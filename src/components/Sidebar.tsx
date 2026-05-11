@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+const NAVY = "#0d1b2e";
+const NAVY_MID = "#1a2d4a";
+const EK_BLUE = "#1d6fd8";
+const EK_GOLD = "#f59e0b";
+
 function DashboardIcon() {
   return (
     <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -52,9 +57,7 @@ function TableIcon() {
   return (
     <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="18" height="18" rx="2" />
-      <path d="M3 9h18" />
-      <path d="M3 15h18" />
-      <path d="M9 3v18" />
+      <path d="M3 9h18" /><path d="M3 15h18" /><path d="M9 3v18" />
     </svg>
   );
 }
@@ -117,35 +120,38 @@ interface SidebarLinkProps {
   label: string;
   active: boolean;
   icon: React.ReactNode;
-  badge?: number;
 }
 
-function SidebarLink({ href, label, active, icon, badge }: SidebarLinkProps) {
+function SidebarLink({ href, label, active, icon }: SidebarLinkProps) {
   return (
     <Link
       href={href}
-      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all group ${
-        active
-          ? "bg-white/10 text-white font-semibold border-l-2 border-ek-gold"
-          : "text-white/55 hover:text-white hover:bg-white/6 border-l-2 border-transparent"
-      }`}
+      style={active ? {
+        backgroundColor: "rgba(255,255,255,0.10)",
+        color: "#ffffff",
+        fontWeight: 600,
+        borderLeftColor: EK_GOLD,
+        borderLeftWidth: 2,
+        borderLeftStyle: "solid",
+      } : {
+        color: "rgba(255,255,255,0.55)",
+        borderLeftColor: "transparent",
+        borderLeftWidth: 2,
+        borderLeftStyle: "solid",
+      }}
+      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all group hover:bg-white/10 hover:!text-white"
     >
-      <span className={`shrink-0 transition-colors ${active ? "text-ek-gold" : "text-white/40 group-hover:text-white/70"}`}>
+      <span style={{ color: active ? EK_GOLD : "rgba(255,255,255,0.35)" }} className="shrink-0 group-hover:!text-white/70 transition-colors">
         {icon}
       </span>
       <span className="truncate flex-1">{label}</span>
-      {badge !== undefined && badge > 0 && (
-        <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-ek-gold text-navy-900 leading-none">
-          {badge > 99 ? "99+" : badge}
-        </span>
-      )}
     </Link>
   );
 }
 
 function SectionLabel({ label }: { label: string }) {
   return (
-    <span className="block px-3 pt-4 pb-1 text-[9px] font-bold text-white/25 uppercase tracking-[0.15em]">
+    <span className="block px-3 pt-4 pb-1 text-[9px] font-bold uppercase tracking-[0.15em]" style={{ color: "rgba(255,255,255,0.25)" }}>
       {label}
     </span>
   );
@@ -155,16 +161,22 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-52 min-h-screen bg-navy-900 flex flex-col shrink-0 no-print border-l border-navy-800">
+    <aside
+      className="w-52 min-h-screen flex flex-col shrink-0 no-print"
+      style={{ backgroundColor: NAVY, borderLeft: `1px solid ${NAVY_MID}` }}
+    >
       {/* Logo */}
-      <div className="px-4 pt-5 pb-4 border-b border-white/8">
+      <div className="px-4 pt-5 pb-4" style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-ek-blue flex items-center justify-center shrink-0 shadow-lg">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-lg"
+            style={{ backgroundColor: EK_BLUE }}
+          >
             <span className="text-white font-black text-base leading-none select-none">א</span>
           </div>
           <div className="min-w-0">
             <div className="text-white font-black text-sm leading-tight tracking-tight">אלקיים</div>
-            <div className="text-ek-gold text-[10px] font-semibold leading-tight opacity-90 truncate">
+            <div className="text-[10px] font-semibold leading-tight truncate" style={{ color: EK_GOLD }}>
               סימון כבישים בע״מ
             </div>
           </div>
@@ -172,27 +184,26 @@ export function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex flex-col gap-1 p-3">
+      <nav className="flex flex-col p-2.5 flex-1 overflow-y-auto">
+        <SectionLabel label="ניהול" />
         <SidebarLink href="/" label="הזמנה" active={pathname === "/"} icon={<OrderIcon />} />
-        <SidebarLink href="/customers" label="לקוחות" active={pathname.startsWith("/customers")} icon={<CustomersIcon />} />
-        <SidebarLink href="/graphics" label="מחלקת גרפיקה" active={pathname.startsWith("/graphics")} icon={<GraphicsIcon />} />
         <SidebarLink href="/orders" label="טבלת הזמנות" active={pathname.startsWith("/orders")} icon={<TableIcon />} />
+        <SidebarLink href="/customers" label="לקוחות" active={pathname.startsWith("/customers")} icon={<CustomersIcon />} />
+
+        <SectionLabel label="מחלקות" />
+        <SidebarLink href="/graphics" label="מחלקת גרפיקה" active={pathname.startsWith("/graphics")} icon={<GraphicsIcon />} />
         <SidebarLink href="/catalog" label="מוצרים ושירותים" active={pathname.startsWith("/catalog")} icon={<CatalogIcon />} />
         <SidebarLink href="/accounting" label="הנהלת חשבונות" active={pathname.startsWith("/accounting")} icon={<AccountingIcon />} />
 
-        <div className="my-2 border-t border-gray-100" />
-
-        <div className="px-3 py-1">
-          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">בקרת שטח</span>
-        </div>
+        <SectionLabel label="בקרת שטח" />
         <SidebarLink href="/workmap" label="מפת עבודות" active={pathname.startsWith("/workmap")} icon={<MapIcon />} />
         <SidebarLink href="/schedule" label="סידור שבועי" active={pathname.startsWith("/schedule")} icon={<CalendarIcon />} />
         <SidebarLink href="/crews" label="צוותי שטח" active={pathname.startsWith("/crews")} icon={<CrewsIcon />} />
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-3 border-t border-white/6">
-        <p className="text-[9px] text-white/15 select-none">מערכת פנימית · אלקיים v1.0</p>
+      <div className="px-4 py-3" style={{ borderTop: `1px solid rgba(255,255,255,0.06)` }}>
+        <p className="text-[9px] select-none" style={{ color: "rgba(255,255,255,0.15)" }}>מערכת פנימית · אלקיים v1.0</p>
       </div>
     </aside>
   );

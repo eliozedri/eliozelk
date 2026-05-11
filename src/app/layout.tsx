@@ -13,14 +13,14 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: "אלקיים סימון כבישים | הזמנת שילוט",
-  description: "מערכת פנימית - פתיחת הזמנת שילוט",
+  title: "אלקיים סימון כבישים | מרכז שליטה",
+  description: "מערכת ניהול פנימית — אלקיים סימון כבישים בע״מ",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="he" dir="rtl" className={heebo.variable}>
-      <body className="font-[family-name:var(--font-heebo)] antialiased bg-gray-50 min-h-screen">
+      <body className="font-[family-name:var(--font-heebo)] antialiased bg-surface min-h-screen">
         <div className="flex min-h-screen">
           <Sidebar />
           <main className="flex-1 min-w-0">

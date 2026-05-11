@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+  /* ─── Elkayam Navy Scale ─────────────────────────── */
+  --color-navy-950: #05111f;
+  --color-navy-900: #0d1b2e;
+  --color-navy-800: #1a2d4a;
+  --color-navy-700: #1e3a5f;
+  --color-navy-600: #243f6e;
+  --color-navy-500: #2a5088;
+
+  /* ─── Elkayam Blue – Primary ─────────────────────── */
+  --color-ek-blue: #1d6fd8;
+  --color-ek-blue-600: #1558b5;
+  --color-ek-blue-100: #dbeafe;
+  --color-ek-blue-50: #eff6ff;
+
+  /* ─── Elkayam Gold – Accent ──────────────────────── */
+  --color-ek-gold: #f59e0b;
+  --color-ek-gold-600: #d97706;
+  --color-ek-gold-100: #fef3c7;
+  --color-ek-gold-50: #fffbeb;
+
+  /* ─── Surface ────────────────────────────────────── */
+  --color-surface: #f4f7fb;
+  --color-surface-2: #e8edf5;
+}
+
+:root {
+  --background: #f4f7fb;
+  --foreground: #0d1b2e;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* RTL table alignment */
+td, th {
+  text-align: right;
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+  .print-full-width {
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
