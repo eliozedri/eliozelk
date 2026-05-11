@@ -33,6 +33,7 @@ export function useOrders() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrders(loadOrders());
     setHydrated(true);
   }, []);

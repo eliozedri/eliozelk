@@ -55,6 +55,7 @@ export function useOrderForm() {
   // Load draft from localStorage on mount
   useEffect(() => {
     const draft = loadDraft();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (draft) setOrder(draft);
   }, []);
 
