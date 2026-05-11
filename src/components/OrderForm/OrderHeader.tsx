@@ -11,21 +11,26 @@ interface Props {
 const inputCls =
   "w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 transition-all";
 
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-sm font-medium text-gray-600">
+        {label}{required && <span className="text-red-500 mr-0.5">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
 export function OrderHeader({ header, onChange }: Props) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 mb-4">
-      {/*
-        Grid in RTL: columns fill right-to-left.
-        HTML order [date, customer, location, reference] → visual order right-to-left:
-        [תאריך][לקוח][מיקום][אסמכתא]
-      */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
 
-        {/* תאריך */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-600">
-            תאריך <span className="text-red-500">*</span>
-          </label>
+      {/* Row 1: date (auto) + company + contact + ordered-by */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+
+        {/* תאריך — auto-filled, still editable */}
+        <Field label="תאריך" required>
           <div className="relative">
             <input
               type="date"
@@ -41,64 +46,82 @@ export function OrderHeader({ header, onChange }: Props) {
               <line x1="3" y1="10" x2="21" y2="10" />
             </svg>
           </div>
-        </div>
+        </Field>
 
-        {/* לקוח / מזמין */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-600">
-            לקוח / מזמין <span className="text-red-500">*</span>
-          </label>
+        {/* שם החברה */}
+        <Field label="שם החברה" required>
           <input
             type="text"
             value={header.customer}
             onChange={(e) => onChange({ customer: e.target.value })}
-            placeholder="בחר לקוח"
+            placeholder="שם הלקוח / החברה"
             className={inputCls}
           />
-        </div>
+        </Field>
 
-        {/* מיקום */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-600">
-            מיקום <span className="text-red-500">*</span>
-          </label>
+        {/* איש קשר */}
+        <Field label="איש קשר">
+          <input
+            type="text"
+            value={header.contactPerson}
+            onChange={(e) => onChange({ contactPerson: e.target.value })}
+            placeholder="שם איש הקשר"
+            className={inputCls}
+          />
+        </Field>
+
+        {/* מזמין */}
+        <Field label="מזמין">
+          <input
+            type="text"
+            value={header.orderedBy}
+            onChange={(e) => onChange({ orderedBy: e.target.value })}
+            placeholder="שם המזמין"
+            className={inputCls}
+          />
+        </Field>
+
+      </div>
+
+      {/* Row 2: site location + job slash + city */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+
+        {/* מיקום האתר */}
+        <Field label="מיקום האתר" required>
           <input
             type="text"
             value={header.location}
             onChange={(e) => onChange({ location: e.target.value })}
-            placeholder="הזן מיקום"
+            placeholder="כתובת / תיאור מיקום"
             className={inputCls}
           />
-        </div>
+        </Field>
+
+        {/* סלאש העבודה */}
+        <Field label="סלאש העבודה">
+          <input
+            type="text"
+            value={header.jobSlash}
+            onChange={(e) => onChange({ jobSlash: e.target.value })}
+            placeholder="לדוגמה: 2024/001"
+            className={inputCls}
+            dir="ltr"
+          />
+        </Field>
 
         {/* עיר */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-600">עיר</label>
+        <Field label="עיר">
           <select
             value={header.city ?? ""}
             onChange={(e) => onChange({ city: e.target.value })}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 bg-white"
           >
             <option value="">— בחר עיר —</option>
             {Object.keys(CITY_COORDINATES).sort().map((city) => (
               <option key={city} value={city}>{city}</option>
             ))}
           </select>
-        </div>
-
-        {/* אסמכתא */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-600">
-            אסמכתא (אופציונלי)
-          </label>
-          <input
-            type="text"
-            value={header.reference}
-            onChange={(e) => onChange({ reference: e.target.value })}
-            placeholder="הזן אסמכתא"
-            className={inputCls}
-          />
-        </div>
+        </Field>
 
       </div>
     </div>

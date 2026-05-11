@@ -486,7 +486,7 @@ export function OrdersTable() {
         o.customer.toLowerCase().includes(q) ||
         o.location.toLowerCase().includes(q) ||
         o.orderNumber.toLowerCase().includes(q) ||
-        o.reference.toLowerCase().includes(q);
+        (o.reference ?? "").toLowerCase().includes(q);
       const matchesStatus = statusFilter === "all" || o.status === statusFilter;
       const matchesPriority = priorityFilter === "all" || o.priority === priorityFilter;
       return matchesSearch && matchesStatus && matchesPriority;

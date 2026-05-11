@@ -32,15 +32,19 @@ export interface MiscRow {
 
 export interface OrderHeader {
   date: string;
-  customer: string;
-  location: string;
+  customer: string;      // שם החברה
+  contactPerson: string; // איש קשר
+  orderedBy: string;     // מזמין
+  location: string;      // מיקום האתר
+  jobSlash: string;      // סלאש העבודה
   city: string;
-  reference: string;
+  reference?: string;    // kept optional for backward compat with old orders
 }
 
 export interface OrderState extends OrderHeader {
   signRows: SignRow[];
   miscRows: MiscRow[];
+  accessoryRows: MiscRow[];
 }
 
 export type OrderSnapshot = OrderState;

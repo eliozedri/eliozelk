@@ -31,9 +31,17 @@ interface Props {
   onAdd: () => void;
   onUpdate: (id: string, partial: Partial<MiscRow>) => void;
   onRemove: (id: string) => void;
+  title?: string;
+  accent?: "blue" | "amber";
 }
 
-export function MiscSection({ rows, onAdd, onUpdate, onRemove }: Props) {
+export function MiscSection({ rows, onAdd, onUpdate, onRemove, title = "שונות", accent = "blue" }: Props) {
+  const headerBg = accent === "amber" ? "bg-amber-50 border-amber-100" : "bg-blue-50 border-blue-100";
+  const headerText = accent === "amber" ? "text-amber-900" : "text-blue-900";
+  const headerIcon = accent === "amber" ? "text-amber-500" : "text-blue-500";
+  const addBtnCls = accent === "amber"
+    ? "flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-amber-400 text-amber-700 text-sm font-medium hover:bg-amber-50 transition-colors"
+    : "flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-blue-400 text-blue-600 text-sm font-medium hover:bg-blue-50 transition-colors";
   const { items: catalogItems } = useCatalogContext();
   const [openSuggestRowId, setOpenSuggestRowId] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -97,9 +105,9 @@ export function MiscSection({ rows, onAdd, onUpdate, onRemove }: Props) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 overflow-x-auto">
 
-      <div className="flex items-center gap-2 px-5 py-3.5 bg-blue-50 rounded-t-xl border-b border-blue-100">
-        <h2 className="text-base font-bold text-blue-900">שונות (עמודים, מסגרות, אביזרים)</h2>
-        <svg className="w-5 h-5 text-blue-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <div className={`flex items-center gap-2 px-5 py-3.5 rounded-t-xl border-b ${headerBg}`}>
+        <h2 className={`text-base font-bold ${headerText}`}>{title}</h2>
+        <svg className={`w-5 h-5 shrink-0 ${headerIcon}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
           <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
           <line x1="12" y1="22.08" x2="12" y2="12" />
@@ -216,11 +224,7 @@ export function MiscSection({ rows, onAdd, onUpdate, onRemove }: Props) {
       </table>
 
       <div className="flex justify-end px-5 py-3 no-print">
-        <button
-          type="button"
-          onClick={onAdd}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-blue-400 text-blue-600 text-sm font-medium hover:bg-blue-50 transition-colors"
-        >
+        <button type="button" onClick={onAdd} className={addBtnCls}>
           + הוסף שורה
         </button>
       </div>

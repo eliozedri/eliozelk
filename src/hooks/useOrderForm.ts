@@ -41,32 +41,41 @@ function initialState(): OrderState {
   return {
     date: todayISO(),
     customer: "",
+    contactPerson: "",
+    orderedBy: "",
     location: "",
+    jobSlash: "",
     city: "",
     reference: "",
     signRows: [emptySignRow()],
     miscRows: [emptyMiscRow()],
+    accessoryRows: [emptyMiscRow()],
   };
 }
 
 export function useOrderForm() {
   const [order, setOrder] = useState<OrderState>(initialState);
 
-  // Load draft from localStorage on mount
   useEffect(() => {
     const draft = loadDraft();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (draft) setOrder(draft);
+    if (draft) {
+      // Ensure new fields exist in old drafts
+      setOrder({
+        ...initialState(),
+        ...draft,
+        accessoryRows: draft.accessoryRows ?? [emptyMiscRow()],
+      });
+    }
   }, []);
 
-  // Auto-save to localStorage on every change
   useEffect(() => {
     if (typeof window === "undefined") return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(order));
   }, [order]);
 
   const updateHeader = useCallback(
-    (partial: Partial<Pick<OrderState, "date" | "customer" | "location" | "city" | "reference">>) => {
+    (partial: Partial<Pick<OrderState, "date" | "customer" | "contactPerson" | "orderedBy" | "location" | "jobSlash" | "city" | "reference">>) => {
       setOrder((prev) => ({ ...prev, ...partial }));
     },
     []
@@ -108,6 +117,24 @@ export function useOrderForm() {
     });
   }, []);
 
+  const addAccessoryRow = useCallback(() => {
+    setOrder((prev) => ({ ...prev, accessoryRows: [...(prev.accessoryRows ?? []), emptyMiscRow()] }));
+  }, []);
+
+  const updateAccessoryRow = useCallback((id: string, partial: Partial<MiscRow>) => {
+    setOrder((prev) => ({
+      ...prev,
+      accessoryRows: (prev.accessoryRows ?? []).map((row) => (row.id === id ? { ...row, ...partial } : row)),
+    }));
+  }, []);
+
+  const removeAccessoryRow = useCallback((id: string) => {
+    setOrder((prev) => {
+      const filtered = (prev.accessoryRows ?? []).filter((r) => r.id !== id);
+      return { ...prev, accessoryRows: filtered.length > 0 ? filtered : [emptyMiscRow()] };
+    });
+  }, []);
+
   const resetOrder = useCallback(() => {
     const fresh = initialState();
     setOrder(fresh);
@@ -123,6 +150,9 @@ export function useOrderForm() {
     addMiscRow,
     updateMiscRow,
     removeMiscRow,
+    addAccessoryRow,
+    updateAccessoryRow,
+    removeAccessoryRow,
     resetOrder,
   };
 }

@@ -39,6 +39,9 @@ export function OrderForm() {
     addMiscRow,
     updateMiscRow,
     removeMiscRow,
+    addAccessoryRow,
+    updateAccessoryRow,
+    removeAccessoryRow,
     resetOrder,
   } = useOrderForm();
 
@@ -86,7 +89,16 @@ export function OrderForm() {
         )}
 
         <OrderHeader
-          header={{ date: order.date, customer: order.customer, location: order.location, city: order.city ?? "", reference: order.reference }}
+          header={{
+            date: order.date,
+            customer: order.customer,
+            contactPerson: order.contactPerson,
+            orderedBy: order.orderedBy,
+            location: order.location,
+            jobSlash: order.jobSlash,
+            city: order.city ?? "",
+            reference: order.reference,
+          }}
           onChange={(partial) => updateHeader(partial as Partial<OrderHeaderType>)}
         />
 
@@ -98,6 +110,17 @@ export function OrderForm() {
         />
 
         <MiscSection
+          title="אביזרים"
+          accent="amber"
+          rows={order.accessoryRows ?? []}
+          onAdd={addAccessoryRow}
+          onUpdate={updateAccessoryRow}
+          onRemove={removeAccessoryRow}
+        />
+
+        <MiscSection
+          title="שונות"
+          accent="blue"
           rows={order.miscRows}
           onAdd={addMiscRow}
           onUpdate={updateMiscRow}

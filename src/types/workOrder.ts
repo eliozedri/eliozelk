@@ -16,10 +16,14 @@ export interface WorkOrder {
   orderNumber: string;
   date: string;
   customer: string;
+  contactPerson?: string;
+  orderedBy?: string;
   location: string;
-  reference: string;
+  jobSlash?: string;
+  reference?: string;
   signRows: SignRow[];
   miscRows: MiscRow[];
+  accessoryRows?: MiscRow[];
   priority: OrderPriority;
   notes: string;
   status: WorkOrderStatus;
