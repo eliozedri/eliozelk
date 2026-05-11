@@ -1,0 +1,407 @@
+// src/components/WeeklySchedule/index.tsx
+"use client";
+
+import { useMemo, useState, useCallback } from "react";
+import { useOrdersContext } from "@/context/OrdersContext";
+import { useCrewsContext } from "@/context/CrewsContext";
+import type { WorkOrder } from "@/types/workOrder";
+import type { Crew } from "@/types/crew";
+import { getSlaColor, SLA_COLORS, formatWaitingDuration } from "@/lib/slaUtils";
+
+// ── Week helpers ─────────────────────────────────────────────────────────────
+
+const WEEK_DAYS_HE = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"];
+
+function getWeekDates(weekOffset: number): Date[] {
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0=Sun
+  const sunday = new Date(now);
+  sunday.setDate(now.getDate() - dayOfWeek + weekOffset * 7);
+  sunday.setHours(0, 0, 0, 0);
+  return Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(sunday);
+    d.setDate(sunday.getDate() + i);
+    return d;
+  });
+}
+
+function toISODate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function formatDayHeader(d: Date): string {
+  return d.toLocaleDateString("he-IL", { day: "numeric", month: "numeric" });
+}
+
+// ── Assign Modal ─────────────────────────────────────────────────────────────
+
+interface AssignModalProps {
+  order: WorkOrder;
+  crews: Crew[];
+  weekDates: Date[];
+  onAssign: (orderId: string, crewId: string, date: string, hours: number) => void;
+  onClose: () => void;
+}
+
+function AssignModal({ order, crews, weekDates, onAssign, onClose }: AssignModalProps) {
+  const [crewId, setCrewId] = useState(order.assignedCrewId ?? crews[0]?.id ?? "");
+  const [dateStr, setDateStr] = useState(order.scheduledDate ?? toISODate(weekDates[0]));
+  const [hours, setHours] = useState(order.estimatedExecutionHours ?? 4);
+
+  const activeCrews = crews.filter((c) => c.active);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 flex flex-col gap-4" dir="rtl">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">שיבוץ לצוות ותאריך</h2>
+          <p className="text-sm text-gray-500 mt-0.5">{order.orderNumber} · {order.customer} · {order.location}</p>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-600">צוות</label>
+            {activeCrews.length === 0 ? (
+              <p className="text-sm text-amber-600">אין צוותים פעילים. הוסף צוות קודם בדף ״צוותי שטח״.</p>
+            ) : (
+              <select
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+                value={crewId}
+                onChange={(e) => setCrewId(e.target.value)}
+              >
+                {activeCrews.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.leader})</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-600">תאריך ביצוע</label>
+            <select
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+              value={dateStr}
+              onChange={(e) => setDateStr(e.target.value)}
+            >
+              {weekDates.map((d, i) => (
+                <option key={i} value={toISODate(d)}>
+                  {WEEK_DAYS_HE[i]} {formatDayHeader(d)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-600">זמן ביצוע משוער (שעות)</label>
+            <input
+              type="number" min={0.5} max={24} step={0.5}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400"
+              value={hours}
+              onChange={(e) => setHours(Number(e.target.value))}
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-2 justify-end pt-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+          >
+            ביטול
+          </button>
+          <button
+            disabled={!crewId || activeCrews.length === 0}
+            onClick={() => { onAssign(order.id, crewId, dateStr, hours); onClose(); }}
+            className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            שבץ עבודה
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Job chip for the board ───────────────────────────────────────────────────
+
+function JobChip({ order, onClick }: { order: WorkOrder; onClick: () => void }) {
+  const slaColor = getSlaColor(order.readyForExecutionAt);
+  const { dot } = SLA_COLORS[slaColor];
+  return (
+    <button
+      onClick={onClick}
+      className="w-full text-right px-2 py-1.5 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors flex items-start gap-1.5 text-xs"
+    >
+      <div className={`w-2 h-2 rounded-full mt-0.5 shrink-0 ${dot}`} />
+      <div className="min-w-0">
+        <div className="font-semibold text-gray-900 truncate">{order.orderNumber}</div>
+        <div className="text-gray-500 truncate">{order.customer}</div>
+        {order.estimatedExecutionHours && (
+          <div className="text-blue-600">{order.estimatedExecutionHours}h</div>
+        )}
+      </div>
+    </button>
+  );
+}
+
+// ── Unscheduled job card ─────────────────────────────────────────────────────
+
+function UnscheduledJobCard({ order, onAssign }: { order: WorkOrder; onAssign: () => void }) {
+  const slaColor = getSlaColor(order.readyForExecutionAt);
+  const { bg, text, dot } = SLA_COLORS[slaColor];
+  return (
+    <div className={`bg-white rounded-xl border shadow-sm p-3 flex flex-col gap-2 ${slaColor === "red" ? "border-red-200" : "border-gray-200"}`}>
+      <div className="flex items-start justify-between gap-1">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
+          <span className="font-bold text-sm text-gray-900 truncate">{order.orderNumber}</span>
+        </div>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${bg} ${text}`}>
+          {formatWaitingDuration(order.readyForExecutionAt)}
+        </span>
+      </div>
+      <div className="text-xs text-gray-500 truncate">{order.customer}</div>
+      <div className="text-xs text-gray-400 truncate">{order.location}</div>
+      {order.estimatedExecutionHours ? (
+        <div className="text-xs text-gray-600 font-medium">{order.estimatedExecutionHours} שע׳ משוערות</div>
+      ) : (
+        <div className="text-xs text-amber-600">⚠ זמן ביצוע לא הוזן</div>
+      )}
+      <button
+        onClick={onAssign}
+        className="w-full py-1.5 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+      >
+        שבץ לצוות
+      </button>
+    </div>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────────────────────
+
+export function WeeklySchedule() {
+  const { orders, updateOrderFields } = useOrdersContext();
+  const { crews } = useCrewsContext();
+
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [assigningOrder, setAssigningOrder] = useState<WorkOrder | null>(null);
+
+  const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
+  const weekLabel = useMemo(() => {
+    const start = weekDates[0];
+    const end = weekDates[5];
+    return `${formatDayHeader(start)} – ${formatDayHeader(end)} ${start.getFullYear()}`;
+  }, [weekDates]);
+
+  const readyOrders = useMemo(() =>
+    orders.filter((o) => o.status === "ready_installation"),
+    [orders]
+  );
+
+  const unscheduled = useMemo(() =>
+    readyOrders.filter((o) => !o.scheduledDate).sort((a, b) => {
+      const ca = getSlaColor(a.readyForExecutionAt);
+      const cb = getSlaColor(b.readyForExecutionAt);
+      const order = { red: 0, yellow: 1, green: 2, gray: 3 };
+      return order[ca] - order[cb];
+    }),
+    [readyOrders]
+  );
+
+  const weekDateStrings = useMemo(() => weekDates.map(toISODate), [weekDates]);
+
+  const scheduledThisWeek = useMemo(() =>
+    readyOrders.filter((o) => o.scheduledDate && weekDateStrings.includes(o.scheduledDate)),
+    [readyOrders, weekDateStrings]
+  );
+
+  const handleAssign = useCallback((orderId: string, crewId: string, date: string, hours: number) => {
+    updateOrderFields(orderId, {
+      assignedCrewId: crewId,
+      scheduledDate: date,
+      estimatedExecutionHours: hours,
+    });
+  }, [updateOrderFields]);
+
+  // Per crew/day workload
+  const workloadMap = useMemo(() => {
+    const map: Record<string, Record<string, WorkOrder[]>> = {};
+    for (const crew of crews) {
+      map[crew.id] = {};
+      for (const d of weekDateStrings) map[crew.id][d] = [];
+    }
+    for (const o of scheduledThisWeek) {
+      if (o.assignedCrewId && o.scheduledDate && map[o.assignedCrewId]) {
+        map[o.assignedCrewId][o.scheduledDate]?.push(o);
+      }
+    }
+    return map;
+  }, [scheduledThisWeek, crews, weekDateStrings]);
+
+  const activeCrews = crews.filter((c) => c.active);
+
+  return (
+    <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
+      <div className="max-w-[1400px] mx-auto space-y-4">
+
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">סידור שבועי</h1>
+            <p className="text-sm text-gray-500 mt-0.5">שיבוץ עבודות לצוותים לפי ימים</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setWeekOffset((w) => w - 1)}
+              className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setWeekOffset(0)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${weekOffset === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}
+            >
+              השבוע
+            </button>
+            <button
+              onClick={() => setWeekOffset((w) => w + 1)}
+              className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+            <span className="text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+              {weekLabel}
+            </span>
+          </div>
+        </div>
+
+        {/* Summary chips */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+            {unscheduled.length} לא משובצות
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+            {scheduledThisWeek.length} משובצות השבוע
+          </span>
+          {unscheduled.filter((o) => getSlaColor(o.readyForExecutionAt) === "red").length > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+              ⚠ {unscheduled.filter((o) => getSlaColor(o.readyForExecutionAt) === "red").length} דחופות לא משובצות
+            </span>
+          )}
+        </div>
+
+        <div className="flex gap-4 items-start">
+
+          {/* Left panel: unscheduled jobs */}
+          <div className="w-64 shrink-0 flex flex-col gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <h2 className="text-sm font-bold text-gray-700">ממתינות לשיבוץ</h2>
+              <span className="text-xs text-gray-400">({unscheduled.length})</span>
+            </div>
+            {unscheduled.length === 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-sm text-gray-400">
+                כל העבודות שובצו 🎉
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 max-h-[600px] overflow-y-auto">
+                {unscheduled.map((o) => (
+                  <UnscheduledJobCard
+                    key={o.id}
+                    order={o}
+                    onAssign={() => setAssigningOrder(o)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Right panel: week board */}
+          <div className="flex-1 min-w-0">
+            {activeCrews.length === 0 ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400 text-sm">
+                <div className="text-3xl mb-2">👷</div>
+                לא הוגדרו צוותים. עבור ל<a href="/crews" className="text-blue-600 underline">צוותי שטח</a> כדי להוסיף צוות.
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                {/* Header row */}
+                <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: `180px repeat(6, 1fr)` }}>
+                  <div className="px-3 py-2.5 text-xs font-semibold text-gray-500 bg-gray-50 border-l border-gray-200">צוות</div>
+                  {weekDates.map((d, i) => (
+                    <div key={i} className={`px-2 py-2.5 text-center border-l border-gray-200 ${toISODate(d) === toISODate(new Date()) ? "bg-blue-50" : "bg-gray-50"}`}>
+                      <div className="text-xs font-bold text-gray-700">{WEEK_DAYS_HE[i]}</div>
+                      <div className="text-xs text-gray-400">{formatDayHeader(d)}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Crew rows */}
+                {activeCrews.map((crew) => (
+                  <div key={crew.id} className="grid border-b border-gray-100 last:border-b-0" style={{ gridTemplateColumns: `180px repeat(6, 1fr)` }}>
+                    {/* Crew name cell */}
+                    <div className="px-3 py-2 border-l border-gray-200 flex flex-col justify-center bg-gray-50/50">
+                      <div className="text-xs font-bold text-gray-800">{crew.name}</div>
+                      <div className="text-[10px] text-gray-400">{crew.leader}</div>
+                      <div className="text-[10px] text-gray-400">קיב׳ {crew.dailyCapacityHours}h</div>
+                    </div>
+
+                    {/* Day cells */}
+                    {weekDateStrings.map((dateStr, di) => {
+                      const jobs = workloadMap[crew.id]?.[dateStr] ?? [];
+                      const totalHours = jobs.reduce((s, o) => s + (o.estimatedExecutionHours ?? 0), 0);
+                      const overload = totalHours > crew.dailyCapacityHours;
+                      return (
+                        <div
+                          key={dateStr}
+                          className={`px-1.5 py-1.5 border-l border-gray-200 min-h-[80px] flex flex-col gap-1 ${overload ? "bg-red-50" : ""}`}
+                        >
+                          {jobs.length > 0 && (
+                            <div className={`text-[9px] font-bold text-right mb-0.5 ${overload ? "text-red-600" : "text-gray-400"}`}>
+                              {totalHours}h {overload ? "⚠ עומס" : ""}
+                            </div>
+                          )}
+                          {jobs.map((o) => (
+                            <JobChip
+                              key={o.id}
+                              order={o}
+                              onClick={() => setAssigningOrder(o)}
+                            />
+                          ))}
+                          {unscheduled.length > 0 && (
+                            <button
+                              onClick={() => setAssigningOrder(unscheduled[0])}
+                              className="w-full py-1 rounded text-[9px] text-gray-300 hover:text-gray-400 hover:bg-gray-50 transition-colors border border-dashed border-transparent hover:border-gray-200"
+                            >
+                              + שבץ
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      {/* Assign Modal */}
+      {assigningOrder && assigningOrder.id && (
+        <AssignModal
+          order={assigningOrder}
+          crews={crews}
+          weekDates={weekDates}
+          onAssign={handleAssign}
+          onClose={() => setAssigningOrder(null)}
+        />
+      )}
+    </div>
+  );
+}
