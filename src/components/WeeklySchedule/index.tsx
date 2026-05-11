@@ -1,4 +1,3 @@
-// src/components/WeeklySchedule/index.tsx
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
@@ -44,11 +43,10 @@ interface AssignModalProps {
 }
 
 function AssignModal({ order, crews, weekDates, onAssign, onClose }: AssignModalProps) {
-  const [crewId, setCrewId] = useState(order.assignedCrewId ?? crews[0]?.id ?? "");
+  const activeCrews = crews.filter((c) => c.active);
+  const [crewId, setCrewId] = useState(order.assignedCrewId ?? activeCrews[0]?.id ?? "");
   const [dateStr, setDateStr] = useState(order.scheduledDate ?? toISODate(weekDates[0]));
   const [hours, setHours] = useState(order.estimatedExecutionHours ?? 4);
-
-  const activeCrews = crews.filter((c) => c.active);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -84,7 +82,7 @@ function AssignModal({ order, crews, weekDates, onAssign, onClose }: AssignModal
               onChange={(e) => setDateStr(e.target.value)}
             >
               {weekDates.map((d, i) => (
-                <option key={i} value={toISODate(d)}>
+                <option key={toISODate(d)} value={toISODate(d)}>
                   {WEEK_DAYS_HE[i]} {formatDayHeader(d)}
                 </option>
               ))}
@@ -238,7 +236,14 @@ export function WeeklySchedule() {
     return map;
   }, [scheduledThisWeek, crews, weekDateStrings]);
 
-  const activeCrews = crews.filter((c) => c.active);
+  const activeCrews = useMemo(() => crews.filter((c) => c.active), [crews]);
+
+  const urgentCount = useMemo(
+    () => unscheduled.filter((o) => getSlaColor(o.readyForExecutionAt) === "red").length,
+    [unscheduled]
+  );
+
+  const todayStr = toISODate(new Date());
 
   return (
     <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
@@ -287,9 +292,9 @@ export function WeeklySchedule() {
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
             {scheduledThisWeek.length} משובצות השבוע
           </span>
-          {unscheduled.filter((o) => getSlaColor(o.readyForExecutionAt) === "red").length > 0 && (
+          {urgentCount > 0 && (
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
-              ⚠ {unscheduled.filter((o) => getSlaColor(o.readyForExecutionAt) === "red").length} דחופות לא משובצות
+              ⚠ {urgentCount} דחופות לא משובצות
             </span>
           )}
         </div>
@@ -333,7 +338,7 @@ export function WeeklySchedule() {
                 <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: `180px repeat(6, 1fr)` }}>
                   <div className="px-3 py-2.5 text-xs font-semibold text-gray-500 bg-gray-50 border-l border-gray-200">צוות</div>
                   {weekDates.map((d, i) => (
-                    <div key={i} className={`px-2 py-2.5 text-center border-l border-gray-200 ${toISODate(d) === toISODate(new Date()) ? "bg-blue-50" : "bg-gray-50"}`}>
+                    <div key={toISODate(d)} className={`px-2 py-2.5 text-center border-l border-gray-200 ${toISODate(d) === todayStr ? "bg-blue-50" : "bg-gray-50"}`}>
                       <div className="text-xs font-bold text-gray-700">{WEEK_DAYS_HE[i]}</div>
                       <div className="text-xs text-gray-400">{formatDayHeader(d)}</div>
                     </div>
@@ -351,11 +356,11 @@ export function WeeklySchedule() {
                     </div>
 
                     {/* Day cells */}
-                    {weekDateStrings.map((dateStr, di) => {
+                    {weekDateStrings.map((dateStr) => {
                       const jobs = workloadMap[crew.id]?.[dateStr] ?? [];
                       const totalHours = jobs.reduce((s, o) => s + (o.estimatedExecutionHours ?? 0), 0);
                       const overload = totalHours > crew.dailyCapacityHours;
-                      const isToday = dateStr === toISODate(new Date());
+                      const isToday = dateStr === todayStr;
                       return (
                         <div
                           key={dateStr}
@@ -394,7 +399,7 @@ export function WeeklySchedule() {
       </div>
 
       {/* Assign Modal */}
-      {assigningOrder && assigningOrder.id && (
+      {assigningOrder && (
         <AssignModal
           order={assigningOrder}
           crews={crews}
