@@ -355,10 +355,11 @@ export function WeeklySchedule() {
                       const jobs = workloadMap[crew.id]?.[dateStr] ?? [];
                       const totalHours = jobs.reduce((s, o) => s + (o.estimatedExecutionHours ?? 0), 0);
                       const overload = totalHours > crew.dailyCapacityHours;
+                      const isToday = dateStr === toISODate(new Date());
                       return (
                         <div
                           key={dateStr}
-                          className={`px-1.5 py-1.5 border-l border-gray-200 min-h-[80px] flex flex-col gap-1 ${overload ? "bg-red-50" : ""}`}
+                          className={`px-1.5 py-1.5 border-l border-gray-200 min-h-[80px] flex flex-col gap-1 ${overload ? "bg-red-50" : isToday ? "bg-blue-50/50" : ""}`}
                         >
                           {jobs.length > 0 && (
                             <div className={`text-[9px] font-bold text-right mb-0.5 ${overload ? "text-red-600" : "text-gray-400"}`}>
