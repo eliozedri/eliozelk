@@ -51,6 +51,7 @@ export function useOrders() {
         date: snapshot.date,
         customer: snapshot.customer,
         location: snapshot.location,
+        city: snapshot.city ?? "",
         reference: snapshot.reference,
         signRows: snapshot.signRows,
         miscRows: snapshot.miscRows,
