@@ -39,6 +39,7 @@ export type TabId =
   | "customers"
   | "graphics"
   | "catalog"
+  | "safety"
   | "accounting"
   | "workmap"
   | "schedule"
@@ -52,6 +53,7 @@ export const ALL_TABS: { id: TabId; label: string; path: string; section: string
   { id: "customers", label: "לקוחות", path: "/customers", section: "ניהול" },
   { id: "graphics", label: "מחלקת גרפיקה", path: "/graphics", section: "מחלקות" },
   { id: "catalog", label: "מוצרים ושירותים", path: "/catalog", section: "מחלקות" },
+  { id: "safety", label: "אביזרי בטיחות", path: "/safety", section: "מחלקות" },
   { id: "accounting", label: "הנהלת חשבונות", path: "/accounting", section: "מחלקות" },
   { id: "workmap", label: "מפת עבודות", path: "/workmap", section: "בקרת שטח" },
   { id: "schedule", label: "סידור שבועי", path: "/schedule", section: "בקרת שטח" },
@@ -106,7 +108,7 @@ export const ROLE_DEFAULTS: Record<Role, { tabs: TabId[] | ["*"]; actions: Actio
     actions: ["manage_graphics"],
   },
   procurement_manager: {
-    tabs: ["dashboard", "catalog"],
+    tabs: ["dashboard", "catalog", "safety"],
     actions: ["manage_catalog"],
   },
   tender_manager: {
