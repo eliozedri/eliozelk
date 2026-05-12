@@ -210,12 +210,8 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { profile, loading, logout } = useAuth();
 
-  const isSupabaseConfigured =
-    !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  // When not configured or still loading, show all tabs (no restrictions)
-  const showAll = !isSupabaseConfigured || loading || !profile;
+  // Show all tabs while loading or before profile is known
+  const showAll = loading || !profile;
 
   const canSeeTab = (tabId: TabId) => showAll || canAccessTab(profile!, tabId);
   const canManageAccess = showAll || canPerformAction(profile!, "manage_access");
@@ -289,7 +285,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
 
       {/* User info + Logout */}
       <div className="px-3 py-3" style={{ borderTop: `1px solid rgba(255,255,255,0.06)` }}>
-        {isSupabaseConfigured && profile && (
+        {profile && (
           <div className="mb-2">
             <p className="text-white text-xs font-semibold truncate">{profile.name}</p>
             <p className="text-[10px] truncate" style={{ color: EK_GOLD }}>
@@ -299,18 +295,16 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         )}
         <div className="flex items-center justify-between">
           <p className="text-[9px] select-none" style={{ color: "rgba(255,255,255,0.15)" }}>
-            {isSupabaseConfigured ? "מערכת פנימית · v1.0" : "מערכת פנימית · v1.0"}
+            מערכת פנימית · v1.0
           </p>
-          {isSupabaseConfigured && (
-            <button
-              onClick={logout}
-              title="יציאה"
-              className="flex items-center gap-1 text-[10px] transition-opacity hover:opacity-80"
-              style={{ color: "rgba(255,255,255,0.35)" }}
-            >
-              <LogoutIcon />
-            </button>
-          )}
+          <button
+            onClick={logout}
+            title="יציאה"
+            className="flex items-center gap-1 text-[10px] transition-opacity hover:opacity-80"
+            style={{ color: "rgba(255,255,255,0.35)" }}
+          >
+            <LogoutIcon />
+          </button>
         </div>
       </div>
     </aside>

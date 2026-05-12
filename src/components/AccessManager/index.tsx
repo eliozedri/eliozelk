@@ -403,13 +403,13 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
 }
 
 export function AccessManager() {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, loading: authLoading, refreshProfile } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState<UserProfile | null>(null);
 
-  const canManage = profile && canPerformAction(profile, "manage_access");
+  const canManage = !authLoading && profile && canPerformAction(profile, "manage_access");
 
   const reloadUsers = useCallback(() => {
     setUsers(loadUsers());
@@ -419,6 +419,14 @@ export function AccessManager() {
   useEffect(() => {
     reloadUsers();
   }, [reloadUsers]);
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <p className="text-sm text-gray-400">טוען...</p>
+      </div>
+    );
+  }
 
   if (!canManage) {
     return (
