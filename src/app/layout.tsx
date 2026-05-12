@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { OrdersProvider } from "@/components/OrdersProvider";
 import { CatalogProvider } from "@/components/CatalogProvider";
 import { CrewsProvider } from "@/components/CrewsProvider";
+import { WorkDiaryProvider } from "@/components/WorkDiaryProvider";
 
 const heebo = Heebo({
   subsets: ["hebrew", "latin"],
@@ -27,7 +28,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <CatalogProvider>
               <OrdersProvider>
                 <CrewsProvider>
-                  {children}
+                  <WorkDiaryProvider>
+                    {children}
+                  </WorkDiaryProvider>
                 </CrewsProvider>
               </OrdersProvider>
             </CatalogProvider>

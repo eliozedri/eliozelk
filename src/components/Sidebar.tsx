@@ -102,6 +102,15 @@ function CalendarIcon() {
   );
 }
 
+function DiaryIcon() {
+  return (
+    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
+      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
+    </svg>
+  );
+}
+
 function CrewsIcon() {
   return (
     <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -199,6 +208,7 @@ export function Sidebar() {
         <SidebarLink href="/workmap" label="מפת עבודות" active={pathname.startsWith("/workmap")} icon={<MapIcon />} />
         <SidebarLink href="/schedule" label="סידור שבועי" active={pathname.startsWith("/schedule")} icon={<CalendarIcon />} />
         <SidebarLink href="/crews" label="צוותי שטח" active={pathname.startsWith("/crews")} icon={<CrewsIcon />} />
+        <SidebarLink href="/work-diary" label="יומן עבודה" active={pathname.startsWith("/work-diary")} icon={<DiaryIcon />} />
       </nav>
 
       {/* Footer */}
