@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { nanoid } from "nanoid";
-import type { MiscRow, OrderState, SignRow } from "@/types/order";
+import type { MiscRow, OrderState, SignRow, FabricationDetails } from "@/types/order";
 
 function todayISO(): string {
   return new Date().toISOString().split("T")[0];
@@ -25,6 +25,10 @@ function emptyMiscRow(): MiscRow {
   return { id: nanoid(), description: "", quantity: "", notes: "" };
 }
 
+function emptyFabrication(): FabricationDetails {
+  return { description: "", width: "", height: "", quantity: "", material: "", notes: "" };
+}
+
 const STORAGE_KEY = "elkayam_order_draft";
 
 function loadDraft(): OrderState | null {
@@ -41,37 +45,55 @@ function initialState(): OrderState {
   return {
     date: todayISO(),
     customer: "",
-    location: "",
+    contactPerson: "",
+    orderedBy: "",
+    jobSlash: "",
     city: "",
-    reference: "",
     signRows: [emptySignRow()],
+    accessoryRows: [emptyMiscRow()],
     miscRows: [emptyMiscRow()],
+    generalNotes: "",
+    attachments: [],
+    fabricationRequired: false,
+    fabricationDetails: emptyFabrication(),
   };
 }
 
 export function useOrderForm() {
   const [order, setOrder] = useState<OrderState>(initialState);
 
-  // Load draft from localStorage on mount
   useEffect(() => {
     const draft = loadDraft();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (draft) setOrder(draft);
+    if (draft) {
+      // Migrate old drafts that may be missing new fields
+      setOrder({
+        ...initialState(),
+        ...draft,
+        accessoryRows: draft.accessoryRows ?? [emptyMiscRow()],
+        generalNotes: draft.generalNotes ?? "",
+        attachments: draft.attachments ?? [],
+        fabricationRequired: draft.fabricationRequired ?? false,
+        fabricationDetails: draft.fabricationDetails ?? emptyFabrication(),
+        contactPerson: draft.contactPerson ?? "",
+        orderedBy: draft.orderedBy ?? "",
+        jobSlash: draft.jobSlash ?? "",
+      });
+    }
   }, []);
 
-  // Auto-save to localStorage on every change
   useEffect(() => {
     if (typeof window === "undefined") return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(order));
   }, [order]);
 
   const updateHeader = useCallback(
-    (partial: Partial<Pick<OrderState, "date" | "customer" | "location" | "city" | "reference">>) => {
+    (partial: Partial<Pick<OrderState, "date" | "customer" | "contactPerson" | "orderedBy" | "jobSlash" | "city" | "generalNotes">>) => {
       setOrder((prev) => ({ ...prev, ...partial }));
     },
     []
   );
 
+  // Sign rows
   const addSignRow = useCallback(() => {
     setOrder((prev) => ({ ...prev, signRows: [...prev.signRows, emptySignRow()] }));
   }, []);
@@ -90,6 +112,26 @@ export function useOrderForm() {
     });
   }, []);
 
+  // Accessory rows
+  const addAccessoryRow = useCallback(() => {
+    setOrder((prev) => ({ ...prev, accessoryRows: [...(prev.accessoryRows ?? []), emptyMiscRow()] }));
+  }, []);
+
+  const updateAccessoryRow = useCallback((id: string, partial: Partial<MiscRow>) => {
+    setOrder((prev) => ({
+      ...prev,
+      accessoryRows: (prev.accessoryRows ?? []).map((row) => (row.id === id ? { ...row, ...partial } : row)),
+    }));
+  }, []);
+
+  const removeAccessoryRow = useCallback((id: string) => {
+    setOrder((prev) => {
+      const filtered = (prev.accessoryRows ?? []).filter((r) => r.id !== id);
+      return { ...prev, accessoryRows: filtered.length > 0 ? filtered : [emptyMiscRow()] };
+    });
+  }, []);
+
+  // Misc rows
   const addMiscRow = useCallback(() => {
     setOrder((prev) => ({ ...prev, miscRows: [...prev.miscRows, emptyMiscRow()] }));
   }, []);
@@ -108,6 +150,17 @@ export function useOrderForm() {
     });
   }, []);
 
+  const setFabricationRequired = useCallback((required: boolean) => {
+    setOrder((prev) => ({ ...prev, fabricationRequired: required }));
+  }, []);
+
+  const updateFabrication = useCallback((partial: Partial<FabricationDetails>) => {
+    setOrder((prev) => ({
+      ...prev,
+      fabricationDetails: { ...prev.fabricationDetails, ...partial },
+    }));
+  }, []);
+
   const resetOrder = useCallback(() => {
     const fresh = initialState();
     setOrder(fresh);
@@ -117,12 +170,17 @@ export function useOrderForm() {
   return {
     order,
     updateHeader,
+    setFabricationRequired,
     addSignRow,
     updateSignRow,
     removeSignRow,
+    addAccessoryRow,
+    updateAccessoryRow,
+    removeAccessoryRow,
     addMiscRow,
     updateMiscRow,
     removeMiscRow,
+    updateFabrication,
     resetOrder,
   };
 }

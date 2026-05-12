@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { Customer } from "@/types/customer";
 
 function CloseIcon() {
@@ -88,6 +89,20 @@ export function CustomerDrawer({ customer, isOpen, onClose }: Props) {
               >
                 <CloseIcon />
               </button>
+            </div>
+
+            {/* Link to full profile */}
+            <div className="px-5 py-3 bg-blue-600 shrink-0">
+              <Link
+                href={`/customers/${customer.id}`}
+                onClick={onClose}
+                className="flex items-center justify-center gap-2 w-full py-2 rounded-lg text-sm font-bold text-white bg-white/20 hover:bg-white/30 transition-colors"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+                </svg>
+                פתח פרופיל מלא
+              </Link>
             </div>
 
             {/* Scrollable body */}

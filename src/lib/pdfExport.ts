@@ -10,7 +10,7 @@ export async function exportOrderPDF(order: OrderSnapshot): Promise<void> {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  const filename = order.reference || order.date || "order";
+  const filename = order.jobSlash || order.date || "order";
   a.download = `order_${filename}.pdf`;
   a.click();
   URL.revokeObjectURL(url);

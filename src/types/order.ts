@@ -22,6 +22,11 @@ export interface MiscRow {
   description: string;
   quantity: string;
   notes: string;
+  // Custom dimension fields (for "שלט לפי מידה")
+  customWidth?: string;
+  customHeight?: string;
+  attachmentDataUrl?: string;
+  attachmentName?: string;
   // Optional catalog reference — snapshot at order creation time
   catalogItemId?: string;
   catalogItemName?: string;
@@ -30,17 +35,40 @@ export interface MiscRow {
   catalogItemType?: string;
 }
 
+export interface OrderAttachment {
+  id: string;
+  name: string;
+  dataUrl: string;
+  type: string;
+  size: number;
+}
+
+export interface FabricationDetails {
+  description: string;
+  width: string;
+  height: string;
+  quantity: string;
+  material: string;
+  notes: string;
+}
+
 export interface OrderHeader {
   date: string;
-  customer: string;
-  location: string;
-  city: string;
-  reference: string;
+  customer: string;      // שם החברה
+  contactPerson: string; // איש קשר
+  orderedBy: string;     // מזמין
+  jobSlash: string;      // סלאש העבודה
+  city: string;          // עיר (required)
 }
 
 export interface OrderState extends OrderHeader {
   signRows: SignRow[];
+  accessoryRows: MiscRow[];
   miscRows: MiscRow[];
+  generalNotes: string;
+  attachments: OrderAttachment[];
+  fabricationRequired: boolean;
+  fabricationDetails: FabricationDetails;
 }
 
 export type OrderSnapshot = OrderState;

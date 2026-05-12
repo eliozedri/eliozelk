@@ -53,7 +53,7 @@ interface IsraelMapProps {
 export default function IsraelMap({ orders, onOpenOrder }: IsraelMapProps) {
   const positioned = orders
     .map((o) => {
-      const coords = extractCityCoordinates(o.city || o.location);
+      const coords = extractCityCoordinates(o.city || o.location || "");
       return coords ? { order: o, coords } : null;
     })
     .filter((x): x is { order: WorkOrder; coords: [number, number] } => x !== null);

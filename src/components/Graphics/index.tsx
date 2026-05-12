@@ -28,7 +28,10 @@ function UrgentBadge() {
 
 function PendingOrderCard({ order, onAcknowledge }: { order: WorkOrder; onAcknowledge: () => void }) {
   const signCount = order.signRows.filter((r) => r.signNumber).length;
-  const miscCount = order.miscRows.filter((r) => r.description).length;
+  const miscCount = [
+    ...order.miscRows.filter((r) => r.description),
+    ...(order.accessoryRows ?? []).filter((r) => r.description),
+  ].length;
 
   return (
     <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4 flex flex-col gap-3">
@@ -51,8 +54,8 @@ function PendingOrderCard({ order, onAcknowledge }: { order: WorkOrder; onAcknow
           <div className="font-medium text-gray-800 truncate">{order.customer || "—"}</div>
         </div>
         <div>
-          <span className="text-xs text-gray-400">מיקום</span>
-          <div className="font-medium text-gray-800 truncate">{order.location || "—"}</div>
+          <span className="text-xs text-gray-400">עיר</span>
+          <div className="font-medium text-gray-800 truncate">{order.city || order.location || "—"}</div>
         </div>
         <div>
           <span className="text-xs text-gray-400">תאריך הזמנה</span>
@@ -69,9 +72,15 @@ function PendingOrderCard({ order, onAcknowledge }: { order: WorkOrder; onAcknow
         </div>
       </div>
 
-      {order.reference && (
-        <div className="text-xs text-gray-500">
-          <span className="font-medium">אסמכתא:</span> {order.reference}
+      {order.generalNotes && (
+        <div className="text-xs text-gray-600 bg-yellow-50 border border-yellow-200 rounded p-2">
+          <span className="font-medium">הערות: </span>{order.generalNotes}
+        </div>
+      )}
+
+      {order.fabricationRequired && (
+        <div className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded p-2 font-medium">
+          🔧 דרושה עבודת מסגרות
         </div>
       )}
 
@@ -90,7 +99,10 @@ function PendingOrderCard({ order, onAcknowledge }: { order: WorkOrder; onAcknow
 
 function ActiveOrderCard({ order, onComplete }: { order: WorkOrder; onComplete: () => void }) {
   const signCount = order.signRows.filter((r) => r.signNumber).length;
-  const miscCount = order.miscRows.filter((r) => r.description).length;
+  const miscCount = [
+    ...order.miscRows.filter((r) => r.description),
+    ...(order.accessoryRows ?? []).filter((r) => r.description),
+  ].length;
 
   return (
     <div className="bg-white rounded-xl border border-blue-200 shadow-sm p-4 flex flex-col gap-3">
@@ -115,8 +127,8 @@ function ActiveOrderCard({ order, onComplete }: { order: WorkOrder; onComplete: 
           <div className="font-medium text-gray-800 truncate">{order.customer || "—"}</div>
         </div>
         <div>
-          <span className="text-xs text-gray-400">מיקום</span>
-          <div className="font-medium text-gray-800 truncate">{order.location || "—"}</div>
+          <span className="text-xs text-gray-400">עיר</span>
+          <div className="font-medium text-gray-800 truncate">{order.city || order.location || "—"}</div>
         </div>
         <div>
           <span className="text-xs text-gray-400">תאריך הזמנה</span>
@@ -133,9 +145,15 @@ function ActiveOrderCard({ order, onComplete }: { order: WorkOrder; onComplete: 
         </div>
       </div>
 
-      {order.reference && (
-        <div className="text-xs text-gray-500">
-          <span className="font-medium">אסמכתא:</span> {order.reference}
+      {order.generalNotes && (
+        <div className="text-xs text-gray-600 bg-yellow-50 border border-yellow-200 rounded p-2">
+          <span className="font-medium">הערות: </span>{order.generalNotes}
+        </div>
+      )}
+
+      {order.fabricationRequired && (
+        <div className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded p-2 font-medium">
+          🔧 דרושה עבודת מסגרות
         </div>
       )}
 

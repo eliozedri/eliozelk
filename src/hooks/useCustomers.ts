@@ -45,9 +45,16 @@ export function useCustomers() {
     setCustomers((prev) => [...prev, newCustomer]);
   }, []);
 
+  const updateCustomer = useCallback((id: string, partial: Partial<Omit<Customer, "id" | "createdAt">>) => {
+    const now = new Date().toISOString();
+    setCustomers((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...partial, updatedAt: now } : c))
+    );
+  }, []);
+
   const deleteCustomer = useCallback((id: string) => {
     setCustomers((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
-  return { customers, addCustomer, deleteCustomer };
+  return { customers, addCustomer, updateCustomer, deleteCustomer };
 }

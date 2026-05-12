@@ -1,4 +1,30 @@
-import type { SignRow, MiscRow } from "./order";
+import type { SignRow, MiscRow, OrderAttachment, FabricationDetails } from "./order";
+
+export type FabricationStatus =
+  | "pending"
+  | "acknowledged"
+  | "in_progress"
+  | "ready"
+  | "completed"
+  | "issue";
+
+export const FABRICATION_STATUS_LABELS: Record<FabricationStatus, string> = {
+  pending: "ממתין",
+  acknowledged: "התקבל",
+  in_progress: "בעבודה",
+  ready: "מוכן",
+  completed: "הושלם",
+  issue: "בעיה",
+};
+
+export const FABRICATION_STATUS_COLORS: Record<FabricationStatus, string> = {
+  pending: "bg-amber-100 text-amber-700",
+  acknowledged: "bg-blue-100 text-blue-700",
+  in_progress: "bg-purple-100 text-purple-700",
+  ready: "bg-teal-100 text-teal-700",
+  completed: "bg-green-100 text-green-700",
+  issue: "bg-red-100 text-red-700",
+};
 
 export type WorkOrderStatus =
   | "graphics_pending"
@@ -18,9 +44,9 @@ export interface WorkOrder {
   customer: string;
   contactPerson?: string;
   orderedBy?: string;
-  location: string;
+  location?: string;      // kept optional for backward compat with old orders
   jobSlash?: string;
-  reference?: string;
+  reference?: string;     // kept optional for backward compat
   signRows: SignRow[];
   miscRows: MiscRow[];
   accessoryRows?: MiscRow[];
@@ -33,8 +59,16 @@ export interface WorkOrder {
   graphicsAcknowledgedAt: string | null;
   graphicsAcknowledgedBy: string | null;
   graphicsCompletedAt: string | null;
-  // Field execution fields
+  // New fields
   city?: string;
+  generalNotes?: string;
+  attachments?: OrderAttachment[];
+  fabricationRequired?: boolean;
+  fabricationDetails?: FabricationDetails;
+  fabricationStatus?: FabricationStatus;
+  fabricationAcknowledgedAt?: string | null;
+  fabricationCompletedAt?: string | null;
+  // Field execution fields
   estimatedExecutionHours?: number;
   readyForExecutionAt?: string | null;
   assignedCrewId?: string | null;

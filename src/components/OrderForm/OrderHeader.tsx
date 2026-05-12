@@ -14,12 +14,8 @@ const inputCls =
 export function OrderHeader({ header, onChange }: Props) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 mb-4">
-      {/*
-        Grid in RTL: columns fill right-to-left.
-        HTML order [date, customer, location, reference] → visual order right-to-left:
-        [תאריך][לקוח][מיקום][אסמכתא]
-      */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {/* Row 1: date + company + contact + orderer + job slash */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
 
         {/* תאריך */}
         <div className="flex flex-col gap-1">
@@ -43,41 +39,67 @@ export function OrderHeader({ header, onChange }: Props) {
           </div>
         </div>
 
-        {/* לקוח / מזמין */}
+        {/* שם החברה */}
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-gray-600">
-            לקוח / מזמין <span className="text-red-500">*</span>
+            שם החברה <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             value={header.customer}
             onChange={(e) => onChange({ customer: e.target.value })}
-            placeholder="בחר לקוח"
+            placeholder="שם לקוח / חברה"
             className={inputCls}
           />
         </div>
 
-        {/* מיקום */}
+        {/* איש קשר */}
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-600">
-            מיקום <span className="text-red-500">*</span>
-          </label>
+          <label className="text-sm font-medium text-gray-600">איש קשר</label>
           <input
             type="text"
-            value={header.location}
-            onChange={(e) => onChange({ location: e.target.value })}
-            placeholder="הזן מיקום"
+            value={header.contactPerson}
+            onChange={(e) => onChange({ contactPerson: e.target.value })}
+            placeholder="שם איש קשר"
             className={inputCls}
           />
         </div>
 
-        {/* עיר */}
+        {/* מזמין */}
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-600">עיר</label>
+          <label className="text-sm font-medium text-gray-600">מזמין</label>
+          <input
+            type="text"
+            value={header.orderedBy}
+            onChange={(e) => onChange({ orderedBy: e.target.value })}
+            placeholder="שם המזמין"
+            className={inputCls}
+          />
+        </div>
+
+        {/* סלאש העבודה */}
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-600">סלאש העבודה</label>
+          <input
+            type="text"
+            value={header.jobSlash}
+            onChange={(e) => onChange({ jobSlash: e.target.value })}
+            placeholder="מס׳ סלאש"
+            className={inputCls}
+          />
+        </div>
+      </div>
+
+      {/* Row 2: city only */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="flex flex-col gap-1 md:col-span-2">
+          <label className="text-sm font-medium text-gray-600">
+            עיר <span className="text-red-500">*</span>
+          </label>
           <select
-            value={header.city ?? ""}
+            value={header.city}
             onChange={(e) => onChange({ city: e.target.value })}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 bg-white transition-all"
           >
             <option value="">— בחר עיר —</option>
             {Object.keys(CITY_COORDINATES).sort().map((city) => (
@@ -85,21 +107,6 @@ export function OrderHeader({ header, onChange }: Props) {
             ))}
           </select>
         </div>
-
-        {/* אסמכתא */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-600">
-            אסמכתא (אופציונלי)
-          </label>
-          <input
-            type="text"
-            value={header.reference}
-            onChange={(e) => onChange({ reference: e.target.value })}
-            placeholder="הזן אסמכתא"
-            className={inputCls}
-          />
-        </div>
-
       </div>
     </div>
   );

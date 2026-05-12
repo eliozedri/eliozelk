@@ -137,16 +137,20 @@ export function OrderDocument({ order }: Props) {
             <Text style={styles.headerValue}>{formatDate(order.date)}</Text>
           </View>
           <View style={styles.headerField}>
-            <Text style={styles.headerLabel}>לקוח / מזמין</Text>
+            <Text style={styles.headerLabel}>שם החברה</Text>
             <Text style={styles.headerValue}>{order.customer || "—"}</Text>
           </View>
           <View style={styles.headerField}>
-            <Text style={styles.headerLabel}>מיקום</Text>
-            <Text style={styles.headerValue}>{order.location || "—"}</Text>
+            <Text style={styles.headerLabel}>עיר</Text>
+            <Text style={styles.headerValue}>{order.city || "—"}</Text>
           </View>
           <View style={styles.headerField}>
-            <Text style={styles.headerLabel}>אסמכתא</Text>
-            <Text style={styles.headerValue}>{order.reference || "—"}</Text>
+            <Text style={styles.headerLabel}>מזמין</Text>
+            <Text style={styles.headerValue}>{order.orderedBy || "—"}</Text>
+          </View>
+          <View style={styles.headerField}>
+            <Text style={styles.headerLabel}>סלאש</Text>
+            <Text style={styles.headerValue}>{order.jobSlash || "—"}</Text>
           </View>
         </View>
 

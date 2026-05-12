@@ -10,6 +10,9 @@ import { FormActions } from "./FormActions";
 import type { OrderHeader as OrderHeaderType } from "@/types/order";
 import type { OrderPriority } from "@/types/workOrder";
 
+const inputCls =
+  "w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 transition-all";
+
 function RoadIcon() {
   return (
     <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -29,26 +32,63 @@ function CheckIcon() {
   );
 }
 
+function validate(order: ReturnType<typeof useOrderForm>["order"]): string | null {
+  if (!order.date) return "נא להזין תאריך";
+  if (!order.customer.trim()) return "נא להזין שם חברה";
+  if (!order.city) return "נא לבחור עיר";
+
+  const hasSign = order.signRows.some((r) => r.signNumber.trim());
+  const hasAccessory = (order.accessoryRows ?? []).some((r) => r.description.trim());
+  const hasMisc = order.miscRows.some((r) => r.description.trim());
+  if (!hasSign && !hasAccessory && !hasMisc) {
+    return "נא להוסיף לפחות פריט אחד להזמנה";
+  }
+
+  for (const r of order.signRows) {
+    if (r.signNumber.trim() && r.quantity !== "" && Number(r.quantity) <= 0) {
+      return `כמות לא תקינה בשורת תמרור: ${r.signNumber}`;
+    }
+  }
+  for (const r of [...(order.accessoryRows ?? []), ...order.miscRows]) {
+    if (r.description.trim() && r.quantity !== "" && Number(r.quantity) <= 0) {
+      return `כמות לא תקינה בפריט: ${r.description}`;
+    }
+  }
+  return null;
+}
+
 export function OrderForm() {
   const {
     order,
     updateHeader,
+    setFabricationRequired,
     addSignRow,
     updateSignRow,
     removeSignRow,
+    addAccessoryRow,
+    updateAccessoryRow,
+    removeAccessoryRow,
     addMiscRow,
     updateMiscRow,
     removeMiscRow,
+    updateFabrication,
     resetOrder,
   } = useOrderForm();
 
   const { addOrder } = useOrdersContext();
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const handleSubmit = (priority: OrderPriority) => {
+    const err = validate(order);
+    if (err) {
+      setValidationError(err);
+      setTimeout(() => setValidationError(null), 4000);
+      return;
+    }
     const submitted = addOrder(order, priority);
     resetOrder();
-    setSuccessMessage(`ההזמנה נשלחה למחלקת גרפיקה בהצלחה — מספר הזמנה: ${submitted.orderNumber}`);
+    setSuccessMessage(`ההזמנה נשלחה למחלקת גרפיקה — מספר הזמנה: ${submitted.orderNumber}`);
     setTimeout(() => setSuccessMessage(null), 5000);
   };
 
@@ -72,6 +112,15 @@ export function OrderForm() {
           </svg>
         </div>
 
+        {validationError && (
+          <div className="flex items-center gap-3 mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm font-medium no-print">
+            <svg className="w-5 h-5 shrink-0 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+            <span>{validationError}</span>
+          </div>
+        )}
+
         {successMessage && (
           <div className="flex items-center gap-3 mb-5 p-4 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm font-medium no-print">
             <CheckIcon />
@@ -86,7 +135,14 @@ export function OrderForm() {
         )}
 
         <OrderHeader
-          header={{ date: order.date, customer: order.customer, location: order.location, city: order.city ?? "", reference: order.reference }}
+          header={{
+            date: order.date,
+            customer: order.customer,
+            contactPerson: order.contactPerson,
+            orderedBy: order.orderedBy,
+            jobSlash: order.jobSlash,
+            city: order.city,
+          }}
           onChange={(partial) => updateHeader(partial as Partial<OrderHeaderType>)}
         />
 
@@ -98,11 +154,99 @@ export function OrderForm() {
         />
 
         <MiscSection
+          rows={order.accessoryRows ?? []}
+          onAdd={addAccessoryRow}
+          onUpdate={updateAccessoryRow}
+          onRemove={removeAccessoryRow}
+          title="אביזרים"
+          accentColor="bg-teal-50"
+          allowedCatalogTypes={["product", "material", "equipment"]}
+        />
+
+        <MiscSection
           rows={order.miscRows}
           onAdd={addMiscRow}
           onUpdate={updateMiscRow}
           onRemove={removeMiscRow}
+          title="שונות"
+          accentColor="bg-blue-50"
+          showDimensionRows
         />
+
+        {/* General notes */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">הערות כלליות</label>
+          <textarea
+            value={order.generalNotes}
+            onChange={(e) => updateHeader({ generalNotes: e.target.value })}
+            placeholder="הערות, הנחיות מיוחדות, מידע נוסף..."
+            rows={3}
+            className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 resize-none"
+          />
+        </div>
+
+        {/* Fabrication */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 mb-4">
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={order.fabricationRequired}
+              onChange={(e) => setFabricationRequired(e.target.checked)}
+              className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+            />
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+              </svg>
+              <span className="text-sm font-semibold text-gray-800">האם דרושה עבודת מסגרות?</span>
+            </div>
+          </label>
+
+          {order.fabricationRequired && (
+            <div className="mt-4 p-4 rounded-lg bg-orange-50 border border-orange-200 grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="col-span-2 md:col-span-3">
+                <label className="text-xs font-medium text-gray-600 block mb-1">תיאור העבודה</label>
+                <input
+                  type="text"
+                  value={order.fabricationDetails.description}
+                  onChange={(e) => updateFabrication({ description: e.target.value })}
+                  placeholder="תיאור עבודת המסגרות"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">רוחב (ס&quot;מ)</label>
+                <input type="number" min="0" value={order.fabricationDetails.width}
+                  onChange={(e) => updateFabrication({ width: e.target.value })}
+                  placeholder="0" className={`${inputCls} text-center`} dir="ltr" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">גובה (ס&quot;מ)</label>
+                <input type="number" min="0" value={order.fabricationDetails.height}
+                  onChange={(e) => updateFabrication({ height: e.target.value })}
+                  placeholder="0" className={`${inputCls} text-center`} dir="ltr" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">כמות</label>
+                <input type="number" min="0" value={order.fabricationDetails.quantity}
+                  onChange={(e) => updateFabrication({ quantity: e.target.value })}
+                  placeholder="0" className={`${inputCls} text-center`} dir="ltr" />
+              </div>
+              <div className="col-span-2 md:col-span-3">
+                <label className="text-xs font-medium text-gray-600 block mb-1">חומר</label>
+                <input type="text" value={order.fabricationDetails.material}
+                  onChange={(e) => updateFabrication({ material: e.target.value })}
+                  placeholder="סוג חומר (למשל: אלומיניום, פלדה...)" className={inputCls} />
+              </div>
+              <div className="col-span-2 md:col-span-3">
+                <label className="text-xs font-medium text-gray-600 block mb-1">הערות מסגרות</label>
+                <input type="text" value={order.fabricationDetails.notes}
+                  onChange={(e) => updateFabrication({ notes: e.target.value })}
+                  placeholder="הערות נוספות לעבודת המסגרות" className={inputCls} />
+              </div>
+            </div>
+          )}
+        </div>
 
         <FormActions order={order} onReset={resetOrder} onSubmit={handleSubmit} />
       </div>

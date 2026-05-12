@@ -139,7 +139,7 @@ export function WorkMap() {
   // Only show non-terminal orders that have a map position
   const mappableOrders = useMemo(() => {
     return orders.filter(
-      (o) => o.status !== "completed" && o.status !== "cancelled" && extractCityCoordinates(o.city || o.location)
+      (o) => o.status !== "completed" && o.status !== "cancelled" && extractCityCoordinates(o.city || o.location || "")
     );
   }, [orders]);
 
@@ -233,7 +233,7 @@ export function WorkMap() {
         {/* Unmappable notice */}
         {(() => {
           const unmappable = orders.filter(
-            (o) => o.status === "ready_installation" && !extractCityCoordinates(o.city || o.location)
+            (o) => o.status === "ready_installation" && !extractCityCoordinates(o.city || o.location || "")
           );
           if (unmappable.length === 0) return null;
           return (
