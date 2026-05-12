@@ -449,9 +449,14 @@ export function AccessManager() {
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState<UserProfile | null>(null);
 
-  const canManage = profile && canPerformAction(profile, "manage_access");
+  const isConfigured =
+    !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  const canManage = !isConfigured || (profile && canPerformAction(profile, "manage_access"));
 
   const loadUsers = useCallback(async () => {
+    if (!isConfigured) { setLoading(false); return; }
     const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
     const { data, error } = await supabase
@@ -475,6 +480,32 @@ export function AccessManager() {
         <div className="text-center">
           <p className="text-lg font-bold text-gray-700">אין לך הרשאה לצפות בעמוד זה</p>
           <p className="text-sm text-gray-400 mt-1">פנה למנהל המערכת</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isConfigured) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-black" style={{ color: NAVY }}>הרשאות גישה</h1>
+            <p className="text-sm text-gray-500 mt-0.5">ניהול משתמשים, תפקידים ורמות גישה</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border p-8 text-center">
+          <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: "#fffbeb" }}>
+            <span className="text-2xl">⚙️</span>
+          </div>
+          <p className="text-lg font-bold text-gray-800 mb-2">Supabase לא מוגדר עדיין</p>
+          <p className="text-sm text-gray-500 mb-4">כדי להפעיל ניהול משתמשים, יש לחבר Supabase ולהגדיר משתני סביבה.</p>
+          <div className="text-right bg-gray-50 rounded-xl p-4 max-w-md mx-auto text-sm font-mono text-gray-600 space-y-1">
+            <p>NEXT_PUBLIC_SUPABASE_URL</p>
+            <p>NEXT_PUBLIC_SUPABASE_ANON_KEY</p>
+            <p>SUPABASE_SERVICE_ROLE_KEY</p>
+          </div>
+          <p className="text-xs text-gray-400 mt-4">לאחר הגדרת המשתנים ב-Vercel, פרוס מחדש ופתח <span className="font-mono">/setup</span></p>
         </div>
       </div>
     );
