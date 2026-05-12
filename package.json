@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.105.4",
     "leaflet": "^1.9.4",
     "nanoid": "^5.1.11",
     "next": "16.2.6",
