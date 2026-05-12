@@ -6,7 +6,7 @@ import {
   ROLE_LABELS, ACTION_PERMISSION_LABELS, ROLE_DEFAULTS, canPerformAction,
 } from "@/types/auth";
 import { useAuth } from "@/context/AuthContext";
-import { loadUsers, createUser, updateUser, deleteUser, changePassword } from "@/lib/auth/store";
+import { loadUsers, createUser, updateUser, deleteUser, changePassword, getRawUsers } from "@/lib/auth/store";
 
 const NAVY = "#0d1b2e";
 const EK_BLUE = "#1d6fd8";
@@ -277,11 +277,64 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: { user: UserProfile
   );
 }
 
+function ExportModal({ onClose }: { onClose: () => void }) {
+  const json = JSON.stringify(getRawUsers(), null, 2);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(json);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDownload = () => {
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "elkayam-users-seed.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b shrink-0">
+          <div>
+            <h2 className="font-black text-lg" style={{ color: NAVY }}>ייצוא משתמשים</h2>
+            <p className="text-xs text-gray-500 mt-0.5">העתק את ה-JSON ושלח לשם הטמעה בקוד</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+        </div>
+        <div className="p-4 flex-1 overflow-y-auto">
+          <textarea readOnly value={json} rows={12}
+            className="w-full text-xs font-mono p-3 border rounded-lg bg-gray-50 resize-none focus:outline-none"
+            dir="ltr" />
+        </div>
+        <div className="p-4 border-t flex gap-2 shrink-0">
+          <button onClick={handleCopy} className="flex-1 py-2.5 rounded-lg font-bold text-sm text-white"
+            style={{ backgroundColor: copied ? "#16a34a" : EK_BLUE }}>
+            {copied ? "✓ הועתק!" : "העתק JSON"}
+          </button>
+          <button onClick={handleDownload} className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50">
+            הורדה
+          </button>
+          <button onClick={onClose} className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50">
+            סגור
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AccessManager() {
   const { profile, loading: authLoading, refreshProfile } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [editUser, setEditUser] = useState<UserProfile | null>(null);
 
   const canManage = !authLoading && profile && canPerformAction(profile, "manage_access");
@@ -317,9 +370,14 @@ export function AccessManager() {
           <h1 className="text-2xl font-black" style={{ color: NAVY }}>הרשאות גישה</h1>
           <p className="text-sm text-gray-500 mt-0.5">ניהול משתמשים, תפקידים ורמות גישה</p>
         </div>
-        <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-sm text-white" style={{ backgroundColor: EK_BLUE }}>
-          <span className="text-lg leading-none">+</span>הוספת משתמש
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowExport(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-sm border border-gray-200 text-gray-600 hover:bg-gray-50">
+            ייצוא משתמשים
+          </button>
+          <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-bold text-sm text-white" style={{ backgroundColor: EK_BLUE }}>
+            <span className="text-lg leading-none">+</span>הוספת משתמש
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -369,6 +427,7 @@ export function AccessManager() {
       </div>
 
       {showAdd && <AddUserModal onClose={() => setShowAdd(false)} onCreated={handleSaved} />}
+      {showExport && <ExportModal onClose={() => setShowExport(false)} />}
       {editUser && <EditUserModal user={editUser} allUsers={users} onClose={() => setEditUser(null)} onSaved={handleSaved} />}
     </div>
   );

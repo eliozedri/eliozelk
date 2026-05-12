@@ -1,6 +1,7 @@
 import type { UserProfile, Role } from "@/types/auth";
 import { ROLE_DEFAULTS } from "@/types/auth";
 import { hashPassword } from "./crypto";
+import { SEED_USERS } from "./seed-users";
 
 const STORE_KEY = "elkayam_users";
 
@@ -9,9 +10,14 @@ export interface StoredUser extends UserProfile {
 }
 
 function load(): StoredUser[] {
-  if (typeof window === "undefined") return [];
+  if (typeof window === "undefined") return SEED_USERS as StoredUser[];
   try {
-    return JSON.parse(localStorage.getItem(STORE_KEY) ?? "[]");
+    const stored = localStorage.getItem(STORE_KEY);
+    if (!stored && SEED_USERS.length > 0) {
+      localStorage.setItem(STORE_KEY, JSON.stringify(SEED_USERS));
+      return SEED_USERS as StoredUser[];
+    }
+    return JSON.parse(stored ?? "[]");
   } catch {
     return [];
   }
@@ -102,6 +108,10 @@ export function deleteUser(id: string) {
     throw new Error("לא ניתן למחוק את המנהל הראשי האחרון");
   }
   save(users.filter((u) => u.id !== id));
+}
+
+export function getRawUsers(): StoredUser[] {
+  return load();
 }
 
 export function touchLastLogin(id: string) {
