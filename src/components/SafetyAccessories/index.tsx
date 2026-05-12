@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Image from "next/image";
 import { SAFETY_ACCESSORIES } from "@/data/safetyAccessories";
+import { SAFETY_IMAGES } from "@/data/safetyAccessoryImages";
 import type {
   SafetyAccessoryItem,
   SafetySubcategory,
@@ -75,6 +77,8 @@ function DetailPanel({ item, onClose }: { item: SafetyAccessoryItem; onClose: ()
   const subColor = SAFETY_SUBCATEGORY_COLORS[item.subcategory];
   const statusColor = STATUS_COLORS[item.status];
   const statusLabel = STATUS_LABELS[item.status];
+  const imgs = SAFETY_IMAGES[item.id];
+  const [showPage, setShowPage] = useState(false);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 sticky top-6 overflow-hidden">
@@ -94,6 +98,49 @@ function DetailPanel({ item, onClose }: { item: SafetyAccessoryItem; onClose: ()
           <CloseIcon />
         </button>
       </div>
+
+      {/* Product image */}
+      {imgs && (
+        <div className="border-b border-gray-100">
+          {!showPage && imgs.productImage ? (
+            <div className="relative w-full h-44 bg-gray-50">
+              <Image
+                src={imgs.productImage}
+                alt={item.name}
+                fill
+                className="object-contain p-2"
+                sizes="384px"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPage(true)}
+                className="absolute bottom-1 left-1 text-[10px] text-gray-400 hover:text-blue-600 bg-white/80 rounded px-1.5 py-0.5 transition-colors"
+              >
+                עמוד קטלוג
+              </button>
+            </div>
+          ) : (
+            <div className="relative w-full h-56 bg-gray-50">
+              <Image
+                src={imgs.pageImage}
+                alt={`עמוד קטלוג ${item.catalogPage}`}
+                fill
+                className="object-contain p-1"
+                sizes="384px"
+              />
+              {imgs.productImage && (
+                <button
+                  type="button"
+                  onClick={() => setShowPage(false)}
+                  className="absolute bottom-1 left-1 text-[10px] text-gray-400 hover:text-blue-600 bg-white/80 rounded px-1.5 py-0.5 transition-colors"
+                >
+                  תמונת מוצר
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Badges row */}
       <div className="px-4 py-2.5 border-b border-gray-100 flex flex-wrap gap-1.5">
@@ -205,6 +252,7 @@ function ProductCard({
 }) {
   const subColor = SAFETY_SUBCATEGORY_COLORS[item.subcategory];
   const statusColor = STATUS_COLORS[item.status];
+  const imgs = SAFETY_IMAGES[item.id];
 
   return (
     <button
@@ -216,14 +264,32 @@ function ProductCard({
           : "bg-white border-gray-200 hover:border-gray-300"
       }`}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-gray-900 text-sm leading-tight truncate">{item.name}</p>
+      <div className="flex items-start gap-3 mb-2">
+        {/* Thumbnail */}
+        {imgs?.productImage ? (
+          <div className="relative shrink-0 w-14 h-14 rounded-lg bg-gray-50 border border-gray-100 overflow-hidden">
+            <Image
+              src={imgs.productImage}
+              alt={item.name}
+              fill
+              className="object-contain p-1"
+              sizes="56px"
+            />
+          </div>
+        ) : (
+          <div className="shrink-0 w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center">
+            <ShieldIcon className="w-6 h-6 text-gray-300" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-semibold text-gray-900 text-sm leading-tight truncate">{item.name}</p>
+            <span className={`inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColor}`}>
+              {STATUS_LABELS[item.status]}
+            </span>
+          </div>
           <p className="text-[10px] text-gray-400 mt-0.5">עמ' קטלוג {item.catalogPage}</p>
         </div>
-        <span className={`inline-flex shrink-0 items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColor}`}>
-          {STATUS_LABELS[item.status]}
-        </span>
       </div>
 
       <div className="flex flex-wrap gap-1 mb-2">
