@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { MiscRow } from "@/types/order";
+import type { CatalogItemType } from "@/types/catalog";
 import { useCatalogContext } from "@/context/CatalogContext";
 
 const inputCls =
@@ -33,9 +34,10 @@ interface Props {
   onRemove: (id: string) => void;
   title?: string;
   accent?: "blue" | "amber";
+  allowedCatalogTypes?: CatalogItemType[];
 }
 
-export function MiscSection({ rows, onAdd, onUpdate, onRemove, title = "שונות", accent = "blue" }: Props) {
+export function MiscSection({ rows, onAdd, onUpdate, onRemove, title = "שונות", accent = "blue", allowedCatalogTypes }: Props) {
   const headerBg = accent === "amber" ? "bg-amber-50 border-amber-100" : "bg-blue-50 border-blue-100";
   const headerText = accent === "amber" ? "text-amber-900" : "text-blue-900";
   const headerIcon = accent === "amber" ? "text-amber-500" : "text-blue-500";
@@ -98,7 +100,11 @@ export function MiscSection({ rows, onAdd, onUpdate, onRemove, title = "שונו
     if (!query) return [];
     const q = query.toLowerCase();
     return catalogItems
-      .filter((item) => item.isActive && item.name.toLowerCase().includes(q))
+      .filter((item) => {
+        if (!item.isActive) return false;
+        if (allowedCatalogTypes && !allowedCatalogTypes.includes(item.type)) return false;
+        return item.name.toLowerCase().includes(q);
+      })
       .slice(0, 6);
   }
 

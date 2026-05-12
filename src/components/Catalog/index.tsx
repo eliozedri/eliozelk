@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useCatalogContext } from "@/context/CatalogContext";
 import type { CatalogFormState, CatalogItemType } from "@/types/catalog";
-import { TYPE_LABELS, TYPE_COLORS, UNIT_OPTIONS } from "@/types/catalog";
+import { TYPE_LABELS, TYPE_COLORS, UNIT_OPTIONS, DIMENSION_UNIT_OPTIONS } from "@/types/catalog";
 
 const inputCls =
   "w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 transition-all";
@@ -13,6 +13,8 @@ const emptyForm: CatalogFormState = {
   type: "product",
   category: "",
   unitOfMeasure: "יחידה",
+  dimensionValue: "",
+  dimensionUnit: "",
   defaultPrice: "",
   description: "",
 };
@@ -134,7 +136,7 @@ function AddItemForm({ onAdd }: AddItemFormProps) {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">יחידת מידה</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">יחידת הזמנה</label>
           <select
             value={form.unitOfMeasure}
             onChange={(e) => update("unitOfMeasure", e.target.value)}
@@ -144,6 +146,31 @@ function AddItemForm({ onAdd }: AddItemFormProps) {
               <option key={u} value={u}>{u}</option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">מידה פיזית</label>
+          <div className="flex gap-1">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.dimensionValue}
+              onChange={(e) => update("dimensionValue", e.target.value)}
+              placeholder="גודל"
+              className={`${inputCls} w-20 shrink-0`}
+              dir="ltr"
+            />
+            <select
+              value={form.dimensionUnit}
+              onChange={(e) => update("dimensionUnit", e.target.value)}
+              className={inputCls}
+            >
+              {DIMENSION_UNIT_OPTIONS.map((u) => (
+                <option key={u} value={u}>{u || "— יחידה —"}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div>
@@ -225,6 +252,8 @@ export function CatalogPage() {
       type: item.type,
       category: item.category,
       unitOfMeasure: item.unitOfMeasure,
+      dimensionValue: item.dimensionValue ?? "",
+      dimensionUnit: item.dimensionUnit ?? "",
       defaultPrice: item.defaultPrice !== null ? String(item.defaultPrice) : "",
       description: item.description,
     });
@@ -329,7 +358,8 @@ export function CatalogPage() {
                     <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">שם פריט</th>
                     <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">סוג</th>
                     <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-28">קטגוריה</th>
-                    <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-20">יחידה</th>
+                    <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-20">יחידת הזמנה</th>
+                    <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">מידה</th>
                     <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">מחיר</th>
                     <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">תיאור</th>
                     <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-20">סטטוס</th>
@@ -379,6 +409,29 @@ export function CatalogPage() {
                           </select>
                         </td>
                         <td className="px-3 py-2">
+                          <div className="flex gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={editForm.dimensionValue}
+                              onChange={(e) => updateEditForm("dimensionValue", e.target.value)}
+                              placeholder="גודל"
+                              className={`${inputCls} w-16 shrink-0`}
+                              dir="ltr"
+                            />
+                            <select
+                              value={editForm.dimensionUnit}
+                              onChange={(e) => updateEditForm("dimensionUnit", e.target.value)}
+                              className={inputCls}
+                            >
+                              {DIMENSION_UNIT_OPTIONS.map((u) => (
+                                <option key={u} value={u}>{u || "—"}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
                           <input
                             type="number"
                             min="0"
@@ -426,6 +479,11 @@ export function CatalogPage() {
                         </td>
                         <td className="px-4 py-3 text-gray-500 text-xs">{item.category || "—"}</td>
                         <td className="px-4 py-3 text-gray-600 text-xs">{item.unitOfMeasure}</td>
+                        <td className="px-4 py-3 text-gray-600 text-xs" dir="ltr">
+                          {item.dimensionValue && item.dimensionUnit
+                            ? `${item.dimensionValue} ${item.dimensionUnit}`
+                            : item.dimensionValue || "—"}
+                        </td>
                         <td className="px-4 py-3 text-gray-600 text-xs" dir="ltr">
                           {item.defaultPrice !== null ? `₪${item.defaultPrice.toLocaleString()}` : "—"}
                         </td>

@@ -206,7 +206,7 @@ function SectionLabel({ label }: { label: string }) {
 
 // ── Sidebar ────────────────────────────────────────────────────────────
 
-export function Sidebar() {
+export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { profile, loading, logout } = useAuth();
 
@@ -222,12 +222,24 @@ export function Sidebar() {
 
   return (
     <aside
-      className="w-52 min-h-screen flex flex-col shrink-0 no-print"
+      className="w-64 md:w-52 h-full min-h-screen flex flex-col shrink-0 no-print"
       style={{ backgroundColor: NAVY, borderLeft: `1px solid ${NAVY_MID}` }}
     >
-      {/* Logo */}
+      {/* Logo + mobile close */}
       <div className="px-4 pt-5 pb-4" style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
         <div className="flex items-center gap-2.5">
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="md:hidden mr-auto flex items-center justify-center w-7 h-7 rounded-lg"
+              style={{ color: "rgba(255,255,255,0.5)" }}
+              aria-label="סגור תפריט"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
           <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-lg" style={{ backgroundColor: EK_BLUE }}>
             <span className="text-white font-black text-base leading-none select-none">א</span>
           </div>

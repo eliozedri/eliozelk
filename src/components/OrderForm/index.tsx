@@ -7,7 +7,7 @@ import { OrderHeader } from "./OrderHeader";
 import { SignTable } from "./SignTable";
 import { MiscSection } from "./MiscSection";
 import { FormActions } from "./FormActions";
-import type { OrderHeader as OrderHeaderType } from "@/types/order";
+import type { OrderHeader as OrderHeaderType, OrderState } from "@/types/order";
 import type { OrderPriority } from "@/types/workOrder";
 
 function RoadIcon() {
@@ -29,6 +29,26 @@ function CheckIcon() {
   );
 }
 
+function validateOrder(order: OrderState): string[] {
+  const errors: string[] = [];
+  if (!order.customer.trim()) errors.push("שם החברה הוא שדה חובה");
+  if (!order.location.trim()) errors.push("מיקום האתר הוא שדה חובה");
+
+  for (const row of order.signRows) {
+    if (row.signNumber.trim() && (!row.quantity || parseFloat(row.quantity) <= 0))
+      errors.push(`תמרור "${row.signNumber}" — הכמות חייבת להיות גדולה מ-0`);
+  }
+  for (const row of order.accessoryRows ?? []) {
+    if (row.description.trim() && (!row.quantity || parseFloat(row.quantity) <= 0))
+      errors.push(`אביזר "${row.description}" — הכמות חייבת להיות גדולה מ-0`);
+  }
+  for (const row of order.miscRows) {
+    if (row.description.trim() && (!row.quantity || parseFloat(row.quantity) <= 0))
+      errors.push(`שונות "${row.description}" — הכמות חייבת להיות גדולה מ-0`);
+  }
+  return errors;
+}
+
 export function OrderForm() {
   const {
     order,
@@ -47,8 +67,16 @@ export function OrderForm() {
 
   const { addOrder } = useOrdersContext();
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const handleSubmit = (priority: OrderPriority) => {
+    const errors = validateOrder(order);
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    setValidationErrors([]);
     const submitted = addOrder(order, priority);
     resetOrder();
     setSuccessMessage(`ההזמנה נשלחה למחלקת גרפיקה בהצלחה — מספר הזמנה: ${submitted.orderNumber}`);
@@ -74,6 +102,15 @@ export function OrderForm() {
             <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
           </svg>
         </div>
+
+        {validationErrors.length > 0 && (
+          <div className="mb-5 p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm no-print">
+            <p className="font-semibold mb-1">לא ניתן לשלוח — יש לתקן את הבאים:</p>
+            <ul className="list-disc list-inside space-y-0.5">
+              {validationErrors.map((e, i) => <li key={i}>{e}</li>)}
+            </ul>
+          </div>
+        )}
 
         {successMessage && (
           <div className="flex items-center gap-3 mb-5 p-4 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm font-medium no-print">
@@ -112,6 +149,7 @@ export function OrderForm() {
         <MiscSection
           title="אביזרים"
           accent="amber"
+          allowedCatalogTypes={["product", "material", "equipment"]}
           rows={order.accessoryRows ?? []}
           onAdd={addAccessoryRow}
           onUpdate={updateAccessoryRow}
@@ -121,6 +159,7 @@ export function OrderForm() {
         <MiscSection
           title="שונות"
           accent="blue"
+          allowedCatalogTypes={["service", "labor", "misc"]}
           rows={order.miscRows}
           onAdd={addMiscRow}
           onUpdate={updateMiscRow}
