@@ -4,8 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import {
   UserProfile,
   Role,
-  TabId,
-  ActionPermission,
   ALL_ROLES,
   ALL_TABS,
   ALL_ACTIONS,
@@ -15,12 +13,15 @@ import {
   canPerformAction,
 } from "@/types/auth";
 import { useAuth } from "@/context/AuthContext";
+import {
+  loadUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+} from "@/lib/auth/store";
 
 const NAVY = "#0d1b2e";
 const EK_BLUE = "#1d6fd8";
-const EK_GOLD = "#f59e0b";
-
-// ── Types ──────────────────────────────────────────────────────────────
 
 interface NewUserForm {
   name: string;
@@ -30,8 +31,6 @@ interface NewUserForm {
   allowed_tabs: string[];
   action_permissions: string[];
 }
-
-// ── Helpers ────────────────────────────────────────────────────────────
 
 function defaultsForRole(role: Role): { allowed_tabs: string[]; action_permissions: string[] } {
   const d = ROLE_DEFAULTS[role];
@@ -45,10 +44,7 @@ function StatusBadge({ active }: { active: boolean }) {
   return (
     <span
       className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold"
-      style={{
-        backgroundColor: active ? "#dcfce7" : "#fee2e2",
-        color: active ? "#15803d" : "#dc2626",
-      }}
+      style={{ backgroundColor: active ? "#dcfce7" : "#fee2e2", color: active ? "#15803d" : "#dc2626" }}
     >
       {active ? "פעיל" : "מושבת"}
     </span>
@@ -56,21 +52,16 @@ function StatusBadge({ active }: { active: boolean }) {
 }
 
 function RoleBadge({ role }: { role: Role }) {
-  const ismaster = role === "master";
+  const isMaster = role === "master";
   return (
     <span
       className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold"
-      style={{
-        backgroundColor: ismaster ? "#fef3c7" : "#eff6ff",
-        color: ismaster ? "#92400e" : "#1e40af",
-      }}
+      style={{ backgroundColor: isMaster ? "#fef3c7" : "#eff6ff", color: isMaster ? "#92400e" : "#1e40af" }}
     >
       {ROLE_LABELS[role] ?? role}
     </span>
   );
 }
-
-// ── Permission Editor ──────────────────────────────────────────────────
 
 interface PermissionEditorProps {
   tabs: string[];
@@ -80,74 +71,58 @@ interface PermissionEditorProps {
 }
 
 function PermissionEditor({ tabs, actions, onChange, role }: PermissionEditorProps) {
-  const isMaster = role === "master";
-
-  const toggleTab = (id: string) => {
-    if (isMaster) return;
-    const next = tabs.includes(id) ? tabs.filter((t) => t !== id) : [...tabs, id];
-    onChange(next, actions);
-  };
-
-  const toggleAction = (id: string) => {
-    if (isMaster) return;
-    const next = actions.includes(id) ? actions.filter((a) => a !== id) : [...actions, id];
-    onChange(tabs, next);
-  };
-
-  if (isMaster) {
-    return (
-      <p className="text-xs text-gray-500 italic">מנהל ראשי — גישה מלאה לכל הטאבים והפעולות</p>
-    );
+  if (role === "master") {
+    return <p className="text-xs text-gray-500 italic">מנהל ראשי — גישה מלאה לכל הטאבים והפעולות</p>;
   }
 
   const hasAllTabs = tabs.includes("*");
   const hasAllActions = actions.includes("*");
+
+  const toggleTab = (id: string) => {
+    onChange(tabs.includes(id) ? tabs.filter((t) => t !== id) : [...tabs, id], actions);
+  };
+
+  const toggleAction = (id: string) => {
+    onChange(tabs, actions.includes(id) ? actions.filter((a) => a !== id) : [...actions, id]);
+  };
 
   return (
     <div className="space-y-4">
       <div>
         <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">טאבים מורשים</p>
         <div className="flex flex-wrap gap-2">
-          {ALL_TABS.filter((t) => t.id !== "access").map((tab) => {
-            const checked = hasAllTabs || tabs.includes(tab.id);
-            return (
-              <label key={tab.id} className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggleTab(tab.id)}
-                  className="rounded"
-                />
-                <span className="text-xs text-gray-700">{tab.label}</span>
-              </label>
-            );
-          })}
+          {ALL_TABS.filter((t) => t.id !== "access").map((tab) => (
+            <label key={tab.id} className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hasAllTabs || tabs.includes(tab.id)}
+                onChange={() => toggleTab(tab.id)}
+                className="rounded"
+              />
+              <span className="text-xs text-gray-700">{tab.label}</span>
+            </label>
+          ))}
         </div>
       </div>
       <div>
         <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">פעולות מורשות</p>
         <div className="flex flex-wrap gap-2">
-          {ALL_ACTIONS.map((action) => {
-            const checked = hasAllActions || actions.includes(action);
-            return (
-              <label key={action} className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggleAction(action)}
-                  className="rounded"
-                />
-                <span className="text-xs text-gray-700">{ACTION_PERMISSION_LABELS[action]}</span>
-              </label>
-            );
-          })}
+          {ALL_ACTIONS.map((action) => (
+            <label key={action} className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hasAllActions || actions.includes(action)}
+                onChange={() => toggleAction(action)}
+                className="rounded"
+              />
+              <span className="text-xs text-gray-700">{ACTION_PERMISSION_LABELS[action]}</span>
+            </label>
+          ))}
         </div>
       </div>
     </div>
   );
 }
-
-// ── Add User Modal ─────────────────────────────────────────────────────
 
 interface AddUserModalProps {
   onClose: () => void;
@@ -173,23 +148,14 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
     e.preventDefault();
     setError("");
     setLoading(true);
-
-    const res = await fetch("/api/admin/create-user", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      setError(data.error ?? "שגיאה ביצירת המשתמש");
-      setLoading(false);
-      return;
+    try {
+      await createUser(form);
+      onCreated();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "שגיאה ביצירת המשתמש");
     }
-
-    onCreated();
-    onClose();
+    setLoading(false);
   };
 
   return (
@@ -199,7 +165,6 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
           <h2 className="font-black text-lg" style={{ color: NAVY }}>הוספת משתמש חדש</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
         </div>
-
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -226,7 +191,6 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
               />
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">סיסמה ראשונית</label>
@@ -254,7 +218,6 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
               </select>
             </div>
           </div>
-
           <div className="border rounded-xl p-4 bg-gray-50">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">הגדרת הרשאות</p>
             <PermissionEditor
@@ -264,13 +227,11 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
               onChange={(t, a) => setForm((p) => ({ ...p, allowed_tabs: t, action_permissions: a }))}
             />
           </div>
-
           {error && (
             <div className="p-3 rounded-lg bg-red-50 border border-red-200">
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
-
           <div className="flex gap-2 pt-2">
             <button
               type="submit"
@@ -294,8 +255,6 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
   );
 }
 
-// ── Edit User Modal ────────────────────────────────────────────────────
-
 interface EditUserModalProps {
   user: UserProfile;
   allUsers: UserProfile[];
@@ -311,7 +270,6 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const isSelf = false; // checked via useAuth in parent if needed
   const masterCount = allUsers.filter((u) => u.role === "master" && u.is_active).length;
   const isLastMaster = user.role === "master" && masterCount === 1;
 
@@ -322,36 +280,37 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
     setActions(d.action_permissions);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (isLastMaster && (!isActive || role !== "master")) {
       setError("לא ניתן לבטל או לשנות את המנהל הראשי האחרון במערכת.");
       return;
     }
     setError("");
     setLoading(true);
-
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-
-    const { error: dbError } = await supabase
-      .from("profiles")
-      .update({
+    try {
+      updateUser(user.id, {
         role,
         is_active: isActive,
         allowed_tabs: role === "master" ? ["*"] : tabs,
         action_permissions: role === "master" ? ["*"] : actions,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", user.id);
-
-    if (dbError) {
-      setError("שגיאה בשמירת הנתונים: " + dbError.message);
-      setLoading(false);
-      return;
+      });
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "שגיאה בשמירה");
     }
+    setLoading(false);
+  };
 
-    onSaved();
-    onClose();
+  const handleDelete = () => {
+    if (!confirm(`למחוק את ${user.name}?`)) return;
+    try {
+      deleteUser(user.id);
+      onSaved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "שגיאה במחיקה");
+    }
   };
 
   return (
@@ -364,7 +323,6 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
         </div>
-
         <div className="p-6 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -393,7 +351,6 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
               </select>
             </div>
           </div>
-
           <div className="border rounded-xl p-4 bg-gray-50">
             <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">הרשאות</p>
             <PermissionEditor
@@ -403,7 +360,6 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
               onChange={(t, a) => { setTabs(t); setActions(a); }}
             />
           </div>
-
           {isLastMaster && (
             <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
               <p className="text-xs text-amber-700 font-semibold">
@@ -411,13 +367,11 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
               </p>
             </div>
           )}
-
           {error && (
             <div className="p-3 rounded-lg bg-red-50 border border-red-200">
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
-
           <div className="flex gap-2 pt-2">
             <button
               onClick={handleSave}
@@ -427,6 +381,14 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
             >
               {loading ? "שומר..." : "שמירת שינויים"}
             </button>
+            {!isLastMaster && (
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2.5 rounded-lg text-sm font-semibold text-red-600 border border-red-200 hover:bg-red-50"
+              >
+                מחיקה
+              </button>
+            )}
             <button
               onClick={onClose}
               className="px-4 py-2.5 rounded-lg text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50"
@@ -440,39 +402,23 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
   );
 }
 
-// ── Main Component ─────────────────────────────────────────────────────
-
 export function AccessManager() {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [editUser, setEditUser] = useState<UserProfile | null>(null);
 
-  const isConfigured =
-    !!process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const canManage = profile && canPerformAction(profile, "manage_access");
 
-  const canManage = !isConfigured || (profile && canPerformAction(profile, "manage_access"));
-
-  const loadUsers = useCallback(async () => {
-    if (!isConfigured) { setLoading(false); return; }
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (!error && data) {
-      setUsers(data as UserProfile[]);
-    }
+  const reloadUsers = useCallback(() => {
+    setUsers(loadUsers());
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    reloadUsers();
+  }, [reloadUsers]);
 
   if (!canManage) {
     return (
@@ -485,35 +431,13 @@ export function AccessManager() {
     );
   }
 
-  if (!isConfigured) {
-    return (
-      <div className="p-6 max-w-5xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-black" style={{ color: NAVY }}>הרשאות גישה</h1>
-            <p className="text-sm text-gray-500 mt-0.5">ניהול משתמשים, תפקידים ורמות גישה</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl border p-8 text-center">
-          <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: "#fffbeb" }}>
-            <span className="text-2xl">⚙️</span>
-          </div>
-          <p className="text-lg font-bold text-gray-800 mb-2">Supabase לא מוגדר עדיין</p>
-          <p className="text-sm text-gray-500 mb-4">כדי להפעיל ניהול משתמשים, יש לחבר Supabase ולהגדיר משתני סביבה.</p>
-          <div className="text-right bg-gray-50 rounded-xl p-4 max-w-md mx-auto text-sm font-mono text-gray-600 space-y-1">
-            <p>NEXT_PUBLIC_SUPABASE_URL</p>
-            <p>NEXT_PUBLIC_SUPABASE_ANON_KEY</p>
-            <p>SUPABASE_SERVICE_ROLE_KEY</p>
-          </div>
-          <p className="text-xs text-gray-400 mt-4">לאחר הגדרת המשתנים ב-Vercel, פרוס מחדש ופתח <span className="font-mono">/setup</span></p>
-        </div>
-      </div>
-    );
-  }
+  const handleSaved = () => {
+    reloadUsers();
+    refreshProfile();
+  };
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-black" style={{ color: NAVY }}>הרשאות גישה</h1>
@@ -529,7 +453,6 @@ export function AccessManager() {
         </button>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         {[
           { label: "סה״כ משתמשים", value: users.length },
@@ -543,7 +466,6 @@ export function AccessManager() {
         ))}
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-xl border overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400 text-sm">טוען משתמשים...</div>
@@ -589,19 +511,15 @@ export function AccessManager() {
         )}
       </div>
 
-      {/* Modals */}
       {showAdd && (
-        <AddUserModal
-          onClose={() => setShowAdd(false)}
-          onCreated={loadUsers}
-        />
+        <AddUserModal onClose={() => setShowAdd(false)} onCreated={handleSaved} />
       )}
       {editUser && (
         <EditUserModal
           user={editUser}
           allUsers={users}
           onClose={() => setEditUser(null)}
-          onSaved={loadUsers}
+          onSaved={handleSaved}
         />
       )}
     </div>
