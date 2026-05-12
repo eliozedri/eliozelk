@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Heebo } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/Sidebar";
+import { AppShell } from "@/components/AppShell";
 import { OrdersProvider } from "@/components/OrdersProvider";
 import { CatalogProvider } from "@/components/CatalogProvider";
 import { CrewsProvider } from "@/components/CrewsProvider";
@@ -21,18 +21,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="he" dir="rtl" className={heebo.variable}>
       <body className="font-[family-name:var(--font-heebo)] antialiased bg-surface min-h-screen">
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 min-w-0">
-            <CatalogProvider>
-              <OrdersProvider>
-                <CrewsProvider>
-                  {children}
-                </CrewsProvider>
-              </OrdersProvider>
-            </CatalogProvider>
-          </main>
-        </div>
+        <CatalogProvider>
+          <OrdersProvider>
+            <CrewsProvider>
+              <AppShell>{children}</AppShell>
+            </CrewsProvider>
+          </OrdersProvider>
+        </CatalogProvider>
       </body>
     </html>
   );
