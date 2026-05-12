@@ -5,6 +5,8 @@ import { AppShell } from "@/components/AppShell";
 import { OrdersProvider } from "@/components/OrdersProvider";
 import { CatalogProvider } from "@/components/CatalogProvider";
 import { CrewsProvider } from "@/components/CrewsProvider";
+import { CostRatesProvider } from "@/components/CostRatesProvider";
+import { WorkDiaryProvider } from "@/components/WorkDiaryProvider";
 
 const heebo = Heebo({
   subsets: ["hebrew", "latin"],
@@ -21,13 +23,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="he" dir="rtl" className={heebo.variable}>
       <body className="font-[family-name:var(--font-heebo)] antialiased bg-surface min-h-screen">
-        <CatalogProvider>
-          <OrdersProvider>
-            <CrewsProvider>
-              <AppShell>{children}</AppShell>
-            </CrewsProvider>
-          </OrdersProvider>
-        </CatalogProvider>
+        <CostRatesProvider>
+          <WorkDiaryProvider>
+            <CatalogProvider>
+              <OrdersProvider>
+                <CrewsProvider>
+                  <AppShell>{children}</AppShell>
+                </CrewsProvider>
+              </OrdersProvider>
+            </CatalogProvider>
+          </WorkDiaryProvider>
+        </CostRatesProvider>
       </body>
     </html>
   );

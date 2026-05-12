@@ -1,32 +1,189 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
+import { useCostRatesContext } from "@/context/CostRatesContext";
 import type { WorkDiary } from "@/types/workDiary";
+import { DIARY_STATUS_LABELS, DIARY_STATUS_COLORS } from "@/types/workDiary";
+import { calculateProfitability, STATUS_LABELS, STATUS_COLORS, STATUS_DOT } from "@/lib/profitability";
 import { TabBar, type DiaryTab } from "./TabBar";
 import { DiaryHeader } from "./DiaryHeader";
 import { PaintingTab } from "./PaintingTab";
 import { PolesSignsTab } from "./PolesSignsTab";
 import { DocumentTab } from "./DocumentTab";
 import { DiaryActions } from "./DiaryActions";
+import { ProfitabilityPanel } from "./ProfitabilityPanel";
 import { exportWorkDiaryPDF, openEmailDraft } from "@/lib/workDiaryExport";
 
 function DiaryIcon({ className }: { className?: string }) {
   return (
-    <svg
-      className={className ?? "w-8 h-8 text-blue-600"}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
+    <svg className={className ?? "w-8 h-8 text-blue-600"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
       <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
     </svg>
   );
 }
+
+function PlusIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+// ── Diary list row ────────────────────────────────────────────────────────────
+
+interface DiaryRowProps {
+  diary: WorkDiary;
+  profitStatus: string;
+  profitColors: string;
+  dotColor: string;
+  netProfit: number;
+  onOpen: () => void;
+  onDelete: () => void;
+}
+
+function DiaryRow({ diary, profitStatus, profitColors, dotColor, netProfit, onOpen, onDelete }: DiaryRowProps) {
+  function formatDate(iso: string) {
+    if (!iso) return "—";
+    return new Date(iso + "T00:00:00").toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  }
+
+  return (
+    <div
+      className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer group"
+      onClick={onOpen}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-semibold text-gray-900">{diary.diaryNumber}</span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${DIARY_STATUS_COLORS[diary.status]}`}>
+            {DIARY_STATUS_LABELS[diary.status]}
+          </span>
+          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${profitColors}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+            {profitStatus}
+          </span>
+        </div>
+        <div className="text-xs text-gray-500 mt-0.5 truncate">
+          {diary.customerName || "ללא לקוח"}{diary.siteName ? ` · ${diary.siteName}` : ""}
+        </div>
+      </div>
+      <div className="text-xs text-gray-400 shrink-0 text-left">
+        {formatDate(diary.executionDate)}
+      </div>
+      {diary.billedAmount != null && (
+        <div className={`text-xs font-bold shrink-0 ${netProfit >= 0 ? "text-green-700" : "text-red-700"}`}>
+          {netProfit >= 0 ? "+" : ""}₪{Math.round(Math.abs(netProfit)).toLocaleString("he-IL")}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); if (confirm("מחוק יומן זה?")) onDelete(); }}
+        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-300 hover:text-red-500 p-1 rounded"
+        title="מחק יומן"
+      >
+        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
+        </svg>
+      </button>
+      <svg className="w-4 h-4 text-gray-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
+    </div>
+  );
+}
+
+// ── List view ─────────────────────────────────────────────────────────────────
+
+function DiaryListView({ onNew, onOpen }: { onNew: () => void; onOpen: (d: WorkDiary) => void }) {
+  const { diaries, deleteDiary } = useWorkDiaryContext();
+  const { rates } = useCostRatesContext();
+
+  const rows = useMemo(() =>
+    diaries.map((d) => {
+      const r = calculateProfitability(d, rates);
+      return {
+        diary: d,
+        profitStatus: STATUS_LABELS[r.status],
+        profitColors: STATUS_COLORS[r.status],
+        dotColor: STATUS_DOT[r.status],
+        netProfit: r.netProfit,
+      };
+    }), [diaries, rates]);
+
+  const sorted = useMemo(() =>
+    [...rows].sort((a, b) => {
+      const ad = a.diary.executionDate || a.diary.createdAt;
+      const bd = b.diary.executionDate || b.diary.createdAt;
+      return bd.localeCompare(ad);
+    }), [rows]);
+
+  return (
+    <div className="min-h-screen bg-[#f0f2f5] pb-10">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 px-4 py-4">
+        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <DiaryIcon className="w-7 h-7 text-blue-600 shrink-0" />
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">יומן עבודה</h1>
+              <p className="text-xs text-gray-400">{diaries.length} יומנים שמורים</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onNew}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors shadow-sm"
+          >
+            <PlusIcon />
+            יומן חדש
+          </button>
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="max-w-3xl mx-auto mt-4 px-4">
+        {sorted.length === 0 ? (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
+            <DiaryIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500 font-medium mb-1">אין יומנים שמורים</p>
+            <p className="text-xs text-gray-400 mb-6">צור יומן עבודה חדש לתיעוד עבודת השטח</p>
+            <button
+              type="button"
+              onClick={onNew}
+              className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm transition-colors"
+            >
+              + יומן עבודה חדש
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">יומנים</span>
+              <span className="text-xs text-gray-400">{sorted.length} יומנים</span>
+            </div>
+            {sorted.map((row) => (
+              <DiaryRow
+                key={row.diary.id}
+                diary={row.diary}
+                profitStatus={row.profitStatus}
+                profitColors={row.profitColors}
+                dotColor={row.dotColor}
+                netProfit={row.netProfit}
+                onOpen={() => onOpen(row.diary)}
+                onDelete={() => deleteDiary(row.diary.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Form view ─────────────────────────────────────────────────────────────────
 
 export function WorkDiaryForm() {
   const { createDiary, saveDiary, submitDiary } = useWorkDiaryContext();
@@ -38,6 +195,12 @@ export function WorkDiaryForm() {
 
   function handleNew() {
     const d = createDiary();
+    setDiary(d);
+    setActiveTab("header");
+    setSuccessMessage(null);
+  }
+
+  function handleOpen(d: WorkDiary) {
     setDiary(d);
     setActiveTab("header");
     setSuccessMessage(null);
@@ -65,9 +228,7 @@ export function WorkDiaryForm() {
     submitDiary(diary.id);
     const submitted = { ...diary, status: "submitted" as const, submittedAt: new Date().toISOString() };
     setDiary(submitted);
-    setSuccessMessage(
-      `יומן עבודה ${diary.diaryNumber} נשלח בהצלחה ותויק בהנהלת חשבונות.`
-    );
+    setSuccessMessage(`יומן עבודה ${diary.diaryNumber} נשלח בהצלחה ותויק בהנהלת חשבונות.`);
   }
 
   async function handleExportPDF() {
@@ -86,28 +247,9 @@ export function WorkDiaryForm() {
     openEmailDraft(diary);
   }
 
-  // ── Landing ──────────────────────────────────────────────
+  // ── Landing / list ───────────────────────────────────────────────────────
   if (!diary) {
-    return (
-      <div className="min-h-screen bg-[#f0f2f5] flex flex-col items-center justify-center px-4">
-        <div className="text-center max-w-sm">
-          <div className="flex justify-center mb-5">
-            <DiaryIcon className="w-14 h-14 text-blue-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">יומן עבודה</h1>
-          <p className="text-sm text-gray-500 mb-8 leading-relaxed">
-            תיעוד דיגיטלי של עבודת שטח — כמויות, צוות, חתימות ותמונות
-          </p>
-          <button
-            type="button"
-            onClick={handleNew}
-            className="px-8 py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-base transition-colors shadow-sm"
-          >
-            + יומן עבודה חדש
-          </button>
-        </div>
-      </div>
-    );
+    return <DiaryListView onNew={handleNew} onOpen={handleOpen} />;
   }
 
   const disabled = diary.status === "submitted";
@@ -134,13 +276,10 @@ export function WorkDiaryForm() {
           {!successMessage && (
             <button
               type="button"
-              onClick={() => {
-                setDiary(null);
-                setSuccessMessage(null);
-              }}
+              onClick={() => { setDiary(null); setSuccessMessage(null); }}
               className="mr-auto text-xs text-gray-400 hover:text-gray-600 underline transition-colors"
             >
-              ← חזור
+              ← רשימת יומנים
             </button>
           )}
         </div>
@@ -152,11 +291,7 @@ export function WorkDiaryForm() {
 
         <div className="p-4">
           {activeTab === "header" && (
-            <DiaryHeader
-              diary={diary}
-              onChange={handleChange}
-              disabled={disabled}
-            />
+            <DiaryHeader diary={diary} onChange={handleChange} disabled={disabled} />
           )}
           {activeTab === "painting" && (
             <PaintingTab
@@ -175,11 +310,10 @@ export function WorkDiaryForm() {
             />
           )}
           {activeTab === "docs" && (
-            <DocumentTab
-              diary={diary}
-              onChange={handleChange}
-              disabled={disabled}
-            />
+            <DocumentTab diary={diary} onChange={handleChange} disabled={disabled} />
+          )}
+          {activeTab === "analysis" && (
+            <ProfitabilityPanel diary={diary} />
           )}
         </div>
       </div>

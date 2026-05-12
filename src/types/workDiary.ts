@@ -70,6 +70,8 @@ export interface DiarySignature {
   dataUrl: string;
 }
 
+export type DiaryApprovalStatus = "pending" | "approved" | "rejected";
+
 export interface WorkDiary {
   id: string;
   diaryNumber: string;
@@ -96,6 +98,30 @@ export interface WorkDiary {
   createdAt: string;
   updatedAt: string;
   submittedAt: string | null;
+
+  // ─── Profitability & billing ──────────────────────────────
+  orderId?: string;             // link to WorkOrder.id
+  orderNumber?: string;         // snapshot for display
+  billedAmount?: number;        // ₪ expected/actual billing for this day
+  isBillable?: boolean;         // false = internal/non-billable work
+  billingNotes?: string;
+
+  // ─── Time breakdown (hours, decimal) ─────────────────────
+  travelTimeHours?: number;     // total travel (both ways)
+  setupTimeHours?: number;      // equipment setup/teardown
+  waitingTimeHours?: number;    // idle/wait time on site
+  executionTimeHours?: number;  // actual productive execution time
+
+  // ─── Cost overrides ───────────────────────────────────────
+  vehicleCostOverride?: number; // if different from rate defaults
+  equipmentCost?: number;       // rental/machines beyond base vehicle
+  materialCost?: number;        // paint, signs, consumables used
+
+  // ─── Manager approval ────────────────────────────────────
+  approvalStatus?: DiaryApprovalStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
 }
 
 // ── Seed factories ──────────────────────────────────────────

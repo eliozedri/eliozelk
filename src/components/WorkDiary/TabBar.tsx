@@ -1,12 +1,13 @@
 "use client";
 
-export type DiaryTab = "header" | "painting" | "poles" | "docs";
+export type DiaryTab = "header" | "painting" | "poles" | "docs" | "analysis";
 
 const TABS: { id: DiaryTab; label: string }[] = [
   { id: "header", label: "פרטי עבודה" },
   { id: "painting", label: "צביעה" },
   { id: "poles", label: "עמודים ותמרורים" },
   { id: "docs", label: "תיעוד" },
+  { id: "analysis", label: "ניתוח רווחיות" },
 ];
 
 interface Props {
