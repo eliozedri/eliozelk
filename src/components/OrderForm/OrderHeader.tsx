@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import type { OrderHeader as OrderHeaderType } from "@/types/order";
 import { CITY_COORDINATES } from "@/lib/cityCoordinates";
+import { useCustomers } from "@/hooks/useCustomers";
 
 interface Props {
   header: OrderHeaderType;
@@ -12,6 +14,31 @@ const inputCls =
   "w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 transition-all";
 
 export function OrderHeader({ header, onChange }: Props) {
+  const { customers } = useCustomers();
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const suggestions = header.customer.trim().length >= 1
+    ? customers
+        .filter((c) => c.name.toLowerCase().includes(header.customer.toLowerCase()))
+        .slice(0, 6)
+    : [];
+
+  function selectCustomer(name: string) {
+    onChange({ customer: name });
+    setShowSuggestions(false);
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 mb-4">
       {/* Row 1: date + company + contact + orderer */}
@@ -40,17 +67,44 @@ export function OrderHeader({ header, onChange }: Props) {
         </div>
 
         {/* שם החברה */}
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1" ref={wrapperRef}>
           <label className="text-sm font-medium text-gray-600">
             שם החברה <span className="text-red-500">*</span>
           </label>
-          <input
-            type="text"
-            value={header.customer}
-            onChange={(e) => onChange({ customer: e.target.value })}
-            placeholder="שם לקוח / חברה"
-            className={inputCls}
-          />
+          <div className="relative">
+            <input
+              type="text"
+              value={header.customer}
+              onChange={(e) => {
+                onChange({ customer: e.target.value });
+                setShowSuggestions(true);
+              }}
+              onFocus={() => { if (header.customer.trim().length >= 1) setShowSuggestions(true); }}
+              placeholder="שם לקוח / חברה"
+              className={inputCls}
+              autoComplete="off"
+            />
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full right-0 mt-1 w-full bg-white rounded-lg border border-gray-200 shadow-lg z-50 overflow-hidden">
+                {suggestions.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onMouseDown={() => selectCustomer(c.name)}
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-right hover:bg-blue-50 transition-colors"
+                  >
+                    <div className="flex-1 text-right">
+                      <div className="font-medium text-gray-800">{c.name}</div>
+                      {c.phone && <div className="text-xs text-gray-400">{c.phone}</div>}
+                    </div>
+                    {c.location && (
+                      <span className="text-xs text-gray-400 shrink-0">{c.location}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* איש קשר */}
@@ -76,7 +130,6 @@ export function OrderHeader({ header, onChange }: Props) {
             className={inputCls}
           />
         </div>
-
       </div>
 
       {/* Row 2: city only */}
