@@ -140,7 +140,6 @@ export function OrderForm() {
             customer: order.customer,
             contactPerson: order.contactPerson,
             orderedBy: order.orderedBy,
-            jobSlash: order.jobSlash,
             city: order.city,
           }}
           onChange={(partial) => updateHeader(partial as Partial<OrderHeaderType>)}
@@ -168,9 +167,10 @@ export function OrderForm() {
           onAdd={addMiscRow}
           onUpdate={updateMiscRow}
           onRemove={removeMiscRow}
-          title="שונות"
+          title="שלט לפי מידה"
           accentColor="bg-blue-50"
           showDimensionRows
+          alwaysShowDimensions
         />
 
         {/* General notes */}

@@ -47,7 +47,6 @@ function initialState(): OrderState {
     customer: "",
     contactPerson: "",
     orderedBy: "",
-    jobSlash: "",
     city: "",
     signRows: [emptySignRow()],
     accessoryRows: [emptyMiscRow()],
@@ -76,7 +75,6 @@ export function useOrderForm() {
         fabricationDetails: draft.fabricationDetails ?? emptyFabrication(),
         contactPerson: draft.contactPerson ?? "",
         orderedBy: draft.orderedBy ?? "",
-        jobSlash: draft.jobSlash ?? "",
       });
     }
   }, []);
@@ -87,7 +85,7 @@ export function useOrderForm() {
   }, [order]);
 
   const updateHeader = useCallback(
-    (partial: Partial<Pick<OrderState, "date" | "customer" | "contactPerson" | "orderedBy" | "jobSlash" | "city" | "generalNotes">>) => {
+    (partial: Partial<Pick<OrderState, "date" | "customer" | "contactPerson" | "orderedBy" | "city" | "generalNotes">>) => {
       setOrder((prev) => ({ ...prev, ...partial }));
     },
     []

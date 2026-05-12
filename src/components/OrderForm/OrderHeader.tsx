@@ -14,8 +14,8 @@ const inputCls =
 export function OrderHeader({ header, onChange }: Props) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 mb-4">
-      {/* Row 1: date + company + contact + orderer + job slash */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+      {/* Row 1: date + company + contact + orderer */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
 
         {/* תאריך */}
         <div className="flex flex-col gap-1">
@@ -77,17 +77,6 @@ export function OrderHeader({ header, onChange }: Props) {
           />
         </div>
 
-        {/* סלאש העבודה */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-600">סלאש העבודה</label>
-          <input
-            type="text"
-            value={header.jobSlash}
-            onChange={(e) => onChange({ jobSlash: e.target.value })}
-            placeholder="מס׳ סלאש"
-            className={inputCls}
-          />
-        </div>
       </div>
 
       {/* Row 2: city only */}

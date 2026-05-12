@@ -6,7 +6,11 @@ import type { WorkOrder } from "@/types/workOrder";
 import {
   FABRICATION_STATUS_LABELS,
   FABRICATION_STATUS_COLORS,
+  PROBLEM_CATEGORY_LABELS,
+  PROBLEM_STATUS_LABELS,
+  PROBLEM_STATUS_COLORS,
   type FabricationStatus,
+  type OrderProblemCategory,
 } from "@/types/workOrder";
 
 function formatDate(iso: string): string {
@@ -25,8 +29,95 @@ function StatusBadge({ status }: { status: FabricationStatus }) {
   );
 }
 
+const FAB_CATEGORIES: OrderProblemCategory[] = [
+  "missing_dimensions", "material_shortage", "fabrication_unclear", "unclear_request", "other",
+];
+
+function ProblemForm({ orderId, onClose }: { orderId: string; onClose: () => void }) {
+  const { addOrderProblem } = useOrdersContext();
+  const [category, setCategory] = useState<OrderProblemCategory>("fabrication_unclear");
+  const [description, setDescription] = useState("");
+
+  function submit() {
+    if (!description.trim()) return;
+    addOrderProblem(orderId, { department: "fabrication", category, description: description.trim() });
+    onClose();
+  }
+
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50 p-3 flex flex-col gap-2">
+      <div className="text-xs font-semibold text-red-700 mb-0.5">דיווח בעיה</div>
+      <select
+        value={category}
+        onChange={(e) => setCategory(e.target.value as OrderProblemCategory)}
+        className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 bg-white outline-none focus:ring-2 focus:ring-red-300"
+      >
+        {FAB_CATEGORIES.map((c) => (
+          <option key={c} value={c}>{PROBLEM_CATEGORY_LABELS[c]}</option>
+        ))}
+      </select>
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="תיאור הבעיה..."
+        rows={2}
+        className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 bg-white outline-none focus:ring-2 focus:ring-red-300 resize-none"
+      />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!description.trim()}
+          className="flex-1 py-1.5 rounded text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors"
+        >
+          שלח דיווח
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-3 py-1.5 rounded text-xs text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
+        >
+          ביטול
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function OpenProblems({ order }: { order: WorkOrder }) {
+  const { resolveOrderProblem } = useOrdersContext();
+  const problems = (order.problems ?? []).filter((p) => p.status !== "resolved" && p.status !== "cancelled");
+  if (problems.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {problems.map((p) => (
+        <div key={p.id} className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs flex items-start gap-2">
+          <div className="flex-1">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${PROBLEM_STATUS_COLORS[p.status]}`}>
+                {PROBLEM_STATUS_LABELS[p.status]}
+              </span>
+              <span className="text-gray-500">{PROBLEM_CATEGORY_LABELS[p.category]}</span>
+            </div>
+            <div className="text-gray-700">{p.description}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => resolveOrderProblem(order.id, p.id)}
+            className="shrink-0 text-[10px] px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200 font-medium transition-colors whitespace-nowrap"
+          >
+            נפתרה
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function FabricationCard({ order }: { order: WorkOrder }) {
   const { updateOrderFields } = useOrdersContext();
+  const [showProblemForm, setShowProblemForm] = useState(false);
   const status = order.fabricationStatus ?? "pending";
   const fab = order.fabricationDetails;
 
@@ -58,17 +149,13 @@ function FabricationCard({ order }: { order: WorkOrder }) {
     updateOrderFields(order.id, extra);
   }
 
-  function markIssue() {
-    updateOrderFields(order.id, { fabricationStatus: "issue" });
-  }
-
   const borderColor = {
     pending: "border-amber-200",
     acknowledged: "border-blue-200",
     in_progress: "border-purple-200",
     ready: "border-teal-200",
     completed: "border-green-200",
-    issue: "border-red-200",
+    issue: "border-red-300",
   }[status];
 
   return (
@@ -116,29 +203,35 @@ function FabricationCard({ order }: { order: WorkOrder }) {
         </div>
       )}
 
-      <div className="flex gap-2">
-        {NEXT_STATUS[status] !== null && (
-          <button
-            onClick={advance}
-            className="flex-1 py-2 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
-          >
-            {NEXT_LABEL[status]}
-          </button>
-        )}
-        {status !== "completed" && status !== "issue" && (
-          <button
-            onClick={markIssue}
-            className="px-3 py-2 rounded-lg text-sm font-medium text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 transition-colors"
-          >
-            בעיה
-          </button>
-        )}
-        {status === "completed" && (
-          <div className="flex-1 py-2 rounded-lg text-sm font-bold text-center text-green-700 bg-green-50 border border-green-200">
-            ✓ הושלם
-          </div>
-        )}
-      </div>
+      <OpenProblems order={order} />
+
+      {showProblemForm ? (
+        <ProblemForm orderId={order.id} onClose={() => setShowProblemForm(false)} />
+      ) : (
+        <div className="flex gap-2">
+          {NEXT_STATUS[status] !== null && (
+            <button
+              onClick={advance}
+              className="flex-1 py-2 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+            >
+              {NEXT_LABEL[status]}
+            </button>
+          )}
+          {status !== "completed" && (
+            <button
+              onClick={() => setShowProblemForm(true)}
+              className="px-3 py-2 rounded-lg text-sm font-medium text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 transition-colors"
+            >
+              בעיה
+            </button>
+          )}
+          {status === "completed" && (
+            <div className="flex-1 py-2 rounded-lg text-sm font-bold text-center text-green-700 bg-green-50 border border-green-200">
+              ✓ הושלם
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

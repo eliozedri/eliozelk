@@ -57,7 +57,6 @@ export interface OrderHeader {
   customer: string;      // שם החברה
   contactPerson: string; // איש קשר
   orderedBy: string;     // מזמין
-  jobSlash: string;      // סלאש העבודה
   city: string;          // עיר (required)
 }
 

@@ -3,7 +3,7 @@
 import { createContext, useContext } from "react";
 import { useOrders } from "@/hooks/useOrders";
 import type { OrderState } from "@/types/order";
-import type { WorkOrder, WorkOrderStatus, OrderPriority } from "@/types/workOrder";
+import type { WorkOrder, WorkOrderStatus, OrderPriority, OrderProblemStatus, OrderProblemCategory, OrderActivityType } from "@/types/workOrder";
 
 interface OrdersContextValue {
   orders: WorkOrder[];
@@ -12,6 +12,9 @@ interface OrdersContextValue {
   completeGraphics: (id: string) => void;
   updateOrderStatus: (id: string, status: WorkOrderStatus) => void;
   updateOrderFields: (id: string, fields: Partial<WorkOrder>) => void;
+  addOrderActivity: (id: string, type: OrderActivityType, description: string, opts?: { by?: string; department?: string; meta?: Record<string, string> }) => void;
+  addOrderProblem: (id: string, problem: { department: "graphics" | "fabrication" | "office"; category: OrderProblemCategory; description: string; reportedBy?: string }) => void;
+  resolveOrderProblem: (orderId: string, problemId: string, opts?: { resolvedBy?: string; resolutionNotes?: string; newStatus?: OrderProblemStatus }) => void;
 }
 
 const OrdersContext = createContext<OrdersContextValue | null>(null);

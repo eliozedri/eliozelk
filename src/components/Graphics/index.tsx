@@ -1,7 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { useOrdersContext } from "@/context/OrdersContext";
 import type { WorkOrder } from "@/types/workOrder";
+import {
+  PROBLEM_CATEGORY_LABELS,
+  PROBLEM_STATUS_LABELS,
+  PROBLEM_STATUS_COLORS,
+  type OrderProblemCategory,
+} from "@/types/workOrder";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("he-IL", {
@@ -26,12 +33,100 @@ function UrgentBadge() {
   );
 }
 
+const CATEGORIES: OrderProblemCategory[] = [
+  "missing_dimensions", "missing_file", "unclear_request", "wrong_file",
+  "material_shortage", "fabrication_unclear", "graphic_unclear", "other",
+];
+
+function ProblemForm({ orderId, onClose }: { orderId: string; onClose: () => void }) {
+  const { addOrderProblem } = useOrdersContext();
+  const [category, setCategory] = useState<OrderProblemCategory>("unclear_request");
+  const [description, setDescription] = useState("");
+
+  function submit() {
+    if (!description.trim()) return;
+    addOrderProblem(orderId, { department: "graphics", category, description: description.trim() });
+    onClose();
+  }
+
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50 p-3 flex flex-col gap-2">
+      <div className="text-xs font-semibold text-red-700 mb-0.5">דיווח בעיה</div>
+      <select
+        value={category}
+        onChange={(e) => setCategory(e.target.value as OrderProblemCategory)}
+        className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 bg-white outline-none focus:ring-2 focus:ring-red-300"
+      >
+        {CATEGORIES.map((c) => (
+          <option key={c} value={c}>{PROBLEM_CATEGORY_LABELS[c]}</option>
+        ))}
+      </select>
+      <textarea
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="תיאור הבעיה..."
+        rows={2}
+        className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 bg-white outline-none focus:ring-2 focus:ring-red-300 resize-none"
+      />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!description.trim()}
+          className="flex-1 py-1.5 rounded text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors"
+        >
+          שלח דיווח
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-3 py-1.5 rounded text-xs text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 transition-colors"
+        >
+          ביטול
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function OpenProblems({ order }: { order: WorkOrder }) {
+  const { resolveOrderProblem } = useOrdersContext();
+  const problems = (order.problems ?? []).filter((p) => p.status !== "resolved" && p.status !== "cancelled");
+  if (problems.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {problems.map((p) => (
+        <div key={p.id} className="rounded border border-red-200 bg-red-50 px-3 py-2 text-xs flex items-start gap-2">
+          <div className="flex-1">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-medium ${PROBLEM_STATUS_COLORS[p.status]}`}>
+                {PROBLEM_STATUS_LABELS[p.status]}
+              </span>
+              <span className="text-gray-500">{PROBLEM_CATEGORY_LABELS[p.category]}</span>
+            </div>
+            <div className="text-gray-700">{p.description}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => resolveOrderProblem(order.id, p.id)}
+            className="shrink-0 text-[10px] px-2 py-1 rounded bg-green-100 text-green-700 hover:bg-green-200 font-medium transition-colors whitespace-nowrap"
+          >
+            נפתרה
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PendingOrderCard({ order, onAcknowledge }: { order: WorkOrder; onAcknowledge: () => void }) {
   const signCount = order.signRows.filter((r) => r.signNumber).length;
   const miscCount = [
     ...order.miscRows.filter((r) => r.description),
     ...(order.accessoryRows ?? []).filter((r) => r.description),
   ].length;
+  const [showProblemForm, setShowProblemForm] = useState(false);
 
   return (
     <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4 flex flex-col gap-3">
@@ -84,15 +179,29 @@ function PendingOrderCard({ order, onAcknowledge }: { order: WorkOrder; onAcknow
         </div>
       )}
 
-      <button
-        onClick={onAcknowledge}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
-      >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-        אישור קבלה
-      </button>
+      <OpenProblems order={order} />
+
+      {showProblemForm ? (
+        <ProblemForm orderId={order.id} onClose={() => setShowProblemForm(false)} />
+      ) : (
+        <div className="flex gap-2">
+          <button
+            onClick={onAcknowledge}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            אישור קבלה
+          </button>
+          <button
+            onClick={() => setShowProblemForm(true)}
+            className="px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 transition-colors whitespace-nowrap"
+          >
+            דווח בעיה
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -103,6 +212,7 @@ function ActiveOrderCard({ order, onComplete }: { order: WorkOrder; onComplete: 
     ...order.miscRows.filter((r) => r.description),
     ...(order.accessoryRows ?? []).filter((r) => r.description),
   ].length;
+  const [showProblemForm, setShowProblemForm] = useState(false);
 
   return (
     <div className="bg-white rounded-xl border border-blue-200 shadow-sm p-4 flex flex-col gap-3">
@@ -157,16 +267,30 @@ function ActiveOrderCard({ order, onComplete }: { order: WorkOrder; onComplete: 
         </div>
       )}
 
-      <button
-        onClick={onComplete}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold text-green-700 bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
-      >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-          <polyline points="22 4 12 14.01 9 11.01" />
-        </svg>
-        סמן כהושלם
-      </button>
+      <OpenProblems order={order} />
+
+      {showProblemForm ? (
+        <ProblemForm orderId={order.id} onClose={() => setShowProblemForm(false)} />
+      ) : (
+        <div className="flex gap-2">
+          <button
+            onClick={onComplete}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold text-green-700 bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            סמן כהושלם
+          </button>
+          <button
+            onClick={() => setShowProblemForm(true)}
+            className="px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 transition-colors whitespace-nowrap"
+          >
+            דווח בעיה
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { nanoid } from "nanoid";
 import type { OrderState } from "@/types/order";
-import type { WorkOrder, WorkOrderStatus, OrderPriority } from "@/types/workOrder";
+import type { WorkOrder, WorkOrderStatus, OrderPriority, OrderProblem, OrderProblemStatus, OrderProblemCategory, OrderActivity, OrderActivityType } from "@/types/workOrder";
 
 const STORAGE_KEY = "elkayam_orders";
 
@@ -53,7 +53,6 @@ export function useOrders() {
         customer: snapshot.customer,
         contactPerson: snapshot.contactPerson || undefined,
         orderedBy: snapshot.orderedBy || undefined,
-        jobSlash: snapshot.jobSlash || undefined,
         city: snapshot.city ?? "",
         location: "",
         signRows: snapshot.signRows,
@@ -73,7 +72,18 @@ export function useOrders() {
         graphicsAcknowledgedAt: null,
         graphicsAcknowledgedBy: null,
         graphicsCompletedAt: null,
+        activities: [
+          {
+            id: nanoid(),
+            orderId: "",
+            type: "order_created" as OrderActivityType,
+            timestamp: now,
+            description: "הזמנה נוצרה ונשלחה למחלקת גרפיקה",
+          },
+        ],
       };
+      // Fix orderId inside activities now that we have the id
+      newOrder.activities = newOrder.activities!.map((a) => ({ ...a, orderId: newOrder.id }));
       setOrders((prev) => [newOrder, ...prev]);
       return newOrder;
     },
@@ -83,33 +93,43 @@ export function useOrders() {
   const acknowledgeOrder = useCallback((id: string, acknowledgedBy = "גרפיקה") => {
     const now = new Date().toISOString();
     setOrders((prev) =>
-      prev.map((o) =>
-        o.id === id
-          ? {
-              ...o,
-              status: "graphics_active" as WorkOrderStatus,
-              graphicsAcknowledgedAt: now,
-              graphicsAcknowledgedBy: acknowledgedBy,
-              updatedAt: now,
-            }
-          : o
-      )
+      prev.map((o) => {
+        if (o.id !== id) return o;
+        const activity: OrderActivity = {
+          id: nanoid(), orderId: id, type: "graphics_acknowledged",
+          timestamp: now, by: acknowledgedBy, department: "graphics",
+          description: `אישור קבלה על ידי ${acknowledgedBy}`,
+        };
+        return {
+          ...o,
+          status: "graphics_active" as WorkOrderStatus,
+          graphicsAcknowledgedAt: now,
+          graphicsAcknowledgedBy: acknowledgedBy,
+          updatedAt: now,
+          activities: [...(o.activities ?? []), activity],
+        };
+      })
     );
   }, []);
 
   const completeGraphics = useCallback((id: string) => {
     const now = new Date().toISOString();
     setOrders((prev) =>
-      prev.map((o) =>
-        o.id === id
-          ? {
-              ...o,
-              status: "graphics_done" as WorkOrderStatus,
-              graphicsCompletedAt: now,
-              updatedAt: now,
-            }
-          : o
-      )
+      prev.map((o) => {
+        if (o.id !== id) return o;
+        const activity: OrderActivity = {
+          id: nanoid(), orderId: id, type: "graphics_completed",
+          timestamp: now, department: "graphics",
+          description: "עבודת גרפיקה הושלמה",
+        };
+        return {
+          ...o,
+          status: "graphics_done" as WorkOrderStatus,
+          graphicsCompletedAt: now,
+          updatedAt: now,
+          activities: [...(o.activities ?? []), activity],
+        };
+      })
     );
   }, []);
 
@@ -134,5 +154,76 @@ export function useOrders() {
     );
   }, []);
 
-  return { orders, addOrder, acknowledgeOrder, completeGraphics, updateOrderStatus, updateOrderFields };
+  const addOrderActivity = useCallback((id: string, type: OrderActivityType, description: string, opts?: { by?: string; department?: string; meta?: Record<string, string> }) => {
+    const now = new Date().toISOString();
+    const activity: OrderActivity = {
+      id: nanoid(), orderId: id, type, timestamp: now,
+      description, ...opts,
+    };
+    setOrders((prev) =>
+      prev.map((o) => (o.id === id ? { ...o, activities: [...(o.activities ?? []), activity], updatedAt: now } : o))
+    );
+  }, []);
+
+  const addOrderProblem = useCallback((
+    id: string,
+    problem: { department: "graphics" | "fabrication" | "office"; category: OrderProblemCategory; description: string; reportedBy?: string }
+  ) => {
+    const now = new Date().toISOString();
+    const newProblem: OrderProblem = {
+      id: nanoid(), orderId: id, ...problem,
+      reportedAt: now, status: "open",
+    };
+    const activity: OrderActivity = {
+      id: nanoid(), orderId: id, type: "problem_reported",
+      timestamp: now, department: problem.department,
+      description: `בעיה דווחה: ${problem.description}`,
+      by: problem.reportedBy,
+    };
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === id
+          ? {
+              ...o,
+              problems: [...(o.problems ?? []), newProblem],
+              activities: [...(o.activities ?? []), activity],
+              updatedAt: now,
+            }
+          : o
+      )
+    );
+    return newProblem;
+  }, []);
+
+  const resolveOrderProblem = useCallback((
+    orderId: string,
+    problemId: string,
+    opts?: { resolvedBy?: string; resolutionNotes?: string; newStatus?: OrderProblemStatus }
+  ) => {
+    const now = new Date().toISOString();
+    const status = opts?.newStatus ?? "resolved";
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id !== orderId) return o;
+        const updatedProblems = (o.problems ?? []).map((p) =>
+          p.id === problemId
+            ? { ...p, status, resolvedAt: now, resolvedBy: opts?.resolvedBy, resolutionNotes: opts?.resolutionNotes }
+            : p
+        );
+        const activity: OrderActivity = {
+          id: nanoid(), orderId, type: "problem_resolved",
+          timestamp: now, by: opts?.resolvedBy,
+          description: status === "resolved" ? "בעיה סומנה כנפתרה" : `סטטוס בעיה עודכן ל-${status}`,
+        };
+        return {
+          ...o,
+          problems: updatedProblems,
+          activities: [...(o.activities ?? []), activity],
+          updatedAt: now,
+        };
+      })
+    );
+  }, []);
+
+  return { orders, addOrder, acknowledgeOrder, completeGraphics, updateOrderStatus, updateOrderFields, addOrderActivity, addOrderProblem, resolveOrderProblem };
 }

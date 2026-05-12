@@ -149,8 +149,8 @@ export function OrderDocument({ order }: Props) {
             <Text style={styles.headerValue}>{order.orderedBy || "—"}</Text>
           </View>
           <View style={styles.headerField}>
-            <Text style={styles.headerLabel}>סלאש</Text>
-            <Text style={styles.headerValue}>{order.jobSlash || "—"}</Text>
+            <Text style={styles.headerLabel}>איש קשר</Text>
+            <Text style={styles.headerValue}>{order.contactPerson || "—"}</Text>
           </View>
         </View>
 

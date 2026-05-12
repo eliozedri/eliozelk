@@ -1,5 +1,7 @@
 import type { SignRow, MiscRow, OrderAttachment, FabricationDetails } from "./order";
 
+// ─── Fabrication ────────────────────────────────────────────────────────────
+
 export type FabricationStatus =
   | "pending"
   | "acknowledged"
@@ -26,6 +28,101 @@ export const FABRICATION_STATUS_COLORS: Record<FabricationStatus, string> = {
   issue: "bg-red-100 text-red-700",
 };
 
+// ─── Order Problems ──────────────────────────────────────────────────────────
+
+export type OrderProblemStatus =
+  | "open"
+  | "office_handling"
+  | "waiting_customer"
+  | "waiting_dept"
+  | "resolved"
+  | "cancelled";
+
+export type OrderProblemCategory =
+  | "missing_dimensions"
+  | "missing_file"
+  | "unclear_request"
+  | "wrong_file"
+  | "material_shortage"
+  | "fabrication_unclear"
+  | "graphic_unclear"
+  | "other";
+
+export const PROBLEM_STATUS_LABELS: Record<OrderProblemStatus, string> = {
+  open: "פתוחה",
+  office_handling: "בטיפול משרד",
+  waiting_customer: "ממתין ללקוח",
+  waiting_dept: "ממתין למחלקה",
+  resolved: "נפתרה",
+  cancelled: "בוטלה",
+};
+
+export const PROBLEM_STATUS_COLORS: Record<OrderProblemStatus, string> = {
+  open: "bg-red-100 text-red-700",
+  office_handling: "bg-orange-100 text-orange-700",
+  waiting_customer: "bg-yellow-100 text-yellow-700",
+  waiting_dept: "bg-blue-100 text-blue-700",
+  resolved: "bg-green-100 text-green-700",
+  cancelled: "bg-gray-100 text-gray-500",
+};
+
+export const PROBLEM_CATEGORY_LABELS: Record<OrderProblemCategory, string> = {
+  missing_dimensions: "מידות חסרות",
+  missing_file: "קובץ חסר",
+  unclear_request: "בקשה לא ברורה",
+  wrong_file: "קובץ שגוי",
+  material_shortage: "מחסור חומרים",
+  fabrication_unclear: "פרטי מסגרייה לא ברורים",
+  graphic_unclear: "פרטי גרפיקה לא ברורים",
+  other: "אחר",
+};
+
+export interface OrderProblem {
+  id: string;
+  orderId: string;
+  department: "graphics" | "fabrication" | "office";
+  reportedAt: string;
+  reportedBy?: string;
+  category: OrderProblemCategory;
+  description: string;
+  status: OrderProblemStatus;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  resolutionNotes?: string;
+}
+
+// ─── Order Activity Timeline ─────────────────────────────────────────────────
+
+export type OrderActivityType =
+  | "order_created"
+  | "sent_to_graphics"
+  | "sent_to_fabrication"
+  | "graphics_acknowledged"
+  | "graphics_completed"
+  | "fabrication_acknowledged"
+  | "fabrication_status_changed"
+  | "fabrication_completed"
+  | "problem_reported"
+  | "problem_resolved"
+  | "problem_status_changed"
+  | "correction_added"
+  | "file_attached"
+  | "status_changed"
+  | "note_added";
+
+export interface OrderActivity {
+  id: string;
+  orderId: string;
+  type: OrderActivityType;
+  timestamp: string;
+  by?: string;
+  department?: string;
+  description: string;
+  meta?: Record<string, string>;
+}
+
+// ─── Work Order ──────────────────────────────────────────────────────────────
+
 export type WorkOrderStatus =
   | "graphics_pending"
   | "graphics_active"
@@ -44,8 +141,8 @@ export interface WorkOrder {
   customer: string;
   contactPerson?: string;
   orderedBy?: string;
-  location?: string;      // kept optional for backward compat with old orders
-  jobSlash?: string;
+  location?: string;
+  jobSlash?: string;      // kept optional for backward compat
   reference?: string;     // kept optional for backward compat
   signRows: SignRow[];
   miscRows: MiscRow[];
@@ -59,21 +156,29 @@ export interface WorkOrder {
   graphicsAcknowledgedAt: string | null;
   graphicsAcknowledgedBy: string | null;
   graphicsCompletedAt: string | null;
-  // New fields
+  // Location
   city?: string;
+  // Rich content
   generalNotes?: string;
   attachments?: OrderAttachment[];
+  // Fabrication
   fabricationRequired?: boolean;
   fabricationDetails?: FabricationDetails;
   fabricationStatus?: FabricationStatus;
   fabricationAcknowledgedAt?: string | null;
   fabricationCompletedAt?: string | null;
-  // Field execution fields
+  // Problem tracking
+  problems?: OrderProblem[];
+  // Activity timeline
+  activities?: OrderActivity[];
+  // Field execution
   estimatedExecutionHours?: number;
   readyForExecutionAt?: string | null;
   assignedCrewId?: string | null;
   scheduledDate?: string | null;
 }
+
+// ─── Status config ───────────────────────────────────────────────────────────
 
 export const STATUS_LABELS: Record<WorkOrderStatus, string> = {
   graphics_pending: "ממתין לאישור גרפיקה",
@@ -128,4 +233,18 @@ export function getProgressState(status: WorkOrderStatus): ProgressState {
     default:
       return { completedSteps: 1, activeStep: null, isPending: false };
   }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+export function hasOpenProblems(order: WorkOrder): boolean {
+  return (order.problems ?? []).some(
+    (p) => p.status !== "resolved" && p.status !== "cancelled"
+  );
+}
+
+export function openProblemsCount(order: WorkOrder): number {
+  return (order.problems ?? []).filter(
+    (p) => p.status !== "resolved" && p.status !== "cancelled"
+  ).length;
 }

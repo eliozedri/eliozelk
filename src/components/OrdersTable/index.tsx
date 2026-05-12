@@ -9,6 +9,8 @@ import {
   STATUS_COLORS,
   LIFECYCLE_STAGES,
   getProgressState,
+  hasOpenProblems,
+  openProblemsCount,
 } from "@/types/workOrder";
 import type { WorkOrder, WorkOrderStatus } from "@/types/workOrder";
 
@@ -150,19 +152,19 @@ function StatusIcon({ status }: { status: WorkOrderStatus }) {
 }
 
 // KPI card icons
-function KpiIcon({ type }: { type: "total" | "completed" | "pending" | "active" | "production" }) {
+function KpiIcon({ type }: { type: "total" | "completed" | "fabrication" | "active" | "problems" }) {
   const cls = "w-5 h-5";
   switch (type) {
     case "total":
       return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></svg>;
     case "completed":
       return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>;
-    case "pending":
-      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>;
+    case "fabrication":
+      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" /></svg>;
     case "active":
       return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08" /><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1 1 2.25 1 3 .98 1.66 0 3-1.34 3-3.01 0-1.67-1.34-3.01-3-3.01z" /></svg>;
-    case "production":
-      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></svg>;
+    case "problems":
+      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>;
     default:
       return null;
   }
@@ -300,6 +302,12 @@ function OrderRow({ order, index, phoneMap, onUpdateStatus }: OrderRowProps) {
           <span className="font-mono text-sm font-bold text-gray-800 tracking-tight">{order.orderNumber}</span>
           {order.priority === "urgent" && (
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 w-fit">דחוף</span>
+          )}
+          {openProblemsCount(order) > 0 && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 w-fit">
+              <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+              {openProblemsCount(order)} בעיות
+            </span>
           )}
           {signCount + miscCount > 0 && (
             <span className="text-[10px] text-gray-400">
@@ -443,6 +451,7 @@ export function OrdersTable() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<WorkOrderStatus | "all">("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "normal" | "urgent">("all");
+  const [showProblemsOnly, setShowProblemsOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
 
   // Build phone lookup map from customers
@@ -460,16 +469,18 @@ export function OrdersTable() {
     completed: orders.filter((o) => o.status === "completed").length,
     graphicsPending: orders.filter((o) => o.status === "graphics_pending").length,
     graphicsActive: orders.filter((o) => o.status === "graphics_active").length,
-    production: orders.filter((o) => o.status === "production").length,
+    fabricationActive: orders.filter((o) => o.fabricationRequired && o.fabricationStatus !== "completed").length,
+    withProblems: orders.filter((o) => hasOpenProblems(o)).length,
     urgent: orders.filter((o) => o.priority === "urgent").length,
   }), [orders]);
 
-  const hasFilters = search !== "" || statusFilter !== "all" || priorityFilter !== "all";
+  const hasFilters = search !== "" || statusFilter !== "all" || priorityFilter !== "all" || showProblemsOnly;
 
   const clearFilters = useCallback(() => {
     setSearch("");
     setStatusFilter("all");
     setPriorityFilter("all");
+    setShowProblemsOnly(false);
     setCurrentPage(0);
   }, []);
 
@@ -484,14 +495,15 @@ export function OrdersTable() {
       const matchesSearch =
         !q ||
         o.customer.toLowerCase().includes(q) ||
-        ( o.location ?? "").toLowerCase().includes(q) ||
+        (o.location ?? "").toLowerCase().includes(q) ||
         o.orderNumber.toLowerCase().includes(q) ||
         (o.reference ?? "").toLowerCase().includes(q);
       const matchesStatus = statusFilter === "all" || o.status === statusFilter;
       const matchesPriority = priorityFilter === "all" || o.priority === priorityFilter;
-      return matchesSearch && matchesStatus && matchesPriority;
+      const matchesProblems = !showProblemsOnly || hasOpenProblems(o);
+      return matchesSearch && matchesStatus && matchesPriority && matchesProblems;
     });
-  }, [orders, search, statusFilter, priorityFilter]);
+  }, [orders, search, statusFilter, priorityFilter, showProblemsOnly]);
 
   // Reset page when filters change
   const totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
@@ -561,11 +573,11 @@ export function OrdersTable() {
             onFilter={() => applyFilter("completed")}
           />
           <KpiCard
-            icon={<KpiIcon type="pending" />}
-            iconBg="bg-amber-50 text-amber-600"
-            value={counts.graphicsPending}
-            label="ממתינות לאישור גרפיקה"
-            onFilter={() => applyFilter("graphics_pending")}
+            icon={<KpiIcon type="fabrication" />}
+            iconBg="bg-orange-50 text-orange-600"
+            value={counts.fabricationActive}
+            label="בטיפול מסגרייה"
+            onFilter={() => { setStatusFilter("all"); setShowProblemsOnly(false); setCurrentPage(0); }}
           />
           <KpiCard
             icon={<KpiIcon type="active" />}
@@ -575,11 +587,11 @@ export function OrdersTable() {
             onFilter={() => applyFilter("graphics_active")}
           />
           <KpiCard
-            icon={<KpiIcon type="production" />}
-            iconBg="bg-purple-50 text-purple-600"
-            value={counts.production}
-            label="בייצור"
-            onFilter={() => applyFilter("production")}
+            icon={<KpiIcon type="problems" />}
+            iconBg="bg-red-50 text-red-600"
+            value={counts.withProblems}
+            label="בעיות בהזמנות"
+            onFilter={() => { setShowProblemsOnly(true); setStatusFilter("all"); setCurrentPage(0); }}
           />
         </div>
 

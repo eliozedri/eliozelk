@@ -38,6 +38,7 @@ interface Props {
   accentColor?: string;      // tailwind bg class for header
   allowedCatalogTypes?: CatalogItemType[];
   showDimensionRows?: boolean; // allow "שלט לפי מידה" special row
+  alwaysShowDimensions?: boolean; // always show dimension sub-row for every row
 }
 
 export function MiscSection({
@@ -49,6 +50,7 @@ export function MiscSection({
   accentColor = "bg-blue-50",
   allowedCatalogTypes,
   showDimensionRows = false,
+  alwaysShowDimensions = false,
 }: Props) {
   const { items: catalogItems } = useCatalogContext();
   const [openSuggestRowId, setOpenSuggestRowId] = useState<string | null>(null);
@@ -151,7 +153,7 @@ export function MiscSection({
           {rows.map((row) => {
             const suggestions = openSuggestRowId === row.id ? getSuggestions(row.description) : [];
             const isLinked = Boolean(row.catalogItemId);
-            const isDimRow = showDimensionRows && isCustomDimensionRow(row);
+            const isDimRow = alwaysShowDimensions || (showDimensionRows && isCustomDimensionRow(row));
 
             return (
               <React.Fragment key={row.id}>
@@ -187,7 +189,7 @@ export function MiscSection({
                             placeholder="תיאור פריט"
                             className={inputCls}
                           />
-                          {showDimensionRows && (
+                          {showDimensionRows && !alwaysShowDimensions && (
                             <button
                               type="button"
                               title='הוסף "שלט לפי מידה"'

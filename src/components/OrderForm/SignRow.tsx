@@ -6,7 +6,7 @@ import { SignThumbnail } from "@/components/SignThumbnail";
 import type { SignRow as SignRowType } from "@/types/order";
 
 const SIZES = ["40", "50", "60", "70", "80", "90", "100", "120", "140", "160"];
-const TYPES = ["יהלום", "מהנדס", "שכבה 3", "אחר"];
+const TYPES = ["EG", "EGP", "יהלום", "רב עוצמה"];
 
 const cellInput =
   "w-full px-2.5 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 transition-all";
