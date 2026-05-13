@@ -10,6 +10,7 @@ import type {
   FabricationStatus, AccountingStatus,
 } from "@/types/workOrder";
 import { getSupabase } from "@/lib/supabase/client";
+import { canTransition, canMarkReadyForInstallation } from "@/lib/workflowEngine";
 
 const STORAGE_KEY = "elkayam_orders";
 
@@ -517,12 +518,29 @@ export function useOrders() {
 
   // ── updateOrderStatus ──────────────────────────────────────────────────
   const updateOrderStatus = useCallback((id: string, status: WorkOrderStatus) => {
-    const extra: Partial<WorkOrder> = {};
+    const original = ref.current.find(o => o.id === id);
+    if (!original) return;
+
+    if (!canTransition(original.status, status)) {
+      console.warn(
+        `[orders] blocked invalid transition: ${original.status} → ${status} (order ${id})`
+      );
+      return;
+    }
+
     if (status === "ready_installation") {
-      const original = ref.current.find(o => o.id === id);
-      if (original && !original.readyForExecutionAt) {
-        extra.readyForExecutionAt = new Date().toISOString();
+      const fabCheck = canMarkReadyForInstallation(original);
+      if (!fabCheck.ok) {
+        console.warn(
+          `[orders] blocked production → ready_installation: ${fabCheck.reason} (order ${id})`
+        );
+        return;
       }
+    }
+
+    const extra: Partial<WorkOrder> = {};
+    if (status === "ready_installation" && !original.readyForExecutionAt) {
+      extra.readyForExecutionAt = new Date().toISOString();
     }
     _patchOrder(id, { status, ...extra });
   }, [_patchOrder]);

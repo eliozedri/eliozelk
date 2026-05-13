@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useOrdersContext } from "@/context/OrdersContext";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { openProblemsCount } from "@/types/workOrder";
+import { getStageSlaColor } from "@/lib/workflowEngine";
 
 export interface NotificationCounts {
   // Raw dimensional counts (for department pages to use directly)
@@ -16,6 +17,8 @@ export interface NotificationCounts {
   schedulePending: number;      // ready_installation + no scheduledDate
   problemsOpen: number;         // open problems across all orders
   urgentActive: number;         // urgent priority + not finished
+  stuckOrders: number;          // orders past warn SLA threshold in any active stage
+  criticalAlerts: number;       // orders in critical SLA breach or fabrication issue
 
   // Sidebar-facing aggregated counts (one number per tab)
   graphics: number;     // graphicsPending — primary alert for the graphics team
@@ -63,6 +66,21 @@ export function useNotifications(): NotificationCounts {
       o.status !== "cancelled"
     ).length;
 
+    const activeStatuses = new Set([
+      "graphics_pending", "graphics_active", "graphics_done",
+      "production", "ready_installation",
+    ]);
+    const stuckOrders = orders.filter(o => {
+      if (!activeStatuses.has(o.status)) return false;
+      const c = getStageSlaColor(o);
+      return c === "yellow" || c === "red";
+    }).length;
+    const criticalAlerts = orders.filter(o => {
+      if (o.status === "completed" || o.status === "cancelled") return false;
+      return getStageSlaColor(o) === "red" ||
+             (o.fabricationRequired && o.fabricationStatus === "issue");
+    }).length;
+
     return {
       graphicsPending,
       graphicsActive,
@@ -73,6 +91,8 @@ export function useNotifications(): NotificationCounts {
       schedulePending,
       problemsOpen,
       urgentActive,
+      stuckOrders,
+      criticalAlerts,
       graphics:    graphicsPending,
       fabrication: fabricationActive + fabricationIssues,
       accounting:  accountingPending + diariesPending,
