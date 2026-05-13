@@ -168,6 +168,7 @@ export const ACCOUNTING_STATUS_COLORS: Record<AccountingStatus, string> = {
 export interface WorkOrder {
   id: string;
   orderNumber: string;
+  version: number;
   date: string;
   customer: string;
   contactPerson?: string;
