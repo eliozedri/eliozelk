@@ -3,12 +3,13 @@
 import { useState, useMemo } from "react";
 import { useOrdersContext } from "@/context/OrdersContext";
 import type { WorkOrder } from "@/types/workOrder";
-import { STATUS_LABELS } from "@/types/workOrder";
+import { STATUS_LABELS, ACCOUNTING_STATUS_LABELS, ACCOUNTING_STATUS_COLORS } from "@/types/workOrder";
 import { exportAccountingCSV, exportAccountingPDF } from "@/lib/accountingExport";
 import type { AccountingReportData } from "@/components/pdf/AccountingDocument";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { DIARY_STATUS_LABELS, DIARY_STATUS_COLORS } from "@/types/workDiary";
 import { exportWorkDiaryPDF } from "@/lib/workDiaryExport";
+import { useAuth } from "@/context/AuthContext";
 
 function AccountingIcon() {
   return (
@@ -172,9 +173,10 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function AccountingPage() {
-  const { orders } = useOrdersContext();
+  const { orders, updateOrderFields } = useOrdersContext();
   const { diaries } = useWorkDiaryContext();
-  const [activeTab, setActiveTab] = useState<"orders" | "work-diaries">("orders");
+  const { profile } = useAuth();
+  const [activeTab, setActiveTab] = useState<"orders" | "work-diaries" | "billing">("orders");
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
@@ -182,6 +184,33 @@ export function AccountingPage() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [diaryExportingId, setDiaryExportingId] = useState<string | null>(null);
+  const [invoicingId, setInvoicingId] = useState<string | null>(null);
+  const [invoiceInputs, setInvoiceInputs] = useState<Record<string, string>>({});
+
+  const pendingBilling = useMemo(
+    () => orders.filter(
+      (o) => o.status === "completed" &&
+             (!o.accountingStatus || o.accountingStatus === "pending") &&
+             !o.invoicedAt
+    ),
+    [orders]
+  );
+
+  async function handleMarkInvoiced(order: WorkOrder) {
+    setInvoicingId(order.id);
+    const invoiceNumber = invoiceInputs[order.id]?.trim() || null;
+    try {
+      await updateOrderFields(order.id, {
+        accountingStatus: "invoiced",
+        invoicedAt: new Date().toISOString(),
+        invoicedBy: profile?.id ?? null,
+        invoiceNumber,
+      });
+      setInvoiceInputs((prev) => { const next = { ...prev }; delete next[order.id]; return next; });
+    } finally {
+      setInvoicingId(null);
+    }
+  }
 
   const submittedDiaries = useMemo(
     () => diaries.filter((d) => d.status === "submitted"),
@@ -284,6 +313,22 @@ export function AccountingPage() {
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab("billing")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "billing"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            ממתין לחיוב
+            {pendingBilling.length > 0 && (
+              <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full text-xs font-bold ${activeTab === "billing" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700"}`}>
+                {pendingBilling.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab("work-diaries")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === "work-diaries"
@@ -299,6 +344,85 @@ export function AccountingPage() {
             )}
           </button>
         </div>
+
+        {/* Pending Billing Tab */}
+        {activeTab === "billing" && (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+              <div className="bg-white rounded-xl border border-amber-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-gray-900">{pendingBilling.length}</p>
+                <p className="text-xs text-gray-500">הזמנות ממתינות לחיוב</p>
+              </div>
+              <div className="bg-white rounded-xl border border-green-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-gray-900">{new Set(pendingBilling.map((o) => o.customer)).size}</p>
+                <p className="text-xs text-gray-500">לקוחות ייחודיים</p>
+              </div>
+              <div className="bg-white rounded-xl border border-blue-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-gray-900">{orders.filter((o) => o.accountingStatus === "invoiced").length}</p>
+                <p className="text-xs text-gray-500">הזמנות שחויבו</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              {pendingBilling.length === 0 ? (
+                <div className="py-16 text-center">
+                  <p className="text-gray-500 font-medium">אין הזמנות הממתינות לחיוב</p>
+                  <p className="text-sm text-gray-400 mt-1">הזמנות שהושלמו ועדיין לא חויבו יופיעו כאן</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">הזמנה</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">לקוח</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">מיקום</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">תאריך</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-16">שלטים</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">מס׳ חשבונית</th>
+                        <th className="px-4 py-2.5 w-32"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingBilling.map((order) => (
+                        <tr key={order.id} className="border-b border-gray-100 hover:bg-amber-50/20 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900 text-xs">{order.orderNumber}</td>
+                          <td className="px-4 py-3 text-gray-700">{order.customer}</td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">{order.location || "—"}</td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(order.date)}</td>
+                          <td className="px-4 py-3 text-center text-gray-700 text-sm font-medium">{countSignQty(order) || "—"}</td>
+                          <td className="px-4 py-3">
+                            <input
+                              type="text"
+                              placeholder="אופציונלי"
+                              value={invoiceInputs[order.id] ?? ""}
+                              onChange={(e) => setInvoiceInputs((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                              className="w-28 px-2 py-1 rounded border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+                              dir="ltr"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() => handleMarkInvoiced(order)}
+                              disabled={invoicingId === order.id}
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                            >
+                              {invoicingId === order.id ? "שומר..." : "סמן כחויב"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="px-5 py-2.5 border-t border-gray-100 text-xs text-gray-400">
+                    {pendingBilling.length} הזמנות ממתינות לחיוב
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {/* Work Diaries Tab */}
         {activeTab === "work-diaries" && (

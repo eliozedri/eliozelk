@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { canAccessTab, canPerformAction, ROLE_LABELS } from "@/types/auth";
 import type { TabId } from "@/types/auth";
+import { useNotifications } from "@/hooks/useNotifications";
 
 const NAVY = "#0d1b2e";
 const NAVY_MID = "#1a2d4a";
@@ -60,6 +61,25 @@ function LogoutIcon() {
   return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>;
 }
 
+function NavBadge({ count, variant = "amber" }: { count: number; variant?: "amber" | "red" | "blue" | "teal" }) {
+  if (count === 0) return null;
+  const styles: Record<string, { bg: string; text: string }> = {
+    amber: { bg: "rgba(245,158,11,0.25)", text: "#fbbf24" },
+    red:   { bg: "rgba(239,68,68,0.25)",  text: "#f87171" },
+    blue:  { bg: "rgba(59,130,246,0.25)", text: "#93c5fd" },
+    teal:  { bg: "rgba(20,184,166,0.25)", text: "#5eead4" },
+  };
+  const { bg, text } = styles[variant] ?? styles.amber;
+  return (
+    <span
+      className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold leading-none shrink-0"
+      style={{ backgroundColor: bg, color: text }}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
 interface NavItem { tabId: TabId; href: string; label: string; icon: React.ReactNode; matchFn: (p: string) => boolean; }
 interface NavSection { label: string; items: NavItem[]; }
 
@@ -100,7 +120,10 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-function SidebarLink({ href, label, active, icon, onClick }: { href: string; label: string; active: boolean; icon: React.ReactNode; onClick?: () => void }) {
+function SidebarLink({ href, label, active, icon, onClick, badge, badgeVariant }: {
+  href: string; label: string; active: boolean; icon: React.ReactNode;
+  onClick?: () => void; badge?: number; badgeVariant?: "amber" | "red" | "blue" | "teal";
+}) {
   return (
     <Link href={href} onClick={onClick}
       style={active
@@ -109,6 +132,7 @@ function SidebarLink({ href, label, active, icon, onClick }: { href: string; lab
       className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all group hover:bg-white/10 hover:!text-white">
       <span style={{ color: active ? EK_GOLD : "rgba(255,255,255,0.35)" }} className="shrink-0 group-hover:!text-white/70 transition-colors">{icon}</span>
       <span className="truncate flex-1">{label}</span>
+      {badge !== undefined && <NavBadge count={badge} variant={badgeVariant} />}
     </Link>
   );
 }
@@ -117,9 +141,20 @@ function SectionLabel({ label }: { label: string }) {
   return <span className="block px-3 pt-4 pb-1 text-[9px] font-bold uppercase tracking-[0.15em]" style={{ color: "rgba(255,255,255,0.25)" }}>{label}</span>;
 }
 
+// Per-tab badge config: which notification count + which colour variant
+const TAB_BADGES: Partial<Record<TabId, { count: keyof ReturnType<typeof useNotifications>; variant: "amber" | "red" | "blue" | "teal" }>> = {
+  dashboard:   { count: "dashboard",   variant: "red" },
+  orders:      { count: "orders",      variant: "red" },
+  graphics:    { count: "graphics",    variant: "amber" },
+  fabrication: { count: "fabrication", variant: "amber" },
+  accounting:  { count: "accounting",  variant: "blue" },
+  schedule:    { count: "schedule",    variant: "teal" },
+};
+
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { profile, loading, logout } = useAuth();
+  const notif = useNotifications();
 
   const showAll = loading || !profile;
   const canSeeTab = (tabId: TabId) => showAll || canAccessTab(profile!, tabId);
@@ -159,10 +194,15 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           return (
             <div key={section.label}>
               <SectionLabel label={section.label} />
-              {visibleItems.map((item) => (
-                <SidebarLink key={item.tabId} href={item.href} label={item.label}
-                  active={item.matchFn(pathname)} icon={item.icon} onClick={handleNavClick} />
-              ))}
+              {visibleItems.map((item) => {
+                const cfg = TAB_BADGES[item.tabId];
+                return (
+                  <SidebarLink key={item.tabId} href={item.href} label={item.label}
+                    active={item.matchFn(pathname)} icon={item.icon} onClick={handleNavClick}
+                    badge={cfg ? notif[cfg.count] : undefined}
+                    badgeVariant={cfg?.variant} />
+                );
+              })}
             </div>
           );
         })}

@@ -134,6 +134,37 @@ export type WorkOrderStatus =
 
 export type OrderPriority = "normal" | "urgent";
 
+// ─── Accounting workflow state ────────────────────────────────────────────────
+// Stored in WorkOrder.data JSONB today.
+// When ERP / invoice-generation integration begins, promote these to
+// first-class columns via a straightforward ALTER TABLE migration.
+
+export type AccountingStatus =
+  | "pending"    // completed, awaiting invoice
+  | "invoiced"   // invoice issued
+  | "partial"    // partially billed (reserved for future split-billing)
+  | "approved"   // finance approved (reserved for future approval workflow)
+  | "paid"       // payment confirmed (reserved for future payment tracking)
+  | "disputed";  // billing dispute in progress
+
+export const ACCOUNTING_STATUS_LABELS: Record<AccountingStatus, string> = {
+  pending:  "ממתין לחיוב",
+  invoiced: "חויב",
+  partial:  "חויב חלקית",
+  approved: "אושר",
+  paid:     "שולם",
+  disputed: "בסכסוך",
+};
+
+export const ACCOUNTING_STATUS_COLORS: Record<AccountingStatus, string> = {
+  pending:  "bg-amber-100 text-amber-700",
+  invoiced: "bg-green-100 text-green-700",
+  partial:  "bg-blue-100 text-blue-700",
+  approved: "bg-teal-100 text-teal-700",
+  paid:     "bg-gray-100 text-gray-600",
+  disputed: "bg-red-100 text-red-700",
+};
+
 export interface WorkOrder {
   id: string;
   orderNumber: string;
@@ -176,6 +207,12 @@ export interface WorkOrder {
   readyForExecutionAt?: string | null;
   assignedCrewId?: string | null;
   scheduledDate?: string | null;
+  // Accounting (JSONB today; first-class columns when ERP integration begins)
+  accountingStatus?: AccountingStatus;
+  invoicedAt?: string | null;
+  invoicedBy?: string | null;
+  invoiceNumber?: string | null;
+  billedAmount?: number | null;
 }
 
 // ─── Status config ───────────────────────────────────────────────────────────
