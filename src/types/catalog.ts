@@ -11,7 +11,9 @@ export interface CatalogItem {
   name: string;
   type: CatalogItemType;
   category: string;
-  unitOfMeasure: string;
+  unitOfMeasure: string;     // order unit (יחידה / מטר / שעה …)
+  dimensionValue?: string;   // physical size value, e.g. "1.5"
+  dimensionUnit?: string;    // physical size unit, e.g. "מטר"
   defaultPrice: number | null;
   description: string;
   isActive: boolean;
@@ -24,6 +26,8 @@ export interface CatalogFormState {
   type: CatalogItemType;
   category: string;
   unitOfMeasure: string;
+  dimensionValue: string;
+  dimensionUnit: string;
   defaultPrice: string;
   description: string;
 }
@@ -45,6 +49,17 @@ export const TYPE_COLORS: Record<CatalogItemType, string> = {
   equipment: "bg-gray-100 text-gray-600",
   misc: "bg-amber-100 text-amber-700",
 };
+
+export const DIMENSION_UNIT_OPTIONS = [
+  "",
+  "מטר",
+  "ס\"מ",
+  "מ\"מ",
+  "מ\"ר",
+  "ק\"ג",
+  "גרם",
+  "ליטר",
+];
 
 export const UNIT_OPTIONS = [
   "יחידה",

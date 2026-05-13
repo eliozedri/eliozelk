@@ -1,7 +1,6 @@
 import type { UserProfile, Role } from "@/types/auth";
 import { ROLE_DEFAULTS } from "@/types/auth";
 import { hashPassword } from "./crypto";
-import { SEED_USERS } from "./seed-users";
 
 const STORE_KEY = "elkayam_users";
 
@@ -10,14 +9,9 @@ export interface StoredUser extends UserProfile {
 }
 
 function load(): StoredUser[] {
-  if (typeof window === "undefined") return SEED_USERS as StoredUser[];
+  if (typeof window === "undefined") return [];
   try {
-    const stored = localStorage.getItem(STORE_KEY);
-    if (!stored && SEED_USERS.length > 0) {
-      localStorage.setItem(STORE_KEY, JSON.stringify(SEED_USERS));
-      return SEED_USERS as StoredUser[];
-    }
-    return JSON.parse(stored ?? "[]");
+    return JSON.parse(localStorage.getItem(STORE_KEY) ?? "[]");
   } catch {
     return [];
   }
@@ -91,15 +85,6 @@ export function updateUser(id: string, updates: Partial<Omit<StoredUser, "id" | 
   return profile;
 }
 
-export async function changePassword(id: string, newPassword: string): Promise<void> {
-  const users = load();
-  const idx = users.findIndex((u) => u.id === id);
-  if (idx === -1) throw new Error("משתמש לא נמצא");
-  users[idx].passwordHash = await hashPassword(newPassword);
-  users[idx].updated_at = new Date().toISOString();
-  save(users);
-}
-
 export function deleteUser(id: string) {
   const users = load();
   const masters = users.filter((u) => u.role === "master");
@@ -108,10 +93,6 @@ export function deleteUser(id: string) {
     throw new Error("לא ניתן למחוק את המנהל הראשי האחרון");
   }
   save(users.filter((u) => u.id !== id));
-}
-
-export function getRawUsers(): StoredUser[] {
-  return load();
 }
 
 export function touchLastLogin(id: string) {

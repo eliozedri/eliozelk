@@ -20,16 +20,18 @@ export default function SetupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
     if (hasMaster()) {
-      setError("כבר קיים מנהל ראשי במערכת.");
+      setError("כבר קיים מנהל ראשי במערכת. עמוד זה אינו נגיש יותר.");
       return;
     }
+
     setLoading(true);
     try {
       await createUser({ name, email, password, role: "master" });
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "שגיאה");
+      setError(err instanceof Error ? err.message : "שגיאה ביצירת המשתמש");
     }
     setLoading(false);
   };
@@ -45,38 +47,76 @@ export default function SetupPage() {
           <p className="text-sm font-semibold mt-1" style={{ color: EK_GOLD }}>יצירת מנהל ראשי</p>
           <p className="text-xs mt-2 text-gray-400 text-center">עמוד זה זמין פעם אחת בלבד</p>
         </div>
+
         <div className="bg-white rounded-2xl shadow-lg p-8">
           {done ? (
             <div className="text-center">
-              <p className="font-bold text-gray-800 mb-4">המנהל הראשי נוצר בהצלחה!</p>
-              <button onClick={() => router.push("/login")}
+              <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: "#dcfce7" }}>
+                <span className="text-2xl">✓</span>
+              </div>
+              <p className="font-bold text-gray-800">המנהל הראשי נוצר בהצלחה!</p>
+              <p className="text-sm text-gray-500 mt-1 mb-4">כעת ניתן להיכנס למערכת</p>
+              <button
+                onClick={() => router.push("/login")}
                 className="w-full py-2.5 rounded-lg font-bold text-sm text-white"
-                style={{ backgroundColor: EK_BLUE }}>מעבר לדף הכניסה</button>
+                style={{ backgroundColor: EK_BLUE }}
+              >
+                מעבר לדף הכניסה
+              </button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold mb-1.5" style={{ color: NAVY }}>שם מלא</label>
-                <input type="text" required value={name} onChange={(e) => setName(e.target.value)}
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-lg border text-sm outline-none"
-                  style={{ borderColor: "#d1d5db" }} placeholder="שם מלא" />
+                  style={{ borderColor: "#d1d5db" }}
+                  placeholder="שם מלא"
+                />
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-1.5" style={{ color: NAVY }}>אימייל</label>
-                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-lg border text-sm outline-none"
-                  style={{ borderColor: "#d1d5db" }} dir="ltr" placeholder="admin@company.co.il" />
+                  style={{ borderColor: "#d1d5db" }}
+                  dir="ltr"
+                  placeholder="admin@company.co.il"
+                />
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-1.5" style={{ color: NAVY }}>סיסמה</label>
-                <input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)}
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-lg border text-sm outline-none"
-                  style={{ borderColor: "#d1d5db" }} placeholder="לפחות 8 תווים" />
+                  style={{ borderColor: "#d1d5db" }}
+                  placeholder="לפחות 8 תווים"
+                />
               </div>
-              {error && <div className="p-3 rounded-lg bg-red-50 border border-red-200"><p className="text-sm text-red-700">{error}</p></div>}
-              <button type="submit" disabled={loading}
+
+              {error && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
                 className="w-full py-2.5 rounded-lg font-bold text-sm text-white"
-                style={{ backgroundColor: loading ? "#9ca3af" : EK_BLUE }}>
+                style={{ backgroundColor: loading ? "#9ca3af" : EK_BLUE }}
+              >
                 {loading ? "יוצר..." : "יצירת מנהל ראשי"}
               </button>
             </form>

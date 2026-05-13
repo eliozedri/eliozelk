@@ -6,6 +6,9 @@ import type { WorkOrder } from "@/types/workOrder";
 import { STATUS_LABELS } from "@/types/workOrder";
 import { exportAccountingCSV, exportAccountingPDF } from "@/lib/accountingExport";
 import type { AccountingReportData } from "@/components/pdf/AccountingDocument";
+import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
+import { DIARY_STATUS_LABELS, DIARY_STATUS_COLORS } from "@/types/workDiary";
+import { exportWorkDiaryPDF } from "@/lib/workDiaryExport";
 
 function AccountingIcon() {
   return (
@@ -170,12 +173,40 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function AccountingPage() {
   const { orders } = useOrdersContext();
+  const { diaries } = useWorkDiaryContext();
+  const [activeTab, setActiveTab] = useState<"orders" | "work-diaries">("orders");
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
+  const [diaryExportingId, setDiaryExportingId] = useState<string | null>(null);
+
+  const submittedDiaries = useMemo(
+    () => diaries.filter((d) => d.status === "submitted"),
+    [diaries]
+  );
+
+  const filteredDiaries = useMemo(() => {
+    return submittedDiaries.filter((d) => {
+      if (filterCustomer && !d.customerName.toLowerCase().includes(filterCustomer.toLowerCase())) return false;
+      if (filterDateFrom && d.executionDate < filterDateFrom) return false;
+      if (filterDateTo && d.executionDate > filterDateTo) return false;
+      return true;
+    });
+  }, [submittedDiaries, filterCustomer, filterDateFrom, filterDateTo]);
+
+  async function handleDiaryPDF(id: string) {
+    const diary = diaries.find((d) => d.id === id);
+    if (!diary) return;
+    setDiaryExportingId(id);
+    try {
+      await exportWorkDiaryPDF(diary);
+    } finally {
+      setDiaryExportingId(null);
+    }
+  }
 
   const filtered = useMemo(() => {
     return orders.filter((o) => {
@@ -236,7 +267,155 @@ export function AccountingPage() {
           <h1 className="text-2xl font-bold text-gray-900">הנהלת חשבונות</h1>
           <AccountingIcon />
         </div>
-        <p className="text-sm text-gray-500 mb-5">סיכום עבודות, כמויות ודוחות לפי לקוחות</p>
+        <p className="text-sm text-gray-500 mb-4">סיכום עבודות, כמויות ודוחות לפי לקוחות</p>
+
+        {/* Tab switcher */}
+        <div className="flex gap-1 bg-white rounded-xl border border-gray-200 shadow-sm p-1 mb-5 w-fit">
+          <button
+            type="button"
+            onClick={() => setActiveTab("orders")}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "orders"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            הזמנות
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("work-diaries")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "work-diaries"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            יומני עבודה
+            {submittedDiaries.length > 0 && (
+              <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${activeTab === "work-diaries" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700"}`}>
+                {submittedDiaries.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Work Diaries Tab */}
+        {activeTab === "work-diaries" && (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+              <div className="bg-white rounded-xl border border-blue-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-gray-900">{submittedDiaries.length}</p>
+                <p className="text-xs text-gray-500">יומנים שנשלחו</p>
+              </div>
+              <div className="bg-white rounded-xl border border-green-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-gray-900">{new Set(submittedDiaries.map((d) => d.customerName)).size}</p>
+                <p className="text-xs text-gray-500">לקוחות ייחודיים</p>
+              </div>
+              <div className="bg-white rounded-xl border border-purple-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-gray-900">{submittedDiaries.filter((d) => d.executionDate === new Date().toISOString().split("T")[0]).length}</p>
+                <p className="text-xs text-gray-500">יומנים היום</p>
+              </div>
+              <div className="bg-white rounded-xl border border-amber-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-gray-900">{diaries.filter((d) => d.status === "draft").length}</p>
+                <p className="text-xs text-gray-500">טיוטות</p>
+              </div>
+            </div>
+
+            {/* Diary filters */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-4 px-5 py-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">לקוח</label>
+                  <input
+                    type="text"
+                    value={filterCustomer}
+                    onChange={(e) => setFilterCustomer(e.target.value)}
+                    placeholder="חיפוש לפי שם לקוח"
+                    className="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">מתאריך</label>
+                  <input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} dir="ltr" className="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">עד תאריך</label>
+                  <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} dir="ltr" className="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent" />
+                </div>
+              </div>
+              {(filterCustomer || filterDateFrom || filterDateTo) && (
+                <div className="flex justify-end mt-3">
+                  <button type="button" onClick={() => { setFilterCustomer(""); setFilterDateFrom(""); setFilterDateTo(""); }} className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                    נקה סינון
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Diary list */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              {filteredDiaries.length === 0 ? (
+                <div className="py-16 text-center">
+                  <p className="text-gray-500 font-medium">
+                    {submittedDiaries.length === 0 ? "עדיין לא נשלחו יומני עבודה" : "אין יומנים תואמים לסינון"}
+                  </p>
+                  <p className="text-sm text-gray-400 mt-1">יומנים שנשלחו מ״יומן עבודה״ יופיעו כאן</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">מס׳ יומן</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">קבלן</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">אתר</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">תאריך</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">שעות</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">סטטוס</th>
+                        <th className="px-4 py-2.5 w-20"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredDiaries.map((diary) => (
+                        <tr key={diary.id} className="border-b border-gray-100 hover:bg-blue-50/20 transition-colors">
+                          <td className="px-4 py-3 font-medium text-gray-900 text-xs">{diary.diaryNumber}</td>
+                          <td className="px-4 py-3 text-gray-700">{diary.customerName || "—"}</td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">{diary.siteName || "—"}</td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(diary.executionDate)}</td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">
+                            {diary.startTime && diary.endTime ? `${diary.startTime} — ${diary.endTime}` : diary.startTime || "—"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${DIARY_STATUS_COLORS[diary.status]}`}>
+                              {DIARY_STATUS_LABELS[diary.status]}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() => handleDiaryPDF(diary.id)}
+                              disabled={diaryExportingId === diary.id}
+                              className="text-xs text-blue-600 hover:text-blue-800 underline disabled:opacity-50 transition-colors"
+                            >
+                              {diaryExportingId === diary.id ? "מייצא..." : "PDF"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="px-5 py-2.5 border-t border-gray-100 text-xs text-gray-400">
+                    מוצגים {filteredDiaries.length} מתוך {submittedDiaries.length} יומנים
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Orders tab */}
+        {activeTab === "orders" && (<>
 
         {/* KPI cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
@@ -414,6 +593,7 @@ export function AccountingPage() {
             </div>
           )}
         </div>
+        </>)}
       </div>
     </div>
   );

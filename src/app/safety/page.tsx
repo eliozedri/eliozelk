@@ -1,5 +1,5 @@
 import { SafetyAccessoriesPage } from "@/components/SafetyAccessories";
 
-export default function SafetyPage() {
+export default function Page() {
   return <SafetyAccessoriesPage />;
 }
