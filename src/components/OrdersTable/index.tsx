@@ -13,6 +13,7 @@ import {
   openProblemsCount,
 } from "@/types/workOrder";
 import type { WorkOrder, WorkOrderStatus } from "@/types/workOrder";
+import { getStageSlaColor, hoursInCurrentStage, canMarkReadyForInstallation } from "@/lib/workflowEngine";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -59,6 +60,14 @@ function relativeTime(iso: string): string | null {
   if (hours < 24) return `לפני ${Math.round(hours)} שעות`;
   if (hours < 48) return "אתמול";
   return null;
+}
+
+function formatStageAge(hours: number): string {
+  if (hours < 1)  return "< 1 שע׳";
+  if (hours < 24) return `${Math.round(hours)} שע׳`;
+  const days = Math.floor(hours / 24);
+  const rem  = Math.round(hours % 24);
+  return rem > 0 ? `${days}י ${rem}ש׳` : `${days} ימים`;
 }
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
@@ -286,6 +295,11 @@ function OrderRow({ order, index, phoneMap, onUpdateStatus }: OrderRowProps) {
   const miscCount = order.miscRows.filter((r) => r.description).length;
 
   const isTerminal = order.status === "completed" || order.status === "cancelled";
+  const slaColor   = !isTerminal ? getStageSlaColor(order) : "gray";
+  const stageHours = !isTerminal ? hoursInCurrentStage(order) : 0;
+  const fabCheck   = order.status === "production"
+    ? canMarkReadyForInstallation(order)
+    : { ok: true, reason: undefined };
 
   return (
     <tr
@@ -352,7 +366,28 @@ function OrderRow({ order, index, phoneMap, onUpdateStatus }: OrderRowProps) {
 
       {/* Status */}
       <td className="px-3 py-3.5">
-        <StatusBadge status={order.status} />
+        <div className="flex flex-col gap-1">
+          <StatusBadge status={order.status} />
+          {!isTerminal && (
+            <div
+              className="flex items-center gap-1"
+              title={`${formatStageAge(stageHours)} בשלב הנוכחי`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                slaColor === "red"    ? "bg-red-500 animate-pulse" :
+                slaColor === "yellow" ? "bg-amber-400" :
+                                        "bg-green-500"
+              }`} />
+              <span className={`text-[10px] font-medium ${
+                slaColor === "red"    ? "text-red-500" :
+                slaColor === "yellow" ? "text-amber-500" :
+                                        "text-green-600"
+              }`}>
+                {formatStageAge(stageHours)}
+              </span>
+            </div>
+          )}
+        </div>
       </td>
 
       {/* Progress */}
@@ -381,8 +416,14 @@ function OrderRow({ order, index, phoneMap, onUpdateStatus }: OrderRowProps) {
           )}
           {order.status === "production" && (
             <button
-              onClick={() => onUpdateStatus(order.id, "ready_installation")}
-              className="px-2 py-1 rounded-lg text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors whitespace-nowrap"
+              onClick={() => { if (fabCheck.ok) onUpdateStatus(order.id, "ready_installation"); }}
+              disabled={!fabCheck.ok}
+              title={!fabCheck.ok ? fabCheck.reason : undefined}
+              className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-colors whitespace-nowrap ${
+                fabCheck.ok
+                  ? "text-teal-700 bg-teal-50 hover:bg-teal-100 border-teal-200"
+                  : "text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-60"
+              }`}
             >
               מוכן להתקנה
             </button>
