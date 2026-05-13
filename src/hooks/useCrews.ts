@@ -51,10 +51,10 @@ function saveLocal(crews: Crew[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(crews)); } catch { /* ignore */ }
 }
 
-function isNewer(existingUpdatedAt: string, incomingUpdatedAt: string): boolean {
+function isNewerOrRecent(existing: string, incoming: string, toleranceMs = 5000): boolean {
   try {
-    return new Date(incomingUpdatedAt).getTime() > new Date(existingUpdatedAt).getTime();
-  } catch { return false; }
+    return new Date(incoming).getTime() > new Date(existing).getTime() - toleranceMs;
+  } catch { return true; }
 }
 
 export function useCrews() {
@@ -111,7 +111,7 @@ export function useCrews() {
           } else if (payload.eventType === "UPDATE") {
             const incoming = fromRow(payload.new as Record<string, unknown>);
             setCrews(prev => prev.map(c =>
-              c.id === incoming.id && isNewer(c.updatedAt, incoming.updatedAt) ? incoming : c
+              c.id === incoming.id && isNewerOrRecent(c.updatedAt, incoming.updatedAt) ? incoming : c
             ));
           } else if (payload.eventType === "DELETE") {
             const deletedId = (payload.old as { id?: string }).id;

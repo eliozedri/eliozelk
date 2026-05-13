@@ -64,10 +64,10 @@ function generateOrderNumberLocal(orders: WorkOrder[]): string {
   return `${prefix}${String(next).padStart(3, "0")}`;
 }
 
-function isNewer(existingUpdatedAt: string, incomingUpdatedAt: string): boolean {
+function isNewerOrRecent(existing: string, incoming: string, toleranceMs = 5000): boolean {
   try {
-    return new Date(incomingUpdatedAt).getTime() > new Date(existingUpdatedAt).getTime();
-  } catch { return false; }
+    return new Date(incoming).getTime() > new Date(existing).getTime() - toleranceMs;
+  } catch { return true; }
 }
 
 export function useOrders() {
@@ -126,7 +126,7 @@ export function useOrders() {
           } else if (payload.eventType === "UPDATE") {
             const incoming = fromRow(payload.new as Record<string, unknown>);
             setOrders(prev => prev.map(o =>
-              o.id === incoming.id && isNewer(o.updatedAt, incoming.updatedAt) ? incoming : o
+              o.id === incoming.id && isNewerOrRecent(o.updatedAt, incoming.updatedAt) ? incoming : o
             ));
           } else if (payload.eventType === "DELETE") {
             const deletedId = (payload.old as { id?: string }).id;

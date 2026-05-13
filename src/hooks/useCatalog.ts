@@ -50,10 +50,10 @@ function saveLocal(items: CatalogItem[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch { /* ignore */ }
 }
 
-function isNewer(existingUpdatedAt: string, incomingUpdatedAt: string): boolean {
+function isNewerOrRecent(existing: string, incoming: string, toleranceMs = 5000): boolean {
   try {
-    return new Date(incomingUpdatedAt).getTime() > new Date(existingUpdatedAt).getTime();
-  } catch { return false; }
+    return new Date(incoming).getTime() > new Date(existing).getTime() - toleranceMs;
+  } catch { return true; }
 }
 
 export function useCatalog() {
@@ -110,7 +110,7 @@ export function useCatalog() {
           } else if (payload.eventType === "UPDATE") {
             const incoming = fromRow(payload.new as Record<string, unknown>);
             setItems(prev => prev.map(i =>
-              i.id === incoming.id && isNewer(i.updatedAt, incoming.updatedAt) ? incoming : i
+              i.id === incoming.id && isNewerOrRecent(i.updatedAt, incoming.updatedAt) ? incoming : i
             ));
           } else if (payload.eventType === "DELETE") {
             const deletedId = (payload.old as { id?: string }).id;

@@ -52,10 +52,13 @@ function saveLocal(diaries: WorkDiary[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(diaries)); } catch { /* ignore */ }
 }
 
-function isNewer(existingUpdatedAt: string, incomingUpdatedAt: string): boolean {
+// Apply incoming update if it's newer than or within clock-skew tolerance of existing.
+// Strictly greater-than would silently drop legitimate remote updates when the local
+// optimistic timestamp (client clock) is slightly ahead of the server clock.
+function isNewerOrRecent(existing: string, incoming: string, toleranceMs = 5000): boolean {
   try {
-    return new Date(incomingUpdatedAt).getTime() > new Date(existingUpdatedAt).getTime();
-  } catch { return false; }
+    return new Date(incoming).getTime() > new Date(existing).getTime() - toleranceMs;
+  } catch { return true; }
 }
 
 function generateDiaryNumberLocal(diaries: WorkDiary[]): string {
@@ -123,7 +126,7 @@ export function useWorkDiaries() {
           } else if (payload.eventType === "UPDATE") {
             const incoming = fromRow(payload.new as Record<string, unknown>);
             setDiaries(prev => prev.map(d =>
-              d.id === incoming.id && isNewer(d.updatedAt, incoming.updatedAt) ? incoming : d
+              d.id === incoming.id && isNewerOrRecent(d.updatedAt, incoming.updatedAt) ? incoming : d
             ));
           } else if (payload.eventType === "DELETE") {
             const deletedId = (payload.old as { id?: string }).id;
@@ -181,6 +184,7 @@ export function useWorkDiaries() {
 
   const saveDiary = useCallback((diary: WorkDiary) => {
     const now = new Date().toISOString();
+    const original = ref.current.find(d => d.id === diary.id);
     const updated = { ...diary, updatedAt: now };
     setDiaries(prev => {
       const exists = prev.find(d => d.id === diary.id);
@@ -189,7 +193,10 @@ export function useWorkDiaries() {
     const db = getSupabase();
     if (db) {
       db.from("work_diaries").upsert(toRow(updated)).then(({ error }) => {
-        if (error) console.error("[diaries] save failed:", error.message);
+        if (error) {
+          console.error("[diaries] save failed:", error.message);
+          if (original) setDiaries(prev => prev.map(d => d.id === diary.id ? original : d));
+        }
       });
     }
   }, []);

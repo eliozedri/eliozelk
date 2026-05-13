@@ -196,20 +196,17 @@ export function AccountingPage() {
     [orders]
   );
 
-  async function handleMarkInvoiced(order: WorkOrder) {
+  function handleMarkInvoiced(order: WorkOrder) {
     setInvoicingId(order.id);
     const invoiceNumber = invoiceInputs[order.id]?.trim() || null;
-    try {
-      await updateOrderFields(order.id, {
-        accountingStatus: "invoiced",
-        invoicedAt: new Date().toISOString(),
-        invoicedBy: profile?.id ?? null,
-        invoiceNumber,
-      });
-      setInvoiceInputs((prev) => { const next = { ...prev }; delete next[order.id]; return next; });
-    } finally {
-      setInvoicingId(null);
-    }
+    updateOrderFields(order.id, {
+      accountingStatus: "invoiced",
+      invoicedAt: new Date().toISOString(),
+      invoicedBy: profile?.id ?? null,
+      invoiceNumber,
+    });
+    setInvoiceInputs((prev) => { const next = { ...prev }; delete next[order.id]; return next; });
+    setInvoicingId(null);
   }
 
   const submittedDiaries = useMemo(
