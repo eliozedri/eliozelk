@@ -29,10 +29,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "No Postgres connection available", debug }, { status: 503 });
   }
 
-  const client = new Client({
-    connectionString: connStr,
-    ssl: { rejectUnauthorized: false },
-  });
+  // Supabase uses valid TLS but Node may reject intermediate cert chain
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+  const client = new Client({ connectionString: connStr });
 
   try {
     await client.connect();
