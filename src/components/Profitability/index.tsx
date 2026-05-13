@@ -12,7 +12,8 @@ import {
   STATUS_DOT,
 } from "@/lib/profitability";
 import type { ProfitabilityStatus } from "@/lib/profitability";
-import type { CrewMetrics, OrderProfitabilitySummary, WeeklyBucket } from "@/lib/operationalKPIs";
+import type { CrewMetrics, OrderProfitabilitySummary, WeeklyBucket, CustomerMetrics } from "@/lib/operationalKPIs";
+import type { DiagnosticFinding } from "@/hooks/useOperationalKPIs";
 import { DIARY_STATUS_LABELS } from "@/types/workDiary";
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -58,13 +59,26 @@ function StatusBadge({ status }: { status: ProfitabilityStatus }) {
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
-type Tab = "diaries" | "orders" | "crews" | "trends";
+type Tab = "diaries" | "orders" | "crews" | "trends" | "management";
 const TABS: { id: Tab; label: string }[] = [
-  { id: "diaries", label: "יומנים" },
-  { id: "orders",  label: "עבודות" },
-  { id: "crews",   label: "צוותים" },
-  { id: "trends",  label: "מגמות" },
+  { id: "diaries",    label: "יומנים" },
+  { id: "orders",     label: "עבודות" },
+  { id: "crews",      label: "צוותים" },
+  { id: "trends",     label: "מגמות" },
+  { id: "management", label: "ניהול" },
 ];
+
+// ── Trend indicator ───────────────────────────────────────────────────────────
+
+function TrendArrow({ direction, changePct }: { direction: "up" | "flat" | "down"; changePct: number }) {
+  if (direction === "up") return (
+    <span className="text-green-600 text-[10px] font-bold">▲ {Math.abs(changePct).toFixed(0)}%</span>
+  );
+  if (direction === "down") return (
+    <span className="text-red-600 text-[10px] font-bold">▼ {Math.abs(changePct).toFixed(0)}%</span>
+  );
+  return <span className="text-gray-400 text-[10px]">→ יציב</span>;
+}
 
 // ── Diaries tab ───────────────────────────────────────────────────────────────
 
@@ -525,6 +539,184 @@ function TrendsTab({ byWeek, labor, executionVariance }: {
   );
 }
 
+// ── Management tab ────────────────────────────────────────────────────────────
+
+const SEVERITY_STYLES: Record<DiagnosticFinding["severity"], { border: string; badge: string; icon: string }> = {
+  critical: { border: "border-red-200 bg-red-50",    badge: "bg-red-100 text-red-700",    icon: "text-red-500" },
+  warn:     { border: "border-amber-200 bg-amber-50", badge: "bg-amber-100 text-amber-700", icon: "text-amber-500" },
+  info:     { border: "border-blue-200 bg-blue-50",   badge: "bg-blue-100 text-blue-700",   icon: "text-blue-400" },
+};
+const SEVERITY_LABELS: Record<DiagnosticFinding["severity"], string> = {
+  critical: "קריטי", warn: "אזהרה", info: "מידע",
+};
+
+function DiagnosticCard({ f }: { f: DiagnosticFinding }) {
+  const styles = SEVERITY_STYLES[f.severity];
+  return (
+    <div className={`rounded-xl border p-4 ${styles.border}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${styles.badge}`}>
+              {SEVERITY_LABELS[f.severity]}
+            </span>
+            <span className="text-sm font-bold text-gray-900">{f.title}</span>
+          </div>
+          <p className="text-xs text-gray-600 mt-1.5 leading-relaxed">{f.explanation}</p>
+          <div className="mt-2 flex items-start gap-1.5">
+            <span className="text-[10px] font-semibold text-gray-400 shrink-0 mt-0.5">→</span>
+            <p className="text-[11px] text-gray-500 italic">{f.recommendation}</p>
+          </div>
+          {f.evidence.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {f.evidence.slice(0, 4).map((e, i) => (
+                <span key={i} className="text-[9px] bg-white border border-gray-200 rounded px-1.5 py-0.5 text-gray-500 font-mono">{e}</span>
+              ))}
+              {f.evidence.length > 4 && (
+                <span className="text-[9px] text-gray-400">+{f.evidence.length - 4}</span>
+              )}
+            </div>
+          )}
+        </div>
+        {f.estimatedImpact != null && f.estimatedImpact > 0 && (
+          <div className="shrink-0 text-right">
+            <div className="text-base font-black text-gray-800" dir="ltr">{`₪${Math.round(f.estimatedImpact).toLocaleString("he-IL")}`}</div>
+            <div className="text-[9px] text-gray-400">השפעה מוערכת</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CustomerTable({ byCustomer }: { byCustomer: CustomerMetrics[] }) {
+  if (byCustomer.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-400">
+        קשר יומני עבודה להזמנות כדי לראות רווחיות לפי לקוח
+      </div>
+    );
+  }
+  const RISK_COLORS = { green: "bg-green-100 text-green-700", amber: "bg-amber-100 text-amber-700", red: "bg-red-100 text-red-700" };
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <span className="text-sm font-bold text-gray-700">רווחיות לפי לקוח</span>
+        <span className="text-xs text-gray-400">{byCustomer.length} לקוחות</span>
+      </div>
+      <div className="flex gap-3 px-4 py-2 bg-gray-50 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase">
+        <div className="flex-1">לקוח</div>
+        <div className="w-14 text-center shrink-0">עבודות</div>
+        <div className="w-20 text-left shrink-0">הכנסה</div>
+        <div className="w-20 text-left shrink-0">עלות</div>
+        <div className="w-20 text-left shrink-0">רווח</div>
+        <div className="w-16 text-center shrink-0">מרווח</div>
+        <div className="w-14 text-center shrink-0">סיכון</div>
+      </div>
+      {byCustomer.map(c => {
+        const isLoss = c.netProfit < 0;
+        return (
+          <div key={c.customerName} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-50 hover:bg-gray-50 transition-colors text-xs">
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-gray-900 truncate">{c.customerName}</div>
+              {c.lastActivity && <div className="text-gray-400 text-[10px]">{formatDate(c.lastActivity)}</div>}
+            </div>
+            <div className="w-14 text-center text-gray-500 shrink-0">{c.orderCount}</div>
+            <div className="w-20 text-left text-gray-700 shrink-0" dir="ltr">{c.totalRevenue > 0 ? `₪${Math.round(c.totalRevenue).toLocaleString("he-IL")}` : "—"}</div>
+            <div className="w-20 text-left text-gray-700 shrink-0" dir="ltr">{c.totalCost > 0 ? `₪${Math.round(c.totalCost).toLocaleString("he-IL")}` : "—"}</div>
+            <div className={`w-20 font-bold text-left shrink-0 ${isLoss ? "text-red-700" : "text-green-700"}`} dir="ltr">
+              {c.totalRevenue > 0 ? `${isLoss ? "-" : "+"}₪${Math.round(Math.abs(c.netProfit)).toLocaleString("he-IL")}` : "—"}
+            </div>
+            <div className={`w-16 text-center font-bold shrink-0 text-xs ${isLoss ? "text-red-600" : c.avgMarginPct < 15 ? "text-amber-600" : "text-green-600"}`}>
+              {c.totalRevenue > 0 ? `${c.avgMarginPct.toFixed(1)}%` : "—"}
+            </div>
+            <div className="w-14 text-center shrink-0">
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${RISK_COLORS[c.riskLevel]}`}>
+                {c.riskLevel === "green" ? "תקין" : c.riskLevel === "amber" ? "שולי" : "הפסד"}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ManagementTab({ diagnostics, byCustomer, billingLeakage }: {
+  diagnostics: DiagnosticFinding[];
+  byCustomer: CustomerMetrics[];
+  billingLeakage: ReturnType<typeof useOperationalKPIs>["billingLeakage"];
+}) {
+  const critical = diagnostics.filter(d => d.severity === "critical").length;
+  const warnings = diagnostics.filter(d => d.severity === "warn").length;
+  const totalImpact = diagnostics.reduce((s, d) => s + (d.estimatedImpact ?? 0), 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Summary bar */}
+      {diagnostics.length > 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4 flex items-center gap-6 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="text-2xl font-black text-gray-900">{diagnostics.length}</div>
+            <div className="text-xs text-gray-500">ממצאים</div>
+          </div>
+          {critical > 0 && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+              <span className="text-sm font-bold text-red-700">{critical} קריטי</span>
+            </div>
+          )}
+          {warnings > 0 && (
+            <div className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span className="text-sm font-bold text-amber-700">{warnings} אזהרה</span>
+            </div>
+          )}
+          {totalImpact > 0 && (
+            <div className="mr-auto text-right">
+              <div className="text-lg font-black text-gray-800" dir="ltr">{`₪${Math.round(totalImpact).toLocaleString("he-IL")}`}</div>
+              <div className="text-[10px] text-gray-400">סה״כ חשיפה / הזדמנות מוערכת</div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-4 text-sm font-medium text-emerald-700">
+          ✓ לא זוהו ממצאים תפעוליים בסיס הנתונים הנוכחי
+        </div>
+      )}
+
+      {/* Billing leakage urgent callout */}
+      {billingLeakage.uninvoicedCompletedOrders > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-bold text-red-800">
+              {billingLeakage.uninvoicedCompletedOrders} הזמנות מושלמות ממתינות לחיוב
+              {billingLeakage.uninvoicedEstimatedRevenue > 0 && ` — ${`₪${Math.round(billingLeakage.uninvoicedEstimatedRevenue).toLocaleString("he-IL")}`} מוערך`}
+            </div>
+            <div className="text-xs text-red-600 mt-0.5">
+              ההזמנה הוותיקה ביותר ממתינה {billingLeakage.oldestUninvoicedDays} ימים
+            </div>
+          </div>
+          <Link href="/accounting"
+            className="shrink-0 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors">
+            לדף חשבונות
+          </Link>
+        </div>
+      )}
+
+      {/* Diagnostic findings */}
+      {diagnostics.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {diagnostics.map(f => <DiagnosticCard key={f.id} f={f} />)}
+        </div>
+      )}
+
+      {/* Customer profitability */}
+      <CustomerTable byCustomer={byCustomer} />
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ProfitabilityPage() {
@@ -533,9 +725,14 @@ export function ProfitabilityPage() {
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
 
-  const kpis = useOperationalKPIs();
+  const intel = useOperationalKPIs();
+  const {
+    global: agg, byCrew, byOrder, byCustomer, byWeek,
+    labor, executionVariance, dataQuality,
+    billingLeakage, trendSummary, diagnostics,
+  } = intel;
 
-  const { global: agg, byCrew, byOrder, byWeek, labor, executionVariance, dataQuality } = kpis;
+  const criticalCount = diagnostics.filter(d => d.severity === "critical").length;
 
   return (
     <div className="min-h-screen bg-[#f0f2f5] pb-10">
@@ -550,7 +747,7 @@ export function ProfitabilityPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">מודיעין תפעולי</h1>
-              <p className="text-xs text-gray-400">רווחיות · צוותים · מגמות · ניתוח ביצוע</p>
+              <p className="text-xs text-gray-400">רווחיות · צוותים · מגמות · ניתוח ביצוע · ניהול</p>
             </div>
           </div>
           <Link href="/cost-settings" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
@@ -563,50 +760,45 @@ export function ProfitabilityPage() {
       <div className="max-w-6xl mx-auto px-4 mt-4 space-y-4">
         {/* Global KPI strip */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <KpiCard label="סה״כ ימי עבודה" value={String(agg.totalDays)} accent="bg-blue-500" />
+          <KpiCard label="סה״כ ימי עבודה" value={String(agg.totalDays)} accent="bg-blue-500"
+            sub={trendSummary.dataWeeks > 0 ? `${trendSummary.dataWeeks} שבועות נתונים` : undefined} />
           <KpiCard label="ימים רווחיים" value={String(agg.profitableDays)} accent="bg-green-500"
             sub={agg.totalDays > 0 ? pct((agg.profitableDays / agg.totalDays) * 100) : undefined} />
           <KpiCard label="ימי הפסד" value={String(agg.lossDays)} accent="bg-red-500"
             sub={agg.totalDays > 0 ? pct((agg.lossDays / agg.totalDays) * 100) : undefined} />
-          <KpiCard label="סה״כ הכנסות" value={agg.totalRevenue > 0 ? fmt(agg.totalRevenue) : "—"} accent="bg-teal-500" small />
+          <KpiCard
+            label="סה״כ הכנסות"
+            value={agg.totalRevenue > 0 ? `₪${Math.round(agg.totalRevenue).toLocaleString("he-IL")}` : "—"}
+            accent={trendSummary.revenueDirection === "up" ? "bg-teal-500" : trendSummary.revenueDirection === "down" ? "bg-red-400" : "bg-teal-500"}
+            sub={trendSummary.dataWeeks >= 4 ? `${trendSummary.revenueDirection === "up" ? "▲" : trendSummary.revenueDirection === "down" ? "▼" : "→"} ${Math.abs(trendSummary.revenueChangePct).toFixed(0)}% vs קודם` : undefined}
+            small
+          />
           <KpiCard
             label="רווח נקי כולל"
-            value={agg.totalNetProfit !== 0 ? `${agg.totalNetProfit >= 0 ? "+" : ""}${fmt(agg.totalNetProfit)}` : "—"}
+            value={agg.totalNetProfit !== 0 ? `${agg.totalNetProfit >= 0 ? "+" : ""}₪${Math.round(Math.abs(agg.totalNetProfit)).toLocaleString("he-IL")}` : "—"}
             accent={agg.totalNetProfit >= 0 ? "bg-green-600" : "bg-red-600"}
             sub={agg.totalRevenue > 0 ? `${pct(agg.avgMarginPercentage)} מרווח` : undefined}
             small
           />
           <KpiCard
-            label="איכות נתונים"
-            value={`${dataQuality.completenessScore}%`}
-            accent={dataQuality.completenessScore >= 80 ? "bg-emerald-400" : dataQuality.completenessScore >= 60 ? "bg-amber-400" : "bg-red-400"}
-            sub={dataQuality.missingBilling > 0 ? `${dataQuality.missingBilling} חסרי חיוב` : undefined}
+            label={criticalCount > 0 ? `${criticalCount} ממצאים קריטיים` : "איכות נתונים"}
+            value={criticalCount > 0 ? String(criticalCount) : `${dataQuality.completenessScore}%`}
+            accent={criticalCount > 0 ? "bg-red-500" : dataQuality.completenessScore >= 80 ? "bg-emerald-400" : dataQuality.completenessScore >= 60 ? "bg-amber-400" : "bg-red-400"}
+            sub={criticalCount > 0 ? "לחץ על ניהול לפרטים" : dataQuality.missingBilling > 0 ? `${dataQuality.missingBilling} חסרי חיוב` : undefined}
           />
         </div>
-
-        {/* Data quality warning */}
-        {dataQuality.completenessScore < 70 && dataQuality.totalDiaries > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3 text-sm">
-            <svg className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-              <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-            <div>
-              <span className="font-semibold text-amber-800">איכות נתונים נמוכה</span>
-              <span className="text-amber-700 mr-1">—</span>
-              {dataQuality.missingBilling > 0 && <span className="text-amber-700">{dataQuality.missingBilling} יומנים ללא סכום חיוב · </span>}
-              {dataQuality.missingCrew > 0 && <span className="text-amber-700">{dataQuality.missingCrew} ללא פרטי צוות · </span>}
-              {dataQuality.missingOrderLink > 0 && <span className="text-amber-700">{dataQuality.missingOrderLink} לא מקושרים להזמנה</span>}
-            </div>
-          </div>
-        )}
 
         {/* Tab bar */}
         <div className="flex items-center gap-1 bg-white rounded-xl border border-gray-200 shadow-sm p-1 w-fit">
           {TABS.map(t => (
             <button key={t.id} type="button" onClick={() => setActiveTab(t.id)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === t.id ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>
+              className={`relative px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === t.id ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>
               {t.label}
+              {t.id === "management" && criticalCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  {criticalCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -625,6 +817,9 @@ export function ProfitabilityPage() {
         {activeTab === "orders" && <OrdersTab byOrder={byOrder} />}
         {activeTab === "crews" && <CrewsTab byCrew={byCrew} />}
         {activeTab === "trends" && <TrendsTab byWeek={byWeek} labor={labor} executionVariance={executionVariance} />}
+        {activeTab === "management" && (
+          <ManagementTab diagnostics={diagnostics} byCustomer={byCustomer} billingLeakage={billingLeakage} />
+        )}
 
         <div className="text-xs text-gray-400 text-center px-4 py-2">
           הנתונים מבוססים על יומני עבודה שמולאו ·{" "}

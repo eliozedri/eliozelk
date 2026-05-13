@@ -100,16 +100,58 @@ export interface DataQuality {
   completenessScore: number;       // 0–100
 }
 
+// ─── Customer profitability ──────────────────────────────────────────────────
+
+export interface CustomerMetrics {
+  customerName: string;
+  orderCount: number;
+  diaryCount: number;
+  totalRevenue: number;
+  totalCost: number;
+  netProfit: number;
+  avgMarginPct: number;
+  avgRevenuePerOrder: number;
+  riskLevel: "green" | "amber" | "red";
+  lastActivity: string;          // most recent execution date ISO
+}
+
+// ─── Billing leakage ────────────────────────────────────────────────────────
+
+export interface BillingLeakage {
+  uninvoicedCompletedOrders: number;
+  uninvoicedEstimatedRevenue: number;  // sum of linked diary billedAmounts
+  approvedDiariesWithoutBilling: number;
+  submittedDiariesWithoutBilling: number;
+  totalLeakageEstimate: number;
+  oldestUninvoicedDays: number;
+}
+
+// ─── Trend summary ───────────────────────────────────────────────────────────
+
+export interface TrendSummary {
+  revenueDirection: "up" | "flat" | "down";
+  revenueChangePct: number;            // % change recent half vs prior half
+  marginDirection: "up" | "flat" | "down";
+  marginChangePct: number;
+  throughputDirection: "up" | "flat" | "down";
+  throughputChangePct: number;
+  forecastNextWeekRevenue: number | null;
+  dataWeeks: number;
+}
+
 // ─── Top-level structure ─────────────────────────────────────────────────────
 
 export interface OperationalKPIs {
   global: AggregatedProfitability;
   byCrew: CrewMetrics[];
   byOrder: OrderProfitabilitySummary[];
+  byCustomer: CustomerMetrics[];
   byWeek: WeeklyBucket[];
   labor: LaborUtilization;
   executionVariance: ExecutionVariance;
   dataQuality: DataQuality;
+  billingLeakage: BillingLeakage;
+  trendSummary: TrendSummary;
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
@@ -137,6 +179,35 @@ function weekLabel(sundayIso: string): string {
   sat.setDate(d.getDate() + 5); // Saturday
   const fmt = (x: Date) => x.toLocaleDateString("he-IL", { day: "numeric", month: "numeric" });
   return `${fmt(d)}–${fmt(sat)}`;
+}
+
+function trendDir(pct: number): "up" | "flat" | "down" {
+  if (pct > 5) return "up";
+  if (pct < -5) return "down";
+  return "flat";
+}
+
+function halfChange(values: number[]): number {
+  const n = values.length;
+  if (n < 4) return 0;
+  const mid = Math.floor(n / 2);
+  const prior = values.slice(0, mid).reduce((a, b) => a + b, 0) / mid;
+  const recent = values.slice(n - mid).reduce((a, b) => a + b, 0) / mid;
+  return prior !== 0 ? ((recent - prior) / Math.abs(prior)) * 100 : 0;
+}
+
+function linearForecast(values: number[]): number | null {
+  const n = values.length;
+  if (n < 3) return null;
+  const meanX = (n - 1) / 2;
+  const meanY = values.reduce((a, b) => a + b, 0) / n;
+  let num = 0, den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (i - meanX) * (values[i] - meanY);
+    den += (i - meanX) ** 2;
+  }
+  const slope = den !== 0 ? num / den : 0;
+  return Math.max(0, meanY + slope * (n - meanX));
 }
 
 function matchCrew(
@@ -370,5 +441,107 @@ export function computeOperationalKPIs(
     completenessScore,
   };
 
-  return { global, byCrew, byOrder, byWeek, labor, executionVariance, dataQuality };
+  // ── Customer metrics ─────────────────────────────────────────────────────
+  const customerBuckets = new Map<string, OrderProfitabilitySummary[]>();
+  for (const o of byOrder) {
+    if (!customerBuckets.has(o.customerName)) customerBuckets.set(o.customerName, []);
+    customerBuckets.get(o.customerName)!.push(o);
+  }
+
+  const byCustomer: CustomerMetrics[] = [];
+  for (const [customerName, orders] of customerBuckets) {
+    const totalRevenue = orders.reduce((s, o) => s + o.totalRevenue, 0);
+    const totalCost = orders.reduce((s, o) => s + o.totalCost, 0);
+    const netProfit = totalRevenue - totalCost;
+    const avgMarginPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+    const diaryCount = orders.reduce((s, o) => s + o.diaryCount, 0);
+    const lastActivity = orders
+      .flatMap(o => o.executionDates)
+      .sort()
+      .at(-1) ?? "";
+    const riskLevel: CustomerMetrics["riskLevel"] =
+      avgMarginPct < -5 ? "red" :
+      avgMarginPct < 10 ? "amber" : "green";
+
+    byCustomer.push({
+      customerName,
+      orderCount: orders.length,
+      diaryCount,
+      totalRevenue,
+      totalCost,
+      netProfit,
+      avgMarginPct,
+      avgRevenuePerOrder: orders.length > 0 ? totalRevenue / orders.length : 0,
+      riskLevel,
+      lastActivity,
+    });
+  }
+  byCustomer.sort((a, b) => b.netProfit - a.netProfit);
+
+  // ── Billing leakage ───────────────────────────────────────────────────────
+  const diaryByOrderId = new Map<string, WorkDiary[]>();
+  for (const d of diaries) {
+    if (d.orderId) {
+      if (!diaryByOrderId.has(d.orderId)) diaryByOrderId.set(d.orderId, []);
+      diaryByOrderId.get(d.orderId)!.push(d);
+    }
+  }
+
+  const uninvoicedOrders = orders.filter(o =>
+    o.status === "completed" &&
+    !o.invoicedAt &&
+    (!o.accountingStatus || o.accountingStatus === "pending")
+  );
+  const uninvoicedEstimatedRevenue = uninvoicedOrders.reduce((sum, o) => {
+    const linked = diaryByOrderId.get(o.id) ?? [];
+    return sum + linked.reduce((s, d) => s + (d.billedAmount ?? 0), 0);
+  }, 0);
+
+  const nowMs = Date.now();
+  const oldestUninvoicedDays = uninvoicedOrders.length > 0
+    ? Math.round(Math.max(...uninvoicedOrders.map(o =>
+        (nowMs - new Date(o.updatedAt).getTime()) / 86_400_000
+      )))
+    : 0;
+
+  const approvedNoBilling = diaries.filter(
+    d => d.approvalStatus === "approved" && !d.billedAmount && d.isBillable !== false
+  ).length;
+  const submittedNoBilling = diaries.filter(
+    d => d.status === "submitted" && !d.billedAmount && d.isBillable !== false
+  ).length;
+
+  const billingLeakage: BillingLeakage = {
+    uninvoicedCompletedOrders: uninvoicedOrders.length,
+    uninvoicedEstimatedRevenue,
+    approvedDiariesWithoutBilling: approvedNoBilling,
+    submittedDiariesWithoutBilling: submittedNoBilling,
+    totalLeakageEstimate: uninvoicedEstimatedRevenue,
+    oldestUninvoicedDays,
+  };
+
+  // ── Trend summary ─────────────────────────────────────────────────────────
+  const revenueValues = byWeek.map(b => b.totalRevenue);
+  const marginValues = byWeek.map(b => b.avgMarginPct);
+  const countValues = byWeek.map(b => b.diaryCount);
+  const revChangePct = halfChange(revenueValues);
+  const margChangePct = halfChange(marginValues);
+  const countChangePct = halfChange(countValues);
+
+  const trendSummary: TrendSummary = {
+    revenueDirection: trendDir(revChangePct),
+    revenueChangePct: revChangePct,
+    marginDirection: trendDir(margChangePct),
+    marginChangePct: margChangePct,
+    throughputDirection: trendDir(countChangePct),
+    throughputChangePct: countChangePct,
+    forecastNextWeekRevenue: linearForecast(revenueValues),
+    dataWeeks: byWeek.length,
+  };
+
+  return {
+    global, byCrew, byOrder, byCustomer, byWeek,
+    labor, executionVariance, dataQuality,
+    billingLeakage, trendSummary,
+  };
 }
