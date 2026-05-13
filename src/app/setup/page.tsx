@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { hasMaster, createUser } from "@/lib/auth/store";
 
 const NAVY = "#0d1b2e";
 const EK_BLUE = "#1d6fd8";
@@ -20,19 +19,22 @@ export default function SetupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
-    if (await hasMaster()) {
-      setError("כבר קיים מנהל ראשי במערכת. עמוד זה אינו נגיש יותר.");
+    const res = await fetch("/api/auth/setup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password }),
+    });
+
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    if (!res.ok) {
+      setError(body.error ?? "שגיאה ביצירת המשתמש");
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
-    try {
-      await createUser({ name, email, password, role: "master" });
-      setDone(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "שגיאה ביצירת המשתמש");
-    }
+    setDone(true);
     setLoading(false);
   };
 

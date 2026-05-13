@@ -2,10 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { getUserByEmail } from "@/lib/auth/store";
-import { verifyPassword } from "@/lib/auth/crypto";
-import { createSession } from "@/lib/auth/session";
-import { touchLastLogin } from "@/lib/auth/store";
+import { getSupabase } from "@/lib/supabase/client";
 
 const NAVY = "#0d1b2e";
 const EK_BLUE = "#1d6fd8";
@@ -23,30 +20,64 @@ export function Login() {
     setError("");
     setLoading(true);
 
-    const user = await getUserByEmail(email);
-    if (!user) {
-      setError("אימייל או סיסמה שגויים. נסה שנית.");
+    const db = getSupabase();
+    if (!db) {
+      setError("שגיאת תצורה. פנה למנהל המערכת.");
       setLoading(false);
       return;
     }
 
-    if (!user.is_active) {
-      setError("חשבון זה אינו פעיל. פנה למנהל המערכת.");
+    // 1. Try Supabase Auth directly (normal path after migration)
+    const { error: signInErr } = await db.auth.signInWithPassword({ email, password });
+
+    if (!signInErr) {
+      router.push("/");
+      router.refresh();
+      return;
+    }
+
+    // 2. If credentials failed, attempt bridge migration from legacy system
+    if (signInErr.message.includes("Invalid login credentials") || signInErr.message.includes("Email not confirmed")) {
+      const res = await fetch("/api/auth/migrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (res.ok) {
+        // Migration succeeded — retry sign in
+        const { error: retryErr } = await db.auth.signInWithPassword({ email, password });
+        if (!retryErr) {
+          router.push("/");
+          router.refresh();
+          return;
+        }
+        setError("שגיאת מעבר מערכת. נסה שוב.");
+        setLoading(false);
+        return;
+      }
+
+      const body = await res.json().catch(() => ({})) as { error?: string };
+      if (res.status === 401 || body.error === "invalid_credentials") {
+        setError("אימייל או סיסמה שגויים. נסה שנית.");
+      } else if (res.status === 403 || body.error === "inactive") {
+        setError("חשבון זה אינו פעיל. פנה למנהל המערכת.");
+      } else if (res.status === 404 || body.error === "not_found") {
+        setError("אימייל או סיסמה שגויים. נסה שנית.");
+      } else {
+        setError("שגיאת כניסה. נסה שנית.");
+      }
       setLoading(false);
       return;
     }
 
-    const valid = await verifyPassword(password, user.passwordHash);
-    if (!valid) {
-      setError("אימייל או סיסמה שגויים. נסה שנית.");
-      setLoading(false);
-      return;
+    // 3. Other Supabase Auth errors
+    if (signInErr.message.includes("Email not confirmed")) {
+      setError("נדרש אישור אימייל. פנה למנהל המערכת.");
+    } else {
+      setError("שגיאת כניסה. נסה שנית.");
     }
-
-    await touchLastLogin(user.id);
-    createSession(user.id);
-    router.push("/");
-    router.refresh();
+    setLoading(false);
   };
 
   return (
