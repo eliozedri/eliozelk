@@ -135,9 +135,6 @@ export type WorkOrderStatus =
 export type OrderPriority = "normal" | "urgent";
 
 // ─── Accounting workflow state ────────────────────────────────────────────────
-// Stored in WorkOrder.data JSONB today.
-// When ERP / invoice-generation integration begins, promote these to
-// first-class columns via a straightforward ALTER TABLE migration.
 
 export type AccountingStatus =
   | "pending"    // completed, awaiting invoice

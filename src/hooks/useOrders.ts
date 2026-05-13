@@ -387,6 +387,8 @@ export function useOrders() {
       }
     }
 
+    if (Object.keys(columnPatch).length === 0 && !needsContentUpdate) return;
+
     const dbUpdate: Record<string, unknown> = {
       ...columnPatch,
       version: original.version + 1,
@@ -578,7 +580,6 @@ export function useOrders() {
   }, []);
 
   // ── resolveOrderProblem ────────────────────────────────────────────────
-  // Updates a row in order_problems — field-level, no version check needed.
   const resolveOrderProblem = useCallback((
     orderId: string,
     problemId: string,
@@ -613,9 +614,14 @@ export function useOrders() {
         })
         .eq("id", problemId)
         .eq("order_id", orderId)
+        .select("id")
+        .single()
         .then(({ error }) => {
-          if (error) {
+          const notFound = error?.code === "PGRST116";
+          if (error && !notFound) {
             console.error("[orders] resolveOrderProblem failed:", error.message);
+          }
+          if ((error && !notFound) || notFound) {
             if (originalProblem) {
               setOrders(prev => prev.map(o =>
                 o.id === orderId
@@ -623,6 +629,7 @@ export function useOrders() {
                   : o
               ));
             }
+            if (notFound) fetchAll();
           } else {
             insertActivity(orderId, "problem_status_changed",
               status === "resolved" ? "בעיה סומנה כנפתרה" : `סטטוס בעיה עודכן ל-${status}`,
@@ -631,7 +638,7 @@ export function useOrders() {
           }
         });
     }
-  }, []);
+  }, [fetchAll]);
 
   // ── addOrderActivity ───────────────────────────────────────────────────
   const addOrderActivity = useCallback((

@@ -202,7 +202,7 @@ export function AccountingPage() {
     updateOrderFields(order.id, {
       accountingStatus: "invoiced",
       invoicedAt: new Date().toISOString(),
-      invoicedBy: profile?.id ?? null,
+      invoicedBy: profile?.name ?? null,
       invoiceNumber,
     });
     setInvoiceInputs((prev) => { const next = { ...prev }; delete next[order.id]; return next; });
