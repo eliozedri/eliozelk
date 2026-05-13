@@ -6,8 +6,12 @@ import { useOrdersContext } from "@/context/OrdersContext";
 import { useCustomersContext } from "@/context/CustomersContext";
 import { useCatalogContext } from "@/context/CatalogContext";
 import { STATUS_LABELS } from "@/types/workOrder";
-import type { WorkOrder } from "@/types/workOrder";
+import type { WorkOrder, WorkOrderStatus } from "@/types/workOrder";
 import { ProjectMap } from "./ProjectMap";
+import { useWorkflowAlerts, DEPT_LABELS } from "@/hooks/useWorkflowAlerts";
+import type { WorkflowAlert } from "@/hooks/useWorkflowAlerts";
+import { getStageSlaColor, hoursInCurrentStage } from "@/lib/workflowEngine";
+import { useNotifications } from "@/hooks/useNotifications";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -183,23 +187,29 @@ function DeptCard({ label, count, sub, href, icon, accent, accentText }: DeptCar
 
 // ─── Alerts Section ────────────────────────────────────────────────────────
 
-interface Alert {
-  id: string;
-  message: string;
-  level: "warn" | "error";
-  href: string;
-}
+const SEVERITY_STYLE = {
+  critical: { icon: "text-red-500",   hover: "hover:bg-red-50",   badge: "bg-red-100 text-red-700"    },
+  warn:     { icon: "text-amber-500", hover: "hover:bg-amber-50", badge: "bg-amber-100 text-amber-700" },
+};
 
-function AlertsSection({ alerts }: { alerts: Alert[] }) {
+function AlertsSection({ alerts }: { alerts: WorkflowAlert[] }) {
+  const criticalCount = alerts.filter(a => a.severity === "critical").length;
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
         <h2 className="text-sm font-bold text-navy-900">התראות לטיפול</h2>
-        {alerts.length > 0 && (
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-            {alerts.length}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {criticalCount > 0 && (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+              {criticalCount} קריטי
+            </span>
+          )}
+          {alerts.length > 0 && (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+              {alerts.length}
+            </span>
+          )}
+        </div>
       </div>
       <div className="divide-y divide-gray-50">
         {alerts.length === 0 ? (
@@ -208,18 +218,32 @@ function AlertsSection({ alerts }: { alerts: Alert[] }) {
             <p className="text-xs text-gray-400">אין התראות — הכל תקין</p>
           </div>
         ) : (
-          alerts.map((alert) => (
-            <Link
-              key={alert.id}
-              href={alert.href}
-              className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
-            >
-              <span className={alert.level === "error" ? "text-red-500 mt-0.5" : "text-amber-500 mt-0.5"}>
-                <AlertIcon />
-              </span>
-              <p className="text-xs text-gray-700 leading-relaxed">{alert.message}</p>
-            </Link>
-          ))
+          alerts.map((alert) => {
+            const style = SEVERITY_STYLE[alert.severity];
+            return (
+              <Link
+                key={alert.id}
+                href={alert.href}
+                className={`flex items-start gap-3 px-4 py-3 ${style.hover} transition-colors`}
+              >
+                <span className={`${style.icon} mt-0.5 shrink-0`}><AlertIcon /></span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-700 leading-relaxed">{alert.message}</p>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${style.badge}`}>
+                      {DEPT_LABELS[alert.department]}
+                    </span>
+                    {alert.orderNumbers && alert.orderNumbers.length > 0 && (
+                      <span className="text-[10px] text-gray-400">
+                        {alert.orderNumbers.slice(0, 3).join(", ")}
+                        {alert.orderNumbers.length > 3 && ` +${alert.orderNumbers.length - 3}`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            );
+          })
         )}
       </div>
     </div>
@@ -237,6 +261,109 @@ const STATUS_STYLE: Record<string, string> = {
   completed: "bg-gray-100 text-gray-600",
   cancelled: "bg-red-100 text-red-600",
 };
+
+// ─── Stage Health Panel ────────────────────────────────────────────────────
+
+interface StageSpec {
+  status: WorkOrderStatus;
+  label: string;
+  deptLabel: string;
+}
+
+const STAGE_SPECS: StageSpec[] = [
+  { status: "graphics_pending",   label: "ממתינה לגרפיקה", deptLabel: "גרפיקה"  },
+  { status: "graphics_active",    label: "בטיפול גרפיקה",  deptLabel: "גרפיקה"  },
+  { status: "graphics_done",      label: "גרפיקה הושלמה",  deptLabel: "משרד"    },
+  { status: "production",         label: "ייצור",           deptLabel: "מסגרייה" },
+  { status: "ready_installation", label: "מוכן להתקנה",    deptLabel: "תיאום"   },
+];
+
+function StageHealthPanel({ orders }: { orders: WorkOrder[] }) {
+  const now = Date.now();
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-gray-100">
+        <h2 className="text-sm font-bold text-navy-900">בריאות צנרת הזמנות</h2>
+        <p className="text-[10px] text-gray-400 mt-0.5">
+          זמן בשלב · ירוק = תקין · צהוב = מתעכב · אדום = קריטי
+        </p>
+      </div>
+      <div className="p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {STAGE_SPECS.map(spec => {
+            const stageOrders = orders.filter(o => o.status === spec.status);
+            const colors      = stageOrders.map(o => getStageSlaColor(o, now));
+            const green  = colors.filter(c => c === "green").length;
+            const yellow = colors.filter(c => c === "yellow").length;
+            const red    = colors.filter(c => c === "red").length;
+            const worst  =
+              red > 0             ? "red" :
+              yellow > 0          ? "yellow" :
+              stageOrders.length  ? "green" :
+                                    "gray";
+
+            const containerCls =
+              worst === "red"    ? "bg-red-50 border-red-200" :
+              worst === "yellow" ? "bg-amber-50 border-amber-200" :
+              worst === "green"  ? "bg-green-50 border-green-100" :
+                                   "bg-gray-50 border-gray-100";
+            const countCls =
+              worst === "red"    ? "text-red-600" :
+              worst === "yellow" ? "text-amber-600" :
+              worst === "green"  ? "text-green-700" :
+                                   "text-gray-300";
+
+            // Show longest wait in the stage for tooltip context
+            const maxHours = stageOrders.length
+              ? Math.max(...stageOrders.map(o => hoursInCurrentStage(o, now)))
+              : 0;
+            const maxDays = maxHours >= 24 ? `${Math.floor(maxHours / 24)}י` : `${Math.round(maxHours)}ש׳`;
+
+            return (
+              <div
+                key={spec.status}
+                className={`rounded-xl border p-3 flex flex-col gap-2 ${containerCls}`}
+                title={stageOrders.length ? `הזמן הארוך ביותר בשלב: ${maxDays}` : undefined}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider truncate">
+                    {spec.deptLabel}
+                  </span>
+                  <span className={`text-2xl font-black leading-none ${countCls}`}>
+                    {stageOrders.length}
+                  </span>
+                </div>
+                <div className="text-xs font-medium text-gray-700 leading-tight">{spec.label}</div>
+                {stageOrders.length > 0 ? (
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {red > 0 && (
+                      <span className="text-[9px] font-bold text-red-600 bg-red-100 rounded px-1.5 py-0.5">
+                        {red} קריטי
+                      </span>
+                    )}
+                    {yellow > 0 && (
+                      <span className="text-[9px] font-bold text-amber-600 bg-amber-100 rounded px-1.5 py-0.5">
+                        {yellow} מאחר
+                      </span>
+                    )}
+                    {green > 0 && (
+                      <span className="text-[9px] font-bold text-green-700 bg-green-100 rounded px-1.5 py-0.5">
+                        {green} תקין
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-gray-300">ריק</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Recent Activity Section ───────────────────────────────────────────────
 
@@ -305,56 +432,8 @@ export function DashboardPage() {
     };
   }, [orders, customers, catalogItems]);
 
-  const alerts = useMemo((): Alert[] => {
-    const list: Alert[] = [];
-    // eslint-disable-next-line react-hooks/purity
-    const now = Date.now();
-
-    const pendingOver24h = orders.filter(
-      (o) => o.status === "graphics_pending" && now - new Date(o.graphicsSentAt ?? o.createdAt).getTime() > 86_400_000
-    );
-    if (pendingOver24h.length > 0) {
-      list.push({
-        id: "pending-24h",
-        message: `${pendingOver24h.length} הזמנ${pendingOver24h.length === 1 ? "ה ממתינה" : "ות ממתינות"} לגרפיקה מעל 24 שעות`,
-        level: "warn",
-        href: "/graphics",
-      });
-    }
-
-    const urgentStuck = orders.filter(
-      (o) =>
-        o.priority === "urgent" &&
-        o.status !== "completed" &&
-        o.status !== "cancelled" &&
-        now - new Date(o.createdAt).getTime() > 43_200_000
-    );
-    if (urgentStuck.length > 0) {
-      list.push({
-        id: "urgent-stuck",
-        message: `${urgentStuck.length} הזמנ${urgentStuck.length === 1 ? "ה דחופה" : "ות דחופות"} ממתינ${urgentStuck.length === 1 ? "ה" : "ות"} לטיפול`,
-        level: "error",
-        href: "/orders",
-      });
-    }
-
-    const graphicsDoneStuck = orders.filter(
-      (o) =>
-        o.status === "graphics_done" &&
-        o.graphicsCompletedAt &&
-        now - new Date(o.graphicsCompletedAt).getTime() > 86_400_000
-    );
-    if (graphicsDoneStuck.length > 0) {
-      list.push({
-        id: "graphics-done-stuck",
-        message: `${graphicsDoneStuck.length} הזמנ${graphicsDoneStuck.length === 1 ? "ה מוכנה" : "ות מוכנות"} מגרפיקה — טרם הועבר${graphicsDoneStuck.length === 1 ? "ה" : "ו"} לייצור`,
-        level: "warn",
-        href: "/orders",
-      });
-    }
-
-    return list;
-  }, [orders]);
+  const alerts = useWorkflowAlerts();
+  const { criticalAlerts, stuckOrders } = useNotifications();
 
   const recentActivity = useMemo(
     () =>
@@ -464,6 +543,18 @@ export function DashboardPage() {
                 <span className="text-red-300 text-xs font-semibold">{metrics.urgentOpen} הזמנות דחופות</span>
               </div>
             )}
+            {criticalAlerts > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                <span className="text-red-300 text-xs font-semibold">{criticalAlerts} חריגות SLA קריטיות</span>
+              </div>
+            )}
+            {stuckOrders > 0 && criticalAlerts === 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                <span className="text-amber-300 text-xs">{stuckOrders} הזמנות מתעכבות</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -515,6 +606,9 @@ export function DashboardPage() {
 
         {/* Pipeline */}
         <PipelineSection stages={pipelineStages} />
+
+        {/* Stage Health (bottleneck radar) */}
+        <StageHealthPanel orders={orders} />
 
         {/* Departments + Alerts/Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
