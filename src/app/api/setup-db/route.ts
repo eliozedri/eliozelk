@@ -84,7 +84,7 @@ export async function GET(req: Request) {
         on conflict (key) do nothing;
 
       create or replace function public.next_counter(counter_key text)
-      returns integer language plpgsql as $$
+      returns integer language plpgsql security definer as $$
       declare next_val integer;
       begin
         update public.counters set value = value + 1
@@ -96,6 +96,7 @@ export async function GET(req: Request) {
         end if;
         return next_val;
       end; $$;
+      grant execute on function public.next_counter(text) to anon, authenticated;
 
       -- ── Customers ─────────────────────────────────────────────────────────────
       create table if not exists public.customers (
