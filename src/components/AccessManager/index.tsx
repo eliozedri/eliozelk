@@ -280,7 +280,7 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
     setActions(d.action_permissions);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (isLastMaster && (!isActive || role !== "master")) {
       setError("לא ניתן לבטל או לשנות את המנהל הראשי האחרון במערכת.");
       return;
@@ -288,7 +288,7 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
     setError("");
     setLoading(true);
     try {
-      updateUser(user.id, {
+      await updateUser(user.id, {
         role,
         is_active: isActive,
         allowed_tabs: role === "master" ? ["*"] : tabs,
@@ -302,10 +302,10 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
     setLoading(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!confirm(`למחוק את ${user.name}?`)) return;
     try {
-      deleteUser(user.id);
+      await deleteUser(user.id);
       onSaved();
       onClose();
     } catch (err) {
@@ -411,8 +411,8 @@ export function AccessManager() {
 
   const canManage = !authLoading && profile && canPerformAction(profile, "manage_access");
 
-  const reloadUsers = useCallback(() => {
-    setUsers(loadUsers());
+  const reloadUsers = useCallback(async () => {
+    setUsers(await loadUsers());
     setLoading(false);
   }, []);
 

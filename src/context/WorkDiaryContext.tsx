@@ -6,7 +6,7 @@ import type { WorkDiary } from "@/types/workDiary";
 
 interface WorkDiaryContextValue {
   diaries: WorkDiary[];
-  createDiary: () => WorkDiary;
+  createDiary: () => Promise<WorkDiary>;
   saveDiary: (diary: WorkDiary) => void;
   submitDiary: (id: string) => void;
   deleteDiary: (id: string) => void;

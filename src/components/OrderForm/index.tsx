@@ -79,14 +79,14 @@ export function OrderForm() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const handleSubmit = (priority: OrderPriority) => {
+  const handleSubmit = async (priority: OrderPriority) => {
     const err = validate(order);
     if (err) {
       setValidationError(err);
       setTimeout(() => setValidationError(null), 4000);
       return;
     }
-    const submitted = addOrder(order, priority);
+    const submitted = await addOrder(order, priority);
     resetOrder();
     setSuccessMessage(`ההזמנה נשלחה למחלקת גרפיקה — מספר הזמנה: ${submitted.orderNumber}`);
     setTimeout(() => setSuccessMessage(null), 5000);

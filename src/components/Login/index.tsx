@@ -23,7 +23,7 @@ export function Login() {
     setError("");
     setLoading(true);
 
-    const user = getUserByEmail(email);
+    const user = await getUserByEmail(email);
     if (!user) {
       setError("אימייל או סיסמה שגויים. נסה שנית.");
       setLoading(false);
@@ -43,7 +43,7 @@ export function Login() {
       return;
     }
 
-    touchLastLogin(user.id);
+    await touchLastLogin(user.id);
     createSession(user.id);
     router.push("/");
     router.refresh();

@@ -9,35 +9,33 @@ interface AuthContextValue {
   profile: UserProfile | null;
   loading: boolean;
   logout: () => void;
-  refreshProfile: () => void;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
   profile: null,
   loading: true,
   logout: () => {},
-  refreshProfile: () => {},
+  refreshProfile: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadProfile = useCallback(() => {
+  const loadProfile = useCallback(async () => {
     const session = getSession();
     if (!session) {
       setProfile(null);
       setLoading(false);
       return;
     }
-    const user = getUserById(session.userId);
+    const user = await getUserById(session.userId);
     setProfile(user);
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+  useEffect(() => { loadProfile(); }, [loadProfile]);
 
   const logout = useCallback(() => {
     clearSession();

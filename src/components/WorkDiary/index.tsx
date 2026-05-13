@@ -193,8 +193,8 @@ export function WorkDiaryForm() {
   const [exporting, setExporting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  function handleNew() {
-    const d = createDiary();
+  async function handleNew() {
+    const d = await createDiary();
     setDiary(d);
     setActiveTab("header");
     setSuccessMessage(null);

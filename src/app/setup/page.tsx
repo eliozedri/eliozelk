@@ -21,7 +21,7 @@ export default function SetupPage() {
     e.preventDefault();
     setError("");
 
-    if (hasMaster()) {
+    if (await hasMaster()) {
       setError("כבר קיים מנהל ראשי במערכת. עמוד זה אינו נגיש יותר.");
       return;
     }

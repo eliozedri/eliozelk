@@ -1,7 +1,7 @@
 // src/hooks/useCrews.ts
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import type { Crew } from "@/types/crew";
 import { getSupabase } from "@/lib/supabase/client";
@@ -44,12 +44,7 @@ function toRow(c: Crew) {
 
 function loadLocal(): Crew[] {
   if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]"); } catch { return []; }
 }
 
 function saveLocal(crews: Crew[]) {
@@ -59,22 +54,34 @@ function saveLocal(crews: Crew[]) {
 export function useCrews() {
   const [crews, setCrews] = useState<Crew[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const ref = useRef<Crew[]>([]);
+
+  useEffect(() => { ref.current = crews; }, [crews]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    saveLocal(crews);
+  }, [crews, hydrated]);
 
   useEffect(() => {
     const db = getSupabase();
     if (db) {
       db.from("crews").select("*").order("created_at", { ascending: true })
         .then(({ data, error }) => {
-          if (!error && data && data.length > 0) {
-            const mapped = data.map(fromRow);
-            setCrews(mapped);
-            saveLocal(mapped);
-          } else {
-            const local = loadLocal();
-            setCrews(local);
-            if (local.length > 0) {
-              db.from("crews").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
+          if (!error && data) {
+            if (data.length > 0) {
+              const mapped = data.map(r => fromRow(r as Record<string, unknown>));
+              setCrews(mapped);
+              saveLocal(mapped);
+            } else {
+              const local = loadLocal();
+              setCrews(local);
+              if (local.length > 0) {
+                db.from("crews").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
+              }
             }
+          } else {
+            setCrews(loadLocal());
           }
           setHydrated(true);
         });
@@ -84,37 +91,57 @@ export function useCrews() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    saveLocal(crews);
-  }, [crews, hydrated]);
-
   const addCrew = useCallback((data: Omit<Crew, "id" | "createdAt" | "updatedAt">) => {
     const now = new Date().toISOString();
     const crew: Crew = { id: nanoid(), ...data, createdAt: now, updatedAt: now };
-    setCrews((prev) => [...prev, crew]);
+
+    setCrews(prev => [...prev, crew]);
+
     const db = getSupabase();
-    if (db) db.from("crews").insert(toRow(crew)).then(() => {});
+    if (db) {
+      db.from("crews").insert(toRow(crew)).then(({ error }) => {
+        if (error) {
+          console.error("[crews] insert failed:", error.message);
+          setCrews(prev => prev.filter(c => c.id !== crew.id));
+        }
+      });
+    }
     return crew;
   }, []);
 
   const updateCrew = useCallback((id: string, data: Partial<Omit<Crew, "id" | "createdAt">>) => {
     const now = new Date().toISOString();
-    setCrews((prev) =>
-      prev.map((c) => {
-        if (c.id !== id) return c;
-        const updated = { ...c, ...data, updatedAt: now };
-        const db = getSupabase();
-        if (db) db.from("crews").update(toRow(updated)).eq("id", id).then(() => {});
-        return updated;
-      })
-    );
+    const original = ref.current.find(c => c.id === id);
+    if (!original) return;
+    const updated = { ...original, ...data, updatedAt: now };
+
+    setCrews(prev => prev.map(c => c.id === id ? updated : c));
+
+    const db = getSupabase();
+    if (db) {
+      db.from("crews").update(toRow(updated)).eq("id", id).then(({ error }) => {
+        if (error) {
+          console.error("[crews] update failed:", error.message);
+          setCrews(prev => prev.map(c => c.id === id ? original : c));
+        }
+      });
+    }
   }, []);
 
   const deleteCrew = useCallback((id: string) => {
-    setCrews((prev) => prev.filter((c) => c.id !== id));
+    const original = ref.current.find(c => c.id === id);
+
+    setCrews(prev => prev.filter(c => c.id !== id));
+
     const db = getSupabase();
-    if (db) db.from("crews").delete().eq("id", id).then(() => {});
+    if (db) {
+      db.from("crews").delete().eq("id", id).then(({ error }) => {
+        if (error) {
+          console.error("[crews] delete failed:", error.message);
+          if (original) setCrews(prev => [...prev, original]);
+        }
+      });
+    }
   }, []);
 
   return { crews, addCrew, updateCrew, deleteCrew };

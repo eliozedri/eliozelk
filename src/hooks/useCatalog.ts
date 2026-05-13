@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import type { CatalogItem, CatalogFormState } from "@/types/catalog";
 import { getSupabase } from "@/lib/supabase/client";
@@ -43,12 +43,7 @@ function toRow(item: CatalogItem) {
 
 function loadLocal(): CatalogItem[] {
   if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]"); } catch { return []; }
 }
 
 function saveLocal(items: CatalogItem[]) {
@@ -58,22 +53,34 @@ function saveLocal(items: CatalogItem[]) {
 export function useCatalog() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const ref = useRef<CatalogItem[]>([]);
+
+  useEffect(() => { ref.current = items; }, [items]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    saveLocal(items);
+  }, [items, hydrated]);
 
   useEffect(() => {
     const db = getSupabase();
     if (db) {
       db.from("catalog_items").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
-          if (!error && data && data.length > 0) {
-            const mapped = data.map(fromRow);
-            setItems(mapped);
-            saveLocal(mapped);
-          } else {
-            const local = loadLocal();
-            setItems(local);
-            if (local.length > 0) {
-              db.from("catalog_items").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
+          if (!error && data) {
+            if (data.length > 0) {
+              const mapped = data.map(r => fromRow(r as Record<string, unknown>));
+              setItems(mapped);
+              saveLocal(mapped);
+            } else {
+              const local = loadLocal();
+              setItems(local);
+              if (local.length > 0) {
+                db.from("catalog_items").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
+              }
             }
+          } else {
+            setItems(loadLocal());
           }
           setHydrated(true);
         });
@@ -82,11 +89,6 @@ export function useCatalog() {
       setHydrated(true);
     }
   }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    saveLocal(items);
-  }, [items, hydrated]);
 
   const addItem = useCallback((form: CatalogFormState): CatalogItem => {
     const now = new Date().toISOString();
@@ -104,55 +106,85 @@ export function useCatalog() {
       createdAt: now,
       updatedAt: now,
     };
-    setItems((prev) => [newItem, ...prev]);
+
+    setItems(prev => [newItem, ...prev]);
+
     const db = getSupabase();
-    if (db) db.from("catalog_items").insert(toRow(newItem)).then(() => {});
+    if (db) {
+      db.from("catalog_items").insert(toRow(newItem)).then(({ error }) => {
+        if (error) {
+          console.error("[catalog] insert failed:", error.message);
+          setItems(prev => prev.filter(i => i.id !== newItem.id));
+        }
+      });
+    }
     return newItem;
   }, []);
 
   const updateItem = useCallback((id: string, partial: Partial<CatalogFormState>) => {
     const now = new Date().toISOString();
-    setItems((prev) =>
-      prev.map((item) => {
-        if (item.id !== id) return item;
-        const updated: CatalogItem = {
-          ...item,
-          ...(partial.name !== undefined && { name: partial.name.trim() }),
-          ...(partial.type !== undefined && { type: partial.type }),
-          ...(partial.category !== undefined && { category: partial.category.trim() }),
-          ...(partial.unitOfMeasure !== undefined && { unitOfMeasure: partial.unitOfMeasure }),
-          ...(partial.dimensionValue !== undefined && { dimensionValue: partial.dimensionValue || undefined }),
-          ...(partial.dimensionUnit !== undefined && { dimensionUnit: partial.dimensionUnit || undefined }),
-          ...(partial.defaultPrice !== undefined && {
-            defaultPrice: partial.defaultPrice ? parseFloat(partial.defaultPrice) : null,
-          }),
-          ...(partial.description !== undefined && { description: partial.description.trim() }),
-          updatedAt: now,
-        };
-        const db = getSupabase();
-        if (db) db.from("catalog_items").update(toRow(updated)).eq("id", id).then(() => {});
-        return updated;
-      })
-    );
+    const original = ref.current.find(i => i.id === id);
+    if (!original) return;
+
+    const updated: CatalogItem = {
+      ...original,
+      ...(partial.name !== undefined && { name: partial.name.trim() }),
+      ...(partial.type !== undefined && { type: partial.type }),
+      ...(partial.category !== undefined && { category: partial.category.trim() }),
+      ...(partial.unitOfMeasure !== undefined && { unitOfMeasure: partial.unitOfMeasure }),
+      ...(partial.dimensionValue !== undefined && { dimensionValue: partial.dimensionValue || undefined }),
+      ...(partial.dimensionUnit !== undefined && { dimensionUnit: partial.dimensionUnit || undefined }),
+      ...(partial.defaultPrice !== undefined && { defaultPrice: partial.defaultPrice ? parseFloat(partial.defaultPrice) : null }),
+      ...(partial.description !== undefined && { description: partial.description.trim() }),
+      updatedAt: now,
+    };
+
+    setItems(prev => prev.map(i => i.id === id ? updated : i));
+
+    const db = getSupabase();
+    if (db) {
+      db.from("catalog_items").update(toRow(updated)).eq("id", id).then(({ error }) => {
+        if (error) {
+          console.error("[catalog] update failed:", error.message);
+          setItems(prev => prev.map(i => i.id === id ? original : i));
+        }
+      });
+    }
   }, []);
 
   const toggleActive = useCallback((id: string) => {
     const now = new Date().toISOString();
-    setItems((prev) =>
-      prev.map((item) => {
-        if (item.id !== id) return item;
-        const updated = { ...item, isActive: !item.isActive, updatedAt: now };
-        const db = getSupabase();
-        if (db) db.from("catalog_items").update({ is_active: updated.isActive, updated_at: now }).eq("id", id).then(() => {});
-        return updated;
-      })
-    );
+    const original = ref.current.find(i => i.id === id);
+    if (!original) return;
+    const updated = { ...original, isActive: !original.isActive, updatedAt: now };
+
+    setItems(prev => prev.map(i => i.id === id ? updated : i));
+
+    const db = getSupabase();
+    if (db) {
+      db.from("catalog_items").update({ is_active: updated.isActive, updated_at: now }).eq("id", id).then(({ error }) => {
+        if (error) {
+          console.error("[catalog] toggleActive failed:", error.message);
+          setItems(prev => prev.map(i => i.id === id ? original : i));
+        }
+      });
+    }
   }, []);
 
   const deleteItem = useCallback((id: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
+    const original = ref.current.find(i => i.id === id);
+
+    setItems(prev => prev.filter(i => i.id !== id));
+
     const db = getSupabase();
-    if (db) db.from("catalog_items").delete().eq("id", id).then(() => {});
+    if (db) {
+      db.from("catalog_items").delete().eq("id", id).then(({ error }) => {
+        if (error) {
+          console.error("[catalog] delete failed:", error.message);
+          if (original) setItems(prev => [original, ...prev]);
+        }
+      });
+    }
   }, []);
 
   return { items, addItem, updateItem, toggleActive, deleteItem };

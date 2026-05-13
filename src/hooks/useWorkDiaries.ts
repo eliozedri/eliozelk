@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkDiary, WorkDiaryStatus } from "@/types/workDiary";
 import { createEmptyDiary } from "@/types/workDiary";
 import { getSupabase } from "@/lib/supabase/client";
@@ -52,7 +52,7 @@ function saveLocal(diaries: WorkDiary[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(diaries)); } catch { /* ignore */ }
 }
 
-function generateDiaryNumber(diaries: WorkDiary[]): string {
+function generateDiaryNumberLocal(diaries: WorkDiary[]): string {
   const year = new Date().getFullYear();
   const prefix = `WD-${year}-`;
   const existing = diaries
@@ -66,22 +66,35 @@ function generateDiaryNumber(diaries: WorkDiary[]): string {
 export function useWorkDiaries() {
   const [diaries, setDiaries] = useState<WorkDiary[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const ref = useRef<WorkDiary[]>([]);
+
+  useEffect(() => { ref.current = diaries; }, [diaries]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    saveLocal(diaries);
+  }, [diaries, hydrated]);
 
   useEffect(() => {
     const db = getSupabase();
     if (db) {
       db.from("work_diaries").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
-          if (!error && data && data.length > 0) {
-            const mapped = data.map(fromRow);
-            setDiaries(mapped);
-            saveLocal(mapped);
-          } else {
-            const local = loadLocal();
-            setDiaries(local);
-            if (local.length > 0) {
-              db.from("work_diaries").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
+          if (!error && data) {
+            if (data.length > 0) {
+              const mapped = data.map(r => fromRow(r as Record<string, unknown>));
+              setDiaries(mapped);
+              saveLocal(mapped);
+            } else {
+              const local = loadLocal();
+              setDiaries(local);
+              if (local.length > 0) {
+                db.from("work_diaries").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
+              }
             }
+          } else {
+            // Supabase error — use local cache, do NOT push
+            setDiaries(loadLocal());
           }
           setHydrated(true);
         });
@@ -91,51 +104,84 @@ export function useWorkDiaries() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    saveLocal(diaries);
-  }, [diaries, hydrated]);
-
-  const createDiary = useCallback((): WorkDiary => {
-    const existing = loadLocal();
-    const number = generateDiaryNumber(existing);
-    const diary = createEmptyDiary(number);
-    setDiaries((prev) => [diary, ...prev]);
+  const createDiary = useCallback(async (): Promise<WorkDiary> => {
     const db = getSupabase();
-    if (db) db.from("work_diaries").insert(toRow(diary)).then(() => {});
+    let number: string;
+    if (db) {
+      const { data, error } = await db.rpc("next_counter", { counter_key: "diary" });
+      if (!error && data != null) {
+        const year = new Date().getFullYear();
+        number = `WD-${year}-${String(data as number).padStart(3, "0")}`;
+      } else {
+        number = generateDiaryNumberLocal(ref.current);
+      }
+    } else {
+      number = generateDiaryNumberLocal(ref.current);
+    }
+
+    const diary = createEmptyDiary(number);
+    setDiaries(prev => [diary, ...prev]);
+
+    if (db) {
+      db.from("work_diaries").insert(toRow(diary)).then(({ error }) => {
+        if (error) {
+          console.error("[diaries] insert failed:", error.message);
+          setDiaries(prev => prev.filter(d => d.id !== diary.id));
+        }
+      });
+    }
     return diary;
   }, []);
 
   const saveDiary = useCallback((diary: WorkDiary) => {
     const now = new Date().toISOString();
     const updated = { ...diary, updatedAt: now };
-    setDiaries((prev) => {
-      const exists = prev.find((d) => d.id === diary.id);
-      return exists
-        ? prev.map((d) => (d.id === diary.id ? updated : d))
-        : [updated, ...prev];
+    setDiaries(prev => {
+      const exists = prev.find(d => d.id === diary.id);
+      return exists ? prev.map(d => d.id === diary.id ? updated : d) : [updated, ...prev];
     });
     const db = getSupabase();
-    if (db) db.from("work_diaries").upsert(toRow(updated)).then(() => {});
+    if (db) {
+      db.from("work_diaries").upsert(toRow(updated)).then(({ error }) => {
+        if (error) console.error("[diaries] save failed:", error.message);
+      });
+    }
   }, []);
 
   const submitDiary = useCallback((id: string) => {
     const now = new Date().toISOString();
-    setDiaries((prev) =>
-      prev.map((d) => {
-        if (d.id !== id) return d;
-        const updated = { ...d, status: "submitted" as WorkDiaryStatus, submittedAt: now, updatedAt: now };
-        const db = getSupabase();
-        if (db) db.from("work_diaries").update({ status: "submitted", submitted_at: now, updated_at: now, data: updated }).eq("id", id).then(() => {});
-        return updated;
-      })
-    );
+    const original = ref.current.find(d => d.id === id);
+    if (!original) return;
+    const updated = { ...original, status: "submitted" as WorkDiaryStatus, submittedAt: now, updatedAt: now };
+
+    setDiaries(prev => prev.map(d => d.id === id ? updated : d));
+
+    const db = getSupabase();
+    if (db) {
+      db.from("work_diaries")
+        .update({ status: "submitted", submitted_at: now, updated_at: now, data: updated })
+        .eq("id", id)
+        .then(({ error }) => {
+          if (error) {
+            console.error("[diaries] submit failed:", error.message);
+            setDiaries(prev => prev.map(d => d.id === id ? original : d));
+          }
+        });
+    }
   }, []);
 
   const deleteDiary = useCallback((id: string) => {
-    setDiaries((prev) => prev.filter((d) => d.id !== id));
+    const original = ref.current.find(d => d.id === id);
+    setDiaries(prev => prev.filter(d => d.id !== id));
     const db = getSupabase();
-    if (db) db.from("work_diaries").delete().eq("id", id).then(() => {});
+    if (db) {
+      db.from("work_diaries").delete().eq("id", id).then(({ error }) => {
+        if (error) {
+          console.error("[diaries] delete failed:", error.message);
+          if (original) setDiaries(prev => [original, ...prev]);
+        }
+      });
+    }
   }, []);
 
   return { diaries, createDiary, saveDiary, submitDiary, deleteDiary };
