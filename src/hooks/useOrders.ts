@@ -4,10 +4,42 @@ import { useCallback, useEffect, useState } from "react";
 import { nanoid } from "nanoid";
 import type { OrderState } from "@/types/order";
 import type { WorkOrder, WorkOrderStatus, OrderPriority, OrderProblem, OrderProblemStatus, OrderProblemCategory, OrderActivity, OrderActivityType } from "@/types/workOrder";
+import { getSupabase } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "elkayam_orders";
 
-function loadOrders(): WorkOrder[] {
+function fromRow(r: Record<string, unknown>): WorkOrder {
+  const data = (r.data ?? {}) as Partial<WorkOrder>;
+  return {
+    ...data,
+    id: r.id as string,
+    orderNumber: r.order_number as string,
+    status: r.status as WorkOrderStatus,
+    priority: r.priority as OrderPriority,
+    customer: r.customer as string,
+    city: r.city as string,
+    date: r.order_date as string,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  } as WorkOrder;
+}
+
+function toRow(o: WorkOrder) {
+  return {
+    id: o.id,
+    order_number: o.orderNumber,
+    status: o.status,
+    priority: o.priority ?? "normal",
+    customer: o.customer ?? "",
+    city: o.city ?? "",
+    order_date: o.date ?? "",
+    data: o,
+    created_at: o.createdAt,
+    updated_at: o.updatedAt,
+  };
+}
+
+function loadLocal(): WorkOrder[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -15,6 +47,10 @@ function loadOrders(): WorkOrder[] {
   } catch {
     return [];
   }
+}
+
+function saveLocal(orders: WorkOrder[]) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(orders)); } catch { /* ignore */ }
 }
 
 function generateOrderNumber(orders: WorkOrder[]): string {
@@ -33,22 +69,37 @@ export function useOrders() {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOrders(loadOrders());
-    setHydrated(true);
+    const db = getSupabase();
+    if (db) {
+      db.from("work_orders").select("*").order("created_at", { ascending: false })
+        .then(({ data, error }) => {
+          if (!error && data) {
+            const mapped = data.map(fromRow);
+            setOrders(mapped);
+            saveLocal(mapped);
+          } else {
+            setOrders(loadLocal());
+          }
+          setHydrated(true);
+        });
+    } else {
+      setOrders(loadLocal());
+      setHydrated(true);
+    }
   }, []);
 
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+    saveLocal(orders);
   }, [orders, hydrated]);
 
   const addOrder = useCallback(
     (snapshot: OrderState, priority: OrderPriority = "normal", notes = ""): WorkOrder => {
       const now = new Date().toISOString();
+      const localOrders = loadLocal();
       const newOrder: WorkOrder = {
         id: nanoid(),
-        orderNumber: generateOrderNumber(loadOrders()),
+        orderNumber: generateOrderNumber(localOrders),
         date: snapshot.date,
         customer: snapshot.customer,
         contactPerson: snapshot.contactPerson || undefined,
@@ -72,23 +123,33 @@ export function useOrders() {
         graphicsAcknowledgedAt: null,
         graphicsAcknowledgedBy: null,
         graphicsCompletedAt: null,
-        activities: [
-          {
-            id: nanoid(),
-            orderId: "",
-            type: "order_created" as OrderActivityType,
-            timestamp: now,
-            description: "הזמנה נוצרה ונשלחה למחלקת גרפיקה",
-          },
-        ],
+        activities: [],
       };
-      // Fix orderId inside activities now that we have the id
-      newOrder.activities = newOrder.activities!.map((a) => ({ ...a, orderId: newOrder.id }));
+      const activity: OrderActivity = {
+        id: nanoid(), orderId: newOrder.id, type: "order_created" as OrderActivityType,
+        timestamp: now, description: "הזמנה נוצרה ונשלחה למחלקת גרפיקה",
+      };
+      newOrder.activities = [activity];
       setOrders((prev) => [newOrder, ...prev]);
+      const db = getSupabase();
+      if (db) db.from("work_orders").insert(toRow(newOrder)).then(() => {});
       return newOrder;
     },
     []
   );
+
+  const _patchOrder = useCallback((id: string, patch: Partial<WorkOrder>) => {
+    const now = new Date().toISOString();
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id !== id) return o;
+        const updated = { ...o, ...patch, updatedAt: now };
+        const db = getSupabase();
+        if (db) db.from("work_orders").update(toRow(updated)).eq("id", id).then(() => {});
+        return updated;
+      })
+    );
+  }, []);
 
   const acknowledgeOrder = useCallback((id: string, acknowledgedBy = "גרפיקה") => {
     const now = new Date().toISOString();
@@ -100,7 +161,7 @@ export function useOrders() {
           timestamp: now, by: acknowledgedBy, department: "graphics",
           description: `אישור קבלה על ידי ${acknowledgedBy}`,
         };
-        return {
+        const updated = {
           ...o,
           status: "graphics_active" as WorkOrderStatus,
           graphicsAcknowledgedAt: now,
@@ -108,6 +169,9 @@ export function useOrders() {
           updatedAt: now,
           activities: [...(o.activities ?? []), activity],
         };
+        const db = getSupabase();
+        if (db) db.from("work_orders").update(toRow(updated)).eq("id", id).then(() => {});
+        return updated;
       })
     );
   }, []);
@@ -119,16 +183,18 @@ export function useOrders() {
         if (o.id !== id) return o;
         const activity: OrderActivity = {
           id: nanoid(), orderId: id, type: "graphics_completed",
-          timestamp: now, department: "graphics",
-          description: "עבודת גרפיקה הושלמה",
+          timestamp: now, department: "graphics", description: "עבודת גרפיקה הושלמה",
         };
-        return {
+        const updated = {
           ...o,
           status: "graphics_done" as WorkOrderStatus,
           graphicsCompletedAt: now,
           updatedAt: now,
           activities: [...(o.activities ?? []), activity],
         };
+        const db = getSupabase();
+        if (db) db.from("work_orders").update(toRow(updated)).eq("id", id).then(() => {});
+        return updated;
       })
     );
   }, []);
@@ -142,26 +208,31 @@ export function useOrders() {
         if (status === "ready_installation" && !o.readyForExecutionAt) {
           extra.readyForExecutionAt = now;
         }
-        return { ...o, ...extra, status, updatedAt: now };
+        const updated = { ...o, ...extra, status, updatedAt: now };
+        const db = getSupabase();
+        if (db) db.from("work_orders").update(toRow(updated)).eq("id", id).then(() => {});
+        return updated;
       })
     );
   }, []);
 
   const updateOrderFields = useCallback((id: string, fields: Partial<WorkOrder>) => {
-    const now = new Date().toISOString();
-    setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, ...fields, updatedAt: now } : o))
-    );
-  }, []);
+    _patchOrder(id, fields);
+  }, [_patchOrder]);
 
   const addOrderActivity = useCallback((id: string, type: OrderActivityType, description: string, opts?: { by?: string; department?: string; meta?: Record<string, string> }) => {
     const now = new Date().toISOString();
     const activity: OrderActivity = {
-      id: nanoid(), orderId: id, type, timestamp: now,
-      description, ...opts,
+      id: nanoid(), orderId: id, type, timestamp: now, description, ...opts,
     };
     setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, activities: [...(o.activities ?? []), activity], updatedAt: now } : o))
+      prev.map((o) => {
+        if (o.id !== id) return o;
+        const updated = { ...o, activities: [...(o.activities ?? []), activity], updatedAt: now };
+        const db = getSupabase();
+        if (db) db.from("work_orders").update(toRow(updated)).eq("id", id).then(() => {});
+        return updated;
+      })
     );
   }, []);
 
@@ -171,26 +242,26 @@ export function useOrders() {
   ) => {
     const now = new Date().toISOString();
     const newProblem: OrderProblem = {
-      id: nanoid(), orderId: id, ...problem,
-      reportedAt: now, status: "open",
+      id: nanoid(), orderId: id, ...problem, reportedAt: now, status: "open",
     };
     const activity: OrderActivity = {
       id: nanoid(), orderId: id, type: "problem_reported",
       timestamp: now, department: problem.department,
-      description: `בעיה דווחה: ${problem.description}`,
-      by: problem.reportedBy,
+      description: `בעיה דווחה: ${problem.description}`, by: problem.reportedBy,
     };
     setOrders((prev) =>
-      prev.map((o) =>
-        o.id === id
-          ? {
-              ...o,
-              problems: [...(o.problems ?? []), newProblem],
-              activities: [...(o.activities ?? []), activity],
-              updatedAt: now,
-            }
-          : o
-      )
+      prev.map((o) => {
+        if (o.id !== id) return o;
+        const updated = {
+          ...o,
+          problems: [...(o.problems ?? []), newProblem],
+          activities: [...(o.activities ?? []), activity],
+          updatedAt: now,
+        };
+        const db = getSupabase();
+        if (db) db.from("work_orders").update(toRow(updated)).eq("id", id).then(() => {});
+        return updated;
+      })
     );
     return newProblem;
   }, []);
@@ -215,12 +286,15 @@ export function useOrders() {
           timestamp: now, by: opts?.resolvedBy,
           description: status === "resolved" ? "בעיה סומנה כנפתרה" : `סטטוס בעיה עודכן ל-${status}`,
         };
-        return {
+        const updated = {
           ...o,
           problems: updatedProblems,
           activities: [...(o.activities ?? []), activity],
           updatedAt: now,
         };
+        const db = getSupabase();
+        if (db) db.from("work_orders").update(toRow(updated)).eq("id", orderId).then(() => {});
+        return updated;
       })
     );
   }, []);

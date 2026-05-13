@@ -3,10 +3,39 @@
 import { useCallback, useEffect, useState } from "react";
 import { nanoid } from "nanoid";
 import type { Customer, CustomerFormState } from "@/types/customer";
+import { getSupabase } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "elkayam_customers";
 
-function loadCustomers(): Customer[] {
+function fromRow(r: Record<string, unknown>): Customer {
+  return {
+    id: r.id as string,
+    name: r.name as string,
+    location: r.location as string,
+    phone: r.phone as string,
+    lastOrder: r.last_order as string,
+    notes: r.notes as string | undefined,
+    paymentTerms: r.payment_terms as string | undefined,
+    createdAt: (r.created_at as string) ?? new Date().toISOString(),
+    updatedAt: (r.updated_at as string) ?? new Date().toISOString(),
+  };
+}
+
+function toRow(c: Customer) {
+  return {
+    id: c.id,
+    name: c.name,
+    location: c.location,
+    phone: c.phone,
+    last_order: c.lastOrder,
+    notes: c.notes ?? null,
+    payment_terms: c.paymentTerms ?? null,
+    created_at: c.createdAt,
+    updated_at: c.updatedAt,
+  };
+}
+
+function loadLocal(): Customer[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -16,22 +45,37 @@ function loadCustomers(): Customer[] {
   }
 }
 
+function saveLocal(customers: Customer[]) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(customers)); } catch { /* ignore */ }
+}
+
 export function useCustomers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
-  // Load from localStorage once on mount. Setting hydrated=true in the same
-  // batch prevents the save effect from firing with [] before data is loaded.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCustomers(loadCustomers());
-    setHydrated(true);
+    const db = getSupabase();
+    if (db) {
+      db.from("customers").select("*").order("created_at", { ascending: false })
+        .then(({ data, error }) => {
+          if (!error && data) {
+            const mapped = data.map(fromRow);
+            setCustomers(mapped);
+            saveLocal(mapped);
+          } else {
+            setCustomers(loadLocal());
+          }
+          setHydrated(true);
+        });
+    } else {
+      setCustomers(loadLocal());
+      setHydrated(true);
+    }
   }, []);
 
-  // Only persist after hydration — prevents wiping saved data on initial render.
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(customers));
+    saveLocal(customers);
   }, [customers, hydrated]);
 
   const addCustomer = useCallback((form: CustomerFormState) => {
@@ -43,17 +87,27 @@ export function useCustomers() {
       updatedAt: now,
     };
     setCustomers((prev) => [...prev, newCustomer]);
+    const db = getSupabase();
+    if (db) db.from("customers").insert(toRow(newCustomer)).then(() => {});
   }, []);
 
   const updateCustomer = useCallback((id: string, partial: Partial<Omit<Customer, "id" | "createdAt">>) => {
     const now = new Date().toISOString();
     setCustomers((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, ...partial, updatedAt: now } : c))
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const updated = { ...c, ...partial, updatedAt: now };
+        const db = getSupabase();
+        if (db) db.from("customers").update(toRow(updated)).eq("id", id).then(() => {});
+        return updated;
+      })
     );
   }, []);
 
   const deleteCustomer = useCallback((id: string) => {
     setCustomers((prev) => prev.filter((c) => c.id !== id));
+    const db = getSupabase();
+    if (db) db.from("customers").delete().eq("id", id).then(() => {});
   }, []);
 
   return { customers, addCustomer, updateCustomer, deleteCustomer };
