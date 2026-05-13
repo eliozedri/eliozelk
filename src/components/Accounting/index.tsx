@@ -10,6 +10,7 @@ import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { DIARY_STATUS_LABELS, DIARY_STATUS_COLORS } from "@/types/workDiary";
 import { exportWorkDiaryPDF } from "@/lib/workDiaryExport";
 import { useAuth } from "@/context/AuthContext";
+import { useOperationalKPIs } from "@/hooks/useOperationalKPIs";
 
 function AccountingIcon() {
   return (
@@ -172,11 +173,29 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-red-100 text-red-600",
 };
 
+function agingDays(isoDate: string): number {
+  return Math.round((Date.now() - new Date(isoDate).getTime()) / 86_400_000);
+}
+
+function AgingBadge({ days }: { days: number }) {
+  const cls =
+    days >= 30 ? "bg-red-100 text-red-700" :
+    days >= 7  ? "bg-amber-100 text-amber-700" :
+                 "bg-gray-100 text-gray-500";
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${cls}`}>
+      {days}י
+    </span>
+  );
+}
+
 export function AccountingPage() {
   const { orders, updateOrderFields } = useOrdersContext();
   const { diaries } = useWorkDiaryContext();
   const { profile } = useAuth();
-  const [activeTab, setActiveTab] = useState<"orders" | "work-diaries" | "billing">("orders");
+  const { billingLeakage, byOrder } = useOperationalKPIs();
+
+  const [activeTab, setActiveTab] = useState<"orders" | "work-diaries" | "billing" | "invoiced">("orders");
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
@@ -186,6 +205,30 @@ export function AccountingPage() {
   const [diaryExportingId, setDiaryExportingId] = useState<string | null>(null);
   const [invoicingId, setInvoicingId] = useState<string | null>(null);
   const [invoiceInputs, setInvoiceInputs] = useState<Record<string, string>>({});
+  const [billedAmountInputs, setBilledAmountInputs] = useState<Record<string, string>>({});
+
+  // Map orderId → diary revenue for billing queue enrichment
+  const orderRevenueMap = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const o of byOrder) m.set(o.orderId, o.totalRevenue);
+    return m;
+  }, [byOrder]);
+
+  // Invoiced history
+  const invoicedOrders = useMemo(
+    () => orders
+      .filter(o => o.accountingStatus === "invoiced" || (o.invoicedAt != null))
+      .sort((a, b) => new Date(b.invoicedAt ?? b.updatedAt).getTime() - new Date(a.invoicedAt ?? a.updatedAt).getTime()),
+    [orders]
+  );
+
+  const invoicedThisMonth = useMemo(() => {
+    const now = new Date();
+    return invoicedOrders.filter(o => {
+      const d = new Date(o.invoicedAt ?? o.updatedAt);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length;
+  }, [invoicedOrders]);
 
   const pendingBilling = useMemo(
     () => orders.filter(
@@ -199,13 +242,17 @@ export function AccountingPage() {
   function handleMarkInvoiced(order: WorkOrder) {
     setInvoicingId(order.id);
     const invoiceNumber = invoiceInputs[order.id]?.trim() || null;
+    const billedAmountRaw = billedAmountInputs[order.id]?.trim();
+    const billedAmount = billedAmountRaw ? parseFloat(billedAmountRaw) || null : null;
     updateOrderFields(order.id, {
       accountingStatus: "invoiced",
       invoicedAt: new Date().toISOString(),
       invoicedBy: profile?.name ?? null,
       invoiceNumber,
+      ...(billedAmount != null ? { billedAmount } : {}),
     });
     setInvoiceInputs((prev) => { const next = { ...prev }; delete next[order.id]; return next; });
+    setBilledAmountInputs((prev) => { const next = { ...prev }; delete next[order.id]; return next; });
     setInvoicingId(null);
   }
 
@@ -340,23 +387,49 @@ export function AccountingPage() {
               </span>
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("invoiced")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "invoiced"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            היסטוריית חיוב
+            {invoicedOrders.length > 0 && (
+              <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full text-xs font-bold ${activeTab === "invoiced" ? "bg-white/20 text-white" : "bg-green-100 text-green-700"}`}>
+                {invoicedOrders.length}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* Pending Billing Tab */}
         {activeTab === "billing" && (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
               <div className="bg-white rounded-xl border border-amber-100 px-5 py-4 shadow-sm">
                 <p className="text-2xl font-bold text-gray-900">{pendingBilling.length}</p>
                 <p className="text-xs text-gray-500">הזמנות ממתינות לחיוב</p>
               </div>
-              <div className="bg-white rounded-xl border border-green-100 px-5 py-4 shadow-sm">
-                <p className="text-2xl font-bold text-gray-900">{new Set(pendingBilling.map((o) => o.customer)).size}</p>
-                <p className="text-xs text-gray-500">לקוחות ייחודיים</p>
+              <div className="bg-white rounded-xl border border-red-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-amber-700">
+                  {billingLeakage.uninvoicedEstimatedRevenue > 0
+                    ? "₪" + Math.round(billingLeakage.uninvoicedEstimatedRevenue).toLocaleString()
+                    : "—"}
+                </p>
+                <p className="text-xs text-gray-500">הכנסות ממתינות לגבייה</p>
               </div>
-              <div className="bg-white rounded-xl border border-blue-100 px-5 py-4 shadow-sm">
-                <p className="text-2xl font-bold text-gray-900">{orders.filter((o) => o.accountingStatus === "invoiced").length}</p>
-                <p className="text-xs text-gray-500">הזמנות שחויבו</p>
+              <div className="bg-white rounded-xl border border-orange-100 px-5 py-4 shadow-sm">
+                <p className={`text-2xl font-bold ${billingLeakage.oldestUninvoicedDays >= 30 ? "text-red-600" : billingLeakage.oldestUninvoicedDays >= 7 ? "text-amber-600" : "text-gray-900"}`}>
+                  {billingLeakage.oldestUninvoicedDays > 0 ? `${billingLeakage.oldestUninvoicedDays} ימים` : "—"}
+                </p>
+                <p className="text-xs text-gray-500">הזמן הארוך ביותר ממתין</p>
+              </div>
+              <div className="bg-white rounded-xl border border-green-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-green-700">{invoicedThisMonth}</p>
+                <p className="text-xs text-gray-500">חויבו החודש</p>
               </div>
             </div>
 
@@ -374,26 +447,53 @@ export function AccountingPage() {
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">הזמנה</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">לקוח</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">מיקום</th>
-                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">תאריך</th>
-                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-16">שלטים</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-20">המתנה</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">הכנסה משוערת</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">מס׳ חשבונית</th>
-                        <th className="px-4 py-2.5 w-32"></th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">סכום לחיוב ₪</th>
+                        <th className="px-4 py-2.5 w-28"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {pendingBilling.map((order) => (
+                      {pendingBilling.map((order) => {
+                        const estRevenue = orderRevenueMap.get(order.id) ?? 0;
+                        const days = agingDays(order.updatedAt);
+                        return (
                         <tr key={order.id} className="border-b border-gray-100 hover:bg-amber-50/20 transition-colors">
-                          <td className="px-4 py-3 font-medium text-gray-900 text-xs">{order.orderNumber}</td>
-                          <td className="px-4 py-3 text-gray-700">{order.customer}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-mono text-xs font-bold text-gray-900">{order.orderNumber}</span>
+                              <span className="text-[10px] text-gray-400">{formatDate(order.date)}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{order.customer}</td>
                           <td className="px-4 py-3 text-gray-500 text-xs">{order.location || "—"}</td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(order.date)}</td>
-                          <td className="px-4 py-3 text-center text-gray-700 text-sm font-medium">{countSignQty(order) || "—"}</td>
+                          <td className="px-4 py-3">
+                            <AgingBadge days={days} />
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-gray-700">
+                            {estRevenue > 0
+                              ? "₪" + Math.round(estRevenue).toLocaleString()
+                              : <span className="text-gray-300 text-xs">אין נתוני יומן</span>}
+                          </td>
                           <td className="px-4 py-3">
                             <input
                               type="text"
                               placeholder="אופציונלי"
                               value={invoiceInputs[order.id] ?? ""}
                               onChange={(e) => setInvoiceInputs((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                              className="w-24 px-2 py-1 rounded border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
+                              dir="ltr"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              placeholder={estRevenue > 0 ? String(Math.round(estRevenue)) : "0"}
+                              value={billedAmountInputs[order.id] ?? ""}
+                              onChange={(e) => setBilledAmountInputs((prev) => ({ ...prev, [order.id]: e.target.value }))}
                               className="w-28 px-2 py-1 rounded border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 placeholder-gray-300"
                               dir="ltr"
                             />
@@ -403,13 +503,14 @@ export function AccountingPage() {
                               type="button"
                               onClick={() => handleMarkInvoiced(order)}
                               disabled={invoicingId === order.id}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium transition-colors disabled:opacity-50 whitespace-nowrap"
                             >
                               {invoicingId === order.id ? "שומר..." : "סמן כחויב"}
                             </button>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                   <div className="px-5 py-2.5 border-t border-gray-100 text-xs text-gray-400">
@@ -528,6 +629,84 @@ export function AccountingPage() {
                   </table>
                   <div className="px-5 py-2.5 border-t border-gray-100 text-xs text-gray-400">
                     מוצגים {filteredDiaries.length} מתוך {submittedDiaries.length} יומנים
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Invoiced History Tab */}
+        {activeTab === "invoiced" && (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+              <div className="bg-white rounded-xl border border-green-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-green-700">{invoicedOrders.length}</p>
+                <p className="text-xs text-gray-500">הזמנות שחויבו סה״כ</p>
+              </div>
+              <div className="bg-white rounded-xl border border-blue-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-gray-900">{invoicedThisMonth}</p>
+                <p className="text-xs text-gray-500">חויבו החודש</p>
+              </div>
+              <div className="bg-white rounded-xl border border-purple-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-gray-900">
+                  {invoicedOrders.filter(o => o.billedAmount).length > 0
+                    ? "₪" + Math.round(invoicedOrders.reduce((s, o) => s + (o.billedAmount ?? 0), 0)).toLocaleString()
+                    : "—"}
+                </p>
+                <p className="text-xs text-gray-500">סכום חויב כולל (עם סכום)</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              {invoicedOrders.length === 0 ? (
+                <div className="py-16 text-center">
+                  <p className="text-gray-500 font-medium">אין הזמנות שחויבו עדיין</p>
+                  <p className="text-sm text-gray-400 mt-1">הזמנות שסומנו כחויב יופיעו כאן</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">הזמנה</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">לקוח</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">מס׳ חשבונית</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">סכום שחויב</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">תאריך חיוב</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">בוצע ע״י</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoicedOrders.map((order) => (
+                        <tr key={order.id} className="border-b border-gray-100 hover:bg-green-50/20 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-mono text-xs font-bold text-gray-900">{order.orderNumber}</span>
+                              <span className="text-[10px] text-gray-400">{order.location || "—"}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-700">{order.customer}</td>
+                          <td className="px-4 py-3 text-sm font-mono text-gray-700">
+                            {order.invoiceNumber
+                              ? <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs font-bold">{order.invoiceNumber}</span>
+                              : <span className="text-gray-300 text-xs">לא הוזן</span>}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-semibold text-green-700">
+                            {order.billedAmount
+                              ? "₪" + Math.round(order.billedAmount).toLocaleString()
+                              : <span className="text-gray-300 text-xs">לא הוזן</span>}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {order.invoicedAt ? formatDate(order.invoicedAt.slice(0, 10)) : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-500">{order.invoicedBy || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="px-5 py-2.5 border-t border-gray-100 text-xs text-gray-400">
+                    {invoicedOrders.length} הזמנות חויבו
                   </div>
                 </div>
               )}
