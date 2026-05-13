@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useCrewsContext } from "@/context/CrewsContext";
 import type { Crew, CrewSkill, CrewRegion } from "@/types/crew";
 import { CREW_SKILL_LABELS, CREW_REGION_LABELS } from "@/types/crew";
+import { useOperationalKPIs } from "@/hooks/useOperationalKPIs";
+import type { CrewMetrics } from "@/lib/operationalKPIs";
 
 const ALL_SKILLS = Object.keys(CREW_SKILL_LABELS) as CrewSkill[];
 const ALL_REGIONS = Object.keys(CREW_REGION_LABELS) as CrewRegion[];
@@ -192,13 +194,18 @@ function CrewForm({ initial, onSave, onCancel, submitLabel }: CrewFormProps) {
 
 function CrewCard({
   crew,
+  metrics,
   onEdit,
   onDelete,
 }: {
   crew: Crew;
+  metrics: CrewMetrics | undefined;
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const fmtRevenue = (n: number) =>
+    n >= 1_000 ? `₪${Math.round(n / 1_000)}k` : `₪${Math.round(n)}`;
+
   return (
     <div className={`bg-white rounded-xl border shadow-sm p-4 flex flex-col gap-3 ${crew.active ? "border-gray-200" : "border-gray-100 opacity-60"}`}>
       <div className="flex items-start justify-between gap-2">
@@ -238,6 +245,43 @@ function CrewCard({
         )}
       </div>
 
+      {/* Performance metrics strip */}
+      {metrics && metrics.totalDays > 0 && (
+        <div className="border-t border-gray-100 pt-2.5 grid grid-cols-3 gap-2 text-xs">
+          <div>
+            <div className="text-gray-400">הכנסות</div>
+            <div className="font-semibold text-gray-800 mt-0.5">{fmtRevenue(metrics.totalRevenue)}</div>
+          </div>
+          <div>
+            <div className="text-gray-400">מרווח</div>
+            <div className={`font-semibold mt-0.5 ${
+              metrics.avgMarginPct < 0 ? "text-red-600" :
+              metrics.avgMarginPct < 10 ? "text-amber-600" : "text-green-700"
+            }`}>
+              {metrics.avgMarginPct.toFixed(1)}%
+            </div>
+          </div>
+          <div>
+            <div className="text-gray-400">ימים</div>
+            <div className="font-semibold text-gray-800 mt-0.5">
+              <span className="text-green-700">{metrics.profitableDays}+</span>
+              {" / "}
+              <span className={metrics.lossDays > 0 ? "text-red-600" : "text-gray-400"}>
+                {metrics.lossDays}−
+              </span>
+            </div>
+          </div>
+          <div className="col-span-3">
+            <div className="text-gray-400">₪ לעובד/יום</div>
+            <div className="font-semibold text-gray-700 mt-0.5">
+              {metrics.totalWorkerDays > 0
+                ? `₪${Math.round(metrics.revenuePerWorkerDay).toLocaleString()}`
+                : "—"}
+            </div>
+          </div>
+        </div>
+      )}
+
       {crew.skills.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {crew.skills.map((skill) => (
@@ -259,6 +303,15 @@ export function Crews() {
   const { crews, addCrew, updateCrew, deleteCrew } = useCrewsContext();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const { byCrew } = useOperationalKPIs();
+  const crewMetricsMap = useMemo(() => {
+    const m = new Map<string, CrewMetrics>();
+    for (const c of byCrew) {
+      if (c.crewId) m.set(c.crewId, c);
+    }
+    return m;
+  }, [byCrew]);
 
   const handleAdd = useCallback((data: Omit<Crew, "id" | "createdAt" | "updatedAt">) => {
     addCrew(data);
@@ -342,6 +395,7 @@ export function Crews() {
                       <CrewCard
                         key={crew.id}
                         crew={crew}
+                        metrics={crewMetricsMap.get(crew.id)}
                         onEdit={() => setEditingId(crew.id)}
                         onDelete={() => deleteCrew(crew.id)}
                       />
@@ -373,6 +427,7 @@ export function Crews() {
                       <CrewCard
                         key={crew.id}
                         crew={crew}
+                        metrics={crewMetricsMap.get(crew.id)}
                         onEdit={() => setEditingId(crew.id)}
                         onDelete={() => deleteCrew(crew.id)}
                       />

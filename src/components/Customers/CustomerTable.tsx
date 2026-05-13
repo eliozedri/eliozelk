@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { Customer, CustomerFormState } from "@/types/customer";
 import { AddCustomerForm } from "./AddCustomerForm";
+import { useOperationalKPIs } from "@/hooks/useOperationalKPIs";
+import type { CustomerMetrics } from "@/lib/operationalKPIs";
 
 function CustomersIcon() {
   return (
@@ -35,6 +37,24 @@ function formatDate(iso: string): string {
   }
 }
 
+function fmtRevenue(n: number): string {
+  if (n >= 1_000_000) return `₪${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `₪${Math.round(n / 1_000)}k`;
+  return `₪${Math.round(n)}`;
+}
+
+const RISK_DOT: Record<CustomerMetrics["riskLevel"], string> = {
+  green: "bg-green-500",
+  amber: "bg-amber-400",
+  red:   "bg-red-500",
+};
+
+const RISK_TITLE: Record<CustomerMetrics["riskLevel"], string> = {
+  green: "לקוח רווחי",
+  amber: "מרווח נמוך",
+  red:   "לקוח עם הפסדים",
+};
+
 interface Props {
   customers: Customer[];
   onAdd: (form: CustomerFormState) => Promise<unknown>;
@@ -45,6 +65,13 @@ interface Props {
 export function CustomerTable({ customers, onAdd, onDelete, onSelect }: Props) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const { byCustomer } = useOperationalKPIs();
+  const metricsMap = useMemo(() => {
+    const m = new Map<string, CustomerMetrics>();
+    for (const c of byCustomer) m.set(c.customerName.trim().toLowerCase(), c);
+    return m;
+  }, [byCustomer]);
 
   async function handleDelete(e: React.MouseEvent, id: string) {
     e.stopPropagation();
@@ -83,6 +110,7 @@ export function CustomerTable({ customers, onAdd, onDelete, onSelect }: Props) {
             <th className="px-3 py-2.5 text-sm font-medium text-gray-500 text-right">מיקום</th>
             <th className="px-3 py-2.5 text-sm font-medium text-gray-500 text-right w-36">טלפון</th>
             <th className="px-3 py-2.5 text-sm font-medium text-gray-500 text-right">הזמנה אחרונה</th>
+            <th className="px-3 py-2.5 text-sm font-medium text-gray-500 text-right whitespace-nowrap">הכנסות · מרווח</th>
             <th className="px-3 py-2.5 text-sm font-medium text-gray-500 text-right w-32">תאריך הוספה</th>
             <th className="w-10 no-print"></th>
           </tr>
@@ -90,21 +118,48 @@ export function CustomerTable({ customers, onAdd, onDelete, onSelect }: Props) {
         <tbody>
           {customers.length === 0 ? (
             <tr>
-              <td colSpan={6} className="px-5 py-10 text-center text-gray-400 text-sm">
+              <td colSpan={7} className="px-5 py-10 text-center text-gray-400 text-sm">
                 לא נמצאו לקוחות. הוסף את הלקוח הראשון.
               </td>
             </tr>
           ) : (
-            customers.map((customer) => (
+            customers.map((customer) => {
+              const m = metricsMap.get(customer.name.trim().toLowerCase());
+              return (
               <tr
                 key={customer.id}
                 onClick={() => onSelect(customer)}
                 className="border-b border-gray-100 hover:bg-blue-50/40 transition-colors cursor-pointer"
               >
-                <td className="px-3 py-2.5 font-medium text-gray-900">{customer.name}</td>
+                <td className="px-3 py-2.5 font-medium text-gray-900">
+                  <div className="flex items-center gap-2">
+                    {m && (
+                      <span
+                        className={`w-2 h-2 rounded-full shrink-0 ${RISK_DOT[m.riskLevel]}`}
+                        title={RISK_TITLE[m.riskLevel]}
+                      />
+                    )}
+                    {customer.name}
+                  </div>
+                </td>
                 <td className="px-3 py-2.5 text-gray-600">{customer.location || "—"}</td>
                 <td className="px-3 py-2.5 text-gray-600" dir="ltr">{customer.phone}</td>
                 <td className="px-3 py-2.5 text-gray-600">{customer.lastOrder || "—"}</td>
+                <td className="px-3 py-2.5 whitespace-nowrap">
+                  {m && m.totalRevenue > 0 ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-medium text-gray-700">{fmtRevenue(m.totalRevenue)}</span>
+                      <span className={`text-xs font-semibold ${
+                        m.avgMarginPct < 0 ? "text-red-600" :
+                        m.avgMarginPct < 10 ? "text-amber-600" : "text-green-700"
+                      }`}>
+                        {m.avgMarginPct.toFixed(1)}%
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-gray-300">—</span>
+                  )}
+                </td>
                 <td className="px-3 py-2.5 text-gray-500 text-xs">{formatDate(customer.createdAt)}</td>
                 <td className="px-2 py-2.5 w-10 no-print">
                   <button
@@ -118,7 +173,8 @@ export function CustomerTable({ customers, onAdd, onDelete, onSelect }: Props) {
                   </button>
                 </td>
               </tr>
-            ))
+              );
+            })
           )}
         </tbody>
       </table>
