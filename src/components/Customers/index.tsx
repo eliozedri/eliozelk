@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useCustomers } from "@/hooks/useCustomers";
+import { useCustomersContext } from "@/context/CustomersContext";
 import { CustomerTable } from "./CustomerTable";
 import { CustomerDrawer } from "./CustomerDrawer";
 import type { Customer } from "@/types/customer";
@@ -18,16 +18,32 @@ function CustomersIcon() {
 }
 
 export function CustomersPage() {
-  const { customers, addCustomer, deleteCustomer } = useCustomers();
+  const { customers, syncStatus, addCustomer, deleteCustomer } = useCustomersContext();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   return (
     <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-2 mb-5">
+        <div className="flex items-center gap-2 mb-2">
           <h1 className="text-2xl font-bold text-gray-900">לקוחות</h1>
           <CustomersIcon />
+          {syncStatus === "offline" && (
+            <span className="text-xs bg-yellow-100 text-yellow-700 border border-yellow-200 rounded-full px-2 py-0.5 font-medium">
+              מצב לא מקוון — נתונים אינם מסונכרנים
+            </span>
+          )}
+          {syncStatus === "error" && (
+            <span className="text-xs bg-red-100 text-red-700 border border-red-200 rounded-full px-2 py-0.5 font-medium">
+              שגיאת סנכרון — מוצגים נתונים מקומיים
+            </span>
+          )}
         </div>
+
+        {(syncStatus === "offline" || syncStatus === "error") && (
+          <div className="mb-4 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+            ⚠️ המערכת אינה מחוברת לענן. שינויים שתבצע לא יישמרו עד לחזרת החיבור.
+          </div>
+        )}
 
         <CustomerTable
           customers={customers}

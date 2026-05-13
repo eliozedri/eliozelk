@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { OrderHeader as OrderHeaderType } from "@/types/order";
 import { CITY_COORDINATES } from "@/lib/cityCoordinates";
-import { useCustomers } from "@/hooks/useCustomers";
+import { useCustomersContext } from "@/context/CustomersContext";
 
 interface Props {
   header: OrderHeaderType;
@@ -14,7 +14,7 @@ const inputCls =
   "w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 transition-all";
 
 export function OrderHeader({ header, onChange }: Props) {
-  const { customers } = useCustomers();
+  const { customers, syncStatus } = useCustomersContext();
   const [showSuggestions, setShowSuggestions] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -84,24 +84,30 @@ export function OrderHeader({ header, onChange }: Props) {
               className={inputCls}
               autoComplete="off"
             />
-            {showSuggestions && suggestions.length > 0 && (
+            {showSuggestions && header.customer.trim().length >= 1 && (
               <div className="absolute top-full right-0 mt-1 w-full bg-white rounded-lg border border-gray-200 shadow-lg z-50 overflow-hidden">
-                {suggestions.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onMouseDown={() => selectCustomer(c.name)}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-right hover:bg-blue-50 transition-colors"
-                  >
-                    <div className="flex-1 text-right">
-                      <div className="font-medium text-gray-800">{c.name}</div>
-                      {c.phone && <div className="text-xs text-gray-400">{c.phone}</div>}
-                    </div>
-                    {c.location && (
-                      <span className="text-xs text-gray-400 shrink-0">{c.location}</span>
-                    )}
-                  </button>
-                ))}
+                {syncStatus === "loading" ? (
+                  <div className="px-3 py-2.5 text-sm text-gray-400">טוען לקוחות...</div>
+                ) : suggestions.length > 0 ? (
+                  suggestions.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onMouseDown={() => selectCustomer(c.name)}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-right hover:bg-blue-50 transition-colors"
+                    >
+                      <div className="flex-1 text-right">
+                        <div className="font-medium text-gray-800">{c.name}</div>
+                        {c.phone && <div className="text-xs text-gray-400">{c.phone}</div>}
+                      </div>
+                      {c.location && (
+                        <span className="text-xs text-gray-400 shrink-0">{c.location}</span>
+                      )}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-2.5 text-sm text-gray-400">לא נמצאו לקוחות תואמים</div>
+                )}
               </div>
             )}
           </div>

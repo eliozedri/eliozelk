@@ -53,15 +53,9 @@ function saveLocal(crews: Crew[]) {
 
 export function useCrews() {
   const [crews, setCrews] = useState<Crew[]>([]);
-  const [hydrated, setHydrated] = useState(false);
   const ref = useRef<Crew[]>([]);
 
   useEffect(() => { ref.current = crews; }, [crews]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    saveLocal(crews);
-  }, [crews, hydrated]);
 
   useEffect(() => {
     const db = getSupabase();
@@ -69,25 +63,15 @@ export function useCrews() {
       db.from("crews").select("*").order("created_at", { ascending: true })
         .then(({ data, error }) => {
           if (!error && data) {
-            if (data.length > 0) {
-              const mapped = data.map(r => fromRow(r as Record<string, unknown>));
-              setCrews(mapped);
-              saveLocal(mapped);
-            } else {
-              const local = loadLocal();
-              setCrews(local);
-              if (local.length > 0) {
-                db.from("crews").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
-              }
-            }
+            const mapped = data.map(r => fromRow(r as Record<string, unknown>));
+            setCrews(mapped);
+            saveLocal(mapped); // warm cache — written once
           } else {
             setCrews(loadLocal());
           }
-          setHydrated(true);
         });
     } else {
       setCrews(loadLocal());
-      setHydrated(true);
     }
   }, []);
 

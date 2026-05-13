@@ -8,7 +8,6 @@ interface CostRatesContextValue {
   rates: CostRates;
   updateRates: (partial: Partial<Omit<CostRates, "updatedAt">>) => void;
   resetRates: () => void;
-  hydrated: boolean;
 }
 
 const CostRatesContext = createContext<CostRatesContextValue | null>(null);

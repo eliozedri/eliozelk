@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Heebo } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
+import { CustomersProvider } from "@/components/CustomersProvider";
 import { OrdersProvider } from "@/components/OrdersProvider";
 import { CatalogProvider } from "@/components/CatalogProvider";
 import { CrewsProvider } from "@/components/CrewsProvider";
@@ -26,11 +27,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <CostRatesProvider>
           <WorkDiaryProvider>
             <CatalogProvider>
-              <OrdersProvider>
-                <CrewsProvider>
-                  <AppShell>{children}</AppShell>
-                </CrewsProvider>
-              </OrdersProvider>
+              <CustomersProvider>
+                <OrdersProvider>
+                  <CrewsProvider>
+                    <AppShell>{children}</AppShell>
+                  </CrewsProvider>
+                </OrdersProvider>
+              </CustomersProvider>
             </CatalogProvider>
           </WorkDiaryProvider>
         </CostRatesProvider>

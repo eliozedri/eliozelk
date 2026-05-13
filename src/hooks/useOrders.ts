@@ -66,15 +66,9 @@ function generateOrderNumberLocal(orders: WorkOrder[]): string {
 
 export function useOrders() {
   const [orders, setOrders] = useState<WorkOrder[]>([]);
-  const [hydrated, setHydrated] = useState(false);
   const ref = useRef<WorkOrder[]>([]);
 
   useEffect(() => { ref.current = orders; }, [orders]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    saveLocal(orders);
-  }, [orders, hydrated]);
 
   useEffect(() => {
     const db = getSupabase();
@@ -82,26 +76,16 @@ export function useOrders() {
       db.from("work_orders").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
           if (!error && data) {
-            if (data.length > 0) {
-              const mapped = data.map(r => fromRow(r as Record<string, unknown>));
-              setOrders(mapped);
-              saveLocal(mapped);
-            } else {
-              const local = loadLocal();
-              setOrders(local);
-              if (local.length > 0) {
-                db.from("work_orders").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
-              }
-            }
+            const mapped = data.map(r => fromRow(r as Record<string, unknown>));
+            setOrders(mapped);
+            saveLocal(mapped); // warm cache — written once
           } else {
-            // Supabase error — use local cache, do NOT push
+            // Supabase error — use local cache read-only
             setOrders(loadLocal());
           }
-          setHydrated(true);
         });
     } else {
       setOrders(loadLocal());
-      setHydrated(true);
     }
   }, []);
 

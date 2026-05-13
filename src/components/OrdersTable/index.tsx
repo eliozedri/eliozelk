@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { useOrdersContext } from "@/context/OrdersContext";
-import { useCustomers } from "@/hooks/useCustomers";
+import { useCustomersContext } from "@/context/CustomersContext";
 import {
   STATUS_LABELS,
   STATUS_COLORS,
@@ -446,7 +446,7 @@ function EmptyState({ hasFilters, onClear }: { hasFilters: boolean; onClear: () 
 
 export function OrdersTable() {
   const { orders, updateOrderStatus } = useOrdersContext();
-  const { customers } = useCustomers();
+  const { customers } = useCustomersContext();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<WorkOrderStatus | "all">("all");

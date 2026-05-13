@@ -33,35 +33,47 @@ function validateForm(form: CustomerFormState): CustomerErrors {
 }
 
 interface Props {
-  onAdd: (form: CustomerFormState) => void;
+  onAdd: (form: CustomerFormState) => Promise<unknown>;
 }
 
 export function AddCustomerForm({ onAdd }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState<CustomerFormState>(emptyForm);
   const [errors, setErrors] = useState<CustomerErrors>({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  function handleSave() {
+  async function handleSave() {
     const errs = validateForm(form);
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       return;
     }
-    onAdd(form);
-    setForm(emptyForm);
-    setErrors({});
-    setIsOpen(false);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onAdd(form);
+      setForm(emptyForm);
+      setErrors({});
+      setIsOpen(false);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "שגיאה בשמירת הלקוח");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleCancel() {
     setForm(emptyForm);
     setErrors({});
+    setSaveError(null);
     setIsOpen(false);
   }
 
   function update(field: keyof CustomerFormState, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
+    if (saveError) setSaveError(null);
   }
 
   if (!isOpen) {
@@ -91,6 +103,7 @@ export function AddCustomerForm({ onAdd }: Props) {
             onChange={(e) => update("name", e.target.value)}
             placeholder="שם הלקוח"
             className={errors.name ? inputErrCls : inputCls}
+            disabled={saving}
           />
           {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
         </div>
@@ -103,6 +116,7 @@ export function AddCustomerForm({ onAdd }: Props) {
             onChange={(e) => update("location", e.target.value)}
             placeholder="מיקום (אופציונלי)"
             className={inputCls}
+            disabled={saving}
           />
         </div>
 
@@ -117,6 +131,7 @@ export function AddCustomerForm({ onAdd }: Props) {
             placeholder="לדוגמה: 052-1234567"
             dir="ltr"
             className={errors.phone ? inputErrCls : inputCls}
+            disabled={saving}
           />
           {errors.phone && <p className="text-xs text-red-500 mt-0.5">{errors.phone}</p>}
         </div>
@@ -129,24 +144,33 @@ export function AddCustomerForm({ onAdd }: Props) {
             onChange={(e) => update("lastOrder", e.target.value)}
             placeholder="הזמנה אחרונה (אופציונלי)"
             className={inputCls}
+            disabled={saving}
           />
         </div>
       </div>
+
+      {saveError && (
+        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
+          {saveError}
+        </p>
+      )}
 
       <div className="flex gap-2 justify-end">
         <button
           type="button"
           onClick={handleCancel}
-          className="px-4 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+          disabled={saving}
+          className="px-4 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
         >
           ביטול
         </button>
         <button
           type="button"
           onClick={handleSave}
-          className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+          disabled={saving}
+          className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-60"
         >
-          שמור לקוח
+          {saving ? "שומר..." : "שמור לקוח"}
         </button>
       </div>
     </div>

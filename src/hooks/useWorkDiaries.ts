@@ -65,15 +65,9 @@ function generateDiaryNumberLocal(diaries: WorkDiary[]): string {
 
 export function useWorkDiaries() {
   const [diaries, setDiaries] = useState<WorkDiary[]>([]);
-  const [hydrated, setHydrated] = useState(false);
   const ref = useRef<WorkDiary[]>([]);
 
   useEffect(() => { ref.current = diaries; }, [diaries]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    saveLocal(diaries);
-  }, [diaries, hydrated]);
 
   useEffect(() => {
     const db = getSupabase();
@@ -81,26 +75,16 @@ export function useWorkDiaries() {
       db.from("work_diaries").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
           if (!error && data) {
-            if (data.length > 0) {
-              const mapped = data.map(r => fromRow(r as Record<string, unknown>));
-              setDiaries(mapped);
-              saveLocal(mapped);
-            } else {
-              const local = loadLocal();
-              setDiaries(local);
-              if (local.length > 0) {
-                db.from("work_diaries").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
-              }
-            }
+            const mapped = data.map(r => fromRow(r as Record<string, unknown>));
+            setDiaries(mapped);
+            saveLocal(mapped); // warm cache — written once
           } else {
-            // Supabase error — use local cache, do NOT push
+            // Supabase error — use local cache read-only
             setDiaries(loadLocal());
           }
-          setHydrated(true);
         });
     } else {
       setDiaries(loadLocal());
-      setHydrated(true);
     }
   }, []);
 

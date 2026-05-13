@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useOrdersContext } from "@/context/OrdersContext";
-import { useCustomers } from "@/hooks/useCustomers";
+import { useCustomersContext } from "@/context/CustomersContext";
 import { useCatalogContext } from "@/context/CatalogContext";
 import { STATUS_LABELS } from "@/types/workOrder";
 import type { WorkOrder } from "@/types/workOrder";
@@ -284,7 +284,7 @@ function ActivitySection({ orders }: { orders: WorkOrder[] }) {
 
 export function DashboardPage() {
   const { orders } = useOrdersContext();
-  const { customers } = useCustomers();
+  const { customers } = useCustomersContext();
   const { items: catalogItems } = useCatalogContext();
 
   const metrics = useMemo(() => {

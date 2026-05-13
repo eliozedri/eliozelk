@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Customer, CustomerFormState } from "@/types/customer";
 import { AddCustomerForm } from "./AddCustomerForm";
 
@@ -36,12 +37,28 @@ function formatDate(iso: string): string {
 
 interface Props {
   customers: Customer[];
-  onAdd: (form: CustomerFormState) => void;
-  onDelete: (id: string) => void;
+  onAdd: (form: CustomerFormState) => Promise<unknown>;
+  onDelete: (id: string) => Promise<void>;
   onSelect: (customer: Customer) => void;
 }
 
 export function CustomerTable({ customers, onAdd, onDelete, onSelect }: Props) {
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    setDeleteError(null);
+    setDeletingId(id);
+    try {
+      await onDelete(id);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "שגיאה במחיקת הלקוח");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 overflow-x-auto">
       {/* Section header */}
@@ -50,8 +67,14 @@ export function CustomerTable({ customers, onAdd, onDelete, onSelect }: Props) {
         <CustomersIcon />
       </div>
 
-      {/* Add customer form (between header and table) */}
+      {/* Add customer form */}
       <AddCustomerForm onAdd={onAdd} />
+
+      {deleteError && (
+        <div className="mx-5 mt-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          {deleteError}
+        </div>
+      )}
 
       <table className="w-full text-sm border-collapse">
         <thead>
@@ -87,11 +110,9 @@ export function CustomerTable({ customers, onAdd, onDelete, onSelect }: Props) {
                   <button
                     type="button"
                     title="מחק לקוח"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(customer.id);
-                    }}
-                    className="flex items-center justify-center w-8 h-8 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    disabled={deletingId === customer.id}
+                    onClick={(e) => handleDelete(e, customer.id)}
+                    className="flex items-center justify-center w-8 h-8 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
                   >
                     <TrashIcon />
                   </button>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCustomers } from "@/hooks/useCustomers";
+import { useCustomersContext } from "@/context/CustomersContext";
 import { useOrdersContext } from "@/context/OrdersContext";
 import { STATUS_LABELS, STATUS_COLORS } from "@/types/workOrder";
 import type { WorkOrder } from "@/types/workOrder";
@@ -60,7 +60,7 @@ function OrderRow({ order }: { order: WorkOrder }) {
 
 export function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
-  const { customers } = useCustomers();
+  const { customers } = useCustomersContext();
   const { orders } = useOrdersContext();
 
   const customer = customers.find((c) => c.id === params.id);

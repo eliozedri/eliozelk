@@ -52,15 +52,9 @@ function saveLocal(items: CatalogItem[]) {
 
 export function useCatalog() {
   const [items, setItems] = useState<CatalogItem[]>([]);
-  const [hydrated, setHydrated] = useState(false);
   const ref = useRef<CatalogItem[]>([]);
 
   useEffect(() => { ref.current = items; }, [items]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    saveLocal(items);
-  }, [items, hydrated]);
 
   useEffect(() => {
     const db = getSupabase();
@@ -68,25 +62,15 @@ export function useCatalog() {
       db.from("catalog_items").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
           if (!error && data) {
-            if (data.length > 0) {
-              const mapped = data.map(r => fromRow(r as Record<string, unknown>));
-              setItems(mapped);
-              saveLocal(mapped);
-            } else {
-              const local = loadLocal();
-              setItems(local);
-              if (local.length > 0) {
-                db.from("catalog_items").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
-              }
-            }
+            const mapped = data.map(r => fromRow(r as Record<string, unknown>));
+            setItems(mapped);
+            saveLocal(mapped); // warm cache — written once
           } else {
             setItems(loadLocal());
           }
-          setHydrated(true);
         });
     } else {
       setItems(loadLocal());
-      setHydrated(true);
     }
   }, []);
 

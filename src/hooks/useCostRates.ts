@@ -24,15 +24,9 @@ function saveLocal(rates: CostRates) {
 
 export function useCostRates() {
   const [rates, setRates] = useState<CostRates>(DEFAULT_COST_RATES);
-  const [hydrated, setHydrated] = useState(false);
   const ref = useRef<CostRates>(DEFAULT_COST_RATES);
 
   useEffect(() => { ref.current = rates; }, [rates]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    saveLocal(rates);
-  }, [rates, hydrated]);
 
   useEffect(() => {
     const db = getSupabase();
@@ -42,21 +36,14 @@ export function useCostRates() {
           if (!error && data?.data && Object.keys(data.data as object).length > 0) {
             const loaded = { ...DEFAULT_COST_RATES, ...(data.data as Partial<CostRates>) };
             setRates(loaded);
-            saveLocal(loaded);
-          } else if (!error) {
-            // Supabase returned empty — migrate local data up
-            const local = loadLocal();
-            setRates(local);
-            db.from("cost_rates").update({ data: local, updated_at: new Date().toISOString() }).eq("id", 1).then(() => {});
+            saveLocal(loaded); // warm cache — written once
           } else {
-            // Supabase error — use local cache, do NOT push
+            // Supabase error or empty — use local cache read-only
             setRates(loadLocal());
           }
-          setHydrated(true);
         });
     } else {
       setRates(loadLocal());
-      setHydrated(true);
     }
   }, []);
 
@@ -80,5 +67,5 @@ export function useCostRates() {
     });
   }, []);
 
-  return { rates, updateRates, resetRates, hydrated };
+  return { rates, updateRates, resetRates };
 }
