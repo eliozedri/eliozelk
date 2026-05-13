@@ -76,10 +76,21 @@ export function useWorkDiaries() {
         .then(({ data, error }) => {
           if (!error && data) {
             const mapped = data.map(r => fromRow(r as Record<string, unknown>));
-            setDiaries(mapped);
-            saveLocal(mapped); // warm cache — written once
+            if (mapped.length > 0) {
+              setDiaries(mapped);
+              saveLocal(mapped); // warm cache — written once
+            } else {
+              const local = loadLocal();
+              if (local.length > 0) {
+                console.log("[work_diaries] migrating local cache to Supabase:", local.length, "rows");
+                setDiaries(local);
+                db.from("work_diaries").upsert(local.map(toRow), { onConflict: "id" }).then(({ error: migErr }) => {
+                  if (migErr) console.error("[work_diaries] migration failed:", migErr.message);
+                  else saveLocal(local);
+                });
+              }
+            }
           } else {
-            // Supabase error — use local cache read-only
             setDiaries(loadLocal());
           }
         });

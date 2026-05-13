@@ -77,10 +77,23 @@ export function useOrders() {
         .then(({ data, error }) => {
           if (!error && data) {
             const mapped = data.map(r => fromRow(r as Record<string, unknown>));
-            setOrders(mapped);
-            saveLocal(mapped); // warm cache — written once
+            if (mapped.length > 0) {
+              setOrders(mapped);
+              saveLocal(mapped); // warm cache — written once
+            } else {
+              // Supabase empty — one-time migration from local cache
+              const local = loadLocal();
+              if (local.length > 0) {
+                console.log("[orders] migrating local cache to Supabase:", local.length, "rows");
+                setOrders(local);
+                db.from("work_orders").upsert(local.map(toRow), { onConflict: "id" }).then(({ error: migErr }) => {
+                  if (migErr) console.error("[orders] migration failed:", migErr.message);
+                  else saveLocal(local);
+                });
+              }
+            }
           } else {
-            // Supabase error — use local cache read-only
+            // Supabase error — use local cache read-only, do not overwrite
             setOrders(loadLocal());
           }
         });

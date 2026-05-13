@@ -63,8 +63,20 @@ export function useCatalog() {
         .then(({ data, error }) => {
           if (!error && data) {
             const mapped = data.map(r => fromRow(r as Record<string, unknown>));
-            setItems(mapped);
-            saveLocal(mapped); // warm cache — written once
+            if (mapped.length > 0) {
+              setItems(mapped);
+              saveLocal(mapped); // warm cache — written once
+            } else {
+              const local = loadLocal();
+              if (local.length > 0) {
+                console.log("[catalog] migrating local cache to Supabase:", local.length, "rows");
+                setItems(local);
+                db.from("catalog_items").upsert(local.map(toRow), { onConflict: "id" }).then(({ error: migErr }) => {
+                  if (migErr) console.error("[catalog] migration failed:", migErr.message);
+                  else saveLocal(local);
+                });
+              }
+            }
           } else {
             setItems(loadLocal());
           }

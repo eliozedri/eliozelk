@@ -112,8 +112,22 @@ export function CustomersProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         const mapped = (data ?? []).map(r => fromRow(r as Record<string, unknown>));
-        setCustomers(mapped);
-        warmCache(mapped); // single warm write, never written again this session
+        if (mapped.length > 0) {
+          // Supabase has data — it's authoritative
+          setCustomers(mapped);
+          warmCache(mapped);
+        } else {
+          // Supabase is empty — one-time migration from localStorage boot cache
+          const local = readCache();
+          if (local.length > 0) {
+            console.log("[customers] migrating local cache to Supabase:", local.length, "rows");
+            setCustomers(local);
+            db.from("customers").upsert(local.map(toRow), { onConflict: "id" }).then(({ error: migErr }) => {
+              if (migErr) console.error("[customers] migration failed:", migErr.message);
+            });
+          }
+          // else: genuinely empty — no-op, don't overwrite cache with []
+        }
         setSyncStatus("connected");
       });
 

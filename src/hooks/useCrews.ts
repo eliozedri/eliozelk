@@ -64,8 +64,20 @@ export function useCrews() {
         .then(({ data, error }) => {
           if (!error && data) {
             const mapped = data.map(r => fromRow(r as Record<string, unknown>));
-            setCrews(mapped);
-            saveLocal(mapped); // warm cache — written once
+            if (mapped.length > 0) {
+              setCrews(mapped);
+              saveLocal(mapped); // warm cache — written once
+            } else {
+              const local = loadLocal();
+              if (local.length > 0) {
+                console.log("[crews] migrating local cache to Supabase:", local.length, "rows");
+                setCrews(local);
+                db.from("crews").upsert(local.map(toRow), { onConflict: "id" }).then(({ error: migErr }) => {
+                  if (migErr) console.error("[crews] migration failed:", migErr.message);
+                  else saveLocal(local);
+                });
+              }
+            }
           } else {
             setCrews(loadLocal());
           }
