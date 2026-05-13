@@ -53,7 +53,9 @@ export function useNotifications(): NotificationCounts {
       !o.invoicedAt
     ).length;
 
-    const diariesPending = diaries.filter(d => d.status === "submitted").length;
+    const diariesPending = diaries.filter(
+      d => d.status === "submitted" && (!d.approvalStatus || d.approvalStatus === "pending")
+    ).length;
 
     const schedulePending = orders.filter(o =>
       o.status === "ready_installation" && !o.scheduledDate

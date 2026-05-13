@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WorkDiary, WorkDiaryStatus } from "@/types/workDiary";
+import type { WorkDiary, WorkDiaryStatus, DiaryApprovalStatus } from "@/types/workDiary";
 import { createEmptyDiary } from "@/types/workDiary";
 import { getSupabase } from "@/lib/supabase/client";
 
@@ -20,6 +20,12 @@ function fromRow(r: Record<string, unknown>): WorkDiary {
     submittedAt: r.submitted_at as string | null | undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
+    // Promoted execution lifecycle columns take priority over blob
+    orderId: (r.order_id as string | null | undefined) ?? data.orderId,
+    approvalStatus: (r.approval_status as DiaryApprovalStatus | null | undefined) ?? data.approvalStatus,
+    approvedBy: (r.approved_by as string | null | undefined) ?? data.approvedBy,
+    approvedAt: (r.approved_at as string | null | undefined) ?? data.approvedAt,
+    rejectionReason: (r.rejection_reason as string | null | undefined) ?? data.rejectionReason,
   } as WorkDiary;
 }
 
@@ -32,6 +38,11 @@ function toRow(d: WorkDiary) {
     site_name: d.siteName,
     execution_date: d.executionDate,
     submitted_at: d.submittedAt ?? null,
+    order_id: d.orderId ?? null,
+    approval_status: d.approvalStatus ?? "pending",
+    approved_by: d.approvedBy ?? null,
+    approved_at: d.approvedAt ?? null,
+    rejection_reason: d.rejectionReason ?? null,
     data: d,
     created_at: d.createdAt,
     updated_at: d.updatedAt,
@@ -237,5 +248,73 @@ export function useWorkDiaries() {
     }
   }, []);
 
-  return { diaries, createDiary, saveDiary, submitDiary, deleteDiary };
+  const approveDiary = useCallback((id: string, approvedBy: string) => {
+    const now = new Date().toISOString();
+    const original = ref.current.find(d => d.id === id);
+    if (!original || original.status !== "submitted") return;
+    const updated: WorkDiary = {
+      ...original,
+      approvalStatus: "approved",
+      approvedBy,
+      approvedAt: now,
+      rejectionReason: undefined,
+      updatedAt: now,
+    };
+    setDiaries(prev => prev.map(d => d.id === id ? updated : d));
+    const db = getSupabase();
+    if (db) {
+      db.from("work_diaries")
+        .update({
+          approval_status: "approved",
+          approved_by: approvedBy,
+          approved_at: now,
+          rejection_reason: null,
+          updated_at: now,
+          data: updated,
+        })
+        .eq("id", id)
+        .then(({ error }) => {
+          if (error) {
+            console.error("[diaries] approve failed:", error.message);
+            setDiaries(prev => prev.map(d => d.id === id ? original : d));
+          }
+        });
+    }
+  }, []);
+
+  const rejectDiary = useCallback((id: string, reason: string) => {
+    const now = new Date().toISOString();
+    const original = ref.current.find(d => d.id === id);
+    if (!original || original.status !== "submitted") return;
+    const updated: WorkDiary = {
+      ...original,
+      approvalStatus: "rejected",
+      rejectionReason: reason,
+      approvedBy: undefined,
+      approvedAt: undefined,
+      updatedAt: now,
+    };
+    setDiaries(prev => prev.map(d => d.id === id ? updated : d));
+    const db = getSupabase();
+    if (db) {
+      db.from("work_diaries")
+        .update({
+          approval_status: "rejected",
+          rejection_reason: reason,
+          approved_by: null,
+          approved_at: null,
+          updated_at: now,
+          data: updated,
+        })
+        .eq("id", id)
+        .then(({ error }) => {
+          if (error) {
+            console.error("[diaries] reject failed:", error.message);
+            setDiaries(prev => prev.map(d => d.id === id ? original : d));
+          }
+        });
+    }
+  }, []);
+
+  return { diaries, createDiary, saveDiary, submitDiary, deleteDiary, approveDiary, rejectDiary };
 }

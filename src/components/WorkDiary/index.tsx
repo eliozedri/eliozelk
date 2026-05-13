@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
+import { useAuth } from "@/context/AuthContext";
 import { useCostRatesContext } from "@/context/CostRatesContext";
 import type { WorkDiary } from "@/types/workDiary";
 import { DIARY_STATUS_LABELS, DIARY_STATUS_COLORS } from "@/types/workDiary";
@@ -186,7 +187,9 @@ function DiaryListView({ onNew, onOpen }: { onNew: () => void; onOpen: (d: WorkD
 // ── Form view ─────────────────────────────────────────────────────────────────
 
 export function WorkDiaryForm() {
-  const { createDiary, saveDiary, submitDiary } = useWorkDiaryContext();
+  const { createDiary, saveDiary, submitDiary, approveDiary, rejectDiary } = useWorkDiaryContext();
+  const { profile } = useAuth();
+  const canApprove = profile?.role === "master" || profile?.role === "office_manager";
   const [diary, setDiary] = useState<WorkDiary | null>(null);
   const [activeTab, setActiveTab] = useState<DiaryTab>("header");
   const [saving, setSaving] = useState(false);
@@ -321,10 +324,24 @@ export function WorkDiaryForm() {
       <DiaryActions
         status={diary.status}
         diaryNumber={diary.diaryNumber}
+        approvalStatus={diary.approvalStatus}
+        approvedBy={diary.approvedBy}
+        rejectionReason={diary.rejectionReason}
+        canApprove={canApprove}
         onSaveDraft={handleSaveDraft}
         onSubmit={handleSubmit}
         onExportPDF={handleExportPDF}
         onEmail={handleEmail}
+        onApprove={() => {
+          if (!diary || !profile) return;
+          approveDiary(diary.id, profile.name);
+          setDiary(prev => prev ? { ...prev, approvalStatus: "approved", approvedBy: profile.name } : prev);
+        }}
+        onReject={(reason) => {
+          if (!diary) return;
+          rejectDiary(diary.id, reason);
+          setDiary(prev => prev ? { ...prev, approvalStatus: "rejected", rejectionReason: reason } : prev);
+        }}
         saving={saving}
         exporting={exporting}
       />

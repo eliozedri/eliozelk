@@ -3,9 +3,11 @@
 import { useMemo, useState, useCallback } from "react";
 import { useOrdersContext } from "@/context/OrdersContext";
 import { useCrewsContext } from "@/context/CrewsContext";
+import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import type { WorkOrder } from "@/types/workOrder";
 import type { Crew } from "@/types/crew";
 import { getSlaColor, SLA_COLORS, formatWaitingDuration } from "@/lib/slaUtils";
+import { diaryCompletionStatus, type DiaryCompletionStatus } from "@/lib/executionUtils";
 
 // ── Week helpers ─────────────────────────────────────────────────────────────
 
@@ -122,9 +124,18 @@ function AssignModal({ order, crews, weekDates, onAssign, onClose }: AssignModal
 
 // ── Job chip for the board ───────────────────────────────────────────────────
 
-function JobChip({ order, onClick }: { order: WorkOrder; onClick: () => void }) {
+const DIARY_STATUS_CHIP: Record<DiaryCompletionStatus, { label: string; cls: string } | null> = {
+  none:      { label: "אין יומן", cls: "text-amber-600" },
+  draft:     { label: "טיוטה", cls: "text-gray-400" },
+  submitted: { label: "יומן נשלח", cls: "text-blue-600" },
+  approved:  { label: "יומן אושר", cls: "text-emerald-600" },
+  rejected:  { label: "יומן נדחה", cls: "text-red-500" },
+};
+
+function JobChip({ order, diaryStatus, onClick }: { order: WorkOrder; diaryStatus: DiaryCompletionStatus; onClick: () => void }) {
   const slaColor = getSlaColor(order.readyForExecutionAt);
   const { dot } = SLA_COLORS[slaColor];
+  const chip = DIARY_STATUS_CHIP[diaryStatus];
   return (
     <button
       onClick={onClick}
@@ -134,9 +145,14 @@ function JobChip({ order, onClick }: { order: WorkOrder; onClick: () => void }) 
       <div className="min-w-0">
         <div className="font-semibold text-gray-900 truncate">{order.orderNumber}</div>
         <div className="text-gray-500 truncate">{order.customer}</div>
-        {order.estimatedExecutionHours && (
-          <div className="text-blue-600">{order.estimatedExecutionHours}h</div>
-        )}
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {order.estimatedExecutionHours && (
+            <span className="text-blue-600">{order.estimatedExecutionHours}h</span>
+          )}
+          {chip && (
+            <span className={`text-[9px] font-semibold ${chip.cls}`}>{chip.label}</span>
+          )}
+        </div>
       </div>
     </button>
   );
@@ -180,6 +196,7 @@ function UnscheduledJobCard({ order, onAssign }: { order: WorkOrder; onAssign: (
 export function WeeklySchedule() {
   const { orders, updateOrderFields } = useOrdersContext();
   const { crews } = useCrewsContext();
+  const { diaries } = useWorkDiaryContext();
 
   const [weekOffset, setWeekOffset] = useState(0);
   const [assigningOrder, setAssigningOrder] = useState<WorkOrder | null>(null);
@@ -375,6 +392,7 @@ export function WeeklySchedule() {
                             <JobChip
                               key={o.id}
                               order={o}
+                              diaryStatus={diaryCompletionStatus(diaries, o.id)}
                               onClick={() => setAssigningOrder(o)}
                             />
                           ))}

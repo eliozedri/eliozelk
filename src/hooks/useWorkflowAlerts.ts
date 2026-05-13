@@ -2,7 +2,9 @@
 
 import { useMemo } from "react";
 import { useOrdersContext } from "@/context/OrdersContext";
+import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { stageEntryTime } from "@/lib/workflowEngine";
+import { getOrderDiaries } from "@/lib/executionUtils";
 
 export type AlertSeverity = "warn" | "critical";
 export type AlertDepartment = "graphics" | "fabrication" | "office" | "schedule" | "accounting";
@@ -27,6 +29,7 @@ export const DEPT_LABELS: Record<AlertDepartment, string> = {
 
 export function useWorkflowAlerts(): WorkflowAlert[] {
   const { orders } = useOrdersContext();
+  const { diaries } = useWorkDiaryContext();
 
   return useMemo(() => {
     const now = Date.now();
@@ -270,8 +273,54 @@ export function useWorkflowAlerts(): WorkflowAlert[] {
       });
     }
 
+    // ── Diary: submitted awaiting approval too long ──────────────────────
+    const pendingApprovalDiaries = diaries.filter(
+      d => d.status === "submitted" && (!d.approvalStatus || d.approvalStatus === "pending") && d.submittedAt
+    );
+    const approvalCritical = pendingApprovalDiaries.filter(d => h(d.submittedAt!) >= 72);
+    const approvalWarn     = pendingApprovalDiaries.filter(d => h(d.submittedAt!) >= 48 && h(d.submittedAt!) < 72);
+    if (approvalCritical.length > 0) {
+      alerts.push({
+        id: "diary-approval-critical",
+        severity: "critical",
+        department: "office",
+        message: `${approvalCritical.length} יומני עבודה ממתינים לאישור מעל 72 שעות`,
+        count: approvalCritical.length,
+        href: "/work-diary",
+      });
+    } else if (approvalWarn.length > 0) {
+      alerts.push({
+        id: "diary-approval-warn",
+        severity: "warn",
+        department: "office",
+        message: `${approvalWarn.length} יומני עבודה ממתינים לאישור מעל 48 שעות`,
+        count: approvalWarn.length,
+        href: "/work-diary",
+      });
+    }
+
+    // ── Diary: scheduled job past execution date — no diary submitted ────
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const missingDiary = orders.filter(o => {
+      if (o.status !== "ready_installation" && o.status !== "completed") return false;
+      if (!o.scheduledDate || o.scheduledDate >= todayStr) return false;
+      const linked = getOrderDiaries(diaries, o.id);
+      return !linked.some(d => d.status === "submitted");
+    });
+    if (missingDiary.length > 0) {
+      alerts.push({
+        id: "diary-missing",
+        severity: missingDiary.length >= 3 ? "critical" : "warn",
+        department: "office",
+        message: `${missingDiary.length} עבודות שבוצעו ללא יומן שטח מוגש`,
+        count: missingDiary.length,
+        href: "/work-diary",
+        orderNumbers: missingDiary.map(o => o.orderNumber),
+      });
+    }
+
     return alerts.sort(
       (a, b) => (a.severity === "critical" ? 0 : 1) - (b.severity === "critical" ? 0 : 1)
     );
-  }, [orders]);
+  }, [orders, diaries]);
 }

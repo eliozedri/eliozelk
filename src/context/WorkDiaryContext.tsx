@@ -10,6 +10,8 @@ interface WorkDiaryContextValue {
   saveDiary: (diary: WorkDiary) => void;
   submitDiary: (id: string) => void;
   deleteDiary: (id: string) => void;
+  approveDiary: (id: string, approvedBy: string) => void;
+  rejectDiary: (id: string, reason: string) => void;
 }
 
 const WorkDiaryContext = createContext<WorkDiaryContextValue | null>(null);
