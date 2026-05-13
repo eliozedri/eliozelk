@@ -12,6 +12,7 @@ import { useWorkflowAlerts, DEPT_LABELS } from "@/hooks/useWorkflowAlerts";
 import type { WorkflowAlert } from "@/hooks/useWorkflowAlerts";
 import { getStageSlaColor, hoursInCurrentStage } from "@/lib/workflowEngine";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useForecast } from "@/hooks/useForecast";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -407,6 +408,127 @@ function ActivitySection({ orders }: { orders: WorkOrder[] }) {
   );
 }
 
+// ─── Forecast Panel ────────────────────────────────────────────────────────
+
+function CapacityBar({ pct }: { pct: number }) {
+  const filled = Math.round(pct);
+  const barColor =
+    filled >= 90 ? "bg-red-500" :
+    filled >= 70 ? "bg-amber-400" :
+    filled >= 40 ? "bg-green-500" : "bg-gray-300";
+  return (
+    <div className="flex items-center gap-2 flex-1">
+      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${barColor}`}
+          style={{ width: `${filled}%` }}
+        />
+      </div>
+      <span className={`text-xs font-bold tabular-nums w-10 text-right ${
+        filled >= 90 ? "text-red-600" :
+        filled >= 70 ? "text-amber-600" : "text-green-700"
+      }`}>
+        {filled}%
+      </span>
+    </div>
+  );
+}
+
+function ForecastPanel() {
+  const forecast = useForecast();
+  const fmt = (n: number) =>
+    "₪" + n.toLocaleString("he-IL", { maximumFractionDigits: 0 });
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-bold text-navy-900">תחזית תפעולית</h2>
+          <p className="text-[10px] text-gray-400 mt-0.5">
+            שבוע הבא · מבוסס מגמת 12 שבועות
+          </p>
+        </div>
+        {(forecast.criticalRiskCount > 0 || forecast.highRiskCount > 0) && (
+          <div className="flex items-center gap-1.5">
+            {forecast.criticalRiskCount > 0 && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                {forecast.criticalRiskCount} סיכון קריטי
+              </span>
+            )}
+            {forecast.highRiskCount > 0 && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                {forecast.highRiskCount} סיכון גבוה
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {/* Revenue forecast */}
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            תחזית הכנסות שבוע הבא
+          </span>
+          <span className="text-xl font-black text-navy-900 leading-none">
+            {forecast.nextWeekRevenueForecast != null
+              ? fmt(forecast.nextWeekRevenueForecast)
+              : "—"}
+          </span>
+          <span className="text-[10px] text-gray-400">על בסיס מגמה</span>
+        </div>
+
+        {/* Pending billing */}
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            חיוב ממתין גבייה
+          </span>
+          <span className={`text-xl font-black leading-none ${
+            forecast.pendingBillingRevenue > 0 ? "text-amber-600" : "text-gray-300"
+          }`}>
+            {fmt(forecast.pendingBillingRevenue)}
+          </span>
+          <span className="text-[10px] text-gray-400">הזמנות שהושלמו</span>
+        </div>
+
+        {/* Completion forecast */}
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            ביצוע מתוכנן
+          </span>
+          <div className="flex items-end gap-3">
+            <div className="flex flex-col items-center">
+              <span className="text-xl font-black text-navy-900 leading-none">
+                {forecast.completionForecast.thisWeek}
+              </span>
+              <span className="text-[9px] text-gray-400">השבוע</span>
+            </div>
+            <div className="text-gray-200 font-light text-lg leading-none mb-1">|</div>
+            <div className="flex flex-col items-center">
+              <span className="text-xl font-black text-gray-500 leading-none">
+                {forecast.completionForecast.nextWeek}
+              </span>
+              <span className="text-[9px] text-gray-400">שבוע הבא</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Crew capacity */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            ניצול קיבולת צוותים
+          </span>
+          <CapacityBar pct={forecast.crewCapacity.utilizationPct} />
+          <span className="text-[10px] text-gray-400">
+            {Math.round(forecast.crewCapacity.scheduledHours)}שע׳ מתוך{" "}
+            {Math.round(forecast.crewCapacity.totalHours)}שע׳ זמינות
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Dashboard ────────────────────────────────────────────────────────
 
 export function DashboardPage() {
@@ -609,6 +731,9 @@ export function DashboardPage() {
 
         {/* Stage Health (bottleneck radar) */}
         <StageHealthPanel orders={orders} />
+
+        {/* Operational Forecast */}
+        <ForecastPanel />
 
         {/* Departments + Alerts/Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">

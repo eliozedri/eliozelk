@@ -14,6 +14,8 @@ import {
 } from "@/types/workOrder";
 import type { WorkOrder, WorkOrderStatus } from "@/types/workOrder";
 import { getStageSlaColor, hoursInCurrentStage, canMarkReadyForInstallation } from "@/lib/workflowEngine";
+import { useOrderRiskScores } from "@/hooks/useOrderRiskScores";
+import type { OrderRiskScore } from "@/hooks/useOrderRiskScores";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -280,14 +282,24 @@ function ProgressTracker({ status }: { status: WorkOrderStatus }) {
   );
 }
 
+const RISK_BADGE: Record<
+  "medium" | "high" | "critical",
+  { label: string; cls: string }
+> = {
+  medium:   { label: "סיכון בינוני",  cls: "bg-amber-100 text-amber-700"  },
+  high:     { label: "סיכון גבוה",    cls: "bg-orange-100 text-orange-700" },
+  critical: { label: "סיכון קריטי",   cls: "bg-red-100 text-red-700"       },
+};
+
 interface OrderRowProps {
   order: WorkOrder;
   index: number;
   phoneMap: Map<string, string>;
+  riskScore: OrderRiskScore | undefined;
   onUpdateStatus: (id: string, status: WorkOrderStatus) => void;
 }
 
-function OrderRow({ order, index, phoneMap, onUpdateStatus }: OrderRowProps) {
+function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus }: OrderRowProps) {
   const phone = phoneMap.get(order.customer.trim().toLowerCase());
   const lastUpdated = getLastUpdated(order);
   const relative = relativeTime(lastUpdated);
@@ -321,6 +333,14 @@ function OrderRow({ order, index, phoneMap, onUpdateStatus }: OrderRowProps) {
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 w-fit">
               <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
               {openProblemsCount(order)} בעיות
+            </span>
+          )}
+          {riskScore && riskScore.level !== "low" && (
+            <span
+              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold w-fit ${RISK_BADGE[riskScore.level].cls}`}
+              title={riskScore.factors.map(f => f.label).join(" · ")}
+            >
+              {RISK_BADGE[riskScore.level].label}
             </span>
           )}
           {signCount + miscCount > 0 && (
@@ -488,6 +508,7 @@ function EmptyState({ hasFilters, onClear }: { hasFilters: boolean; onClear: () 
 export function OrdersTable() {
   const { orders, updateOrderStatus } = useOrdersContext();
   const { customers } = useCustomersContext();
+  const riskScores = useOrderRiskScores();
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<WorkOrderStatus | "all">("all");
@@ -733,6 +754,7 @@ export function OrdersTable() {
                         order={order}
                         index={filtered.length - (safePage * ROWS_PER_PAGE + idx)}
                         phoneMap={phoneMap}
+                        riskScore={riskScores.get(order.id)}
                         onUpdateStatus={handleUpdateStatus}
                       />
                     ))}
