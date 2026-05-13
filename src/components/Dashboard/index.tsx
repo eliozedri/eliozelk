@@ -850,7 +850,7 @@ export function DashboardPage() {
           <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
             <div>
               <h2 className="text-sm font-bold text-navy-900">מפת פרויקטים</h2>
-              <p className="text-[10px] text-gray-400 mt-0.5">תצוגה גיאוגרפית · עתידי: סימון פרויקטים לפי מיקום</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">תצוגה גיאוגרפית · פרויקטים לפי מיקום</p>
             </div>
             <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
               ישראל
