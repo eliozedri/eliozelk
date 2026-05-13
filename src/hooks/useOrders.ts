@@ -64,6 +64,12 @@ function generateOrderNumberLocal(orders: WorkOrder[]): string {
   return `${prefix}${String(next).padStart(3, "0")}`;
 }
 
+function isNewer(existingUpdatedAt: string, incomingUpdatedAt: string): boolean {
+  try {
+    return new Date(incomingUpdatedAt).getTime() > new Date(existingUpdatedAt).getTime();
+  } catch { return false; }
+}
+
 export function useOrders() {
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const ref = useRef<WorkOrder[]>([]);
@@ -72,16 +78,21 @@ export function useOrders() {
 
   useEffect(() => {
     const db = getSupabase();
-    if (db) {
+    if (!db) {
+      setOrders(loadLocal());
+      return;
+    }
+
+    // ── Initial fetch ────────────────────────────────────────────────────────
+    const fetchAll = () =>
       db.from("work_orders").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
           if (!error && data) {
             const mapped = data.map(r => fromRow(r as Record<string, unknown>));
             if (mapped.length > 0) {
               setOrders(mapped);
-              saveLocal(mapped); // warm cache — written once
+              saveLocal(mapped);
             } else {
-              // Supabase empty — one-time migration from local cache
               const local = loadLocal();
               if (local.length > 0) {
                 console.log("[orders] migrating local cache to Supabase:", local.length, "rows");
@@ -93,13 +104,54 @@ export function useOrders() {
               }
             }
           } else {
-            // Supabase error — use local cache read-only, do not overwrite
             setOrders(loadLocal());
           }
         });
-    } else {
-      setOrders(loadLocal());
-    }
+
+    fetchAll();
+
+    // ── Realtime subscription ────────────────────────────────────────────────
+    const channel = db
+      .channel("work_orders_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "work_orders" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const incoming = fromRow(payload.new as Record<string, unknown>);
+            setOrders(prev => {
+              if (prev.some(o => o.id === incoming.id)) return prev; // dedup optimistic
+              return [incoming, ...prev];
+            });
+          } else if (payload.eventType === "UPDATE") {
+            const incoming = fromRow(payload.new as Record<string, unknown>);
+            setOrders(prev => prev.map(o =>
+              o.id === incoming.id && isNewer(o.updatedAt, incoming.updatedAt) ? incoming : o
+            ));
+          } else if (payload.eventType === "DELETE") {
+            const deletedId = (payload.old as { id?: string }).id;
+            if (deletedId) setOrders(prev => prev.filter(o => o.id !== deletedId));
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === "SUBSCRIBED") {
+          console.log("[orders] realtime connected");
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("[orders] realtime issue:", status, err?.message ?? "");
+        }
+      });
+
+    // ── Visibility-change fallback (catches missed events on tab switch) ─────
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchAll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      db.removeChannel(channel);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   const addOrder = useCallback(async (

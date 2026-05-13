@@ -51,6 +51,12 @@ function saveLocal(crews: Crew[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(crews)); } catch { /* ignore */ }
 }
 
+function isNewer(existingUpdatedAt: string, incomingUpdatedAt: string): boolean {
+  try {
+    return new Date(incomingUpdatedAt).getTime() > new Date(existingUpdatedAt).getTime();
+  } catch { return false; }
+}
+
 export function useCrews() {
   const [crews, setCrews] = useState<Crew[]>([]);
   const ref = useRef<Crew[]>([]);
@@ -59,14 +65,19 @@ export function useCrews() {
 
   useEffect(() => {
     const db = getSupabase();
-    if (db) {
+    if (!db) {
+      setCrews(loadLocal());
+      return;
+    }
+
+    const fetchAll = () =>
       db.from("crews").select("*").order("created_at", { ascending: true })
         .then(({ data, error }) => {
           if (!error && data) {
             const mapped = data.map(r => fromRow(r as Record<string, unknown>));
             if (mapped.length > 0) {
               setCrews(mapped);
-              saveLocal(mapped); // warm cache — written once
+              saveLocal(mapped);
             } else {
               const local = loadLocal();
               if (local.length > 0) {
@@ -82,9 +93,49 @@ export function useCrews() {
             setCrews(loadLocal());
           }
         });
-    } else {
-      setCrews(loadLocal());
-    }
+
+    fetchAll();
+
+    const channel = db
+      .channel("crews_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "crews" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const incoming = fromRow(payload.new as Record<string, unknown>);
+            setCrews(prev => {
+              if (prev.some(c => c.id === incoming.id)) return prev;
+              return [...prev, incoming];
+            });
+          } else if (payload.eventType === "UPDATE") {
+            const incoming = fromRow(payload.new as Record<string, unknown>);
+            setCrews(prev => prev.map(c =>
+              c.id === incoming.id && isNewer(c.updatedAt, incoming.updatedAt) ? incoming : c
+            ));
+          } else if (payload.eventType === "DELETE") {
+            const deletedId = (payload.old as { id?: string }).id;
+            if (deletedId) setCrews(prev => prev.filter(c => c.id !== deletedId));
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === "SUBSCRIBED") {
+          console.log("[crews] realtime connected");
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("[crews] realtime issue:", status, err?.message ?? "");
+        }
+      });
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchAll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      db.removeChannel(channel);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   const addCrew = useCallback((data: Omit<Crew, "id" | "createdAt" | "updatedAt">) => {

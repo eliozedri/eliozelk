@@ -52,6 +52,12 @@ function saveLocal(diaries: WorkDiary[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(diaries)); } catch { /* ignore */ }
 }
 
+function isNewer(existingUpdatedAt: string, incomingUpdatedAt: string): boolean {
+  try {
+    return new Date(incomingUpdatedAt).getTime() > new Date(existingUpdatedAt).getTime();
+  } catch { return false; }
+}
+
 function generateDiaryNumberLocal(diaries: WorkDiary[]): string {
   const year = new Date().getFullYear();
   const prefix = `WD-${year}-`;
@@ -71,14 +77,19 @@ export function useWorkDiaries() {
 
   useEffect(() => {
     const db = getSupabase();
-    if (db) {
+    if (!db) {
+      setDiaries(loadLocal());
+      return;
+    }
+
+    const fetchAll = () =>
       db.from("work_diaries").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
           if (!error && data) {
             const mapped = data.map(r => fromRow(r as Record<string, unknown>));
             if (mapped.length > 0) {
               setDiaries(mapped);
-              saveLocal(mapped); // warm cache — written once
+              saveLocal(mapped);
             } else {
               const local = loadLocal();
               if (local.length > 0) {
@@ -94,9 +105,49 @@ export function useWorkDiaries() {
             setDiaries(loadLocal());
           }
         });
-    } else {
-      setDiaries(loadLocal());
-    }
+
+    fetchAll();
+
+    const channel = db
+      .channel("work_diaries_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "work_diaries" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const incoming = fromRow(payload.new as Record<string, unknown>);
+            setDiaries(prev => {
+              if (prev.some(d => d.id === incoming.id)) return prev;
+              return [incoming, ...prev];
+            });
+          } else if (payload.eventType === "UPDATE") {
+            const incoming = fromRow(payload.new as Record<string, unknown>);
+            setDiaries(prev => prev.map(d =>
+              d.id === incoming.id && isNewer(d.updatedAt, incoming.updatedAt) ? incoming : d
+            ));
+          } else if (payload.eventType === "DELETE") {
+            const deletedId = (payload.old as { id?: string }).id;
+            if (deletedId) setDiaries(prev => prev.filter(d => d.id !== deletedId));
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === "SUBSCRIBED") {
+          console.log("[work_diaries] realtime connected");
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("[work_diaries] realtime issue:", status, err?.message ?? "");
+        }
+      });
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchAll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      db.removeChannel(channel);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   const createDiary = useCallback(async (): Promise<WorkDiary> => {

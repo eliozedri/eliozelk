@@ -50,6 +50,12 @@ function saveLocal(items: CatalogItem[]) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch { /* ignore */ }
 }
 
+function isNewer(existingUpdatedAt: string, incomingUpdatedAt: string): boolean {
+  try {
+    return new Date(incomingUpdatedAt).getTime() > new Date(existingUpdatedAt).getTime();
+  } catch { return false; }
+}
+
 export function useCatalog() {
   const [items, setItems] = useState<CatalogItem[]>([]);
   const ref = useRef<CatalogItem[]>([]);
@@ -58,14 +64,19 @@ export function useCatalog() {
 
   useEffect(() => {
     const db = getSupabase();
-    if (db) {
+    if (!db) {
+      setItems(loadLocal());
+      return;
+    }
+
+    const fetchAll = () =>
       db.from("catalog_items").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
           if (!error && data) {
             const mapped = data.map(r => fromRow(r as Record<string, unknown>));
             if (mapped.length > 0) {
               setItems(mapped);
-              saveLocal(mapped); // warm cache — written once
+              saveLocal(mapped);
             } else {
               const local = loadLocal();
               if (local.length > 0) {
@@ -81,9 +92,49 @@ export function useCatalog() {
             setItems(loadLocal());
           }
         });
-    } else {
-      setItems(loadLocal());
-    }
+
+    fetchAll();
+
+    const channel = db
+      .channel("catalog_items_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "catalog_items" },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const incoming = fromRow(payload.new as Record<string, unknown>);
+            setItems(prev => {
+              if (prev.some(i => i.id === incoming.id)) return prev;
+              return [incoming, ...prev];
+            });
+          } else if (payload.eventType === "UPDATE") {
+            const incoming = fromRow(payload.new as Record<string, unknown>);
+            setItems(prev => prev.map(i =>
+              i.id === incoming.id && isNewer(i.updatedAt, incoming.updatedAt) ? incoming : i
+            ));
+          } else if (payload.eventType === "DELETE") {
+            const deletedId = (payload.old as { id?: string }).id;
+            if (deletedId) setItems(prev => prev.filter(i => i.id !== deletedId));
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === "SUBSCRIBED") {
+          console.log("[catalog] realtime connected");
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("[catalog] realtime issue:", status, err?.message ?? "");
+        }
+      });
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchAll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      db.removeChannel(channel);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   const addItem = useCallback((form: CatalogFormState): CatalogItem => {
