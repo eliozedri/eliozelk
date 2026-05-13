@@ -36,7 +36,10 @@ export function useCostRates() {
             setRates(loaded);
             saveLocal(loaded);
           } else {
-            setRates(loadLocal());
+            // Supabase empty — push local rates to cloud
+            const local = loadLocal();
+            setRates(local);
+            db.from("cost_rates").update({ data: local, updated_at: new Date().toISOString() }).eq("id", 1).then(() => {});
           }
           setHydrated(true);
         });

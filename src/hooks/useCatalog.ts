@@ -64,12 +64,16 @@ export function useCatalog() {
     if (db) {
       db.from("catalog_items").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
-          if (!error && data) {
+          if (!error && data && data.length > 0) {
             const mapped = data.map(fromRow);
             setItems(mapped);
             saveLocal(mapped);
           } else {
-            setItems(loadLocal());
+            const local = loadLocal();
+            setItems(local);
+            if (local.length > 0) {
+              db.from("catalog_items").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
+            }
           }
           setHydrated(true);
         });

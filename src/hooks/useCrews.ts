@@ -65,12 +65,16 @@ export function useCrews() {
     if (db) {
       db.from("crews").select("*").order("created_at", { ascending: true })
         .then(({ data, error }) => {
-          if (!error && data) {
+          if (!error && data && data.length > 0) {
             const mapped = data.map(fromRow);
             setCrews(mapped);
             saveLocal(mapped);
           } else {
-            setCrews(loadLocal());
+            const local = loadLocal();
+            setCrews(local);
+            if (local.length > 0) {
+              db.from("crews").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
+            }
           }
           setHydrated(true);
         });

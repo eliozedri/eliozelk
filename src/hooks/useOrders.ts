@@ -73,12 +73,16 @@ export function useOrders() {
     if (db) {
       db.from("work_orders").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
-          if (!error && data) {
+          if (!error && data && data.length > 0) {
             const mapped = data.map(fromRow);
             setOrders(mapped);
             saveLocal(mapped);
           } else {
-            setOrders(loadLocal());
+            const local = loadLocal();
+            setOrders(local);
+            if (local.length > 0) {
+              db.from("work_orders").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
+            }
           }
           setHydrated(true);
         });

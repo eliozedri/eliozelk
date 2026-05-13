@@ -58,12 +58,17 @@ export function useCustomers() {
     if (db) {
       db.from("customers").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
-          if (!error && data) {
+          if (!error && data && data.length > 0) {
             const mapped = data.map(fromRow);
             setCustomers(mapped);
             saveLocal(mapped);
           } else {
-            setCustomers(loadLocal());
+            // Supabase empty or error — load local and push to cloud
+            const local = loadLocal();
+            setCustomers(local);
+            if (local.length > 0) {
+              db.from("customers").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
+            }
           }
           setHydrated(true);
         });

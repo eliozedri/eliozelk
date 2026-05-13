@@ -72,12 +72,16 @@ export function useWorkDiaries() {
     if (db) {
       db.from("work_diaries").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
-          if (!error && data) {
+          if (!error && data && data.length > 0) {
             const mapped = data.map(fromRow);
             setDiaries(mapped);
             saveLocal(mapped);
           } else {
-            setDiaries(loadLocal());
+            const local = loadLocal();
+            setDiaries(local);
+            if (local.length > 0) {
+              db.from("work_diaries").upsert(local.map(toRow), { onConflict: "id" }).then(() => {});
+            }
           }
           setHydrated(true);
         });
