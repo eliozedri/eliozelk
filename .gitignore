@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# macOS Finder duplicates (files with " 2", " 3", " 4" suffixes)
+"* 2.*"
+* 2.*
+* 3.*
+* 4.*
+
+# misc local dirs
+.superpowers/
+catalog/
