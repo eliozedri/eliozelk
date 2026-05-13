@@ -64,9 +64,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Sidebar onClose={() => setSidebarOpen(false)} />
         </div>
 
-        {/* Desktop spacer to compensate for fixed sidebar */}
-        <div className="hidden md:block w-52 shrink-0" />
-
         <main className="flex-1 min-w-0">{children}</main>
       </div>
     </AuthProvider>

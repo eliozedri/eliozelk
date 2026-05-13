@@ -80,14 +80,15 @@ function NavBadge({ count, variant = "amber" }: { count: number; variant?: "ambe
   );
 }
 
-interface NavItem { tabId: TabId; href: string; label: string; icon: React.ReactNode; matchFn: (p: string) => boolean; }
+interface NavItem { tabId: TabId; href: string; label: string; icon: React.ReactNode; matchFn: (p: string) => boolean; noBadge?: boolean; }
 interface NavSection { label: string; items: NavItem[]; }
 
 const NAV_SECTIONS: NavSection[] = [
   {
     label: "ניהול",
     items: [
-      { tabId: "dashboard", href: "/", label: "הזמנה", icon: <OrderIcon />, matchFn: (p) => p === "/" },
+      { tabId: "dashboard", href: "/", label: "לוח בקרה", icon: <TableIcon />, matchFn: (p) => p === "/" },
+      { tabId: "dashboard", href: "/new-order", label: "הזמנה חדשה", icon: <OrderIcon />, matchFn: (p) => p === "/new-order", noBadge: true },
       { tabId: "orders", href: "/orders", label: "טבלת הזמנות", icon: <TableIcon />, matchFn: (p) => p.startsWith("/orders") },
       { tabId: "customers", href: "/customers", label: "לקוחות", icon: <CustomersIcon />, matchFn: (p) => p.startsWith("/customers") },
     ],
@@ -195,9 +196,9 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             <div key={section.label}>
               <SectionLabel label={section.label} />
               {visibleItems.map((item) => {
-                const cfg = TAB_BADGES[item.tabId];
+                const cfg = item.noBadge ? undefined : TAB_BADGES[item.tabId];
                 return (
-                  <SidebarLink key={item.tabId} href={item.href} label={item.label}
+                  <SidebarLink key={item.href} href={item.href} label={item.label}
                     active={item.matchFn(pathname)} icon={item.icon} onClick={handleNavClick}
                     badge={cfg ? notif[cfg.count] : undefined}
                     badgeVariant={cfg?.variant} />

@@ -51,7 +51,7 @@ export type TabId =
   | "access";
 
 export const ALL_TABS: { id: TabId; label: string; path: string; section: string }[] = [
-  { id: "dashboard", label: "הזמנה", path: "/", section: "ניהול" },
+  { id: "dashboard", label: "לוח בקרה", path: "/", section: "ניהול" },
   { id: "orders", label: "טבלת הזמנות", path: "/orders", section: "ניהול" },
   { id: "customers", label: "לקוחות", path: "/customers", section: "ניהול" },
   { id: "graphics", label: "מחלקת גרפיקה", path: "/graphics", section: "מחלקות" },

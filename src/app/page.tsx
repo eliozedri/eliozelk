@@ -1,5 +1,5 @@
-import { OrderForm } from "@/components/OrderForm";
+import { DashboardPage } from "@/components/Dashboard";
 
 export default function Home() {
-  return <OrderForm />;
+  return <DashboardPage />;
 }
