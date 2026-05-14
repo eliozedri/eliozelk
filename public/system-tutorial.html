@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מערכת אלקיים — טוטוריאל ויזואלי</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue:    #3b82f6;
+    --indigo:  #6366f1;
+    --purple:  #8b5cf6;
+    --teal:    #14b8a6;
+    --green:   #22c55e;
+    --amber:   #f59e0b;
+    --orange:  #f97316;
+    --red:     #ef4444;
+    --gray:    #6b7280;
+    --dark:    #111827;
+    --surface: #f8fafc;
+  }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* ─── TOP NAV ─── */
+  .topnav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: rgba(15,23,42,0.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding: 0 2rem;
+    height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .topnav-logo { font-size: 1.1rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 0.5rem; }
+  .topnav-logo .badge { background: var(--blue); color: #fff; font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  .nav-pills { display: flex; gap: 0.25rem; }
+  .nav-pill {
+    padding: 0.35rem 0.85rem; border-radius: 6px; font-size: 0.8rem; font-weight: 500;
+    cursor: pointer; transition: all 0.2s; color: #94a3b8; border: none; background: transparent;
+  }
+  .nav-pill:hover { background: rgba(255,255,255,0.06); color: #e2e8f0; }
+  .nav-pill.active { background: rgba(59,130,246,0.2); color: var(--blue); }
+
+  /* ─── SECTIONS ─── */
+  section {
+    min-height: 100vh; padding: 90px 2rem 4rem;
+    display: flex; flex-direction: column; align-items: center;
+    position: relative;
+  }
+
+  .section-header { text-align: center; margin-bottom: 3rem; max-width: 640px; }
+  .section-tag {
+    display: inline-block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 4px 10px; border-radius: 4px;
+    margin-bottom: 1rem;
+  }
+  .section-title { font-size: clamp(1.6rem, 4vw, 2.4rem); font-weight: 800; color: #f1f5f9; margin-bottom: 0.75rem; line-height: 1.2; }
+  .section-sub { font-size: 1rem; color: #94a3b8; line-height: 1.7; }
+
+  /* ─── HERO ─── */
+  #hero {
+    background: radial-gradient(ellipse at 60% 0%, rgba(99,102,241,0.15) 0%, transparent 60%),
+                radial-gradient(ellipse at 20% 80%, rgba(20,184,166,0.1) 0%, transparent 50%),
+                #0f172a;
+    justify-content: center; text-align: center;
+  }
+  .hero-pill {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 999px; padding: 0.4rem 1rem; font-size: 0.8rem; color: #94a3b8;
+    margin-bottom: 2rem;
+  }
+  .hero-title { font-size: clamp(2.2rem, 6vw, 4rem); font-weight: 900; color: #f1f5f9; line-height: 1.15; margin-bottom: 1.25rem; }
+  .hero-title span { background: linear-gradient(135deg, var(--blue), var(--indigo)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero-sub { font-size: 1.15rem; color: #94a3b8; max-width: 560px; margin: 0 auto 2.5rem; line-height: 1.7; }
+  .hero-stats { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; margin-top: 3rem; }
+  .hero-stat { text-align: center; }
+  .hero-stat .num { font-size: 2rem; font-weight: 800; color: #f1f5f9; }
+  .hero-stat .lbl { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; }
+  .scroll-hint { margin-top: 4rem; color: #475569; font-size: 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+  .scroll-arrow { width: 24px; height: 24px; border-right: 2px solid #475569; border-bottom: 2px solid #475569; transform: rotate(45deg); animation: bounce 1.4s infinite; }
+  @keyframes bounce { 0%,100%{transform:rotate(45deg) translate(0,0)} 50%{transform:rotate(45deg) translate(4px,4px)} }
+
+  /* ─── ARCHITECTURE ─── */
+  #architecture { background: #0f172a; }
+  .arch-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem;
+    max-width: 960px; width: 100%;
+  }
+  .arch-card {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px; padding: 1.5rem; position: relative; overflow: hidden;
+    transition: all 0.3s; cursor: default;
+  }
+  .arch-card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.07); }
+  .arch-card::before { content: ''; position: absolute; inset: 0; opacity: 0; transition: opacity 0.3s; border-radius: 14px; }
+  .arch-card:hover::before { opacity: 1; }
+  .arch-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; margin-bottom: 1rem; }
+  .arch-title { font-weight: 700; font-size: 0.95rem; color: #e2e8f0; margin-bottom: 0.4rem; }
+  .arch-desc { font-size: 0.8rem; color: #64748b; line-height: 1.6; }
+  .arch-badge { display: inline-block; font-size: 0.65rem; font-weight: 600; padding: 2px 7px; border-radius: 4px; margin-top: 0.75rem; }
+
+  /* ─── FLOW ─── */
+  #flow { background: linear-gradient(180deg, #0f172a 0%, #0d1526 100%); }
+  .flow-container { max-width: 780px; width: 100%; }
+  .flow-step {
+    display: flex; gap: 1.25rem; align-items: flex-start;
+    margin-bottom: 0; position: relative;
+  }
+  .flow-left { display: flex; flex-direction: column; align-items: center; width: 48px; flex-shrink: 0; }
+  .flow-dot {
+    width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 1.2rem; z-index: 1; flex-shrink: 0;
+    border: 2px solid transparent; transition: all 0.3s;
+    cursor: pointer;
+  }
+  .flow-line {
+    width: 2px; background: linear-gradient(to bottom, rgba(255,255,255,0.15), transparent);
+    flex: 1; min-height: 40px; margin: 4px 0;
+  }
+  .flow-content {
+    flex: 1; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1rem;
+    transition: all 0.3s; cursor: pointer;
+  }
+  .flow-content:hover { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.07); }
+  .flow-content.active { border-color: var(--blue); background: rgba(59,130,246,0.08); }
+  .flow-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.4rem; }
+  .flow-title { font-size: 1rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.35rem; }
+  .flow-desc { font-size: 0.82rem; color: #64748b; line-height: 1.6; }
+  .flow-tags { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.75rem; }
+  .flow-tag { font-size: 0.68rem; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,0.07); color: #94a3b8; }
+
+  /* ─── MODULES ─── */
+  #modules { background: #0f172a; }
+  .modules-nav { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; margin-bottom: 2.5rem; }
+  .mod-tab {
+    padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.82rem; font-weight: 500;
+    cursor: pointer; transition: all 0.2s; color: #64748b;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+  }
+  .mod-tab.active { color: #fff; }
+  .module-panel { display: none; max-width: 860px; width: 100%; animation: fadeSlide 0.3s ease; }
+  .module-panel.active { display: block; }
+  @keyframes fadeSlide { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .module-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .module-mockup {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; overflow: hidden;
+  }
+  .mock-bar {
+    display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgba(255,255,255,0.07); background: rgba(255,255,255,0.03);
+  }
+  .mock-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .mock-title { font-size: 0.75rem; color: #64748b; flex: 1; text-align: center; }
+  .mock-body { padding: 1rem; }
+  .mock-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.6rem 0.8rem; border-radius: 8px; margin-bottom: 0.5rem;
+    background: rgba(255,255,255,0.04); font-size: 0.78rem;
+  }
+  .mock-row-title { color: #e2e8f0; font-weight: 500; }
+  .mock-chip { font-size: 0.65rem; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .module-info { display: flex; flex-direction: column; gap: 1rem; justify-content: center; }
+  .info-point { display: flex; gap: 0.75rem; align-items: flex-start; }
+  .info-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0; }
+  .info-text h4 { font-size: 0.88rem; font-weight: 700; color: #e2e8f0; margin-bottom: 0.2rem; }
+  .info-text p { font-size: 0.78rem; color: #64748b; line-height: 1.5; }
+
+  /* ─── ROLES ─── */
+  #roles { background: linear-gradient(180deg, #0f172a 0%, #0a1020 100%); }
+  .roles-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; max-width: 900px; width: 100%; }
+  .role-card {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px; padding: 1.5rem; transition: all 0.3s;
+  }
+  .role-card:hover { transform: translateY(-3px); border-color: rgba(255,255,255,0.15); }
+  .role-icon { font-size: 1.8rem; margin-bottom: 0.75rem; }
+  .role-name { font-size: 1rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.4rem; }
+  .role-sub { font-size: 0.78rem; color: #64748b; margin-bottom: 1rem; line-height: 1.5; }
+  .role-perms { display: flex; flex-direction: column; gap: 0.3rem; }
+  .role-perm { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: #94a3b8; }
+  .role-perm::before { content: '✓'; color: var(--green); font-weight: 700; width: 12px; }
+
+  /* ─── DATA ─── */
+  #data { background: #0f172a; }
+  .db-diagram { max-width: 860px; width: 100%; }
+  .db-layers { display: flex; flex-direction: column; gap: 1rem; }
+  .db-layer {
+    border-radius: 14px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.07);
+  }
+  .db-layer-header {
+    padding: 0.75rem 1.25rem; display: flex; align-items: center; gap: 0.75rem;
+    font-weight: 700; font-size: 0.88rem;
+  }
+  .db-layer-body { padding: 1rem 1.25rem; display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .db-table {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px; padding: 0.75rem 1rem; min-width: 140px;
+  }
+  .db-table-name { font-size: 0.8rem; font-weight: 700; color: #e2e8f0; margin-bottom: 0.5rem; }
+  .db-col { font-size: 0.68rem; color: #64748b; padding: 1px 0; }
+  .db-col.new { color: var(--amber); font-weight: 600; }
+  .db-col.pk { color: var(--blue); }
+
+  /* ─── SUMMARY ─── */
+  #summary { background: linear-gradient(180deg, #0a1020 0%, #0f172a 100%); }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; max-width: 860px; width: 100%; margin-bottom: 3rem; }
+  .summary-card {
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px; padding: 1.25rem; text-align: center;
+  }
+  .summary-num { font-size: 2.2rem; font-weight: 800; }
+  .summary-lbl { font-size: 0.78rem; color: #64748b; margin-top: 0.25rem; }
+  .cta-box {
+    background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(99,102,241,0.1));
+    border: 1px solid rgba(59,130,246,0.3); border-radius: 20px;
+    padding: 2.5rem; text-align: center; max-width: 560px;
+  }
+  .cta-title { font-size: 1.4rem; font-weight: 800; color: #f1f5f9; margin-bottom: 0.75rem; }
+  .cta-sub { font-size: 0.9rem; color: #94a3b8; line-height: 1.7; }
+
+  /* ─── UTILS ─── */
+  .tag-blue   { background: rgba(59,130,246,0.15);  color: #60a5fa; }
+  .tag-indigo { background: rgba(99,102,241,0.15);  color: #a5b4fc; }
+  .tag-purple { background: rgba(139,92,246,0.15);  color: #c4b5fd; }
+  .tag-teal   { background: rgba(20,184,166,0.15);  color: #2dd4bf; }
+  .tag-green  { background: rgba(34,197,94,0.15);   color: #4ade80; }
+  .tag-amber  { background: rgba(245,158,11,0.15);  color: #fbbf24; }
+  .tag-orange { background: rgba(249,115,22,0.15);  color: #fb923c; }
+  .tag-red    { background: rgba(239,68,68,0.15);   color: #f87171; }
+  .tag-gray   { background: rgba(107,114,128,0.15); color: #9ca3af; }
+
+  .chip-blue   { background: rgba(59,130,246,0.2);  color: #93c5fd; }
+  .chip-amber  { background: rgba(245,158,11,0.2);  color: #fcd34d; }
+  .chip-green  { background: rgba(34,197,94,0.2);   color: #86efac; }
+  .chip-purple { background: rgba(139,92,246,0.2);  color: #ddd6fe; }
+  .chip-teal   { background: rgba(20,184,166,0.2);  color: #99f6e4; }
+  .chip-gray   { background: rgba(107,114,128,0.2); color: #d1d5db; }
+  .chip-red    { background: rgba(239,68,68,0.2);   color: #fca5a5; }
+
+  .icon-blue   { background: rgba(59,130,246,0.15); }
+  .icon-purple { background: rgba(139,92,246,0.15); }
+  .icon-green  { background: rgba(34,197,94,0.15); }
+  .icon-amber  { background: rgba(245,158,11,0.15); }
+  .icon-teal   { background: rgba(20,184,166,0.15); }
+  .icon-red    { background: rgba(239,68,68,0.15); }
+  .icon-gray   { background: rgba(107,114,128,0.15); }
+
+  .bg-blue-layer   { background: rgba(59,130,246,0.04); }
+  .bg-purple-layer { background: rgba(139,92,246,0.04); }
+  .bg-teal-layer   { background: rgba(20,184,166,0.04); }
+  .bg-amber-layer  { background: rgba(245,158,11,0.04); }
+
+  .hdr-blue   { background: rgba(59,130,246,0.12); color: #60a5fa; }
+  .hdr-purple { background: rgba(139,92,246,0.12); color: #a5b4fc; }
+  .hdr-teal   { background: rgba(20,184,166,0.12); color: #2dd4bf; }
+  .hdr-amber  { background: rgba(245,158,11,0.12); color: #fbbf24; }
+
+  @media (max-width: 640px) {
+    .arch-grid { grid-template-columns: 1fr 1fr; }
+    .module-layout { grid-template-columns: 1fr; }
+    .roles-grid { grid-template-columns: 1fr 1fr; }
+    .nav-pills { display: none; }
+  }
+  @media (max-width: 400px) {
+    .arch-grid { grid-template-columns: 1fr; }
+    .roles-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav class="topnav">
+  <div class="topnav-logo">
+    🚧 אלקיים סימון כבישים <span class="badge">מערכת ניהול</span>
+  </div>
+  <div class="nav-pills">
+    <button class="nav-pill active" onclick="scrollTo('hero')">סקירה</button>
+    <button class="nav-pill" onclick="scrollTo('architecture')">ארכיטקטורה</button>
+    <button class="nav-pill" onclick="scrollTo('flow')">מחזור חיים</button>
+    <button class="nav-pill" onclick="scrollTo('modules')">מודולים</button>
+    <button class="nav-pill" onclick="scrollTo('roles')">תפקידים</button>
+    <button class="nav-pill" onclick="scrollTo('data')">נתונים</button>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════════
+  SECTION 1: HERO
+══════════════════════════════════════════════════════════════════ -->
+<section id="hero">
+  <div class="hero-pill">
+    ✅ גרסה רשמית — Pilot מבוקר פעיל
+  </div>
+  <h1 class="hero-title">
+    מערכת ניהול<br><span>אלקיים סימון כבישים</span>
+  </h1>
+  <p class="hero-sub">
+    מערכת ERP פנימית לניהול הזמנות עבודה, גרפיקה, ייצור, צוותי שטח, יומני עבודה, קטלוג מוצרים וחשבונאות — מ-A עד ז.
+  </p>
+
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <div class="num">10+</div>
+      <div class="lbl">מודולים פעילים</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">6</div>
+      <div class="lbl">תפקידי משתמש</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">11</div>
+      <div class="lbl">Migrations ב-DB</div>
+    </div>
+    <div class="hero-stat">
+      <div class="num">100%</div>
+      <div class="lbl">נתונים ב-Supabase</div>
+    </div>
+  </div>
+
+  <div class="scroll-hint">
+    <div class="scroll-arrow"></div>
+    גלול למטה
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+  SECTION 2: ARCHITECTURE
+══════════════════════════════════════════════════════════════════ -->
+<section id="architecture">
+  <div class="section-header">
+    <div class="section-tag tag-blue">ארכיטקטורה</div>
+    <h2 class="section-title">מרכיבי המערכת</h2>
+    <p class="section-sub">שלוש שכבות: Frontend ב-Next.js, Backend ב-Supabase PostgreSQL, ו-Deployment ב-Vercel — ללא שרת נוסף.</p>
+  </div>
+
+  <div class="arch-grid">
+
+    <div class="arch-card">
+      <div class="arch-icon icon-blue">⚡</div>
+      <div class="arch-title">Next.js 16 — App Router</div>
+      <div class="arch-desc">ממשק משתמש מלא בעברית RTL. כל מסך הוא "use client" component. Middleware מגן על כל route מלבד /login.</div>
+      <div class="arch-badge tag-blue">Frontend</div>
+    </div>
+
+    <div class="arch-card">
+      <div class="arch-icon icon-purple">🗄️</div>
+      <div class="arch-title">Supabase PostgreSQL</div>
+      <div class="arch-desc">בסיס נתונים ראשי. כל הנתונים העסקיים — הזמנות, לקוחות, צוותים, קטלוג, יומנים — נשמרים כאן. RLS מופעל.</div>
+      <div class="arch-badge tag-purple">Database</div>
+    </div>
+
+    <div class="arch-card">
+      <div class="arch-icon icon-teal">🔐</div>
+      <div class="arch-title">Supabase Auth</div>
+      <div class="arch-desc">JWT-based authentication. כל משתמש מקושר ל-profiles table שמגדיר תפקיד, הרשאות ולשוניות מותרות.</div>
+      <div class="arch-badge tag-teal">Auth</div>
+    </div>
+
+    <div class="arch-card">
+      <div class="arch-icon icon-green">🚀</div>
+      <div class="arch-title">Vercel — Production</div>
+      <div class="arch-desc">Deployment אוטומטי מ-main branch ב-GitHub. URL: eliozelk.vercel.app. Build בכל push ל-main תוך 42 שניות.</div>
+      <div class="arch-badge tag-green">Deploy</div>
+    </div>
+
+    <div class="arch-card">
+      <div class="arch-icon icon-amber">💾</div>
+      <div class="arch-title">localStorage — Cache בלבד</div>
+      <div class="arch-desc">Cache לקריאה מהירה. Supabase תמיד כותב ראשון. localStorage מתרענן ב-fetch. draft טפסים בלבד — לא source of truth.</div>
+      <div class="arch-badge tag-amber">Cache</div>
+    </div>
+
+    <div class="arch-card">
+      <div class="arch-icon icon-red">📡</div>
+      <div class="arch-title">Supabase Realtime</div>
+      <div class="arch-desc">עדכונים חיים למסכי גרפיקה, מסגרייה ולוח שבועי. שינוי ב-DB מגיע לכל הלשוניות הפתוחות בשנייה.</div>
+      <div class="arch-badge tag-red">Live</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+  SECTION 3: ORDER LIFECYCLE FLOW
+══════════════════════════════════════════════════════════════════ -->
+<section id="flow">
+  <div class="section-header">
+    <div class="section-tag tag-indigo">מחזור חיים</div>
+    <h2 class="section-title">מסע הזמנה מההתחלה לסוף</h2>
+    <p class="section-sub">כל הזמנת עבודה עוברת דרך שלבים מוגדרים. לחץ על כל שלב לפרטים.</p>
+  </div>
+
+  <div class="flow-container">
+
+    <div class="flow-step">
+      <div class="flow-left">
+        <div class="flow-dot icon-blue tag-blue" onclick="toggleFlow(0)" style="border-color:#3b82f6">🏢</div>
+        <div class="flow-line"></div>
+      </div>
+      <div class="flow-content" id="fc0" onclick="toggleFlow(0)">
+        <div class="flow-label tag-blue" style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.68rem;margin-bottom:0.4rem">שלב 1 — משרד</div>
+        <div class="flow-title">יצירת הזמנת עבודה</div>
+        <div class="flow-desc">הפקיד/ת יוצרת הזמנה חדשה עם פרטי לקוח, מיקום, שורות שילוט, ואביזרים. המערכת מקצה מספר ORD-YYYY-NNN אוטומטי.</div>
+        <div class="flow-tags">
+          <span class="flow-tag">ORD-2026-001</span>
+          <span class="flow-tag">status: graphics_pending</span>
+          <span class="flow-tag">Supabase INSERT</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-left">
+        <div class="flow-dot icon-blue tag-blue" onclick="toggleFlow(1)" style="border-color:#6366f1">🎨</div>
+        <div class="flow-line"></div>
+      </div>
+      <div class="flow-content" id="fc1" onclick="toggleFlow(1)">
+        <div class="flow-label tag-indigo" style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.68rem;margin-bottom:0.4rem">שלב 2 — גרפיקה</div>
+        <div class="flow-title">עיצוב גרפי</div>
+        <div class="flow-desc">מחלקת הגרפיקה מאשרת קבלה, מבצעת עיצוב, ומסמנת השלמה. ניתן לדווח בעיות (מידות חסרות, קובץ שגוי) ולצרף קבצים.</div>
+        <div class="flow-tags">
+          <span class="flow-tag">graphics_active → graphics_done</span>
+          <span class="flow-tag">קבצים מצורפים</span>
+          <span class="flow-tag">דיווח בעיות</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-left">
+        <div class="flow-dot icon-purple tag-purple" onclick="toggleFlow(2)" style="border-color:#8b5cf6">🔩</div>
+        <div class="flow-line"></div>
+      </div>
+      <div class="flow-content" id="fc2" onclick="toggleFlow(2)">
+        <div class="flow-label tag-purple" style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.68rem;margin-bottom:0.4rem">שלב 3 — מסגרייה (אופציונלי)</div>
+        <div class="flow-title">ייצור ומסגרייה</div>
+        <div class="flow-desc">אם נדרשת מסגרייה, הזמנה עוברת למחלקה הרלוונטית. status נפרד: pending → acknowledged → in_progress → ready → completed.</div>
+        <div class="flow-tags">
+          <span class="flow-tag">fabricationRequired = true</span>
+          <span class="flow-tag">fabricationStatus נפרד</span>
+          <span class="flow-tag">אינדפנדנטי מ-status ראשי</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-left">
+        <div class="flow-dot icon-teal tag-teal" onclick="toggleFlow(3)" style="border-color:#14b8a6">📦</div>
+        <div class="flow-line"></div>
+      </div>
+      <div class="flow-content" id="fc3" onclick="toggleFlow(3)">
+        <div class="flow-label tag-teal" style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.68rem;margin-bottom:0.4rem">שלב 4 — משרד</div>
+        <div class="flow-title">מוכן להתקנה</div>
+        <div class="flow-desc">הפקיד/ת מסמן/ת "מוכן לביצוע". מוזנות שעות ביצוע משוערות. ה-SLA הוצג (ירוק/צהוב/אדום לפי זמן המתנה).</div>
+        <div class="flow-tags">
+          <span class="flow-tag">ready_for_execution_at</span>
+          <span class="flow-tag">estimated_execution_hours</span>
+          <span class="flow-tag">SLA clock מתחיל</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-left">
+        <div class="flow-dot icon-amber tag-amber" onclick="toggleFlow(4)" style="border-color:#f59e0b">📅</div>
+        <div class="flow-line"></div>
+      </div>
+      <div class="flow-content" id="fc4" onclick="toggleFlow(4)">
+        <div class="flow-label tag-amber" style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.68rem;margin-bottom:0.4rem">שלב 5 — ניהול שטח</div>
+        <div class="flow-title">שיבוץ לצוות ולוח שבועי</div>
+        <div class="flow-desc">מנהל שיבוץ ההזמנה לצוות שטח ספציפי, תאריך ביצוע, ומספר עובדים נדרש. הכל נשמר ב-DB ומוצג בלוח שבועי.</div>
+        <div class="flow-tags">
+          <span class="flow-tag">assigned_crew_id</span>
+          <span class="flow-tag">scheduled_date</span>
+          <span class="flow-tag">required_workers (חדש)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-left">
+        <div class="flow-dot icon-green tag-green" onclick="toggleFlow(5)" style="border-color:#22c55e">👷</div>
+        <div class="flow-line"></div>
+      </div>
+      <div class="flow-content" id="fc5" onclick="toggleFlow(5)">
+        <div class="flow-label tag-green" style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.68rem;margin-bottom:0.4rem">שלב 6 — ביצוע</div>
+        <div class="flow-title">ביצוע ויומן עבודה</div>
+        <div class="flow-desc">הצוות מבצע את העבודה בשטח. ראש הצוות מגיש יומן עבודה (WD-2026-NNN) עם דוח שעות, עובדים, ופרטי ביצוע.</div>
+        <div class="flow-tags">
+          <span class="flow-tag">WD-2026-001</span>
+          <span class="flow-tag">יומן מוגש ← מאושר</span>
+          <span class="flow-tag">קישור ל-work_order</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="flow-left">
+        <div class="flow-dot icon-gray tag-gray" onclick="toggleFlow(6)" style="border-color:#6b7280">💰</div>
+      </div>
+      <div class="flow-content" id="fc6" onclick="toggleFlow(6)">
+        <div class="flow-label tag-gray" style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.68rem;margin-bottom:0.4rem">שלב 7 — חשבונאות</div>
+        <div class="flow-title">חיוב ותשלום</div>
+        <div class="flow-desc">לאחר השלמה, ההזמנה עוברת לתור חיוב. חשבונאות מוציאה חשבונית, מעדכנת סכום, ומאשרת תשלום. accounting_status נפרד.</div>
+        <div class="flow-tags">
+          <span class="flow-tag">pending → invoiced → paid</span>
+          <span class="flow-tag">invoice_number</span>
+          <span class="flow-tag">billed_amount</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+  SECTION 4: MODULES DEEP DIVE
+══════════════════════════════════════════════════════════════════ -->
+<section id="modules">
+  <div class="section-header">
+    <div class="section-tag tag-purple">מודולים</div>
+    <h2 class="section-title">פירוט כל מודול</h2>
+    <p class="section-sub">לחץ על מודול לראות מה הוא עושה ואיך הוא עובד.</p>
+  </div>
+
+  <div class="modules-nav">
+    <button class="mod-tab active" style="color:#60a5fa;border-color:rgba(59,130,246,0.3)" onclick="switchModule('orders',this)">📋 הזמנות</button>
+    <button class="mod-tab" onclick="switchModule('schedule',this)">📅 סידור שבועי</button>
+    <button class="mod-tab" onclick="switchModule('diary',this)">📓 יומן עבודה</button>
+    <button class="mod-tab" onclick="switchModule('catalog',this)">🗂️ קטלוג מוצרים</button>
+    <button class="mod-tab" onclick="switchModule('crews',this)">👷 צוותי שטח</button>
+    <button class="mod-tab" onclick="switchModule('customers',this)">🏢 לקוחות</button>
+  </div>
+
+  <!-- ORDERS -->
+  <div class="module-panel active" id="mod-orders">
+    <div class="module-layout">
+      <div class="module-mockup">
+        <div class="mock-bar">
+          <div class="mock-dot" style="background:#ef4444"></div>
+          <div class="mock-dot" style="background:#f59e0b"></div>
+          <div class="mock-dot" style="background:#22c55e"></div>
+          <div class="mock-title">הזמנות עבודה</div>
+        </div>
+        <div class="mock-body">
+          <div class="mock-row">
+            <div>
+              <div class="mock-row-title">ORD-2026-031 — עיריית תל אביב</div>
+              <div style="font-size:0.7rem;color:#64748b;margin-top:2px">כביש 20 — מחלף גהה</div>
+            </div>
+            <div class="mock-chip chip-amber">ממתין לגרפיקה</div>
+          </div>
+          <div class="mock-row">
+            <div>
+              <div class="mock-row-title">ORD-2026-030 — נתיבי ישראל</div>
+              <div style="font-size:0.7rem;color:#64748b;margin-top:2px">כביש 1 — צומת שפירים</div>
+            </div>
+            <div class="mock-chip chip-purple">בייצור</div>
+          </div>
+          <div class="mock-row">
+            <div>
+              <div class="mock-row-title">ORD-2026-029 — עיריית חיפה</div>
+              <div style="font-size:0.7rem;color:#64748b;margin-top:2px">רחוב הנשיא — 3 צמתים</div>
+            </div>
+            <div class="mock-chip chip-teal">מוכן להתקנה</div>
+          </div>
+          <div class="mock-row">
+            <div>
+              <div class="mock-row-title">ORD-2026-028 — נ.מ. לוד</div>
+              <div style="font-size:0.7rem;color:#64748b;margin-top:2px">כביש 40 — שיפוץ</div>
+            </div>
+            <div class="mock-chip chip-green">הושלם</div>
+          </div>
+          <div style="text-align:center;padding:0.75rem;font-size:0.72rem;color:#475569">+ 27 הזמנות נוספות</div>
+        </div>
+      </div>
+      <div class="module-info">
+        <div class="info-point">
+          <div class="info-icon icon-blue">📝</div>
+          <div class="info-text">
+            <h4>יצירה אוטומטית</h4>
+            <p>מספור ORD-YYYY-NNN נוצר דרך next_counter() RPC ב-Supabase — ממוספר ברציפות ללא כפילויות.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-purple">🔒</div>
+          <div class="info-text">
+            <h4>נעילה אופטימיסטית</h4>
+            <p>כל עדכון בודק version. שני משתמשים לא יכולים לכתוב בו-זמנית — המאוחר מקבל שגיאה ומרענן.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-teal">🏗️</div>
+          <div class="info-text">
+            <h4>Column per domain</h4>
+            <p>גרפיקה, מסגרייה, חשבונאות ושדה — כל מחלקה כותבת לעמודות שלה. אין overwrite בין מחלקות.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-amber">🐛</div>
+          <div class="info-text">
+            <h4>מעקב בעיות</h4>
+            <p>כל בעיה (מידות חסרות, קובץ שגוי) נרשמת ב-order_problems עם category, status ו-resolution notes.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCHEDULE -->
+  <div class="module-panel" id="mod-schedule">
+    <div class="module-layout">
+      <div class="module-mockup">
+        <div class="mock-bar">
+          <div class="mock-dot" style="background:#ef4444"></div>
+          <div class="mock-dot" style="background:#f59e0b"></div>
+          <div class="mock-dot" style="background:#22c55e"></div>
+          <div class="mock-title">סידור שבועי — שבוע 20</div>
+        </div>
+        <div class="mock-body">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.75rem">
+            <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:0.5rem;font-size:0.72rem;text-align:center">
+              <div style="color:#94a3b8;margin-bottom:4px">ראשון 15/5</div>
+              <div style="color:#e2e8f0;font-weight:600">צוות א׳</div>
+              <div style="color:#64748b;font-size:0.65rem">ORD-029 · 3 עובדים</div>
+            </div>
+            <div style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:8px;padding:0.5rem;font-size:0.72rem;text-align:center">
+              <div style="color:#94a3b8;margin-bottom:4px">שני 16/5</div>
+              <div style="color:#e2e8f0;font-weight:600">צוות ב׳</div>
+              <div style="color:#64748b;font-size:0.65rem">ORD-027 · 4 עובדים</div>
+            </div>
+            <div style="background:rgba(20,184,166,0.1);border:1px solid rgba(20,184,166,0.2);border-radius:8px;padding:0.5rem;font-size:0.72rem;text-align:center">
+              <div style="color:#94a3b8;margin-bottom:4px">שלישי 17/5</div>
+              <div style="color:#e2e8f0;font-weight:600">צוות א׳</div>
+              <div style="color:#64748b;font-size:0.65rem">ORD-031 · 2 עובדים</div>
+            </div>
+          </div>
+          <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:0.75rem;font-size:0.72rem">
+            <div style="color:#94a3b8;margin-bottom:0.4rem;font-weight:600">📋 ממתינים לשיבוץ</div>
+            <div class="mock-row" style="margin-bottom:0.3rem">
+              <span style="color:#fbbf24">● ORD-030</span>
+              <span style="color:#64748b">5.5 שע׳ · עדיפות גבוהה</span>
+            </div>
+            <div class="mock-row">
+              <span style="color:#86efac">● ORD-028</span>
+              <span style="color:#64748b">3 שע׳ · רגיל</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="module-info">
+        <div class="info-point">
+          <div class="info-icon icon-amber">👷</div>
+          <div class="info-text">
+            <h4>כמות עובדים נדרשת (חדש)</div>
+            <p>בעת שיבוץ הזמנה, מוזנת כמות עובדים נדרשת לעבודה ספציפית — נשמרת ב-required_workers בנפרד מהגדרת הצוות.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-blue">📊</div>
+          <div class="info-text">
+            <h4>SLA ויזואלי</h4>
+            <p>כל הזמנה ממתינה מוצגת עם נקודה ירוקה/צהובה/אדומה לפי זמן המתנה מ-ready_for_execution_at.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-green">📓</div>
+          <div class="info-text">
+            <h4>קישור ליומן</h4>
+            <p>כל עבודה בלוח מציגה אם יומן עבודה הוגש ואם אושר — ישירות על ה-chip בלוח.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIARY -->
+  <div class="module-panel" id="mod-diary">
+    <div class="module-layout">
+      <div class="module-mockup">
+        <div class="mock-bar">
+          <div class="mock-dot" style="background:#ef4444"></div>
+          <div class="mock-dot" style="background:#f59e0b"></div>
+          <div class="mock-dot" style="background:#22c55e"></div>
+          <div class="mock-title">יומן עבודה חדש</div>
+        </div>
+        <div class="mock-body">
+          <div class="mock-row">
+            <div><div class="mock-row-title">WD-2026-012 — צוות א׳</div><div style="font-size:0.7rem;color:#64748b">14/5 · ORD-029</div></div>
+            <div class="mock-chip chip-green">אושר</div>
+          </div>
+          <div class="mock-row">
+            <div><div class="mock-row-title">WD-2026-011 — צוות ב׳</div><div style="font-size:0.7rem;color:#64748b">13/5 · ORD-026</div></div>
+            <div class="mock-chip chip-blue">הוגש</div>
+          </div>
+          <div class="mock-row">
+            <div><div class="mock-row-title">WD-2026-010 — צוות א׳</div><div style="font-size:0.7rem;color:#64748b">12/5 · ORD-024</div></div>
+            <div class="mock-chip chip-amber">ממתין לאישור</div>
+          </div>
+          <div class="mock-row">
+            <div><div class="mock-row-title">WD-2026-009 — צוות ב׳</div><div style="font-size:0.7rem;color:#64748b">11/5 — לא מקושר</div></div>
+            <div class="mock-chip chip-red">נדחה</div>
+          </div>
+        </div>
+      </div>
+      <div class="module-info">
+        <div class="info-point">
+          <div class="info-icon icon-blue">📝</div>
+          <div class="info-text">
+            <h4>הגשה על ידי שטח</h4>
+            <p>ראש הצוות מגיש יומן עם פרטי ביצוע. status: draft → submitted → approved/rejected.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-green">✅</div>
+          <div class="info-text">
+            <h4>אישור על ידי משרד</h4>
+            <p>מנהל מאשר או דוחה עם סיבת דחייה. יומן מאושר נעול לעריכה ומשמש בסיס לחיוב.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-purple">🔗</div>
+          <div class="info-text">
+            <h4>קישור להזמנה</h4>
+            <p>כל יומן מקושר ל-work_order דרך order_id. ניתן לעקוב אחר ביצוע בדיוק להזמנה.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CATALOG -->
+  <div class="module-panel" id="mod-catalog">
+    <div class="module-layout">
+      <div class="module-mockup">
+        <div class="mock-bar">
+          <div class="mock-dot" style="background:#ef4444"></div>
+          <div class="mock-dot" style="background:#f59e0b"></div>
+          <div class="mock-dot" style="background:#22c55e"></div>
+          <div class="mock-title">עריכת מוצרים ופריטים</div>
+        </div>
+        <div class="mock-body">
+          <div class="mock-row">
+            <div>
+              <div class="mock-row-title">קו הפרדה לבן 10 ס"מ</div>
+              <div style="font-size:0.7rem;color:#64748b">מ"ר · ₪28.50 · 0.1 שע׳/יח׳</div>
+            </div>
+            <div style="display:flex;gap:0.3rem">
+              <span class="mock-chip chip-green">פעיל</span>
+              <span class="mock-chip chip-purple">3 מקושרים</span>
+            </div>
+          </div>
+          <div class="mock-row">
+            <div>
+              <div class="mock-row-title">חץ ישר כיוון</div>
+              <div style="font-size:0.7rem;color:#64748b">יחידה · ₪180 · 2 שע׳/יח׳</div>
+            </div>
+            <div class="mock-chip chip-green">פעיל</div>
+          </div>
+          <div class="mock-row">
+            <div>
+              <div class="mock-row-title">מחסום גומי</div>
+              <div style="font-size:0.7rem;color:#64748b">מטר · ₪95 · linked products: 2</div>
+            </div>
+            <div class="mock-chip chip-amber">hours_per_unit: 0.5</div>
+          </div>
+        </div>
+      </div>
+      <div class="module-info">
+        <div class="info-point">
+          <div class="info-icon icon-amber">⏱️</div>
+          <div class="info-text">
+            <h4>שעות ליחידה (חדש)</h4>
+            <p>hours_per_unit — גורם המרה לחישוב שעות עבודה מכמות. שמור ב-catalog_items.hours_per_unit ב-Supabase.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-purple">🔗</div>
+          <div class="info-text">
+            <h4>מוצרים מקושרים (חדש)</h4>
+            <p>linked_products — JSONB array של {id, name, qty, required}. מגדיר יחסי רכיב/אביזר בין פריטים.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-green">☁️</div>
+          <div class="info-text">
+            <h4>Supabase כ-primary</h4>
+            <p>כל עדכון נשמר ישירות ב-catalog_items. localStorage הוא cache קריאה בלבד — לא source of truth.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREWS -->
+  <div class="module-panel" id="mod-crews">
+    <div class="module-layout">
+      <div class="module-mockup">
+        <div class="mock-bar">
+          <div class="mock-dot" style="background:#ef4444"></div>
+          <div class="mock-dot" style="background:#f59e0b"></div>
+          <div class="mock-dot" style="background:#22c55e"></div>
+          <div class="mock-title">צוותי שטח</div>
+        </div>
+        <div class="mock-body">
+          <div class="mock-row" style="flex-direction:column;align-items:flex-start;gap:0.4rem">
+            <div style="display:flex;justify-content:space-between;width:100%">
+              <div class="mock-row-title">🚧 צוות א׳ — דוד</div>
+              <span class="mock-chip chip-green">פעיל</span>
+            </div>
+            <div style="font-size:0.7rem;color:#64748b">מרכז · מסגרייה, תמרורים · 8 שע׳/יום</div>
+          </div>
+          <div class="mock-row" style="flex-direction:column;align-items:flex-start;gap:0.4rem">
+            <div style="display:flex;justify-content:space-between;width:100%">
+              <div class="mock-row-title">🚧 צוות ב׳ — יוסי</div>
+              <span class="mock-chip chip-green">פעיל</span>
+            </div>
+            <div style="font-size:0.7rem;color:#64748b">צפון · כל הכישורים · 10 שע׳/יום</div>
+          </div>
+          <div style="margin-top:0.75rem;padding:0.75rem;background:rgba(59,130,246,0.07);border-radius:8px;font-size:0.72rem;color:#94a3b8">
+            💡 מספר עובדים נדרש מוגדר בכל שיבוץ — לא כנכס קבוע של הצוות
+          </div>
+        </div>
+      </div>
+      <div class="module-info">
+        <div class="info-point">
+          <div class="info-icon icon-teal">🏗️</div>
+          <div class="info-text">
+            <h4>פרופיל צוות</h4>
+            <p>שם, ראש צוות, אזור, כישורים, קיבולת שעות יומית. מאוחסן ב-crews table ב-Supabase.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-amber">🚫</div>
+          <div class="info-text">
+            <h4>ללא מספר עובדים קבוע</h4>
+            <p>שדה "מספר עובדים" הוסר מ-UI הצוות. כמות עובדים היא החלטת שיבוץ — לא תכונה קבועה של הצוות.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-blue">📅</div>
+          <div class="info-text">
+            <h4>שיבוץ דינמי</h4>
+            <p>בעת שיבוץ הזמנה, מנהל בוחר צוות + תאריך + שעות + כמות עובדים נדרשת לעבודה הספציפית.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CUSTOMERS -->
+  <div class="module-panel" id="mod-customers">
+    <div class="module-layout">
+      <div class="module-mockup">
+        <div class="mock-bar">
+          <div class="mock-dot" style="background:#ef4444"></div>
+          <div class="mock-dot" style="background:#f59e0b"></div>
+          <div class="mock-dot" style="background:#22c55e"></div>
+          <div class="mock-title">לקוחות</div>
+        </div>
+        <div class="mock-body">
+          <div class="mock-row">
+            <div>
+              <div class="mock-row-title">עיריית תל אביב</div>
+              <div style="font-size:0.7rem;color:#64748b">08-9876543 · 3 הזמנות פעילות</div>
+            </div>
+            <div class="mock-chip chip-blue">שוטף 30</div>
+          </div>
+          <div class="mock-row">
+            <div>
+              <div class="mock-row-title">נתיבי ישראל</div>
+              <div style="font-size:0.7rem;color:#64748b">03-1234567 · 7 הזמנות פעילות</div>
+            </div>
+            <div class="mock-chip chip-purple">שוטף 60</div>
+          </div>
+          <div class="mock-row">
+            <div>
+              <div class="mock-row-title">עיריית חיפה</div>
+              <div style="font-size:0.7rem;color:#64748b">04-5556677 · 1 הזמנה פעילה</div>
+            </div>
+            <div class="mock-chip chip-teal">מיידי</div>
+          </div>
+        </div>
+      </div>
+      <div class="module-info">
+        <div class="info-point">
+          <div class="info-icon icon-blue">🏢</div>
+          <div class="info-text">
+            <h4>ניהול לקוחות</h4>
+            <p>שם, מיקום, טלפון, תנאי תשלום, הזמנה אחרונה. מאוחסן ב-customers table ב-Supabase.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-green">↗️</div>
+          <div class="info-text">
+            <h4>קישור להזמנות</h4>
+            <p>מלחיצה על לקוח ניתן לראות כל ההזמנות שלו, סטטוסן, וסיכום פיננסי.</p>
+          </div>
+        </div>
+        <div class="info-point">
+          <div class="info-icon icon-purple">🔄</div>
+          <div class="info-text">
+            <h4>Migration חכם</h4>
+            <p>אם localStorage מכיל נתוני לקוחות ישנים, הם מועברים אוטומטית ל-Supabase בטעינה ראשונה.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+  SECTION 5: ROLES & PERMISSIONS
+══════════════════════════════════════════════════════════════════ -->
+<section id="roles">
+  <div class="section-header">
+    <div class="section-tag tag-teal">הרשאות</div>
+    <h2 class="section-title">תפקידי משתמש</h2>
+    <p class="section-sub">כל משתמש מקושר ל-profiles table. תפקיד קובע אילו לשוניות גלויות ואילו פעולות מותרות.</p>
+  </div>
+
+  <div class="roles-grid">
+    <div class="role-card">
+      <div class="role-icon">👑</div>
+      <div class="role-name">Master</div>
+      <div class="role-sub">גישה מלאה לכל המערכת. יכול ליצור ולנהל משתמשים.</div>
+      <div class="role-perms">
+        <div class="role-perm">כל המסכים</div>
+        <div class="role-perm">ניהול משתמשים</div>
+        <div class="role-perm">הגדרות מערכת</div>
+        <div class="role-perm">תעריפי עלות</div>
+      </div>
+    </div>
+    <div class="role-card">
+      <div class="role-icon">🏢</div>
+      <div class="role-name">Office</div>
+      <div class="role-sub">פקיד/ת משרד. יוצר הזמנות, מנהל לקוחות, מאשר שיבוצים.</div>
+      <div class="role-perms">
+        <div class="role-perm">הזמנות עבודה</div>
+        <div class="role-perm">לקוחות</div>
+        <div class="role-perm">סידור שבועי</div>
+        <div class="role-perm">אישור יומנים</div>
+      </div>
+    </div>
+    <div class="role-card">
+      <div class="role-icon">🎨</div>
+      <div class="role-name">Graphics</div>
+      <div class="role-sub">מחלקת גרפיקה. רואה הזמנות שלה, מעדכנת סטטוס ומצרפת קבצים.</div>
+      <div class="role-perms">
+        <div class="role-perm">תור גרפיקה</div>
+        <div class="role-perm">העלאת קבצים</div>
+        <div class="role-perm">דיווח בעיות</div>
+      </div>
+    </div>
+    <div class="role-card">
+      <div class="role-icon">🔩</div>
+      <div class="role-name">Fabrication</div>
+      <div class="role-sub">מחלקת מסגרייה. מנהלת ייצור ומעדכנת fabricationStatus.</div>
+      <div class="role-perms">
+        <div class="role-perm">תור מסגרייה</div>
+        <div class="role-perm">עדכון סטטוס ייצור</div>
+        <div class="role-perm">דיווח בעיות</div>
+      </div>
+    </div>
+    <div class="role-card">
+      <div class="role-icon">👷</div>
+      <div class="role-name">Field Worker</div>
+      <div class="role-sub">עובד שטח. רואה רק עבודות שלו ומגיש יומני עבודה. ללא מחירים.</div>
+      <div class="role-perms">
+        <div class="role-perm">יומן עבודה שלו</div>
+        <div class="role-perm">מפת עבודות</div>
+        <div class="role-perm">ללא מחירים/חשבונאות</div>
+      </div>
+    </div>
+    <div class="role-card">
+      <div class="role-icon">💰</div>
+      <div class="role-name">Accounting</div>
+      <div class="role-sub">חשבונאות. רואה הזמנות שהושלמו וממלאת פרטי חשבונית ותשלום.</div>
+      <div class="role-perms">
+        <div class="role-perm">תור חיוב</div>
+        <div class="role-perm">הוצאת חשבוניות</div>
+        <div class="role-perm">רווחיות</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+  SECTION 6: DATA LAYER
+══════════════════════════════════════════════════════════════════ -->
+<section id="data">
+  <div class="section-header">
+    <div class="section-tag tag-amber">שכבת נתונים</div>
+    <h2 class="section-title">מבנה ה-Database</h2>
+    <p class="section-sub">PostgreSQL ב-Supabase. RLS מופעל על כל הטבלאות. 11 migrations בסדר ליניארי.</p>
+  </div>
+
+  <div class="db-diagram">
+    <div class="db-layers">
+
+      <div class="db-layer bg-blue-layer">
+        <div class="db-layer-header hdr-blue">🔐 Auth & Users</div>
+        <div class="db-layer-body">
+          <div class="db-table">
+            <div class="db-table-name">auth.users</div>
+            <div class="db-col pk">id (UUID) PK</div>
+            <div class="db-col">email</div>
+            <div class="db-col">Supabase managed</div>
+          </div>
+          <div class="db-table">
+            <div class="db-table-name">profiles</div>
+            <div class="db-col pk">id → auth.users</div>
+            <div class="db-col">name, role</div>
+            <div class="db-col">allowed_tabs[]</div>
+            <div class="db-col">action_permissions[]</div>
+            <div class="db-col">last_login_at</div>
+          </div>
+          <div class="db-table">
+            <div class="db-table-name">counters</div>
+            <div class="db-col pk">key (text) PK</div>
+            <div class="db-col">value (bigint)</div>
+            <div class="db-col">via next_counter()</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="db-layer bg-purple-layer">
+        <div class="db-layer-header hdr-purple">📋 Work Orders Domain</div>
+        <div class="db-layer-body">
+          <div class="db-table">
+            <div class="db-table-name">work_orders</div>
+            <div class="db-col pk">id (text) PK</div>
+            <div class="db-col">order_number, status</div>
+            <div class="db-col">customer, city</div>
+            <div class="db-col">graphics_* columns</div>
+            <div class="db-col">fabrication_* columns</div>
+            <div class="db-col">accounting_* columns</div>
+            <div class="db-col">estimated_execution_hours</div>
+            <div class="db-col">assigned_crew_id</div>
+            <div class="db-col">scheduled_date</div>
+            <div class="db-col new">required_workers ★</div>
+            <div class="db-col">data (JSONB blob)</div>
+          </div>
+          <div class="db-table">
+            <div class="db-table-name">order_problems</div>
+            <div class="db-col pk">id (text) PK</div>
+            <div class="db-col">order_id → work_orders</div>
+            <div class="db-col">department, category</div>
+            <div class="db-col">status, description</div>
+          </div>
+          <div class="db-table">
+            <div class="db-table-name">order_activities</div>
+            <div class="db-col pk">id (text) PK</div>
+            <div class="db-col">order_id → work_orders</div>
+            <div class="db-col">type, timestamp</div>
+            <div class="db-col">by, description</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="db-layer bg-teal-layer">
+        <div class="db-layer-header hdr-teal">🏗️ Operations</div>
+        <div class="db-layer-body">
+          <div class="db-table">
+            <div class="db-table-name">catalog_items</div>
+            <div class="db-col pk">id (text) PK</div>
+            <div class="db-col">name, type, category</div>
+            <div class="db-col">unit_of_measure</div>
+            <div class="db-col">default_price</div>
+            <div class="db-col new">hours_per_unit ★</div>
+            <div class="db-col new">linked_products ★</div>
+          </div>
+          <div class="db-table">
+            <div class="db-table-name">crews</div>
+            <div class="db-col pk">id (text) PK</div>
+            <div class="db-col">name, leader, phone</div>
+            <div class="db-col">skills[], region</div>
+            <div class="db-col">daily_capacity_hours</div>
+            <div class="db-col">active</div>
+          </div>
+          <div class="db-table">
+            <div class="db-table-name">customers</div>
+            <div class="db-col pk">id (text) PK</div>
+            <div class="db-col">name, location, phone</div>
+            <div class="db-col">payment_terms</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="db-layer bg-amber-layer">
+        <div class="db-layer-header hdr-amber">📓 Field & Finance</div>
+        <div class="db-layer-body">
+          <div class="db-table">
+            <div class="db-table-name">work_diaries</div>
+            <div class="db-col pk">id (text) PK</div>
+            <div class="db-col">diary_number, status</div>
+            <div class="db-col">order_id → work_orders</div>
+            <div class="db-col">approval_status</div>
+            <div class="db-col">approved_by, approved_at</div>
+            <div class="db-col">data (JSONB blob)</div>
+          </div>
+          <div class="db-table">
+            <div class="db-table-name">cost_rates</div>
+            <div class="db-col pk">id = 1 (single row)</div>
+            <div class="db-col">data (JSONB)</div>
+            <div class="db-col">תעריפי עלות גלובליים</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div style="margin-top:1rem;padding:0.75rem 1rem;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:10px;font-size:0.78rem;color:#fbbf24;text-align:center">
+      ★ = שדות חדשים שנוספו ב-Pilot הנוכחי — מיוצגים ב-migrations ומוחלים ב-Supabase Production
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════
+  SECTION 7: SUMMARY
+══════════════════════════════════════════════════════════════════ -->
+<section id="summary">
+  <div class="section-header">
+    <div class="section-tag tag-green">סיכום</div>
+    <h2 class="section-title">המערכת מוכנה לפעולה</h2>
+    <p class="section-sub">כל מרכיב מסונכרן. GitHub, Vercel ו-Supabase מיושרים על commit efae4ec.</p>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="summary-num" style="color:#60a5fa">11</div>
+      <div class="summary-lbl">DB Migrations בסדר</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-num" style="color:#4ade80">✓</div>
+      <div class="summary-lbl">TypeScript Clean Build</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-num" style="color:#2dd4bf">27</div>
+      <div class="summary-lbl">Routes Compiled</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-num" style="color:#fbbf24">3</div>
+      <div class="summary-lbl">שדות DB חדשים פעילים</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-num" style="color:#c4b5fd">2</div>
+      <div class="summary-lbl">Branches (main + backup)</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-num" style="color:#86efac">42s</div>
+      <div class="summary-lbl">Vercel Build Time</div>
+    </div>
+  </div>
+
+  <div class="cta-box">
+    <div style="font-size:2rem;margin-bottom:0.75rem">🚀</div>
+    <div class="cta-title">הפיילוט המבוקר פעיל</div>
+    <div class="cta-sub">
+      המערכת פרוסה ב-<strong style="color:#93c5fd">eliozelk.vercel.app</strong>.<br>
+      כל הנתונים נשמרים ב-Supabase Production.<br>
+      צוות שטח, משרד, גרפיקה ומסגרייה — כולם יכולים להתחיל לעבוד.
+    </div>
+  </div>
+</section>
+
+<script>
+  // ── NAV SCROLL ──
+  function scrollTo(id) {
+    document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // ── ACTIVE NAV PILL ──
+  const sections = ['hero','architecture','flow','modules','roles','data','summary'];
+  const pills = document.querySelectorAll('.nav-pill');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        pills.forEach((p,i) => {
+          p.classList.toggle('active', sections[i] === e.target.id);
+        });
+      }
+    });
+  }, { threshold: 0.4 });
+  sections.forEach(id => { const el = document.getElementById(id); if(el) observer.observe(el); });
+
+  // ── FLOW TOGGLE ──
+  function toggleFlow(i) {
+    const el = document.getElementById('fc'+i);
+    el.classList.toggle('active');
+  }
+
+  // ── MODULE TABS ──
+  function switchModule(name, btn) {
+    document.querySelectorAll('.module-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.mod-tab').forEach(t => {
+      t.classList.remove('active');
+      t.style.color = '';
+      t.style.borderColor = '';
+    });
+    document.getElementById('mod-'+name).classList.add('active');
+    btn.classList.add('active');
+    btn.style.color = '#60a5fa';
+    btn.style.borderColor = 'rgba(59,130,246,0.3)';
+  }
+</script>
+</body>
+</html>
