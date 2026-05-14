@@ -106,6 +106,28 @@ export async function POST(req: NextRequest) {
   });
 }
 
+// ── PUT /api/admin/users — admin actions (password reset, email update) ───────
+
+export async function PUT(req: NextRequest) {
+  const caller = await getCallerProfile(req);
+  if (!isMaster(caller)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const body = await req.json().catch(() => null);
+  if (!body?.id || !body?.action) return NextResponse.json({ error: "Missing id or action" }, { status: 400 });
+
+  const admin = getServiceSupabase();
+
+  if (body.action === "reset_password") {
+    const email = body.email as string;
+    if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400 });
+    const { error } = await admin.auth.admin.generateLink({ type: "recovery", email });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+}
+
 // ── PATCH /api/admin/users — update profile fields ────────────────────────────
 
 export async function PATCH(req: NextRequest) {
@@ -129,6 +151,14 @@ export async function PATCH(req: NextRequest) {
     if (isTarget && masters.length === 1 && (updates.role !== "master" || updates.is_active === false)) {
       return NextResponse.json({ error: "לא ניתן לבטל את המנהל הראשי האחרון" }, { status: 400 });
     }
+  }
+
+  // If email is being updated, sync it to auth.users as well
+  if (typeof updates.email === "string") {
+    const newEmail = (updates.email as string).toLowerCase();
+    const { error: authEmailErr } = await admin.auth.admin.updateUserById(id as string, { email: newEmail });
+    if (authEmailErr) return NextResponse.json({ error: `עדכון אימייל נכשל: ${authEmailErr.message}` }, { status: 500 });
+    updates.email = newEmail;
   }
 
   const { error } = await admin

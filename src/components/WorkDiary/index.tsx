@@ -190,6 +190,7 @@ export function WorkDiaryForm() {
   const { createDiary, saveDiary, submitDiary, approveDiary, rejectDiary } = useWorkDiaryContext();
   const { profile } = useAuth();
   const canApprove = profile?.role === "master" || profile?.role === "office_manager";
+  const isWorker = profile?.role === "field_worker";
   const [diary, setDiary] = useState<WorkDiary | null>(null);
   const [activeTab, setActiveTab] = useState<DiaryTab>("header");
   const [saving, setSaving] = useState(false);
@@ -290,7 +291,7 @@ export function WorkDiaryForm() {
 
       {/* Tabs */}
       <div className="max-w-5xl mx-auto">
-        <TabBar active={activeTab} onChange={setActiveTab} />
+        <TabBar active={activeTab} onChange={setActiveTab} workerMode={isWorker} />
 
         <div className="p-4">
           {activeTab === "header" && (

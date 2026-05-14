@@ -115,9 +115,24 @@ function OpenProblems({ order }: { order: WorkOrder }) {
   );
 }
 
+function ConfirmModal({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 flex flex-col gap-4">
+        <p className="text-sm font-medium text-gray-800 text-center leading-relaxed">{message}</p>
+        <div className="flex gap-3">
+          <button type="button" onClick={onConfirm} className="flex-1 py-2.5 rounded-lg text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 transition-colors">כן, מוכן</button>
+          <button type="button" onClick={onCancel} className="flex-1 py-2.5 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors">ביטול</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FabricationCard({ order }: { order: WorkOrder }) {
   const { updateOrderFields } = useOrdersContext();
   const [showProblemForm, setShowProblemForm] = useState(false);
+  const [showReadyConfirm, setShowReadyConfirm] = useState(false);
   const status = order.fabricationStatus ?? "pending";
   const fab = order.fabricationDetails;
 
@@ -142,6 +157,15 @@ function FabricationCard({ order }: { order: WorkOrder }) {
   function advance() {
     const next = NEXT_STATUS[status];
     if (!next) return;
+    // Require explicit confirmation before marking ready
+    if (status === "in_progress" && next === "ready") {
+      setShowReadyConfirm(true);
+      return;
+    }
+    doAdvance(next);
+  }
+
+  function doAdvance(next: FabricationStatus) {
     const now = new Date().toISOString();
     const extra: Partial<WorkOrder> = { fabricationStatus: next };
     if (next === "acknowledged") extra.fabricationAcknowledgedAt = now;
@@ -160,6 +184,13 @@ function FabricationCard({ order }: { order: WorkOrder }) {
 
   return (
     <div className={`bg-white rounded-xl border ${borderColor} shadow-sm p-4 flex flex-col gap-3`}>
+      {showReadyConfirm && (
+        <ConfirmModal
+          message="האם ההזמנה מוכנה בוודאות וניתן להעביר אותה להתקנה?"
+          onConfirm={() => { setShowReadyConfirm(false); doAdvance("ready"); }}
+          onCancel={() => setShowReadyConfirm(false)}
+        />
+      )}
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">

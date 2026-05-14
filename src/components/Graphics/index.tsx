@@ -206,6 +206,32 @@ function PendingOrderCard({ order, onAcknowledge }: { order: WorkOrder; onAcknow
   );
 }
 
+function ConfirmModal({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 flex flex-col gap-4">
+        <p className="text-sm font-medium text-gray-800 text-center leading-relaxed">{message}</p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="flex-1 py-2.5 rounded-lg text-sm font-bold text-white bg-green-600 hover:bg-green-700 transition-colors"
+          >
+            כן, מוכן
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 py-2.5 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors"
+          >
+            ביטול
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ActiveOrderCard({ order, onComplete }: { order: WorkOrder; onComplete: () => void }) {
   const signCount = order.signRows.filter((r) => r.signNumber).length;
   const miscCount = [
@@ -213,9 +239,17 @@ function ActiveOrderCard({ order, onComplete }: { order: WorkOrder; onComplete: 
     ...(order.accessoryRows ?? []).filter((r) => r.description),
   ].length;
   const [showProblemForm, setShowProblemForm] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   return (
     <div className="bg-white rounded-xl border border-blue-200 shadow-sm p-4 flex flex-col gap-3">
+      {showConfirm && (
+        <ConfirmModal
+          message="האם ההזמנה מוכנה בוודאות וניתן להעביר אותה להתקנה?"
+          onConfirm={() => { setShowConfirm(false); onComplete(); }}
+          onCancel={() => setShowConfirm(false)}
+        />
+      )}
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
@@ -274,7 +308,7 @@ function ActiveOrderCard({ order, onComplete }: { order: WorkOrder; onComplete: 
       ) : (
         <div className="flex gap-2">
           <button
-            onClick={onComplete}
+            onClick={() => setShowConfirm(true)}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold text-green-700 bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

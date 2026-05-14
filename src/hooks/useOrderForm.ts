@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { nanoid } from "nanoid";
-import type { MiscRow, OrderState, SignRow, FabricationDetails } from "@/types/order";
+import type { MiscRow, OrderAttachment, OrderState, SignRow, FabricationDetails } from "@/types/order";
 
 function todayISO(): string {
   return new Date().toISOString().split("T")[0];
@@ -159,6 +159,14 @@ export function useOrderForm() {
     }));
   }, []);
 
+  const addAttachment = useCallback((attachment: OrderAttachment) => {
+    setOrder((prev) => ({ ...prev, attachments: [...(prev.attachments ?? []), attachment] }));
+  }, []);
+
+  const removeAttachment = useCallback((id: string) => {
+    setOrder((prev) => ({ ...prev, attachments: (prev.attachments ?? []).filter((a) => a.id !== id) }));
+  }, []);
+
   const resetOrder = useCallback(() => {
     const fresh = initialState();
     setOrder(fresh);
@@ -179,6 +187,8 @@ export function useOrderForm() {
     updateMiscRow,
     removeMiscRow,
     updateFabrication,
+    addAttachment,
+    removeAttachment,
     resetOrder,
   };
 }

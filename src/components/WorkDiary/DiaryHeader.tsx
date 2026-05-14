@@ -1,7 +1,9 @@
 "use client";
 
+import { nanoid } from "nanoid";
 import type { WorkDiary } from "@/types/workDiary";
 import { useOrdersContext } from "@/context/OrdersContext";
+import { useAuth } from "@/context/AuthContext";
 
 const inputCls =
   "w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500";
@@ -35,6 +37,8 @@ function SectionCard({ title, children, accent = false }: { title: string; child
 
 export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
   const { orders } = useOrdersContext();
+  const { profile } = useAuth();
+  const isWorker = profile?.role === "field_worker";
 
   function inp(key: keyof WorkDiary) {
     return {
@@ -60,15 +64,29 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
     };
   }
 
-  // Open orders available for linking
   const linkableOrders = orders.filter(
     (o) => o.status !== "cancelled" && o.status !== "completed"
   );
 
+  function addCrewMember() {
+    onChange({ crewMembers: [...(diary.crewMembers ?? []), ""] });
+  }
+
+  function updateCrewMember(idx: number, val: string) {
+    const updated = [...(diary.crewMembers ?? [])];
+    updated[idx] = val;
+    onChange({ crewMembers: updated });
+  }
+
+  function removeCrewMember(idx: number) {
+    const updated = (diary.crewMembers ?? []).filter((_, i) => i !== idx);
+    onChange({ crewMembers: updated.length > 0 ? updated : [""] });
+  }
+
   return (
     <div className="space-y-5">
-      {/* Project */}
-      <SectionCard title="פרטי הפרויקט">
+      {/* פרטי עבודה — section 1 */}
+      <SectionCard title="פרטי עבודה">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="שם הקבלן *">
             <input type="text" placeholder="שם הקבלן או הלקוח" {...inp("customerName")} />
@@ -76,39 +94,6 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
           <Field label="אתר העבודה *">
             <input type="text" placeholder="כתובת / שם האתר" {...inp("siteName")} />
           </Field>
-          <Field label="איש קשר">
-            <input type="text" placeholder="שם איש הקשר" {...inp("contactName")} />
-          </Field>
-          <Field label="טלפון">
-            <input type="tel" placeholder="050-0000000" dir="ltr" {...inp("contactPhone")} />
-          </Field>
-          <Field label="קישור להזמנה">
-            <select
-              value={diary.orderId ?? ""}
-              onChange={(e) => {
-                const order = orders.find((o) => o.id === e.target.value);
-                onChange({
-                  orderId: e.target.value || undefined,
-                  orderNumber: order?.orderNumber ?? undefined,
-                });
-              }}
-              disabled={disabled}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              <option value="">— ללא קישור להזמנה —</option>
-              {linkableOrders.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.orderNumber} · {o.customer}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-      </SectionCard>
-
-      {/* Execution */}
-      <SectionCard title="פרטי ביצוע">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label="תאריך ביצוע *">
             <input type="date" dir="ltr" {...inp("executionDate")} />
           </Field>
@@ -118,6 +103,45 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
           <Field label="שעת סיום">
             <input type="time" dir="ltr" {...inp("endTime")} />
           </Field>
+          <Field label="איש קשר">
+            <input type="text" placeholder="שם איש הקשר" {...inp("contactName")} />
+          </Field>
+          <Field label="טלפון">
+            <input type="tel" placeholder="050-0000000" dir="ltr" {...inp("contactPhone")} />
+          </Field>
+
+          {/* קישור להזמנה — hidden from field workers */}
+          {!isWorker && (
+            <div className="sm:col-span-2">
+              <Field label="קישור להזמנה">
+                <select
+                  value={diary.orderId ?? ""}
+                  onChange={(e) => {
+                    const order = orders.find((o) => o.id === e.target.value);
+                    onChange({
+                      orderId: e.target.value || undefined,
+                      orderNumber: order?.orderNumber ?? undefined,
+                    });
+                  }}
+                  disabled={disabled}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="">— ללא קישור להזמנה —</option>
+                  {linkableOrders.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.orderNumber} · {o.customer}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          )}
+        </div>
+      </SectionCard>
+
+      {/* פרטי ביצוע — vehicles + time breakdown */}
+      <SectionCard title="פרטי ביצוע">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label="רכב מס׳">
             <input type="text" placeholder="מספר הרכב" {...inp("vehicleNumber")} />
           </Field>
@@ -129,7 +153,6 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
           </Field>
         </div>
 
-        {/* Time breakdown */}
         <div className="mt-4 pt-4 border-t border-gray-100">
           <p className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">פירוט זמנים (שעות)</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -149,81 +172,101 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
         </div>
       </SectionCard>
 
-      {/* Crew */}
+      {/* Crew — dynamic count */}
       <SectionCard title="צוות">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="ראש צוות">
             <input type="text" placeholder="שם ראש הצוות" {...inp("crewLeaderName")} />
           </Field>
-          {([0, 1, 2, 3] as const).map((i) => (
-            <Field key={i} label={`איש צוות ${i + 1}`}>
-              <input
-                type="text"
-                placeholder={`שם איש צוות ${i + 1}`}
-                value={diary.crewMembers[i]}
-                onChange={(e) => {
-                  const updated: [string, string, string, string] = [...diary.crewMembers];
-                  updated[i] = e.target.value;
-                  onChange({ crewMembers: updated });
-                }}
-                disabled={disabled}
-                className={inputCls}
-              />
-            </Field>
+          {(diary.crewMembers ?? []).map((member, i) => (
+            <div key={i} className="flex gap-2 items-end">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-gray-600 mb-1">איש צוות {i + 1}</label>
+                <input
+                  type="text"
+                  placeholder={`שם איש צוות ${i + 1}`}
+                  value={member}
+                  onChange={(e) => updateCrewMember(i, e.target.value)}
+                  disabled={disabled}
+                  className={inputCls}
+                />
+              </div>
+              {!disabled && (diary.crewMembers ?? []).length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeCrewMember(i)}
+                  className="mb-0.5 px-2 py-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors text-xs"
+                  title="הסר"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           ))}
         </div>
+        {!disabled && (
+          <button
+            type="button"
+            onClick={addCrewMember}
+            className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-300 text-blue-600 text-xs font-medium hover:bg-blue-50 transition-colors"
+          >
+            + הוסף איש צוות
+          </button>
+        )}
       </SectionCard>
 
-      {/* Billing & Costs */}
-      <SectionCard title="חיוב ועלויות" accent>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="סכום לחיוב (₪)">
-            <input
-              type="number"
-              min="0"
-              step="100"
-              value={diary.billedAmount ?? ""}
-              onChange={(e) =>
-                onChange({ billedAmount: e.target.value === "" ? undefined : parseFloat(e.target.value) })
-              }
-              disabled={disabled}
-              placeholder="0"
-              className={numCls}
-              dir="ltr"
-            />
-          </Field>
-          <Field label="ניתן לחיוב?">
-            <select
-              value={diary.isBillable === false ? "false" : "true"}
-              onChange={(e) => onChange({ isBillable: e.target.value !== "false" })}
-              disabled={disabled}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              <option value="true">כן — ניתן לחיוב</option>
-              <option value="false">לא — עבודה פנימית</option>
-            </select>
-          </Field>
-          <Field label="עלות חומרים (₪)">
-            <input
-              type="number" min="0" step="50"
-              value={diary.materialCost ?? ""}
-              onChange={(e) => onChange({ materialCost: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
-              disabled={disabled} placeholder="0" className={numCls} dir="ltr"
-            />
-          </Field>
-          <Field label="עלות ציוד/קבלן (₪)">
-            <input
-              type="number" min="0" step="50"
-              value={diary.equipmentCost ?? ""}
-              onChange={(e) => onChange({ equipmentCost: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
-              disabled={disabled} placeholder="0" className={numCls} dir="ltr"
-            />
-          </Field>
-          <Field label="הערות חיוב">
-            <input type="text" placeholder="הערות לחשבונית..." {...inp("billingNotes")} />
-          </Field>
-        </div>
-      </SectionCard>
+      {/* Billing & Costs — hidden from field workers */}
+      {!isWorker && (
+        <SectionCard title="חיוב ועלויות" accent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="סכום לחיוב (₪)">
+              <input
+                type="number"
+                min="0"
+                step="100"
+                value={diary.billedAmount ?? ""}
+                onChange={(e) =>
+                  onChange({ billedAmount: e.target.value === "" ? undefined : parseFloat(e.target.value) })
+                }
+                disabled={disabled}
+                placeholder="0"
+                className={numCls}
+                dir="ltr"
+              />
+            </Field>
+            <Field label="ניתן לחיוב?">
+              <select
+                value={diary.isBillable === false ? "false" : "true"}
+                onChange={(e) => onChange({ isBillable: e.target.value !== "false" })}
+                disabled={disabled}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value="true">כן — ניתן לחיוב</option>
+                <option value="false">לא — עבודה פנימית</option>
+              </select>
+            </Field>
+            <Field label="עלות חומרים (₪)">
+              <input
+                type="number" min="0" step="50"
+                value={diary.materialCost ?? ""}
+                onChange={(e) => onChange({ materialCost: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+                disabled={disabled} placeholder="0" className={numCls} dir="ltr"
+              />
+            </Field>
+            <Field label="עלות ציוד/קבלן (₪)">
+              <input
+                type="number" min="0" step="50"
+                value={diary.equipmentCost ?? ""}
+                onChange={(e) => onChange({ equipmentCost: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+                disabled={disabled} placeholder="0" className={numCls} dir="ltr"
+              />
+            </Field>
+            <Field label="הערות חיוב">
+              <input type="text" placeholder="הערות לחשבונית..." {...inp("billingNotes")} />
+            </Field>
+          </div>
+        </SectionCard>
+      )}
     </div>
   );
 }

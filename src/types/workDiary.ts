@@ -87,7 +87,7 @@ export interface WorkDiary {
   trailerNumber: string;
   driverName: string;
   crewLeaderName: string;
-  crewMembers: [string, string, string, string];
+  crewMembers: string[];
   paintingItems: PaintingItem[];
   poleItems: PoleItem[];
   signItems: SignItem[];
@@ -212,7 +212,7 @@ export function createDefaultPoleItems(): PoleItem[] {
 }
 
 export function createDefaultSignItems(): SignItem[] {
-  return Array.from({ length: 10 }, emptySign);
+  return [emptySign()];
 }
 
 export function createEmptyDiary(diaryNumber: string): WorkDiary {
@@ -232,7 +232,7 @@ export function createEmptyDiary(diaryNumber: string): WorkDiary {
     trailerNumber: "",
     driverName: "",
     crewLeaderName: "",
-    crewMembers: ["", "", "", ""],
+    crewMembers: [""],
     paintingItems: createDefaultPaintingItems(),
     poleItems: createDefaultPoleItems(),
     signItems: createDefaultSignItems(),

@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { nanoid } from "nanoid";
 import { useOrderForm } from "@/hooks/useOrderForm";
+import type { OrderAttachment } from "@/types/order";
 import { useOrdersContext } from "@/context/OrdersContext";
 import { OrderHeader } from "./OrderHeader";
 import { SignTable } from "./SignTable";
@@ -72,8 +74,58 @@ export function OrderForm() {
     updateMiscRow,
     removeMiscRow,
     updateFabrication,
+    addAttachment,
+    removeAttachment,
     resetOrder,
   } = useOrderForm();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+
+  const ALLOWED_TYPES = ["image/jpeg","image/png","image/gif","image/webp","image/svg+xml","application/pdf","application/msword","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","text/plain"];
+  const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB per file
+  const MAX_TOTAL_BYTES = 15 * 1024 * 1024; // 15 MB total
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setFileError(null);
+
+    const currentTotal = (order.attachments ?? []).reduce((s, a) => s + a.size, 0);
+    let running = currentTotal;
+
+    for (const file of files) {
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        setFileError(`סוג קובץ לא נתמך: ${file.name}`);
+        continue;
+      }
+      if (file.size > MAX_FILE_BYTES) {
+        setFileError(`הקובץ ${file.name} גדול מ-5MB`);
+        continue;
+      }
+      if (running + file.size > MAX_TOTAL_BYTES) {
+        setFileError("הגעת למגבלת 15MB לכלל הקבצים בהזמנה");
+        break;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        const attachment: OrderAttachment = { id: nanoid(), name: file.name, dataUrl, type: file.type, size: file.size };
+        addAttachment(attachment);
+      };
+      reader.readAsDataURL(file);
+      running += file.size;
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function formatBytes(bytes: number) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function isImage(type: string) { return type.startsWith("image/"); }
 
   const { addOrder } = useOrdersContext();
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -183,6 +235,52 @@ export function OrderForm() {
             rows={3}
             className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 resize-none"
           />
+        </div>
+
+        {/* File attachments */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <label className="block text-sm font-medium text-gray-700">קבצים מצורפים</label>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-400 text-blue-600 text-xs font-medium hover:bg-blue-50 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              צרף קובץ
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".jpg,.jpeg,.png,.gif,.webp,.svg,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          {fileError && <p className="text-xs text-red-600 mb-2">{fileError}</p>}
+          {(order.attachments ?? []).length === 0 ? (
+            <p className="text-xs text-gray-400">לא צורפו קבצים · תמיכה ב-PDF, תמונות, Word, Excel (עד 5MB לקובץ)</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {(order.attachments ?? []).map((att) => (
+                <li key={att.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
+                  {isImage(att.type) ? (
+                    <img src={att.dataUrl} alt={att.name} className="w-8 h-8 object-cover rounded border border-gray-200 shrink-0" />
+                  ) : (
+                    <div className="w-8 h-8 rounded border border-gray-200 bg-white flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                  )}
+                  <span className="flex-1 text-xs text-gray-700 truncate">{att.name}</span>
+                  <span className="text-xs text-gray-400 shrink-0">{formatBytes(att.size)}</span>
+                  <button type="button" onClick={() => removeAttachment(att.id)} className="shrink-0 text-gray-300 hover:text-red-500 transition-colors" title="הסר">
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* Fabrication */}

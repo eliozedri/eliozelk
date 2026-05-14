@@ -99,6 +99,19 @@ export async function deleteUser(id: string): Promise<void> {
   }
 }
 
+export async function sendPasswordResetLink(userId: string, email: string): Promise<void> {
+  const token = await getAccessToken();
+  const res = await fetch("/api/admin/users", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ id: userId, action: "reset_password", email }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? "שגיאה בשליחת קישור איפוס");
+  }
+}
+
 export async function touchLastLogin(): Promise<void> {
   const db = getSupabase();
   if (!db) return;

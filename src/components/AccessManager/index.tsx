@@ -18,6 +18,7 @@ import {
   createUser,
   updateUser,
   deleteUser,
+  sendPasswordResetLink,
 } from "@/lib/auth/store";
 
 const NAVY = "#0d1b2e";
@@ -267,8 +268,11 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
   const [actions, setActions] = useState<string[]>(user.action_permissions);
   const [role, setRole] = useState<Role>(user.role);
   const [isActive, setIsActive] = useState(user.is_active);
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [resetMsg, setResetMsg] = useState<string | null>(null);
 
   const masterCount = allUsers.filter((u) => u.role === "master" && u.is_active).length;
   const isLastMaster = user.role === "master" && masterCount === 1;
@@ -285,10 +289,15 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
       setError("לא ניתן לבטל או לשנות את המנהל הראשי האחרון במערכת.");
       return;
     }
+    if (!name.trim()) { setError("שם לא יכול להיות ריק"); return; }
+    const emailTrimmed = email.trim().toLowerCase();
+    if (!emailTrimmed.includes("@")) { setError("כתובת אימייל לא תקינה"); return; }
     setError("");
     setLoading(true);
     try {
       await updateUser(user.id, {
+        name: name.trim(),
+        email: emailTrimmed,
         role,
         is_active: isActive,
         allowed_tabs: role === "master" ? ["*"] : tabs,
@@ -298,6 +307,18 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "שגיאה בשמירה");
+    }
+    setLoading(false);
+  };
+
+  const handlePasswordReset = async () => {
+    setLoading(true);
+    setResetMsg(null);
+    try {
+      await sendPasswordResetLink(user.id, user.email);
+      setResetMsg("קישור לאיפוס סיסמה נשלח לכתובת האימייל של המשתמש");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "שגיאה בשליחת קישור איפוס");
     }
     setLoading(false);
   };
@@ -324,6 +345,30 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
         </div>
         <div className="p-6 space-y-4">
+          {/* Basic details */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">שם מלא</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg text-sm"
+                placeholder="שם מלא"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">אימייל</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg text-sm"
+                dir="ltr"
+                placeholder="email@company.co.il"
+              />
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">תפקיד</label>
@@ -360,6 +405,26 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
               onChange={(t, a) => { setTabs(t); setActions(a); }}
             />
           </div>
+          {/* Password reset */}
+          <div className="border rounded-xl p-3 bg-gray-50">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">איפוס סיסמה</p>
+            {resetMsg ? (
+              <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded p-2">{resetMsg}</p>
+            ) : (
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-gray-500 flex-1">שולח קישור לאיפוס לכתובת האימייל של המשתמש</p>
+                <button
+                  type="button"
+                  onClick={handlePasswordReset}
+                  disabled={loading}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-600 border border-blue-200 hover:bg-blue-50 transition-colors disabled:opacity-50"
+                >
+                  שלח קישור איפוס
+                </button>
+              </div>
+            )}
+          </div>
+
           {isLastMaster && (
             <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
               <p className="text-xs text-amber-700 font-semibold">
@@ -375,9 +440,9 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
           <div className="flex gap-2 pt-2">
             <button
               onClick={handleSave}
-              disabled={loading || isLastMaster}
+              disabled={loading}
               className="flex-1 py-2.5 rounded-lg font-bold text-sm text-white"
-              style={{ backgroundColor: (loading || isLastMaster) ? "#9ca3af" : EK_BLUE }}
+              style={{ backgroundColor: loading ? "#9ca3af" : EK_BLUE }}
             >
               {loading ? "שומר..." : "שמירת שינויים"}
             </button>

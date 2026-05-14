@@ -1,3 +1,10 @@
+export interface LinkedProductEntry {
+  id: string;
+  name: string;
+  qty: number;
+  required: boolean;
+}
+
 export type CatalogItemType =
   | "product"
   | "service"
@@ -17,6 +24,8 @@ export interface CatalogItem {
   defaultPrice: number | null;
   description: string;
   isActive: boolean;
+  hoursPerUnit?: number;
+  linkedProducts?: LinkedProductEntry[];
   createdAt: string;
   updatedAt: string;
 }
