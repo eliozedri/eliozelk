@@ -99,7 +99,8 @@ export async function deleteUser(id: string): Promise<void> {
   }
 }
 
-export async function sendPasswordResetLink(userId: string, email: string): Promise<void> {
+// Returns the recovery link if SMTP is not configured, null if email was sent directly.
+export async function sendPasswordResetLink(userId: string, email: string): Promise<string | null> {
   const token = await getAccessToken();
   const res = await fetch("/api/admin/users", {
     method: "PUT",
@@ -109,6 +110,23 @@ export async function sendPasswordResetLink(userId: string, email: string): Prom
   if (!res.ok) {
     const body = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(body.error ?? "שגיאה בשליחת קישור איפוס");
+  }
+  const body = await res.json() as { ok: boolean; link?: string | null };
+  return body.link ?? null;
+}
+
+// Sets a new password for a user via service-role admin API.
+// Never persists the password — it goes straight to Supabase Auth.
+export async function setUserPassword(userId: string, newPassword: string): Promise<void> {
+  const token = await getAccessToken();
+  const res = await fetch("/api/admin/users", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ id: userId, action: "set_password", password: newPassword }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string };
+    throw new Error(body.error ?? "שגיאה בעדכון הסיסמה");
   }
 }
 

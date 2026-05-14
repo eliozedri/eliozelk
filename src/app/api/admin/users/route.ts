@@ -120,7 +120,25 @@ export async function PUT(req: NextRequest) {
   if (body.action === "reset_password") {
     const email = body.email as string;
     if (!email) return NextResponse.json({ error: "Missing email" }, { status: 400 });
-    const { error } = await admin.auth.admin.generateLink({ type: "recovery", email });
+    const { data, error } = await admin.auth.admin.generateLink({ type: "recovery", email });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    // Return the link so admin can share it manually when SMTP is not configured.
+    // The link is a one-time token — it expires after use or after Supabase's TTL.
+    const link = data?.properties?.action_link ?? null;
+    return NextResponse.json({ ok: true, link });
+  }
+
+  if (body.action === "set_password") {
+    const targetId = body.id as string;
+    const password = body.password as string;
+    if (!targetId || !password) {
+      return NextResponse.json({ error: "Missing id or password" }, { status: 400 });
+    }
+    if (password.length < 8) {
+      return NextResponse.json({ error: "הסיסמה חייבת להכיל לפחות 8 תווים" }, { status: 400 });
+    }
+    // Update via service role — never logs the password value
+    const { error } = await admin.auth.admin.updateUserById(targetId, { password });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
