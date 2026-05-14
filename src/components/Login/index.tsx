@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase/client";
 
 const NAVY = "#0d1b2e";
 const EK_BLUE = "#1d6fd8";
 const EK_GOLD = "#f59e0b";
+const LOGIN_TIMEOUT_MS = 12000;
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -14,70 +15,96 @@ export function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear timeout on unmount
+  useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
+
+  const stopLoading = (msg?: string) => {
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    if (msg) setError(msg);
+    setLoading(false);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    const db = getSupabase();
-    if (!db) {
-      setError("שגיאת תצורה. פנה למנהל המערכת.");
-      setLoading(false);
-      return;
-    }
+    // Safety net: if anything hangs beyond 12s, release the button
+    timeoutRef.current = setTimeout(() => {
+      stopLoading("הכניסה ארכה יותר מדי זמן. בדוק חיבור לאינטרנט ונסה שנית.");
+    }, LOGIN_TIMEOUT_MS);
 
-    // 1. Try Supabase Auth directly (normal path after migration)
-    const { error: signInErr } = await db.auth.signInWithPassword({ email, password });
-
-    if (!signInErr) {
-      router.push("/");
-      router.refresh();
-      return;
-    }
-
-    // 2. If credentials failed, attempt bridge migration from legacy system
-    if (signInErr.message.includes("Invalid login credentials") || signInErr.message.includes("Email not confirmed")) {
-      const res = await fetch("/api/auth/migrate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      if (res.ok) {
-        // Migration succeeded — retry sign in
-        const { error: retryErr } = await db.auth.signInWithPassword({ email, password });
-        if (!retryErr) {
-          router.push("/");
-          router.refresh();
-          return;
-        }
-        setError("שגיאת מעבר מערכת. נסה שוב.");
-        setLoading(false);
+    try {
+      const db = getSupabase();
+      if (!db) {
+        stopLoading("שגיאת תצורה — חסרים פרטי חיבור. פנה למנהל המערכת.");
         return;
       }
 
-      const body = await res.json().catch(() => ({})) as { error?: string };
-      if (res.status === 401 || body.error === "invalid_credentials") {
-        setError("אימייל או סיסמה שגויים. נסה שנית.");
-      } else if (res.status === 403 || body.error === "inactive") {
-        setError("חשבון זה אינו פעיל. פנה למנהל המערכת.");
-      } else if (res.status === 404 || body.error === "not_found") {
-        setError("אימייל או סיסמה שגויים. נסה שנית.");
-      } else {
-        setError("שגיאת כניסה. נסה שנית.");
-      }
-      setLoading(false);
-      return;
-    }
+      // Primary path: Supabase Auth
+      const { error: signInErr } = await db.auth.signInWithPassword({ email, password });
 
-    // 3. Other Supabase Auth errors
-    if (signInErr.message.includes("Email not confirmed")) {
-      setError("נדרש אישור אימייל. פנה למנהל המערכת.");
-    } else {
-      setError("שגיאת כניסה. נסה שנית.");
+      if (!signInErr) {
+        // Session is now in cookies (createBrowserClient) — middleware will pass.
+        // Clear timeout but keep loading=true while Next.js navigates.
+        if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+        router.push("/");
+        return;
+      }
+
+      // Invalid credentials → try legacy bridge (returns 410 if fully migrated)
+      if (
+        signInErr.message.includes("Invalid login credentials") ||
+        signInErr.message.includes("Email not confirmed")
+      ) {
+        const res = await fetch("/api/auth/migrate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+
+        if (res.ok) {
+          const { error: retryErr } = await db.auth.signInWithPassword({ email, password });
+          if (!retryErr) {
+            if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+            router.push("/");
+            return;
+          }
+          stopLoading("שגיאת מעבר מערכת. נסה שוב.");
+          return;
+        }
+
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        if (res.status === 401 || body.error === "invalid_credentials") {
+          stopLoading("אימייל או סיסמה שגויים. נסה שנית.");
+        } else if (res.status === 403 || body.error === "inactive") {
+          stopLoading("חשבון זה אינו פעיל. פנה למנהל המערכת.");
+        } else {
+          // 404 = not found, 410 = legacy endpoint disabled → plain wrong credentials
+          stopLoading("אימייל או סיסמה שגויים. נסה שנית.");
+        }
+        return;
+      }
+
+      // Other Supabase Auth errors
+      const msg = signInErr.message.toLowerCase();
+      if (msg.includes("too many requests") || msg.includes("rate limit")) {
+        stopLoading("יותר מדי ניסיונות כניסה. המתן מספר דקות ונסה שנית.");
+      } else if (msg.includes("network") || msg.includes("fetch")) {
+        stopLoading("שגיאת רשת. בדוק חיבור לאינטרנט ונסה שנית.");
+      } else {
+        stopLoading("שגיאת כניסה. נסה שנית.");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("network") || msg.includes("fetch") || msg.includes("Failed to fetch")) {
+        stopLoading("שגיאת רשת. בדוק חיבור לאינטרנט ונסה שנית.");
+      } else {
+        stopLoading("שגיאה בלתי צפויה. נסה שנית.");
+      }
     }
-    setLoading(false);
   };
 
   return (
@@ -104,6 +131,7 @@ export function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={loading}
                 className="w-full px-3.5 py-2.5 rounded-lg border text-sm outline-none focus:ring-2 transition-all"
                 style={{ borderColor: "#d1d5db" }}
                 placeholder="name@company.co.il"
@@ -118,6 +146,7 @@ export function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={loading}
                 className="w-full px-3.5 py-2.5 rounded-lg border text-sm outline-none focus:ring-2 transition-all"
                 style={{ borderColor: "#d1d5db" }}
                 placeholder="••••••••"

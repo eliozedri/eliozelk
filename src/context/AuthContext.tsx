@@ -27,7 +27,12 @@ async function fetchProfile(userId: string): Promise<UserProfile | null> {
     .select("*")
     .eq("id", userId)
     .single();
-  if (error || !data) return null;
+  if (error) {
+    // Log the cause without exposing sensitive data
+    console.error("[auth] fetchProfile failed:", error.code, error.hint ?? error.message);
+    return null;
+  }
+  if (!data) return null;
   const r = data as Record<string, unknown>;
   return {
     id: r.id as string,
@@ -49,14 +54,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadProfile = useCallback(async (userId: string) => {
     const p = await fetchProfile(userId);
-    if (p && !p.is_active) {
-      // Block inactive users: sign out immediately
+
+    if (p === null) {
+      // Profile not in DB (auth user exists but no profile row) OR transient error.
+      // Sign out so the user doesn't end up in a limbo authenticated-but-no-profile state.
+      console.error("[auth] no profile found for user id:", userId, "— signing out");
       const db = getSupabase();
       await db?.auth.signOut();
       setProfile(null);
-    } else {
-      setProfile(p);
+      setLoading(false);
+      // Hard redirect so middleware state is also cleared
+      if (typeof window !== "undefined") window.location.href = "/login";
+      return;
     }
+
+    if (!p.is_active) {
+      console.warn("[auth] user is inactive, signing out:", userId);
+      const db = getSupabase();
+      await db?.auth.signOut();
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+
+    setProfile(p);
     setLoading(false);
   }, []);
 
@@ -74,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Get current session on mount
+    // Check existing session on mount
     db.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         loadProfile(session.user.id);
@@ -83,17 +104,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // Keep profile in sync with auth state changes
+    // Sync profile with auth state changes
     const { data: { subscription } } = db.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session?.user) {
         loadProfile(session.user.id);
-        touchLastLogin(); // fire-and-forget
+        touchLastLogin();
       } else if (event === "SIGNED_OUT") {
         setProfile(null);
         setLoading(false);
-      } else if (event === "TOKEN_REFRESHED" && session?.user) {
-        // Silently refresh — profile stays the same
       }
+      // TOKEN_REFRESHED: session stays valid, profile unchanged — no action needed
     });
 
     return () => subscription.unsubscribe();
