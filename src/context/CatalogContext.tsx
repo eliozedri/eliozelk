@@ -2,12 +2,12 @@
 
 import { createContext, useContext } from "react";
 import { useCatalog } from "@/hooks/useCatalog";
-import type { CatalogItem, CatalogFormState } from "@/types/catalog";
+import type { CatalogItem, CatalogFormState, LinkedProductEntry } from "@/types/catalog";
 
 interface CatalogContextValue {
   items: CatalogItem[];
-  addItem: (form: CatalogFormState) => CatalogItem;
-  updateItem: (id: string, partial: Partial<CatalogFormState>) => void;
+  addItem: (form: CatalogFormState, linkedProducts?: LinkedProductEntry[]) => CatalogItem;
+  updateItem: (id: string, partial: Partial<CatalogFormState>, linkedProducts?: LinkedProductEntry[]) => void;
   toggleActive: (id: string) => void;
   deleteItem: (id: string) => void;
 }

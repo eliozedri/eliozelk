@@ -360,9 +360,6 @@ function useSafetyImport(existingNames: Set<string>, onAdd: (form: CatalogFormSt
 
 export function CatalogPage() {
   const { items, addItem, updateItem, toggleActive, deleteItem } = useCatalogContext();
-  const [linkedMap, setLinkedMap] = useState<Record<string, LinkedProductEntry[]>>(() => {
-    try { return JSON.parse(localStorage.getItem("elkayam_catalog_links") ?? "{}"); } catch { return {}; }
-  });
 
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<CatalogItemType | "all">("all");
@@ -379,14 +376,8 @@ export function CatalogPage() {
   const existingNames = useMemo(() => new Set(items.map((i) => i.name.toLowerCase())), [items]);
   const allItemRefs = useMemo(() => items.map((i) => ({ id: i.id, name: i.name })), [items]);
 
-  function saveLinkedMap(updated: Record<string, LinkedProductEntry[]>) {
-    setLinkedMap(updated);
-    try { localStorage.setItem("elkayam_catalog_links", JSON.stringify(updated)); } catch { /* ignore */ }
-  }
-
   function handleAdd(form: CatalogFormState, links: LinkedProductEntry[]) {
-    const newItem = addItem(form);
-    if (links.length > 0) saveLinkedMap({ ...linkedMap, [newItem.id]: links });
+    addItem(form, links);
   }
 
   const filtered = useMemo(() => {
@@ -418,13 +409,12 @@ export function CatalogPage() {
       defaultPrice: item.defaultPrice !== null ? String(item.defaultPrice) : "",
       description: item.description,
     });
-    setEditLinked(linkedMap[id] ?? []);
+    setEditLinked(item.linkedProducts ?? []);
     setEditingId(id);
   }
 
   function saveEdit(id: string) {
-    updateItem(id, editForm);
-    saveLinkedMap({ ...linkedMap, [id]: editLinked });
+    updateItem(id, editForm, editLinked);
     setEditingId(null);
   }
 
@@ -539,9 +529,9 @@ export function CatalogPage() {
                       <tr key={item.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${!item.isActive ? "opacity-50" : ""}`}>
                         <td className="px-4 py-3 font-medium text-gray-900">
                           {item.name}
-                          {(linkedMap[item.id]?.length ?? 0) > 0 && (
+                          {(item.linkedProducts?.length ?? 0) > 0 && (
                             <span className="mr-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-                              {linkedMap[item.id].length} נלווים
+                              {item.linkedProducts!.length} נלווים
                             </span>
                           )}
                         </td>

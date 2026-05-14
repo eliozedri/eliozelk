@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { nanoid } from "nanoid";
-import type { CatalogItem, CatalogFormState } from "@/types/catalog";
+import type { CatalogItem, CatalogFormState, LinkedProductEntry } from "@/types/catalog";
 import { getSupabase } from "@/lib/supabase/client";
 
 const STORAGE_KEY = "elkayam_catalog";
@@ -19,6 +19,8 @@ function fromRow(r: Record<string, unknown>): CatalogItem {
     defaultPrice: r.default_price != null ? Number(r.default_price) : null,
     description: r.description as string,
     isActive: r.is_active as boolean,
+    hoursPerUnit: r.hours_per_unit != null ? Number(r.hours_per_unit) : undefined,
+    linkedProducts: Array.isArray(r.linked_products) ? (r.linked_products as LinkedProductEntry[]) : [],
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -36,6 +38,8 @@ function toRow(item: CatalogItem) {
     default_price: item.defaultPrice,
     description: item.description,
     is_active: item.isActive,
+    hours_per_unit: item.hoursPerUnit ?? null,
+    linked_products: item.linkedProducts ?? [],
     created_at: item.createdAt,
     updated_at: item.updatedAt,
   };
@@ -137,7 +141,7 @@ export function useCatalog() {
     };
   }, []);
 
-  const addItem = useCallback((form: CatalogFormState): CatalogItem => {
+  const addItem = useCallback((form: CatalogFormState, linkedProducts?: LinkedProductEntry[]): CatalogItem => {
     const now = new Date().toISOString();
     const newItem: CatalogItem = {
       id: nanoid(),
@@ -150,6 +154,7 @@ export function useCatalog() {
       defaultPrice: form.defaultPrice ? parseFloat(form.defaultPrice) : null,
       description: form.description.trim(),
       isActive: true,
+      linkedProducts: linkedProducts ?? [],
       createdAt: now,
       updatedAt: now,
     };
@@ -168,7 +173,7 @@ export function useCatalog() {
     return newItem;
   }, []);
 
-  const updateItem = useCallback((id: string, partial: Partial<CatalogFormState>) => {
+  const updateItem = useCallback((id: string, partial: Partial<CatalogFormState>, linkedProducts?: LinkedProductEntry[]) => {
     const now = new Date().toISOString();
     const original = ref.current.find(i => i.id === id);
     if (!original) return;
@@ -183,6 +188,7 @@ export function useCatalog() {
       ...(partial.dimensionUnit !== undefined && { dimensionUnit: partial.dimensionUnit || undefined }),
       ...(partial.defaultPrice !== undefined && { defaultPrice: partial.defaultPrice ? parseFloat(partial.defaultPrice) : null }),
       ...(partial.description !== undefined && { description: partial.description.trim() }),
+      ...(linkedProducts !== undefined && { linkedProducts }),
       updatedAt: now,
     };
 
