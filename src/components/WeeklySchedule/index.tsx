@@ -8,6 +8,7 @@ import type { WorkOrder } from "@/types/workOrder";
 import type { Crew } from "@/types/crew";
 import { getSlaColor, SLA_COLORS, formatWaitingDuration } from "@/lib/slaUtils";
 import { diaryCompletionStatus, type DiaryCompletionStatus } from "@/lib/executionUtils";
+import { openWorkOrderPDF } from "@/lib/pdfExport";
 
 // ── Week helpers ─────────────────────────────────────────────────────────────
 
@@ -53,6 +54,16 @@ interface JobDetailModalProps {
 
 function JobDetailModal({ order, crews, onEdit, onCancelAssignment, onClose }: JobDetailModalProps) {
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  async function handleViewPDF() {
+    setPdfLoading(true);
+    try {
+      await openWorkOrderPDF(order);
+    } finally {
+      setPdfLoading(false);
+    }
+  }
 
   const crewName = crews.find((c) => c.id === order.assignedCrewId)?.name ?? "לא ידוע";
   const title = jobDisplayTitle(order);
@@ -121,6 +132,14 @@ function JobDetailModal({ order, crews, onEdit, onCancelAssignment, onClose }: J
         <div className="px-6 pb-6 pt-2 flex flex-col gap-2">
           {!confirmCancel ? (
             <>
+              <button
+                onClick={handleViewPDF}
+                disabled={pdfLoading}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold text-gray-700 border border-gray-200 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <span>📄</span>
+                <span>{pdfLoading ? "טוען..." : "הצג הזמנה PDF"}</span>
+              </button>
               <button
                 onClick={onEdit}
                 className="w-full py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
