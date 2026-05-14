@@ -12,6 +12,7 @@ export interface NotificationCounts {
   graphicsActive: number;       // status = graphics_active (in progress)
   fabricationActive: number;    // fabricationRequired + active fab lifecycle
   fabricationIssues: number;    // fabricationStatus = issue (blocked)
+  warehousePending: number;     // warehouseRequired + status in (pending, processing)
   accountingPending: number;    // completed + not yet invoiced
   diariesPending: number;       // submitted work diaries awaiting review
   schedulePending: number;      // ready_installation + no scheduledDate
@@ -22,6 +23,7 @@ export interface NotificationCounts {
 
   // Sidebar-facing aggregated counts (one number per tab)
   graphics: number;     // graphicsPending — primary alert for the graphics team
+  warehouse: number;    // warehousePending — items needing warehouse preparation
   fabrication: number;  // fabricationActive + fabricationIssues
   accounting: number;   // accountingPending + diariesPending
   schedule: number;     // schedulePending
@@ -57,6 +59,12 @@ export function useNotifications(): NotificationCounts {
       d => d.status === "submitted" && (!d.approvalStatus || d.approvalStatus === "pending")
     ).length;
 
+    const warehousePending = orders.filter(o =>
+      o.warehouseRequired &&
+      o.status !== "completed" && o.status !== "cancelled" &&
+      (!o.warehouseStatus || o.warehouseStatus === "pending" || o.warehouseStatus === "processing")
+    ).length;
+
     const schedulePending = orders.filter(o =>
       o.status === "ready_installation" && !o.scheduledDate
     ).length;
@@ -88,6 +96,7 @@ export function useNotifications(): NotificationCounts {
       graphicsActive,
       fabricationActive,
       fabricationIssues,
+      warehousePending,
       accountingPending,
       diariesPending,
       schedulePending,
@@ -96,6 +105,7 @@ export function useNotifications(): NotificationCounts {
       stuckOrders,
       criticalAlerts,
       graphics:    graphicsPending,
+      warehouse:   warehousePending,
       fabrication: fabricationActive + fabricationIssues,
       accounting:  accountingPending + diariesPending,
       schedule:    schedulePending,

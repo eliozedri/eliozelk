@@ -48,6 +48,9 @@ const COLUMN_MAP: Partial<Record<keyof WorkOrder, string>> = {
   orderType:               "order_type",
   fulfillmentMethod:       "fulfillment_method",
   customerApprovalStatus:  "customer_approval_status",
+  // Warehouse domain
+  warehouseRequired:       "warehouse_required",
+  warehouseStatus:         "warehouse_status",
   // Field execution domain (only scheduling/office writes these)
   jobName:                   "job_name",
   estimatedExecutionHours:   "estimated_execution_hours",
@@ -123,6 +126,9 @@ function fromRow(r: Record<string, unknown>): WorkOrder {
     orderType:              ((r.order_type as string | null) ?? "field_work") as WorkOrder["orderType"],
     fulfillmentMethod:      (r.fulfillment_method as string | null) as WorkOrder["fulfillmentMethod"] ?? null,
     customerApprovalStatus: ((r.customer_approval_status as string | null) ?? "approved") as WorkOrder["customerApprovalStatus"],
+    // Warehouse columns
+    warehouseRequired:      r.warehouse_required != null ? (r.warehouse_required as boolean) : false,
+    warehouseStatus:        (r.warehouse_status as WorkOrder["warehouseStatus"]) ?? null,
     // Field execution columns
     jobName:                   (r.job_name as string | null) ?? null,
     estimatedExecutionHours:   r.estimated_execution_hours != null ? Number(r.estimated_execution_hours) : blob.estimatedExecutionHours,
@@ -182,6 +188,8 @@ function toRow(o: WorkOrder) {
     order_type:                  o.orderType ?? "field_work",
     fulfillment_method:          o.fulfillmentMethod ?? null,
     customer_approval_status:    o.customerApprovalStatus ?? "approved",
+    warehouse_required:          o.warehouseRequired ?? false,
+    warehouse_status:            o.warehouseStatus ?? null,
     job_name:                    o.jobName ?? null,
     estimated_execution_hours:   o.estimatedExecutionHours ?? null,
     ready_for_execution_at:      o.readyForExecutionAt ?? null,
@@ -474,8 +482,10 @@ export function useOrders() {
       orderedBy: snapshot.orderedBy || undefined,
       city: snapshot.city ?? "",
       orderType: snapshot.orderType ?? "field_work",
-      fulfillmentMethod: snapshot.fulfillmentMethod ?? null,
+      fulfillmentMethod: snapshot.orderType === "equipment_supply" ? "delivery" : (snapshot.fulfillmentMethod ?? null),
       customerApprovalStatus: snapshot.awaitingCustomerApproval ? "pending" : "approved",
+      warehouseRequired: (snapshot.accessoryRows ?? []).some(r => r.description?.trim() !== ""),
+      warehouseStatus: (snapshot.accessoryRows ?? []).some(r => r.description?.trim() !== "") ? "pending" : null,
       jobName: snapshot.jobName?.trim() || null,
       location: snapshot.location?.trim() || undefined,
       signRows: snapshot.signRows,
@@ -507,7 +517,11 @@ export function useOrders() {
           console.error("[orders] insert failed:", error.message);
           setOrders(prev => prev.filter(o => o.id !== newOrder.id));
         } else {
-          insertActivity(newOrder.id, "order_created", "הזמנה נוצרה ונשלחה למחלקת גרפיקה");
+          const depts: string[] = [];
+          if (newOrder.signRows?.length || newOrder.miscRows?.length) depts.push("מחלקת גרפיקה");
+          if (newOrder.warehouseRequired) depts.push("מחלקת מחסן");
+          if (depts.length === 0) depts.push("מחלקת גרפיקה");
+          insertActivity(newOrder.id, "order_created", `הזמנה נוצרה ונשלחה ל${depts.join(" ו")}`);
         }
       });
     }

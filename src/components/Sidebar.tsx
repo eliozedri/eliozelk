@@ -33,6 +33,9 @@ function CatalogIcon() {
 function SafetyIcon() {
   return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>;
 }
+function WarehouseIcon() {
+  return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
+}
 function AccountingIcon() {
   return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>;
 }
@@ -99,6 +102,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "מחלקות",
     items: [
       { tabId: "graphics", href: "/graphics", label: "מחלקת גרפיקה", icon: <GraphicsIcon />, matchFn: (p) => p.startsWith("/graphics") },
+      { tabId: "warehouse", href: "/warehouse", label: "מחלקת מחסן", icon: <WarehouseIcon />, matchFn: (p) => p.startsWith("/warehouse") },
       { tabId: "fabrication", href: "/fabrication", label: "מחלקת מסגריה", icon: <FabricationIcon />, matchFn: (p) => p.startsWith("/fabrication") },
       { tabId: "catalog", href: "/catalog", label: "עריכת מוצרים ופריטים", icon: <CatalogIcon />, matchFn: (p) => p.startsWith("/catalog") },
       { tabId: "safety", href: "/safety", label: "קטלוג מוצרים", icon: <SafetyIcon />, matchFn: (p) => p.startsWith("/safety") },
@@ -147,6 +151,7 @@ const TAB_BADGES: Partial<Record<TabId, { count: keyof ReturnType<typeof useNoti
   dashboard:   { count: "dashboard",   variant: "red" },
   orders:      { count: "orders",      variant: "red" },
   graphics:    { count: "graphics",    variant: "amber" },
+  warehouse:   { count: "warehouse",   variant: "teal" },
   fabrication: { count: "fabrication", variant: "amber" },
   accounting:  { count: "accounting",  variant: "blue" },
   schedule:    { count: "schedule",    variant: "teal" },

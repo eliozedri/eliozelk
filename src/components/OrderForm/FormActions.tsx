@@ -85,7 +85,7 @@ export function FormActions({ order, onReset, onSubmit }: Props) {
             className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white bg-green-600 hover:bg-green-700 transition-all shadow-sm"
           >
             <SendIcon />
-            <span>שלח הזמנה לגרפיקה</span>
+            <span>שלח הזמנה</span>
           </button>
           <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none whitespace-nowrap">
             <input

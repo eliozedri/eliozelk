@@ -36,7 +36,6 @@ function CheckIcon() {
 
 function validate(order: ReturnType<typeof useOrderForm>["order"]): string | null {
   if (!order.orderType) return "נא לבחור את אופי ההזמנה";
-  if (order.orderType === "equipment_supply" && !order.fulfillmentMethod) return "נא לבחור את שיטת האספקה — איסוף עצמי או משלוח";
   if (!order.date) return "נא להזין תאריך";
   if (!order.customer.trim()) return "נא להזין שם חברה";
   if (!order.city) return "נא לבחור עיר";
@@ -212,7 +211,7 @@ export function OrderForm() {
                 <button
                   key={type}
                   type="button"
-                  onClick={() => updateHeader({ orderType: type, fulfillmentMethod: undefined, awaitingCustomerApproval: false })}
+                  onClick={() => updateHeader({ orderType: type, fulfillmentMethod: type === "equipment_supply" ? "delivery" : undefined, awaitingCustomerApproval: false })}
                   className={`flex flex-col items-start gap-1 p-3 rounded-xl border-2 text-right transition-all ${
                     selected
                       ? "border-blue-500 bg-blue-50"
@@ -227,43 +226,13 @@ export function OrderForm() {
             })}
           </div>
 
-          {/* Delivery method — equipment_supply only */}
-          {order.orderType === "equipment_supply" && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <p className="text-xs font-semibold text-gray-600 mb-2">שיטת אספקה <span className="text-red-500">*</span></p>
-              <div className="flex gap-3">
-                {(["self_pickup", "delivery"] as const).map((method) => {
-                  const label = method === "self_pickup" ? "איסוף עצמי על ידי הלקוח" : "משלוח / אספקה על ידי אלקיים";
-                  const sel = order.fulfillmentMethod === method;
-                  return (
-                    <button
-                      key={method}
-                      type="button"
-                      onClick={() => updateHeader({ fulfillmentMethod: method })}
-                      className={`flex-1 py-2 px-3 rounded-lg border-2 text-sm font-semibold transition-all ${
-                        sel ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-gray-300 text-gray-600"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Helper text per type */}
           {order.orderType === "pickup" && (
             <p className="mt-3 text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">
               הזמנה זו לא תיכנס לסידור השבועי. לאחר הכנה היא תעבור לתיאום איסוף מול הלקוח.
             </p>
           )}
-          {order.orderType === "equipment_supply" && order.fulfillmentMethod === "self_pickup" && (
-            <p className="mt-3 text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">
-              הציוד יוכן ולאחר מכן הלקוח יאסוף. לא תיכנס לסידור השבועי.
-            </p>
-          )}
-          {order.orderType === "equipment_supply" && order.fulfillmentMethod === "delivery" && (
+          {order.orderType === "equipment_supply" && (
             <p className="mt-3 text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
               לאחר הכנת הציוד, ההזמנה תיכנס לשיבוץ בסידור השבועי לתיאום האספקה.
             </p>

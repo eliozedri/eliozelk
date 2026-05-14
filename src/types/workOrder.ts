@@ -243,6 +243,9 @@ export interface WorkOrder {
   assignedCrewId?: string | null;
   scheduledDate?: string | null;
   requiredWorkers?: number | null;
+  // Warehouse domain — parallel to fabrication, tracks stock prep
+  warehouseRequired: boolean;
+  warehouseStatus?: "pending" | "processing" | "ready" | null;
   // Accounting (JSONB today; first-class columns when ERP integration begins)
   accountingStatus?: AccountingStatus;
   invoicedAt?: string | null;

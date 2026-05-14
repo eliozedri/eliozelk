@@ -5,7 +5,8 @@ import type { WorkOrder, WorkOrderStatus } from "@/types/workOrder";
 export function isSchedulingCandidate(order: WorkOrder): boolean {
   if (order.status !== "ready_installation") return false;
   if (order.orderType === "pickup") return false;
-  if (order.orderType === "equipment_supply" && order.fulfillmentMethod !== "delivery") return false;
+  // equipment_supply always means delivery now; only block legacy self_pickup data
+  if (order.orderType === "equipment_supply" && order.fulfillmentMethod === "self_pickup") return false;
   if (order.orderType === "field_work" && order.customerApprovalStatus === "pending") return false;
   return true;
 }
