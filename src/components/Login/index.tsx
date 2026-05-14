@@ -54,41 +54,15 @@ export function Login() {
         return;
       }
 
-      // Invalid credentials → try legacy bridge (returns 410 if fully migrated)
+      // Map Supabase Auth error messages to user-friendly Hebrew
       if (
         signInErr.message.includes("Invalid login credentials") ||
         signInErr.message.includes("Email not confirmed")
       ) {
-        const res = await fetch("/api/auth/migrate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
-
-        if (res.ok) {
-          const { error: retryErr } = await db.auth.signInWithPassword({ email, password });
-          if (!retryErr) {
-            if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
-            router.push("/");
-            return;
-          }
-          stopLoading("שגיאת מעבר מערכת. נסה שוב.");
-          return;
-        }
-
-        const body = await res.json().catch(() => ({})) as { error?: string };
-        if (res.status === 401 || body.error === "invalid_credentials") {
-          stopLoading("אימייל או סיסמה שגויים. נסה שנית.");
-        } else if (res.status === 403 || body.error === "inactive") {
-          stopLoading("חשבון זה אינו פעיל. פנה למנהל המערכת.");
-        } else {
-          // 404 = not found, 410 = legacy endpoint disabled → plain wrong credentials
-          stopLoading("אימייל או סיסמה שגויים. נסה שנית.");
-        }
+        stopLoading("אימייל או סיסמה שגויים. נסה שנית.");
         return;
       }
 
-      // Other Supabase Auth errors
       const msg = signInErr.message.toLowerCase();
       if (msg.includes("too many requests") || msg.includes("rate limit")) {
         stopLoading("יותר מדי ניסיונות כניסה. המתן מספר דקות ונסה שנית.");

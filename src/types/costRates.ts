@@ -1,5 +1,5 @@
 // Central cost rate configuration — all profitability calculations derive from here.
-// Stored in localStorage: elkayam_cost_rates
+// Persisted in Supabase cost_rates table (id=1); localStorage is a read cache only.
 
 export interface CostRates {
   // ─── Labor ──────────────────────────────────────────────────
