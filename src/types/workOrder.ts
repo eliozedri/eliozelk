@@ -201,6 +201,7 @@ export interface WorkOrder {
   // Activity timeline
   activities?: OrderActivity[];
   // Field execution
+  jobName?: string | null;
   estimatedExecutionHours?: number;
   readyForExecutionAt?: string | null;
   assignedCrewId?: string | null;

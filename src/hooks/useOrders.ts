@@ -45,6 +45,7 @@ const COLUMN_MAP: Partial<Record<keyof WorkOrder, string>> = {
   invoiceNumber:             "invoice_number",
   billedAmount:              "billed_amount",
   // Field execution domain (only scheduling/office writes these)
+  jobName:                   "job_name",
   estimatedExecutionHours:   "estimated_execution_hours",
   readyForExecutionAt:       "ready_for_execution_at",
   assignedCrewId:            "assigned_crew_id",
@@ -115,6 +116,7 @@ function fromRow(r: Record<string, unknown>): WorkOrder {
     invoiceNumber:             (r.invoice_number as string | null) ?? blob.invoiceNumber ?? null,
     billedAmount:              r.billed_amount != null ? Number(r.billed_amount) : (blob.billedAmount ?? null),
     // Field execution columns
+    jobName:                   (r.job_name as string | null) ?? null,
     estimatedExecutionHours:   r.estimated_execution_hours != null ? Number(r.estimated_execution_hours) : blob.estimatedExecutionHours,
     readyForExecutionAt:       (r.ready_for_execution_at as string | null) ?? blob.readyForExecutionAt ?? null,
     assignedCrewId:            (r.assigned_crew_id as string | null) ?? blob.assignedCrewId ?? null,
@@ -169,6 +171,7 @@ function toRow(o: WorkOrder) {
     invoiced_by:                 o.invoicedBy ?? null,
     invoice_number:              o.invoiceNumber ?? null,
     billed_amount:               o.billedAmount ?? null,
+    job_name:                    o.jobName ?? null,
     estimated_execution_hours:   o.estimatedExecutionHours ?? null,
     ready_for_execution_at:      o.readyForExecutionAt ?? null,
     assigned_crew_id:            o.assignedCrewId ?? null,
@@ -459,7 +462,8 @@ export function useOrders() {
       contactPerson: snapshot.contactPerson || undefined,
       orderedBy: snapshot.orderedBy || undefined,
       city: snapshot.city ?? "",
-      location: "",
+      jobName: snapshot.jobName?.trim() || null,
+      location: snapshot.location?.trim() || undefined,
       signRows: snapshot.signRows,
       accessoryRows: snapshot.accessoryRows,
       miscRows: snapshot.miscRows,

@@ -48,6 +48,8 @@ function initialState(): OrderState {
     contactPerson: "",
     orderedBy: "",
     city: "",
+    jobName: "",
+    location: "",
     signRows: [emptySignRow()],
     accessoryRows: [emptyMiscRow()],
     miscRows: [emptyMiscRow()],
@@ -85,7 +87,7 @@ export function useOrderForm() {
   }, [order]);
 
   const updateHeader = useCallback(
-    (partial: Partial<Pick<OrderState, "date" | "customer" | "contactPerson" | "orderedBy" | "city" | "generalNotes">>) => {
+    (partial: Partial<Pick<OrderState, "date" | "customer" | "contactPerson" | "orderedBy" | "city" | "generalNotes" | "jobName" | "location">>) => {
       setOrder((prev) => ({ ...prev, ...partial }));
     },
     []

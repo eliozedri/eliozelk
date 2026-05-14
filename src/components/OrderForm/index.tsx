@@ -197,6 +197,33 @@ export function OrderForm() {
           onChange={(partial) => updateHeader(partial as Partial<OrderHeaderType>)}
         />
 
+        {/* שם עבודה + מקום עבודה */}
+        <div className="grid grid-cols-2 gap-3 mt-1">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              שם עבודה
+              <span className="text-gray-400 font-normal mr-1">(לזיהוי בשיבוץ שבועי)</span>
+            </label>
+            <input
+              type="text"
+              value={order.jobName ?? ""}
+              onChange={(e) => updateHeader({ jobName: e.target.value })}
+              className={inputCls}
+              placeholder="לדוג׳: סימון חניון עיריית אשקלון"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">מקום עבודה</label>
+            <input
+              type="text"
+              value={order.location ?? ""}
+              onChange={(e) => updateHeader({ location: e.target.value })}
+              className={inputCls}
+              placeholder="לדוג׳: רחוב הרצל 12, אשקלון"
+            />
+          </div>
+        </div>
+
         <SignTable
           rows={order.signRows}
           onAdd={addSignRow}

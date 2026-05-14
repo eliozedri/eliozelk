@@ -34,7 +34,145 @@ function formatDayHeader(d: Date): string {
   return d.toLocaleDateString("he-IL", { day: "numeric", month: "numeric" });
 }
 
-// ── Assign Modal ─────────────────────────────────────────────────────────────
+// Returns the best display title for a job — prefers jobName over customer/order number
+function jobDisplayTitle(order: WorkOrder): string {
+  if (order.jobName?.trim()) return order.jobName.trim();
+  if (order.customer?.trim()) return order.customer.trim();
+  return order.orderNumber;
+}
+
+// ── Job Detail Modal (click existing scheduled job) ──────────────────────────
+
+interface JobDetailModalProps {
+  order: WorkOrder;
+  crews: Crew[];
+  onEdit: () => void;
+  onCancelAssignment: () => void;
+  onClose: () => void;
+}
+
+function JobDetailModal({ order, crews, onEdit, onCancelAssignment, onClose }: JobDetailModalProps) {
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
+  const crewName = crews.find((c) => c.id === order.assignedCrewId)?.name ?? "לא ידוע";
+  const title = jobDisplayTitle(order);
+  const subtitle = order.location?.trim() || order.city?.trim() || "";
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col" dir="rtl">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 p-6 border-b border-gray-100">
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">פרטי שיבוץ</p>
+            <h2 className="text-lg font-bold text-gray-900 leading-tight">{title}</h2>
+            {subtitle && <p className="text-sm text-gray-500 mt-0.5 truncate">{subtitle}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0 mt-0.5"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Details grid */}
+        <div className="px-6 py-4 space-y-2.5">
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-gray-500">מספר הזמנה</span>
+            <span className="font-semibold text-gray-800 font-mono">{order.orderNumber}</span>
+          </div>
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-gray-500">לקוח</span>
+            <span className="font-semibold text-gray-800">{order.customer}</span>
+          </div>
+          {order.location && (
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-500">מקום עבודה</span>
+              <span className="font-semibold text-gray-800 text-right max-w-[200px]">{order.location}</span>
+            </div>
+          )}
+          <div className="h-px bg-gray-100" />
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-gray-500">צוות משובץ</span>
+            <span className="font-semibold text-gray-800">{crewName}</span>
+          </div>
+          {order.scheduledDate && (
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-500">תאריך מתוכנן</span>
+              <span className="font-semibold text-gray-800">{order.scheduledDate}</span>
+            </div>
+          )}
+          {order.estimatedExecutionHours != null && (
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-500">זמן ביצוע משוער</span>
+              <span className="font-semibold text-gray-800">{order.estimatedExecutionHours} שעות</span>
+            </div>
+          )}
+          {order.requiredWorkers != null && (
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-500">כמות עובדים נדרשת</span>
+              <span className="font-semibold text-gray-800">{order.requiredWorkers} עובדים</span>
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="px-6 pb-6 pt-2 flex flex-col gap-2">
+          {!confirmCancel ? (
+            <>
+              <button
+                onClick={onEdit}
+                className="w-full py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+              >
+                ✏️ עריכת שיבוץ
+              </button>
+              <button
+                onClick={() => setConfirmCancel(true)}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold text-red-600 border border-red-200 hover:bg-red-50 transition-colors"
+              >
+                🚫 ביטול שיבוץ
+              </button>
+              <button
+                onClick={onClose}
+                className="w-full py-2 rounded-xl text-sm text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                סגור
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+                <p className="text-sm font-semibold text-amber-800">
+                  האם לבטל את השיבוץ ולהחזיר את העבודה להמתנה לשיבוץ מחדש?
+                </p>
+                <p className="text-xs text-amber-600 mt-1">
+                  ההזמנה לא תימחק. היא תחזור לרשימת הממתינות לשיבוץ.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={onCancelAssignment}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-red-600 hover:bg-red-700 transition-colors"
+                >
+                  כן, בטל שיבוץ
+                </button>
+                <button
+                  onClick={() => setConfirmCancel(false)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 hover:bg-gray-50 transition-colors"
+                >
+                  חזור
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Assign / Edit Modal ───────────────────────────────────────────────────────
 
 interface AssignModalProps {
   order: WorkOrder;
@@ -51,12 +189,14 @@ function AssignModal({ order, crews, weekDates, onAssign, onClose }: AssignModal
   const [hours, setHours] = useState(order.estimatedExecutionHours ?? 4);
   const [workers, setWorkers] = useState(order.requiredWorkers ?? 2);
 
+  const title = jobDisplayTitle(order);
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 flex flex-col gap-4" dir="rtl">
         <div>
           <h2 className="text-lg font-bold text-gray-900">שיבוץ לצוות ותאריך</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{order.orderNumber} · {order.customer} · {order.location}</p>
+          <p className="text-sm text-gray-500 mt-0.5 truncate">{order.orderNumber} · {title}</p>
         </div>
 
         <div className="flex flex-col gap-3">
@@ -125,7 +265,7 @@ function AssignModal({ order, crews, weekDates, onAssign, onClose }: AssignModal
             onClick={() => { onAssign(order.id, crewId, dateStr, hours, workers); onClose(); }}
             className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            שבץ עבודה
+            שמור שיבוץ
           </button>
         </div>
       </div>
@@ -147,15 +287,18 @@ function JobChip({ order, diaryStatus, onClick }: { order: WorkOrder; diaryStatu
   const slaColor = getSlaColor(order.readyForExecutionAt);
   const { dot } = SLA_COLORS[slaColor];
   const chip = DIARY_STATUS_CHIP[diaryStatus];
+  const title = jobDisplayTitle(order);
+  const sub = order.location?.trim() || order.city?.trim() || order.customer;
+
   return (
     <button
       onClick={onClick}
-      className="w-full text-right px-2 py-1.5 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors flex items-start gap-1.5 text-xs"
+      className="w-full text-right px-2 py-1.5 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors flex items-start gap-1.5 text-xs group"
     >
       <div className={`w-2 h-2 rounded-full mt-0.5 shrink-0 ${dot}`} />
-      <div className="min-w-0">
-        <div className="font-semibold text-gray-900 truncate">{order.orderNumber}</div>
-        <div className="text-gray-500 truncate">{order.customer}</div>
+      <div className="min-w-0 flex-1">
+        <div className="font-bold text-gray-900 truncate">{title}</div>
+        {sub && <div className="text-gray-500 truncate text-[10px]">{sub}</div>}
         <div className="flex items-center gap-1.5 mt-0.5">
           {order.estimatedExecutionHours && (
             <span className="text-blue-600">{order.estimatedExecutionHours}h</span>
@@ -168,6 +311,7 @@ function JobChip({ order, diaryStatus, onClick }: { order: WorkOrder; diaryStatu
           )}
         </div>
       </div>
+      <span className="text-gray-300 group-hover:text-gray-400 text-[10px] shrink-0 mt-0.5">✏️</span>
     </button>
   );
 }
@@ -177,19 +321,22 @@ function JobChip({ order, diaryStatus, onClick }: { order: WorkOrder; diaryStatu
 function UnscheduledJobCard({ order, onAssign }: { order: WorkOrder; onAssign: () => void }) {
   const slaColor = getSlaColor(order.readyForExecutionAt);
   const { bg, text, dot } = SLA_COLORS[slaColor];
+  const title = jobDisplayTitle(order);
+  const sub = order.location?.trim() || order.city?.trim() || "";
+
   return (
     <div className={`bg-white rounded-xl border shadow-sm p-3 flex flex-col gap-2 ${slaColor === "red" ? "border-red-200" : "border-gray-200"}`}>
       <div className="flex items-start justify-between gap-1">
         <div className="flex items-center gap-1.5 min-w-0">
           <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${dot}`} />
-          <span className="font-bold text-sm text-gray-900 truncate">{order.orderNumber}</span>
+          <span className="font-bold text-sm text-gray-900 truncate">{title}</span>
         </div>
         <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${bg} ${text}`}>
           {formatWaitingDuration(order.readyForExecutionAt)}
         </span>
       </div>
-      <div className="text-xs text-gray-500 truncate">{order.customer}</div>
-      <div className="text-xs text-gray-400 truncate">{order.location}</div>
+      <div className="text-[10px] font-mono text-gray-400">{order.orderNumber}</div>
+      {sub && <div className="text-xs text-gray-400 truncate">{sub}</div>}
       {order.estimatedExecutionHours ? (
         <div className="text-xs text-gray-600 font-medium">{order.estimatedExecutionHours} שע׳ משוערות</div>
       ) : (
@@ -213,6 +360,9 @@ export function WeeklySchedule() {
   const { diaries } = useWorkDiaryContext();
 
   const [weekOffset, setWeekOffset] = useState(0);
+  // viewingOrder: an already-scheduled job the user clicked → shows JobDetailModal
+  const [viewingOrder, setViewingOrder] = useState<WorkOrder | null>(null);
+  // assigningOrder: job being assigned/re-assigned → shows AssignModal
   const [assigningOrder, setAssigningOrder] = useState<WorkOrder | null>(null);
 
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
@@ -251,6 +401,15 @@ export function WeeklySchedule() {
       estimatedExecutionHours: hours,
       requiredWorkers: workers,
     });
+  }, [updateOrderFields]);
+
+  const handleCancelAssignment = useCallback((orderId: string) => {
+    updateOrderFields(orderId, {
+      assignedCrewId: null,
+      scheduledDate: null,
+      requiredWorkers: null,
+    });
+    setViewingOrder(null);
   }, [updateOrderFields]);
 
   // Per crew/day workload
@@ -408,7 +567,7 @@ export function WeeklySchedule() {
                               key={o.id}
                               order={o}
                               diaryStatus={diaryCompletionStatus(diaries, o.id)}
-                              onClick={() => setAssigningOrder(o)}
+                              onClick={() => setViewingOrder(o)}
                             />
                           ))}
                           {unscheduled.length > 0 && (
@@ -431,7 +590,21 @@ export function WeeklySchedule() {
 
       </div>
 
-      {/* Assign Modal */}
+      {/* Job detail modal — for already-scheduled jobs */}
+      {viewingOrder && !assigningOrder && (
+        <JobDetailModal
+          order={viewingOrder}
+          crews={crews}
+          onEdit={() => {
+            setAssigningOrder(viewingOrder);
+            setViewingOrder(null);
+          }}
+          onCancelAssignment={() => handleCancelAssignment(viewingOrder.id)}
+          onClose={() => setViewingOrder(null)}
+        />
+      )}
+
+      {/* Assign / edit modal */}
       {assigningOrder && (
         <AssignModal
           order={assigningOrder}
