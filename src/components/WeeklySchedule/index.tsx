@@ -9,6 +9,7 @@ import type { Crew } from "@/types/crew";
 import { getSlaColor, SLA_COLORS, formatWaitingDuration } from "@/lib/slaUtils";
 import { diaryCompletionStatus, type DiaryCompletionStatus } from "@/lib/executionUtils";
 import { openWorkOrderPDF } from "@/lib/pdfExport";
+import { isSchedulingCandidate } from "@/lib/workflowEngine";
 
 // ── Week helpers ─────────────────────────────────────────────────────────────
 
@@ -435,7 +436,7 @@ export function WeeklySchedule() {
   }, [weekDates]);
 
   const readyOrders = useMemo(() =>
-    orders.filter((o) => o.status === "ready_installation"),
+    orders.filter((o) => isSchedulingCandidate(o)),
     [orders]
   );
 

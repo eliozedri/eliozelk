@@ -11,6 +11,9 @@ import {
   getProgressState,
   hasOpenProblems,
   openProblemsCount,
+  ORDER_TYPE_LABELS,
+  ORDER_TYPE_COLORS,
+  FULFILLMENT_LABELS,
 } from "@/types/workOrder";
 import type { WorkOrder, WorkOrderStatus } from "@/types/workOrder";
 import { getStageSlaColor, hoursInCurrentStage, canMarkReadyForInstallation } from "@/lib/workflowEngine";
@@ -297,9 +300,10 @@ interface OrderRowProps {
   phoneMap: Map<string, string>;
   riskScore: OrderRiskScore | undefined;
   onUpdateStatus: (id: string, status: WorkOrderStatus) => void;
+  onApproveCustomer: (id: string) => void;
 }
 
-function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus }: OrderRowProps) {
+function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApproveCustomer }: OrderRowProps) {
   const phone = phoneMap.get(order.customer.trim().toLowerCase());
   const lastUpdated = getLastUpdated(order);
   const relative = relativeTime(lastUpdated);
@@ -348,6 +352,14 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus }: OrderRo
               {[signCount > 0 && `${signCount} תמרורים`, miscCount > 0 && `${miscCount} שונות`].filter(Boolean).join(" + ")}
             </span>
           )}
+          {order.orderType && order.orderType !== "field_work" && (
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold w-fit ${ORDER_TYPE_COLORS[order.orderType]}`}>
+              {ORDER_TYPE_LABELS[order.orderType]}
+              {order.orderType === "equipment_supply" && order.fulfillmentMethod && (
+                <span className="mr-1 opacity-75">· {FULFILLMENT_LABELS[order.fulfillmentMethod]}</span>
+              )}
+            </span>
+          )}
         </div>
       </td>
 
@@ -388,6 +400,16 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus }: OrderRo
       <td className="px-3 py-3.5">
         <div className="flex flex-col gap-1">
           <StatusBadge status={order.status} />
+          {order.orderType === "field_work" && order.customerApprovalStatus === "pending" && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 w-fit">
+              ממתין לאישור לקוח
+            </span>
+          )}
+          {(order.orderType === "pickup" || (order.orderType === "equipment_supply" && order.fulfillmentMethod === "self_pickup")) && order.status === "ready_installation" && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 w-fit">
+              מוכן לאיסוף
+            </span>
+          )}
           {!isTerminal && (
             <div
               className="flex items-center gap-1"
@@ -448,6 +470,14 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus }: OrderRo
               מוכן להתקנה
             </button>
           )}
+          {order.orderType === "field_work" && order.customerApprovalStatus === "pending" && (
+            <button
+              onClick={() => onApproveCustomer(order.id)}
+              className="px-2 py-1 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors whitespace-nowrap"
+            >
+              ✓ אישור לקוח התקבל
+            </button>
+          )}
           {order.status === "ready_installation" && (
             <button
               onClick={() => onUpdateStatus(order.id, "completed")}
@@ -506,7 +536,7 @@ function EmptyState({ hasFilters, onClear }: { hasFilters: boolean; onClear: () 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export function OrdersTable() {
-  const { orders, updateOrderStatus } = useOrdersContext();
+  const { orders, updateOrderStatus, approveCustomerOrder } = useOrdersContext();
   const { customers } = useCustomersContext();
   const riskScores = useOrderRiskScores();
 
@@ -756,6 +786,7 @@ export function OrdersTable() {
                         phoneMap={phoneMap}
                         riskScore={riskScores.get(order.id)}
                         onUpdateStatus={handleUpdateStatus}
+                        onApproveCustomer={approveCustomerOrder}
                       />
                     ))}
                   </tbody>

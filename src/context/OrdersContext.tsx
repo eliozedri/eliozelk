@@ -10,6 +10,7 @@ interface OrdersContextValue {
   addOrder: (snapshot: OrderState, priority?: OrderPriority, notes?: string) => Promise<WorkOrder>;
   acknowledgeOrder: (id: string, acknowledgedBy?: string) => void;
   completeGraphics: (id: string) => void;
+  approveCustomerOrder: (id: string) => void;
   updateOrderStatus: (id: string, status: WorkOrderStatus) => void;
   updateOrderFields: (id: string, fields: Partial<WorkOrder>) => void;
   addOrderActivity: (id: string, type: OrderActivityType, description: string, opts?: { by?: string; department?: string; meta?: Record<string, string> }) => void;

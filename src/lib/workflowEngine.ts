@@ -1,5 +1,15 @@
 import type { WorkOrder, WorkOrderStatus } from "@/types/workOrder";
 
+// Returns true if this order should appear in the weekly schedule candidate list.
+// Only ready orders that genuinely require field execution or delivery get scheduled.
+export function isSchedulingCandidate(order: WorkOrder): boolean {
+  if (order.status !== "ready_installation") return false;
+  if (order.orderType === "pickup") return false;
+  if (order.orderType === "equipment_supply" && order.fulfillmentMethod !== "delivery") return false;
+  if (order.orderType === "field_work" && order.customerApprovalStatus === "pending") return false;
+  return true;
+}
+
 // ── Valid status transitions ──────────────────────────────────────────────
 // Finite state machine for the order lifecycle.
 // updateOrderStatus enforces this — no jump can skip a stage.

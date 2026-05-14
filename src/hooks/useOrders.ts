@@ -44,6 +44,10 @@ const COLUMN_MAP: Partial<Record<keyof WorkOrder, string>> = {
   invoicedBy:                "invoiced_by",
   invoiceNumber:             "invoice_number",
   billedAmount:              "billed_amount",
+  // Order classification domain
+  orderType:               "order_type",
+  fulfillmentMethod:       "fulfillment_method",
+  customerApprovalStatus:  "customer_approval_status",
   // Field execution domain (only scheduling/office writes these)
   jobName:                   "job_name",
   estimatedExecutionHours:   "estimated_execution_hours",
@@ -115,6 +119,10 @@ function fromRow(r: Record<string, unknown>): WorkOrder {
     invoicedBy:                (r.invoiced_by as string | null) ?? blob.invoicedBy ?? null,
     invoiceNumber:             (r.invoice_number as string | null) ?? blob.invoiceNumber ?? null,
     billedAmount:              r.billed_amount != null ? Number(r.billed_amount) : (blob.billedAmount ?? null),
+    // Order classification columns
+    orderType:              ((r.order_type as string | null) ?? "field_work") as WorkOrder["orderType"],
+    fulfillmentMethod:      (r.fulfillment_method as string | null) as WorkOrder["fulfillmentMethod"] ?? null,
+    customerApprovalStatus: ((r.customer_approval_status as string | null) ?? "approved") as WorkOrder["customerApprovalStatus"],
     // Field execution columns
     jobName:                   (r.job_name as string | null) ?? null,
     estimatedExecutionHours:   r.estimated_execution_hours != null ? Number(r.estimated_execution_hours) : blob.estimatedExecutionHours,
@@ -171,6 +179,9 @@ function toRow(o: WorkOrder) {
     invoiced_by:                 o.invoicedBy ?? null,
     invoice_number:              o.invoiceNumber ?? null,
     billed_amount:               o.billedAmount ?? null,
+    order_type:                  o.orderType ?? "field_work",
+    fulfillment_method:          o.fulfillmentMethod ?? null,
+    customer_approval_status:    o.customerApprovalStatus ?? "approved",
     job_name:                    o.jobName ?? null,
     estimated_execution_hours:   o.estimatedExecutionHours ?? null,
     ready_for_execution_at:      o.readyForExecutionAt ?? null,
@@ -462,6 +473,9 @@ export function useOrders() {
       contactPerson: snapshot.contactPerson || undefined,
       orderedBy: snapshot.orderedBy || undefined,
       city: snapshot.city ?? "",
+      orderType: snapshot.orderType ?? "field_work",
+      fulfillmentMethod: snapshot.fulfillmentMethod ?? null,
+      customerApprovalStatus: snapshot.awaitingCustomerApproval ? "pending" : "approved",
       jobName: snapshot.jobName?.trim() || null,
       location: snapshot.location?.trim() || undefined,
       signRows: snapshot.signRows,
@@ -521,6 +535,12 @@ export function useOrders() {
       graphicsCompletedAt: now,
     });
     insertActivity(id, "graphics_completed", "עבודת גרפיקה הושלמה", { department: "graphics" });
+  }, [_patchOrder]);
+
+  // ── approveCustomerOrder ───────────────────────────────────────────────
+  const approveCustomerOrder = useCallback((id: string) => {
+    _patchOrder(id, { customerApprovalStatus: "approved" });
+    insertActivity(id, "status_changed", "אישור לקוח התקבל — ההזמנה עוברת לשיבוץ");
   }, [_patchOrder]);
 
   // ── updateOrderStatus ──────────────────────────────────────────────────
@@ -681,6 +701,7 @@ export function useOrders() {
 
   return {
     orders, addOrder, acknowledgeOrder, completeGraphics,
+    approveCustomerOrder,
     updateOrderStatus, updateOrderFields, addOrderActivity,
     addOrderProblem, resolveOrderProblem,
   };

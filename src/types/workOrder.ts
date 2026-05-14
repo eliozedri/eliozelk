@@ -1,5 +1,37 @@
 import type { SignRow, MiscRow, OrderAttachment, FabricationDetails } from "./order";
 
+// ─── Order type / fulfillment classification ─────────────────────────────────
+
+export type OrderType =
+  | "field_work"        // ביצוע עבודה — field execution, enters weekly schedule
+  | "pickup"            // הזמנה לאיסוף — customer collects, never scheduled
+  | "equipment_supply"; // אספקת ציוד — depends on fulfillment_method
+
+export type FulfillmentMethod =
+  | "self_pickup"  // איסוף עצמי — customer picks up
+  | "delivery";    // משלוח — Elkayam delivers (enters scheduling)
+
+export type CustomerApprovalStatus =
+  | "approved"  // customer confirmed execution date
+  | "pending";  // standby — waiting for customer approval
+
+export const ORDER_TYPE_LABELS: Record<OrderType, string> = {
+  field_work:       "ביצוע עבודה",
+  pickup:           "הזמנה לאיסוף",
+  equipment_supply: "אספקת ציוד",
+};
+
+export const ORDER_TYPE_COLORS: Record<OrderType, string> = {
+  field_work:       "bg-blue-100 text-blue-700",
+  pickup:           "bg-emerald-100 text-emerald-700",
+  equipment_supply: "bg-orange-100 text-orange-700",
+};
+
+export const FULFILLMENT_LABELS: Record<FulfillmentMethod, string> = {
+  self_pickup: "איסוף עצמי",
+  delivery:    "משלוח ע״י אלקיים",
+};
+
 // ─── Fabrication ────────────────────────────────────────────────────────────
 
 export type FabricationStatus =
@@ -171,6 +203,10 @@ export interface WorkOrder {
   contactPerson?: string;
   orderedBy?: string;
   location?: string;
+  // Order classification — determines workflow routing
+  orderType: OrderType;
+  fulfillmentMethod?: FulfillmentMethod | null;
+  customerApprovalStatus: CustomerApprovalStatus;
   jobSlash?: string;      // kept optional for backward compat
   reference?: string;     // kept optional for backward compat
   signRows: SignRow[];

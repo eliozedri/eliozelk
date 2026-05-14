@@ -48,6 +48,9 @@ function initialState(): OrderState {
     contactPerson: "",
     orderedBy: "",
     city: "",
+    orderType: undefined,
+    fulfillmentMethod: undefined,
+    awaitingCustomerApproval: false,
     jobName: "",
     location: "",
     signRows: [emptySignRow()],
@@ -77,6 +80,9 @@ export function useOrderForm() {
         fabricationDetails: draft.fabricationDetails ?? emptyFabrication(),
         contactPerson: draft.contactPerson ?? "",
         orderedBy: draft.orderedBy ?? "",
+        orderType: draft.orderType ?? undefined,
+        fulfillmentMethod: draft.fulfillmentMethod ?? undefined,
+        awaitingCustomerApproval: draft.awaitingCustomerApproval ?? false,
       });
     }
   }, []);
@@ -87,7 +93,7 @@ export function useOrderForm() {
   }, [order]);
 
   const updateHeader = useCallback(
-    (partial: Partial<Pick<OrderState, "date" | "customer" | "contactPerson" | "orderedBy" | "city" | "generalNotes" | "jobName" | "location">>) => {
+    (partial: Partial<Pick<OrderState, "date" | "customer" | "contactPerson" | "orderedBy" | "city" | "generalNotes" | "jobName" | "location" | "orderType" | "fulfillmentMethod" | "awaitingCustomerApproval">>) => {
       setOrder((prev) => ({ ...prev, ...partial }));
     },
     []

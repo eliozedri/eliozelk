@@ -35,6 +35,8 @@ function CheckIcon() {
 }
 
 function validate(order: ReturnType<typeof useOrderForm>["order"]): string | null {
+  if (!order.orderType) return "נא לבחור את אופי ההזמנה";
+  if (order.orderType === "equipment_supply" && !order.fulfillmentMethod) return "נא לבחור את שיטת האספקה — איסוף עצמי או משלוח";
   if (!order.date) return "נא להזין תאריך";
   if (!order.customer.trim()) return "נא להזין שם חברה";
   if (!order.city) return "נא לבחור עיר";
@@ -140,7 +142,12 @@ export function OrderForm() {
     }
     const submitted = await addOrder(order, priority);
     resetOrder();
-    setSuccessMessage(`ההזמנה נשלחה למחלקת גרפיקה — מספר הזמנה: ${submitted.orderNumber}`);
+    const typeMsg = order.orderType === "pickup"
+      ? "הזמנת האיסוף נפתחה"
+      : order.orderType === "equipment_supply"
+      ? "הזמנת הציוד נפתחה"
+      : "ההזמנה נשלחה למחלקת גרפיקה";
+    setSuccessMessage(`${typeMsg} — מספר הזמנה: ${submitted.orderNumber}`);
     setTimeout(() => setSuccessMessage(null), 5000);
   };
 
@@ -157,7 +164,7 @@ export function OrderForm() {
         </div>
 
         <div className="flex items-center gap-2 mb-5">
-          <h1 className="text-2xl font-bold text-gray-900">פתיחת הזמנת שילוט</h1>
+          <h1 className="text-2xl font-bold text-gray-900">פתיחת הזמנה חדשה</h1>
           <svg className="w-7 h-7 text-blue-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
             <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
@@ -186,6 +193,108 @@ export function OrderForm() {
           </div>
         )}
 
+        {/* ── אופי ההזמנה (required) ─────────────────────────────────────── */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-4">
+          <p className="text-sm font-bold text-gray-700 mb-3">
+            אופי ההזמנה
+            <span className="text-red-500 mr-1">*</span>
+          </p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {(["field_work", "pickup", "equipment_supply"] as const).map((type) => {
+              const labels = {
+                field_work:       { title: "ביצוע עבודה",    icon: "🚧", hint: "ביצוע עבודת שטח על ידי צוות אלקיים" },
+                pickup:           { title: "הזמנה לאיסוף",   icon: "📦", hint: "הלקוח יגיע לאסוף את הפריטים" },
+                equipment_supply: { title: "אספקת ציוד",     icon: "🚚", hint: "אספקת ציוד/מוצרים ללקוח" },
+              };
+              const { title, icon, hint } = labels[type];
+              const selected = order.orderType === type;
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => updateHeader({ orderType: type, fulfillmentMethod: undefined, awaitingCustomerApproval: false })}
+                  className={`flex flex-col items-start gap-1 p-3 rounded-xl border-2 text-right transition-all ${
+                    selected
+                      ? "border-blue-500 bg-blue-50"
+                      : "border-gray-200 hover:border-gray-300 bg-white"
+                  }`}
+                >
+                  <span className="text-xl">{icon}</span>
+                  <span className={`text-sm font-bold ${selected ? "text-blue-700" : "text-gray-700"}`}>{title}</span>
+                  <span className="text-[11px] text-gray-400 leading-snug">{hint}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Delivery method — equipment_supply only */}
+          {order.orderType === "equipment_supply" && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-xs font-semibold text-gray-600 mb-2">שיטת אספקה <span className="text-red-500">*</span></p>
+              <div className="flex gap-3">
+                {(["self_pickup", "delivery"] as const).map((method) => {
+                  const label = method === "self_pickup" ? "איסוף עצמי על ידי הלקוח" : "משלוח / אספקה על ידי אלקיים";
+                  const sel = order.fulfillmentMethod === method;
+                  return (
+                    <button
+                      key={method}
+                      type="button"
+                      onClick={() => updateHeader({ fulfillmentMethod: method })}
+                      className={`flex-1 py-2 px-3 rounded-lg border-2 text-sm font-semibold transition-all ${
+                        sel ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-gray-300 text-gray-600"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Helper text per type */}
+          {order.orderType === "pickup" && (
+            <p className="mt-3 text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">
+              הזמנה זו לא תיכנס לסידור השבועי. לאחר הכנה היא תעבור לתיאום איסוף מול הלקוח.
+            </p>
+          )}
+          {order.orderType === "equipment_supply" && order.fulfillmentMethod === "self_pickup" && (
+            <p className="mt-3 text-xs text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">
+              הציוד יוכן ולאחר מכן הלקוח יאסוף. לא תיכנס לסידור השבועי.
+            </p>
+          )}
+          {order.orderType === "equipment_supply" && order.fulfillmentMethod === "delivery" && (
+            <p className="mt-3 text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+              לאחר הכנת הציוד, ההזמנה תיכנס לשיבוץ בסידור השבועי לתיאום האספקה.
+            </p>
+          )}
+          {order.orderType === "field_work" && !order.awaitingCustomerApproval && (
+            <p className="mt-3 text-xs text-blue-700 bg-blue-50 rounded-lg px-3 py-2">
+              הזמנה זו תעבור לשיבוץ בסידור השבועי לאחר השלמת ההכנות ואישור הלקוח.
+            </p>
+          )}
+
+          {/* Standby / customer approval checkbox — field_work only */}
+          {order.orderType === "field_work" && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={order.awaitingCustomerApproval ?? false}
+                  onChange={(e) => updateHeader({ awaitingCustomerApproval: e.target.checked })}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+                />
+                <div>
+                  <span className="text-sm font-semibold text-gray-700">ממתין לאישור לקוח — עבודה בסטנד ביי</span>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    הזמנה זו היא עבודה עתידית. היא לא תיכנס לסידור השבועי עד שאישור הלקוח יתקבל במשרד.
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
+        </div>
+
         <OrderHeader
           header={{
             date: order.date,
@@ -197,32 +306,34 @@ export function OrderForm() {
           onChange={(partial) => updateHeader(partial as Partial<OrderHeaderType>)}
         />
 
-        {/* שם עבודה + מקום עבודה */}
-        <div className="grid grid-cols-2 gap-3 mt-1">
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              שם עבודה
-              <span className="text-gray-400 font-normal mr-1">(לזיהוי בשיבוץ שבועי)</span>
-            </label>
-            <input
-              type="text"
-              value={order.jobName ?? ""}
-              onChange={(e) => updateHeader({ jobName: e.target.value })}
-              className={inputCls}
-              placeholder="לדוג׳: סימון חניון עיריית אשקלון"
-            />
+        {/* שם עבודה + מקום עבודה — field_work only */}
+        {order.orderType === "field_work" && (
+          <div className="grid grid-cols-2 gap-3 mt-1">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                שם עבודה
+                <span className="text-gray-400 font-normal mr-1">(לזיהוי בסידור השבועי)</span>
+              </label>
+              <input
+                type="text"
+                value={order.jobName ?? ""}
+                onChange={(e) => updateHeader({ jobName: e.target.value })}
+                className={inputCls}
+                placeholder="לדוג׳: סימון חניון עיריית אשקלון"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">מקום עבודה</label>
+              <input
+                type="text"
+                value={order.location ?? ""}
+                onChange={(e) => updateHeader({ location: e.target.value })}
+                className={inputCls}
+                placeholder="לדוג׳: רחוב הרצל 12, אשקלון"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">מקום עבודה</label>
-            <input
-              type="text"
-              value={order.location ?? ""}
-              onChange={(e) => updateHeader({ location: e.target.value })}
-              className={inputCls}
-              placeholder="לדוג׳: רחוב הרצל 12, אשקלון"
-            />
-          </div>
-        </div>
+        )}
 
         <SignTable
           rows={order.signRows}
