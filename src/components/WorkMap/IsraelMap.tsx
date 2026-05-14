@@ -142,25 +142,46 @@ export default function IsraelMap({ orders, onOpenOrder }: IsraelMapProps) {
                   )}
                 </div>
 
-                {onOpenOrder && (
-                  <button
-                    onClick={() => onOpenOrder(order.id)}
+                {/* Navigation links — no API key required */}
+                <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
+                  <a
+                    href={`https://waze.com/ul?ll=${coords[0]},${coords[1]}&navigate=yes`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
-                      width: "100%",
-                      padding: "6px 12px",
-                      background: "#2563eb",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      fontWeight: 700,
-                      fontSize: "12px",
-                      cursor: "pointer",
-                      marginTop: "4px",
+                      flex: 1, padding: "5px 8px", textAlign: "center",
+                      background: "#05c3de", color: "white", borderRadius: "8px",
+                      fontWeight: 700, fontSize: "11px", textDecoration: "none",
                     }}
                   >
-                    פתח הזמנה
-                  </button>
-                )}
+                    Waze
+                  </a>
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${coords[0]},${coords[1]}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      flex: 1, padding: "5px 8px", textAlign: "center",
+                      background: "#4285f4", color: "white", borderRadius: "8px",
+                      fontWeight: 700, fontSize: "11px", textDecoration: "none",
+                    }}
+                  >
+                    מפות
+                  </a>
+                  {onOpenOrder && (
+                    <button
+                      onClick={() => onOpenOrder(order.id)}
+                      style={{
+                        flex: 2, padding: "5px 10px",
+                        background: "#2563eb", color: "white",
+                        border: "none", borderRadius: "8px",
+                        fontWeight: 700, fontSize: "11px", cursor: "pointer",
+                      }}
+                    >
+                      פתח הזמנה
+                    </button>
+                  )}
+                </div>
               </div>
             </Popup>
           </Marker>
