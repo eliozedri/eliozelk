@@ -91,6 +91,8 @@ const NAV_SECTIONS: NavSection[] = [
       { tabId: "dashboard", href: "/new-order", label: "הזמנה חדשה", icon: <OrderIcon />, matchFn: (p) => p === "/new-order", noBadge: true },
       { tabId: "orders", href: "/orders", label: "טבלת הזמנות", icon: <TableIcon />, matchFn: (p) => p.startsWith("/orders") },
       { tabId: "customers", href: "/customers", label: "לקוחות", icon: <CustomersIcon />, matchFn: (p) => p.startsWith("/customers") },
+      { tabId: "schedule", href: "/schedule", label: "סידור שבועי", icon: <CalendarIcon />, matchFn: (p) => p.startsWith("/schedule") },
+      { tabId: "work-diary", href: "/work-diary", label: "יומן עבודה חדש", icon: <DiaryIcon />, matchFn: (p) => p.startsWith("/work-diary") },
     ],
   },
   {
@@ -98,8 +100,8 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "graphics", href: "/graphics", label: "מחלקת גרפיקה", icon: <GraphicsIcon />, matchFn: (p) => p.startsWith("/graphics") },
       { tabId: "fabrication", href: "/fabrication", label: "מחלקת מסגריה", icon: <FabricationIcon />, matchFn: (p) => p.startsWith("/fabrication") },
-      { tabId: "catalog", href: "/catalog", label: "מוצרים ושירותים", icon: <CatalogIcon />, matchFn: (p) => p.startsWith("/catalog") },
-      { tabId: "safety", href: "/safety", label: "אביזרי בטיחות", icon: <SafetyIcon />, matchFn: (p) => p.startsWith("/safety") },
+      { tabId: "catalog", href: "/catalog", label: "עריכת מוצרים ופריטים", icon: <CatalogIcon />, matchFn: (p) => p.startsWith("/catalog") },
+      { tabId: "safety", href: "/safety", label: "קטלוג מוצרים", icon: <SafetyIcon />, matchFn: (p) => p.startsWith("/safety") },
       { tabId: "accounting", href: "/accounting", label: "הנהלת חשבונות", icon: <AccountingIcon />, matchFn: (p) => p.startsWith("/accounting") },
     ],
   },
@@ -107,9 +109,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "בקרת שטח",
     items: [
       { tabId: "workmap", href: "/workmap", label: "מפת עבודות", icon: <MapIcon />, matchFn: (p) => p.startsWith("/workmap") },
-      { tabId: "schedule", href: "/schedule", label: "סידור שבועי", icon: <CalendarIcon />, matchFn: (p) => p.startsWith("/schedule") },
       { tabId: "crews", href: "/crews", label: "צוותי שטח", icon: <CrewsIcon />, matchFn: (p) => p.startsWith("/crews") },
-      { tabId: "work-diary", href: "/work-diary", label: "יומן עבודה", icon: <DiaryIcon />, matchFn: (p) => p.startsWith("/work-diary") },
     ],
   },
   {

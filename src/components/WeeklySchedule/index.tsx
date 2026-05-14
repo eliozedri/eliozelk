@@ -40,7 +40,7 @@ interface AssignModalProps {
   order: WorkOrder;
   crews: Crew[];
   weekDates: Date[];
-  onAssign: (orderId: string, crewId: string, date: string, hours: number) => void;
+  onAssign: (orderId: string, crewId: string, date: string, hours: number, workers: number) => void;
   onClose: () => void;
 }
 
@@ -49,6 +49,7 @@ function AssignModal({ order, crews, weekDates, onAssign, onClose }: AssignModal
   const [crewId, setCrewId] = useState(order.assignedCrewId ?? activeCrews[0]?.id ?? "");
   const [dateStr, setDateStr] = useState(order.scheduledDate ?? toISODate(weekDates[0]));
   const [hours, setHours] = useState(order.estimatedExecutionHours ?? 4);
+  const [workers, setWorkers] = useState(order.requiredWorkers ?? 2);
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
@@ -100,6 +101,16 @@ function AssignModal({ order, crews, weekDates, onAssign, onClose }: AssignModal
               onChange={(e) => setHours(Number(e.target.value))}
             />
           </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-600">כמות עובדים נדרשת</label>
+            <input
+              type="number" min={1} max={50} step={1}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400"
+              value={workers}
+              onChange={(e) => setWorkers(Math.max(1, parseInt(e.target.value) || 1))}
+            />
+          </div>
         </div>
 
         <div className="flex gap-2 justify-end pt-2">
@@ -111,7 +122,7 @@ function AssignModal({ order, crews, weekDates, onAssign, onClose }: AssignModal
           </button>
           <button
             disabled={!crewId || activeCrews.length === 0}
-            onClick={() => { onAssign(order.id, crewId, dateStr, hours); onClose(); }}
+            onClick={() => { onAssign(order.id, crewId, dateStr, hours, workers); onClose(); }}
             className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             שבץ עבודה
@@ -148,6 +159,9 @@ function JobChip({ order, diaryStatus, onClick }: { order: WorkOrder; diaryStatu
         <div className="flex items-center gap-1.5 mt-0.5">
           {order.estimatedExecutionHours && (
             <span className="text-blue-600">{order.estimatedExecutionHours}h</span>
+          )}
+          {order.requiredWorkers && (
+            <span className="text-gray-500">{order.requiredWorkers} עובדים</span>
           )}
           {chip && (
             <span className={`text-[9px] font-semibold ${chip.cls}`}>{chip.label}</span>
@@ -230,11 +244,12 @@ export function WeeklySchedule() {
     [readyOrders, weekDateStrings]
   );
 
-  const handleAssign = useCallback((orderId: string, crewId: string, date: string, hours: number) => {
+  const handleAssign = useCallback((orderId: string, crewId: string, date: string, hours: number, workers: number) => {
     updateOrderFields(orderId, {
       assignedCrewId: crewId,
       scheduledDate: date,
       estimatedExecutionHours: hours,
+      requiredWorkers: workers,
     });
   }, [updateOrderFields]);
 

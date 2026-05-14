@@ -87,15 +87,6 @@ function CrewForm({ initial, onSave, onCancel, submitLabel }: CrewFormProps) {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold text-gray-600">מספר עובדים</label>
-          <input
-            type="number" min={1} max={20}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400"
-            value={form.workerCount}
-            onChange={(e) => setForm((p) => ({ ...p, workerCount: Number(e.target.value) }))}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
           <label className="text-xs font-semibold text-gray-600">טלפון</label>
           <input
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400"
@@ -216,7 +207,7 @@ function CrewCard({
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">לא פעיל</span>
             )}
           </div>
-          <div className="text-xs text-gray-500 mt-0.5">{crew.leader} · {crew.workerCount} עובדים</div>
+          <div className="text-xs text-gray-500 mt-0.5">{crew.leader}</div>
         </div>
         <div className="flex gap-1">
           <button onClick={onEdit} className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">

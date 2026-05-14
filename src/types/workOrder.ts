@@ -205,6 +205,7 @@ export interface WorkOrder {
   readyForExecutionAt?: string | null;
   assignedCrewId?: string | null;
   scheduledDate?: string | null;
+  requiredWorkers?: number | null;
   // Accounting (JSONB today; first-class columns when ERP integration begins)
   accountingStatus?: AccountingStatus;
   invoicedAt?: string | null;

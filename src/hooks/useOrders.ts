@@ -49,6 +49,7 @@ const COLUMN_MAP: Partial<Record<keyof WorkOrder, string>> = {
   readyForExecutionAt:       "ready_for_execution_at",
   assignedCrewId:            "assigned_crew_id",
   scheduledDate:             "scheduled_date",
+  requiredWorkers:           "required_workers",
 };
 
 // Fields that live in the content JSONB blob (set at order creation by office)
@@ -118,6 +119,7 @@ function fromRow(r: Record<string, unknown>): WorkOrder {
     readyForExecutionAt:       (r.ready_for_execution_at as string | null) ?? blob.readyForExecutionAt ?? null,
     assignedCrewId:            (r.assigned_crew_id as string | null) ?? blob.assignedCrewId ?? null,
     scheduledDate:             (r.scheduled_date as string | null) ?? blob.scheduledDate ?? null,
+    requiredWorkers:           r.required_workers != null ? Number(r.required_workers) : null,
     // Joined arrays (present in fetchAll response, empty in realtime payloads)
     problems:    ((r.order_problems as Record<string, unknown>[]) ?? []).map(fromProblemRow),
     activities:  [], // Loaded on demand from order_activities (not in main subscription)
@@ -171,6 +173,7 @@ function toRow(o: WorkOrder) {
     ready_for_execution_at:      o.readyForExecutionAt ?? null,
     assigned_crew_id:            o.assignedCrewId ?? null,
     scheduled_date:              o.scheduledDate ?? null,
+    required_workers:            o.requiredWorkers ?? null,
     data:                        buildContentBlob(o),
     created_at:                  o.createdAt,
     updated_at:                  o.updatedAt,
