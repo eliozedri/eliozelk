@@ -8,15 +8,17 @@ import type { WorkOrder } from "@/types/workOrder";
 import { getSlaColor, SLA_COLORS, type SlaColor } from "@/lib/slaUtils";
 import { extractCityCoordinates } from "@/lib/cityCoordinates";
 
+const LOADING_PLACEHOLDER = (
+  <div className="flex items-center justify-center h-full text-gray-400 text-sm bg-gray-100 rounded-xl">
+    טוען מפה...
+  </div>
+);
+
 // Load Leaflet map only on the client — it requires window/document
-const IsraelMap = dynamic(() => import("./IsraelMap"), {
-  ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center h-full text-gray-400 text-sm bg-gray-100 rounded-xl">
-      טוען מפה...
-    </div>
-  ),
-});
+const IsraelMap = dynamic(() => import("./IsraelMap"), { ssr: false, loading: () => LOADING_PLACEHOLDER });
+
+// Google Maps variant — loaded when API key is configured
+const IsraelMapGoogle = dynamic(() => import("./IsraelMapGoogle"), { ssr: false, loading: () => LOADING_PLACEHOLDER });
 
 // ── KPI Card ────────────────────────────────────────────────────────────────
 
@@ -225,9 +227,10 @@ export function WorkMap() {
               <p className="text-sm font-medium">אין עבודות להצגה בפילטרים הנוכחיים</p>
               <p className="text-xs">שנה את הסינון או ודא שלהזמנות יש שדה מיקום תקין</p>
             </div>
-          ) : (
-            <IsraelMap orders={visibleOrders} />
-          )}
+          ) : process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+            ? <IsraelMapGoogle orders={visibleOrders} />
+            : <IsraelMap orders={visibleOrders} />
+          }
         </div>
 
         {/* Unmappable notice */}
