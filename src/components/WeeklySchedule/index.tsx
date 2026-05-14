@@ -87,8 +87,10 @@ function JobDetailModal({ order, crews, onEdit, onCancelAssignment, onClose }: J
           </button>
         </div>
 
-        {/* Details grid */}
-        <div className="px-6 py-4 space-y-2.5">
+        {/* Details — scrollable if content is long */}
+        <div className="px-6 py-4 space-y-2.5 overflow-y-auto max-h-[55vh]">
+
+          {/* Order identity */}
           <div className="flex justify-between items-center text-sm">
             <span className="text-gray-500">מספר הזמנה</span>
             <span className="font-semibold text-gray-800 font-mono">{order.orderNumber}</span>
@@ -100,10 +102,51 @@ function JobDetailModal({ order, crews, onEdit, onCancelAssignment, onClose }: J
           {order.location && (
             <div className="flex justify-between items-center text-sm">
               <span className="text-gray-500">מקום עבודה</span>
-              <span className="font-semibold text-gray-800 text-right max-w-[200px]">{order.location}</span>
+              <span className="font-semibold text-gray-800 text-right max-w-[220px]">{order.location}</span>
             </div>
           )}
+
           <div className="h-px bg-gray-100" />
+
+          {/* Order items */}
+          <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">פירוט הזמנה</p>
+          {(() => {
+            const signs = (order.signRows ?? []).filter((r) => r.signNumber?.trim());
+            const accessories = (order.accessoryRows ?? []).filter((r) => r.description?.trim());
+            const misc = (order.miscRows ?? []).filter((r) => r.description?.trim());
+            const hasItems = signs.length > 0 || accessories.length > 0 || misc.length > 0;
+            if (!hasItems) return (
+              <p className="text-sm text-gray-400 italic">אין פריטים מפורטים בהזמנה</p>
+            );
+            return (
+              <div className="space-y-1">
+                {signs.map((r) => (
+                  <div key={r.id} className="flex justify-between items-center text-sm">
+                    <span className="text-gray-500 truncate max-w-[60%]">
+                      תמרור {r.signNumber}{r.size ? ` · ${r.size}` : ""}{r.type ? ` · ${r.type}` : ""}
+                    </span>
+                    <span className="font-semibold text-gray-800 shrink-0">× {r.quantity || 1}</span>
+                  </div>
+                ))}
+                {accessories.map((r) => (
+                  <div key={r.id} className="flex justify-between items-center text-sm">
+                    <span className="text-gray-500 truncate max-w-[60%]">{r.description}</span>
+                    <span className="font-semibold text-gray-800 shrink-0">× {r.quantity || 1}</span>
+                  </div>
+                ))}
+                {misc.map((r) => (
+                  <div key={r.id} className="flex justify-between items-center text-sm">
+                    <span className="text-gray-500 truncate max-w-[60%]">{r.description}</span>
+                    <span className="font-semibold text-gray-800 shrink-0">× {r.quantity || 1}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          <div className="h-px bg-gray-100" />
+
+          {/* Assignment details */}
           <div className="flex justify-between items-center text-sm">
             <span className="text-gray-500">צוות משובץ</span>
             <span className="font-semibold text-gray-800">{crewName}</span>
