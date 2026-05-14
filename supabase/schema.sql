@@ -196,12 +196,48 @@ create policy "Allow all for anon" on cost_rates for all using (true) with check
 -- Ensure row exists
 insert into public.cost_rates (id, data) values (1, '{}') on conflict (id) do nothing;
 
+-- ── Sequential counters ──────────────────────────────────────────────────────
+-- Backs the next_counter() RPC used for ORD-YYYY-NNN and WD-YYYY-NNN numbers.
+
+create table if not exists public.counters (
+  key   text   primary key,
+  value bigint not null default 0
+);
+
+alter table public.counters enable row level security;
+
+-- No direct-access policies. SECURITY DEFINER function is the only path in.
+
+create or replace function public.next_counter(counter_key text)
+returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  next_val bigint;
+begin
+  insert into public.counters (key, value)
+  values (counter_key, 1)
+  on conflict (key) do update
+    set value = counters.value + 1
+  returning value into next_val;
+  return next_val;
+end;
+$$;
+
+-- Grant execute only to authenticated; deny anon.
+revoke all on function public.next_counter(text) from public;
+grant execute on function public.next_counter(text) to authenticated;
+
 -- ================================================================
 -- Notes:
--- 1. RLS is enabled on all tables with permissive "allow all" policies
---    since auth is handled at the application layer (not Supabase Auth)
--- 2. Complex nested data (signRows, paintingItems, etc.) is stored as JSONB
--- 3. The cost_rates table uses a single row (id = 1) for the rate config
+-- 1. RLS is enabled on all tables; anon-permissive policies were replaced
+--    by auth-only policies via migration 20260513000001.
+-- 2. Complex nested data (signRows, paintingItems, etc.) is stored as JSONB.
+-- 3. The cost_rates table uses a single row (id = 1) for the rate config.
 -- 4. work_orders and work_diaries store the full object in `data` JSONB
---    for schema flexibility, with indexed columns for filtering
+--    for schema flexibility, with indexed columns for filtering.
+-- 5. next_counter() uses SECURITY DEFINER so it bypasses RLS on counters
+--    and can be called by authenticated users without direct table access.
 -- ================================================================
