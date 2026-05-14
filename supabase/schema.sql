@@ -209,19 +209,21 @@ alter table public.counters enable row level security;
 -- No direct-access policies. SECURITY DEFINER function is the only path in.
 
 create or replace function public.next_counter(counter_key text)
-returns bigint
+returns integer
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  next_val bigint;
+  next_val integer;
 begin
-  insert into public.counters (key, value)
-  values (counter_key, 1)
-  on conflict (key) do update
-    set value = counters.value + 1
-  returning value into next_val;
+  update public.counters set value = value + 1
+  where key = counter_key returning value into next_val;
+  if next_val is null then
+    insert into public.counters (key, value) values (counter_key, 1)
+    on conflict (key) do update set value = public.counters.value + 1
+    returning value into next_val;
+  end if;
   return next_val;
 end;
 $$;

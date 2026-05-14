@@ -18,20 +18,26 @@ ALTER TABLE public.counters ENABLE ROW LEVEL SECURITY;
 -- path in. Service role bypasses RLS for diagnostics.
 
 -- 2. Atomic increment-or-insert function
+-- Return type is integer (matches the live DB definition — cannot change with OR REPLACE).
+-- Body uses UPDATE-first then INSERT-on-conflict, matching the live DB body exactly.
+-- Adds SET search_path = public for search_path injection hardening.
 CREATE OR REPLACE FUNCTION public.next_counter(counter_key text)
-RETURNS bigint
+RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  next_val bigint;
+  next_val integer;
 BEGIN
-  INSERT INTO public.counters (key, value)
-  VALUES (counter_key, 1)
-  ON CONFLICT (key) DO UPDATE
-    SET value = counters.value + 1
-  RETURNING value INTO next_val;
+  UPDATE public.counters SET value = value + 1
+  WHERE key = counter_key RETURNING value INTO next_val;
+  IF next_val IS NULL THEN
+    INSERT INTO public.counters (key, value)
+    VALUES (counter_key, 1)
+    ON CONFLICT (key) DO UPDATE SET value = public.counters.value + 1
+    RETURNING value INTO next_val;
+  END IF;
   RETURN next_val;
 END;
 $$;
