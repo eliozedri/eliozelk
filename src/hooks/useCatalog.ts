@@ -226,9 +226,9 @@ export function useCatalog() {
 
   const deleteItem = useCallback((id: string) => {
     const original = ref.current.find(i => i.id === id);
-
-    setItems(prev => prev.filter(i => i.id !== id));
-
+    const remaining = ref.current.filter(i => i.id !== id);
+    setItems(remaining);
+    saveLocal(remaining);
     const db = getSupabase();
     if (db) {
       db.from("catalog_items").delete().eq("id", id).then(({ error }) => {

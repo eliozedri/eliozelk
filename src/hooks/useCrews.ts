@@ -177,9 +177,9 @@ export function useCrews() {
 
   const deleteCrew = useCallback((id: string) => {
     const original = ref.current.find(c => c.id === id);
-
-    setCrews(prev => prev.filter(c => c.id !== id));
-
+    const remaining = ref.current.filter(c => c.id !== id);
+    setCrews(remaining);
+    saveLocal(remaining);
     const db = getSupabase();
     if (db) {
       db.from("crews").delete().eq("id", id).then(({ error }) => {

@@ -236,7 +236,9 @@ export function useWorkDiaries() {
 
   const deleteDiary = useCallback((id: string) => {
     const original = ref.current.find(d => d.id === id);
-    setDiaries(prev => prev.filter(d => d.id !== id));
+    const remaining = ref.current.filter(d => d.id !== id);
+    setDiaries(remaining);
+    saveLocal(remaining);
     const db = getSupabase();
     if (db) {
       db.from("work_diaries").delete().eq("id", id).then(({ error }) => {
