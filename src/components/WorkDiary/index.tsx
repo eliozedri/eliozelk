@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCostRatesContext } from "@/context/CostRatesContext";
@@ -197,14 +197,17 @@ export function WorkDiaryForm() {
   const [exporting, setExporting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Auto-open a blank diary on mount — this page is a form, not a list
+  useEffect(() => {
+    let cancelled = false;
+    createDiary().then((d) => {
+      if (!cancelled) { setDiary(d); setActiveTab("header"); }
+    });
+    return () => { cancelled = true; };
+  }, [createDiary]);
+
   async function handleNew() {
     const d = await createDiary();
-    setDiary(d);
-    setActiveTab("header");
-    setSuccessMessage(null);
-  }
-
-  function handleOpen(d: WorkDiary) {
     setDiary(d);
     setActiveTab("header");
     setSuccessMessage(null);
@@ -251,9 +254,16 @@ export function WorkDiaryForm() {
     openEmailDraft(diary);
   }
 
-  // ── Landing / list ───────────────────────────────────────────────────────
+  // Loading state while the first diary is being created
   if (!diary) {
-    return <DiaryListView onNew={handleNew} onOpen={handleOpen} />;
+    return (
+      <div className="min-h-screen bg-[#f0f2f5] flex items-center justify-center">
+        <div className="text-center">
+          <DiaryIcon className="w-10 h-10 text-blue-300 mx-auto mb-3 animate-pulse" />
+          <p className="text-sm text-gray-400">פותח יומן עבודה...</p>
+        </div>
+      </div>
+    );
   }
 
   const disabled = diary.status === "submitted";
@@ -273,18 +283,19 @@ export function WorkDiaryForm() {
             </p>
           </div>
           {successMessage && (
-            <div className="mr-auto bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-2 rounded-lg max-w-sm">
-              {successMessage}
+            <div className="mr-auto flex items-center gap-3 flex-wrap">
+              <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-2 rounded-lg">
+                {successMessage}
+              </div>
+              <button
+                type="button"
+                onClick={handleNew}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors shadow-sm whitespace-nowrap"
+              >
+                <PlusIcon />
+                יומן חדש
+              </button>
             </div>
-          )}
-          {!successMessage && (
-            <button
-              type="button"
-              onClick={() => { setDiary(null); setSuccessMessage(null); }}
-              className="mr-auto text-xs text-gray-400 hover:text-gray-600 underline transition-colors"
-            >
-              ← רשימת יומנים
-            </button>
           )}
         </div>
       </div>
