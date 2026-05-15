@@ -60,7 +60,7 @@ function CancelOrderModal({
               <li>• ההזמנה תוסר מרשימת <strong className="text-gray-700">ממתין לחיוב</strong></li>
               <li>• ההזמנה לא תופיע בסיכומי חיוב ובייצוא נתוני חיוב</li>
               <li>• הסטטוס יעודכן ל<strong className="text-gray-700">בוטל</strong></li>
-              <li className="text-green-700">• ההזמנה <strong>אינה נמחקת</strong> מהמערכת — ניתן לצפות בה בלשונית הזמנות</li>
+              <li className="text-green-700">• ההזמנה <strong>אינה נמחקת</strong> מהמערכת — ניתן לצפות בה ב<strong>ארכיון חשבוניות</strong></li>
             </ul>
           </div>
           {saveState === "error" && (
@@ -373,7 +373,6 @@ const ALL_STATUSES = [
   { value: "production", label: STATUS_LABELS.production },
   { value: "ready_installation", label: STATUS_LABELS.ready_installation },
   { value: "completed", label: STATUS_LABELS.completed },
-  { value: "cancelled", label: STATUS_LABELS.cancelled },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -408,7 +407,7 @@ export function AccountingPage() {
   const { profile } = useAuth();
   const { billingLeakage, byOrder } = useOperationalKPIs();
 
-  const [activeTab, setActiveTab] = useState<"orders" | "work-diaries" | "billing" | "invoiced">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "work-diaries" | "billing" | "invoiced" | "archive">("orders");
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
@@ -434,6 +433,22 @@ export function AccountingPage() {
     for (const o of byOrder) m.set(o.orderId, o.totalRevenue);
     return m;
   }, [byOrder]);
+
+  // Cancelled orders archive
+  const cancelledOrders = useMemo(
+    () => orders
+      .filter(o => o.status === "cancelled")
+      .sort((a, b) => new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime()),
+    [orders]
+  );
+
+  const cancelledThisMonth = useMemo(() => {
+    const now = new Date();
+    return cancelledOrders.filter(o => {
+      const d = new Date(o.updatedAt ?? o.createdAt);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length;
+  }, [cancelledOrders]);
 
   // Invoiced history
   const invoicedOrders = useMemo(
@@ -567,6 +582,7 @@ export function AccountingPage() {
 
   const filtered = useMemo(() => {
     return orders.filter((o) => {
+      if (o.status === "cancelled") return false;
       if (filterCustomer && !o.customer.toLowerCase().includes(filterCustomer.toLowerCase())) return false;
       if (filterDateFrom && o.date < filterDateFrom) return false;
       if (filterDateTo && o.date > filterDateTo) return false;
@@ -690,6 +706,22 @@ export function AccountingPage() {
             {invoicedOrders.length > 0 && (
               <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full text-xs font-bold ${activeTab === "invoiced" ? "bg-white/20 text-white" : "bg-green-100 text-green-700"}`}>
                 {invoicedOrders.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("archive")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "archive"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            ארכיון חשבוניות
+            {cancelledOrders.length > 0 && (
+              <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full text-xs font-bold ${activeTab === "archive" ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
+                {cancelledOrders.length}
               </span>
             )}
           </button>
@@ -1103,6 +1135,88 @@ export function AccountingPage() {
           </>
         )}
 
+        {/* Archive Tab */}
+        {activeTab === "archive" && (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+              <div className="bg-white rounded-xl border border-red-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-red-600">{cancelledOrders.length}</p>
+                <p className="text-xs text-gray-500">הזמנות שבוטלו סה״כ</p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-gray-900">{new Set(cancelledOrders.map(o => o.customer)).size}</p>
+                <p className="text-xs text-gray-500">לקוחות</p>
+              </div>
+              <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm">
+                <p className="text-2xl font-bold text-gray-900">{cancelledThisMonth}</p>
+                <p className="text-xs text-gray-500">בוטלו החודש</p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              {cancelledOrders.length === 0 ? (
+                <div className="py-16 text-center">
+                  <div className="text-gray-200 mb-3">
+                    <svg className="w-10 h-10 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>
+                    </svg>
+                  </div>
+                  <p className="text-gray-500 font-medium">אין הזמנות מבוטלות</p>
+                  <p className="text-sm text-gray-400 mt-1">הזמנות שבוטלו יישמרו כאן לצפייה בלבד</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <div className="px-5 py-2 bg-red-50 border-b border-red-100 flex items-center gap-2">
+                    <svg className="w-3.5 h-3.5 text-red-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    <p className="text-xs text-red-600">ארכיון בלבד — הזמנות אלו אינן נכללות בחישובים, בדוחות ובחיובים</p>
+                  </div>
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">#</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">הזמנה</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">לקוח</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">מיקום</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">תאריך הזמנה</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">תאריך ביטול</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-16">שלטים</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-16">שונות</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cancelledOrders.map((order, idx) => {
+                        const isExpanded = expandedRows.has(order.id);
+                        return (
+                          <>
+                            <tr
+                              key={order.id}
+                              className="border-b border-gray-100 hover:bg-red-50/20 transition-colors cursor-pointer"
+                              onClick={() => toggleRow(order.id)}
+                            >
+                              <td className="px-4 py-3 text-gray-300 text-xs">{idx + 1}</td>
+                              <td className="px-4 py-3 font-mono text-xs font-bold text-gray-400 line-through">{order.orderNumber}</td>
+                              <td className="px-4 py-3 text-gray-500">{order.customer}</td>
+                              <td className="px-4 py-3 text-gray-400 text-xs">{order.location || "—"}</td>
+                              <td className="px-4 py-3 text-gray-400 text-xs">{formatDate(order.date)}</td>
+                              <td className="px-4 py-3 text-gray-400 text-xs">{formatDate((order.updatedAt ?? order.createdAt).slice(0, 10))}</td>
+                              <td className="px-4 py-3 text-center text-gray-400 text-sm">{countSignQty(order) || "—"}</td>
+                              <td className="px-4 py-3 text-center text-gray-400 text-sm">{countMiscQty(order) || "—"}</td>
+                            </tr>
+                            {isExpanded && <ExpandedRow key={`${order.id}-expanded`} order={order} />}
+                          </>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="px-5 py-2.5 border-t border-gray-100 text-xs text-gray-400">
+                    {cancelledOrders.length} הזמנות בארכיון
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
         {/* Orders tab */}
         {activeTab === "orders" && (<>
 
@@ -1309,7 +1423,7 @@ export function AccountingPage() {
 
           {filtered.length > 0 && (
             <div className="px-5 py-2.5 border-t border-gray-100 text-xs text-gray-400 flex items-center justify-between">
-              <span>מוצגים {filtered.length} מתוך {orders.length} הזמנות</span>
+              <span>מוצגים {filtered.length} מתוך {orders.length - cancelledOrders.length} הזמנות</span>
               <span>
                 סה״כ שלטים: <strong className="text-gray-600">{filtered.reduce((s, o) => s + countSignQty(o), 0)}</strong>
                 {" | "}
