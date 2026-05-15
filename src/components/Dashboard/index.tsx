@@ -1044,8 +1044,9 @@ export function DashboardPage() {
               </Link>
               <Link
                 href="/work-diary"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-sm font-medium transition-colors border border-white/15 hover:bg-white/8"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-ek-blue hover:bg-ek-blue-600 text-white text-sm font-semibold transition-colors shadow-lg shadow-ek-blue/20"
               >
+                <PlusIcon />
                 יומן חדש
               </Link>
               <Link
