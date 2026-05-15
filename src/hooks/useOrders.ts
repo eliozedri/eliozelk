@@ -544,11 +544,21 @@ export function useOrders() {
   // ── completeGraphics ───────────────────────────────────────────────────
   const completeGraphics = useCallback((id: string) => {
     const now = new Date().toISOString();
+    const order = ref.current.find(o => o.id === id);
+    if (!order) return;
+    // If no department work needed, advance directly to ready_installation (skip production)
+    const needsDeptWork = order.fabricationRequired || order.warehouseRequired;
+    const nextStatus: WorkOrderStatus = needsDeptWork ? "graphics_done" : "ready_installation";
     _patchOrder(id, {
-      status: "graphics_done",
+      status: nextStatus,
       graphicsCompletedAt: now,
+      ...(nextStatus === "ready_installation" && !order.readyForExecutionAt ? { readyForExecutionAt: now } : {}),
     });
-    insertActivity(id, "graphics_completed", "עבודת גרפיקה הושלמה", { department: "graphics" });
+    insertActivity(
+      id, "graphics_completed",
+      needsDeptWork ? "עבודת גרפיקה הושלמה" : "עבודת גרפיקה הושלמה — ההזמנה מוכנה לביצוע",
+      { department: "graphics" }
+    );
   }, [_patchOrder]);
 
   // ── approveCustomerOrder ───────────────────────────────────────────────
@@ -589,8 +599,30 @@ export function useOrders() {
   // ── updateOrderFields ──────────────────────────────────────────────────
   // Generic patch — callers pass only the fields they own.
   // The column map ensures only the relevant columns are written.
+  // Auto-advances status when department completions satisfy all requirements.
   const updateOrderFields = useCallback((id: string, fields: Partial<WorkOrder>) => {
-    _patchOrder(id, fields);
+    const current = ref.current.find(o => o.id === id);
+    if (!current) { _patchOrder(id, fields); return; }
+
+    const merged: WorkOrder = { ...current, ...fields };
+    const extra: Partial<WorkOrder> = {};
+
+    // Auto-advance: production → ready_installation when all required departments are done
+    if (("warehouseStatus" in fields || "fabricationStatus" in fields) && merged.status === "production") {
+      const warehouseOk = !merged.warehouseRequired || merged.warehouseStatus === "ready";
+      const fabricationOk = !merged.fabricationRequired ||
+        merged.fabricationStatus === "completed" || merged.fabricationStatus === "ready";
+      if (warehouseOk && fabricationOk) {
+        extra.status = "ready_installation";
+        if (!merged.readyForExecutionAt) extra.readyForExecutionAt = new Date().toISOString();
+      }
+    }
+
+    _patchOrder(id, { ...fields, ...extra });
+
+    if (extra.status === "ready_installation") {
+      insertActivity(id, "status_changed", "כל שלבי ההכנה הושלמו — ההזמנה מוכנה לביצוע");
+    }
   }, [_patchOrder]);
 
   // ── addOrderProblem ────────────────────────────────────────────────────

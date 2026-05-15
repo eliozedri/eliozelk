@@ -1,4 +1,5 @@
 import type { AccountingReportData } from "@/components/pdf/AccountingDocument";
+import type { CustomerBillingData } from "@/components/pdf/CustomerBillingDocument";
 import type { WorkOrder } from "@/types/workOrder";
 
 const STATUS_LABELS_HE: Record<string, string> = {
@@ -23,6 +24,22 @@ function csvEscape(val: string | number | null | undefined): string {
     return `"${s.replace(/"/g, '""')}"`;
   }
   return s;
+}
+
+export async function exportCustomerBillingPDF(data: CustomerBillingData): Promise<void> {
+  const { pdf } = await import("@react-pdf/renderer");
+  const { CustomerBillingDocument } = await import("@/components/pdf/CustomerBillingDocument");
+  const { createElement } = await import("react");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const blob = await pdf(createElement(CustomerBillingDocument, { data }) as any).toBlob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const d = formatDate(data.generatedAt.split("T")[0]).replace(/\//g, "-");
+  a.download = `חיוב_${data.customerName}_${d}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function exportAccountingPDF(data: AccountingReportData): Promise<void> {

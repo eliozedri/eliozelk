@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useOrdersContext } from "@/context/OrdersContext";
 import type { WorkOrder } from "@/types/workOrder";
 import { STATUS_LABELS, ACCOUNTING_STATUS_LABELS, ACCOUNTING_STATUS_COLORS } from "@/types/workOrder";
-import { exportAccountingCSV, exportAccountingPDF, exportCustomerBillingCSV } from "@/lib/accountingExport";
+import { exportAccountingCSV, exportAccountingPDF, exportCustomerBillingCSV, exportCustomerBillingPDF } from "@/lib/accountingExport";
 import type { AccountingReportData } from "@/components/pdf/AccountingDocument";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { DIARY_STATUS_LABELS, DIARY_STATUS_COLORS } from "@/types/workDiary";
@@ -211,6 +211,7 @@ export function AccountingPage() {
   const [billingDateFrom, setBillingDateFrom] = useState("");
   const [billingDateTo, setBillingDateTo] = useState("");
   const [expandedBillingCustomers, setExpandedBillingCustomers] = useState<Set<string>>(new Set());
+  const [billingPdfExporting, setBillingPdfExporting] = useState<string | null>(null);
 
   // Map orderId → diary revenue for billing queue enrichment
   const orderRevenueMap = useMemo(() => {
@@ -323,6 +324,21 @@ export function AccountingPage() {
       await exportWorkDiaryPDF(diary);
     } finally {
       setDiaryExportingId(null);
+    }
+  }
+
+  async function handleBillingPDF(customerName: string, groupOrders: WorkOrder[]) {
+    setBillingPdfExporting(customerName);
+    try {
+      await exportCustomerBillingPDF({
+        customerName,
+        orders: groupOrders,
+        dateFrom: billingDateFrom || undefined,
+        dateTo: billingDateTo || undefined,
+        generatedAt: new Date().toISOString(),
+      });
+    } finally {
+      setBillingPdfExporting(null);
     }
   }
 
@@ -550,10 +566,18 @@ export function AccountingPage() {
                           {/* Export buttons */}
                           <button
                             type="button"
+                            onClick={(e) => { e.stopPropagation(); handleBillingPDF(group.customerName, group.orders); }}
+                            disabled={billingPdfExporting === group.customerName}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors whitespace-nowrap disabled:opacity-50"
+                          >
+                            {billingPdfExporting === group.customerName ? "..." : "PDF"}
+                          </button>
+                          <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); exportCustomerBillingCSV(group.customerName, group.orders); }}
                             className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-green-300 text-green-700 hover:bg-green-50 transition-colors whitespace-nowrap"
                           >
-                            Excel
+                            CSV
                           </button>
                           <span className={`text-gray-300 transition-transform ${isOpen ? "rotate-180" : ""}`}>
                             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
@@ -745,7 +769,7 @@ export function AccountingPage() {
                                 disabled={diaryCsvExportingId === diary.id}
                                 className="text-xs text-green-700 hover:text-green-900 underline disabled:opacity-50 transition-colors"
                               >
-                                Excel
+                                CSV
                               </button>
                             </div>
                           </td>
@@ -923,7 +947,7 @@ export function AccountingPage() {
                 <line x1="12" y1="18" x2="12" y2="12" />
                 <line x1="9" y1="15" x2="15" y2="15" />
               </svg>
-              ייצוא Excel
+              ייצוא CSV
             </button>
             <button
               type="button"

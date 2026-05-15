@@ -374,9 +374,10 @@ interface OrderRowProps {
   riskScore: OrderRiskScore | undefined;
   onUpdateStatus: (id: string, status: WorkOrderStatus) => void;
   onApproveCustomer: (id: string) => void;
+  onSelect: (order: WorkOrder) => void;
 }
 
-function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApproveCustomer }: OrderRowProps) {
+function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApproveCustomer, onSelect }: OrderRowProps) {
   const phone = phoneMap.get(order.customer.trim().toLowerCase());
   const lastUpdated = getLastUpdated(order);
   const relative = relativeTime(lastUpdated);
@@ -392,7 +393,8 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
 
   return (
     <tr
-      className={`transition-colors hover:bg-gray-50/80 ${
+      onClick={() => onSelect(order)}
+      className={`transition-colors hover:bg-blue-50/50 cursor-pointer ${
         order.priority === "urgent" ? "border-r-2 border-red-400" : ""
       }`}
     >
@@ -529,7 +531,7 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
       </td>
 
       {/* Actions */}
-      <td className="px-3 py-3.5">
+      <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-1.5">
           {order.status === "graphics_done" && (
             <button
@@ -587,14 +589,247 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
           </button>
           <button
             onClick={() => exportWorkOrderCSV(order)}
-            title="ייצוא Excel"
+            title="ייצוא CSV"
             className="px-1.5 py-1 rounded text-[10px] font-semibold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors"
           >
-            XLS
+            CSV
           </button>
         </div>
       </td>
     </tr>
+  );
+}
+
+// ─── Order Detail Slide-Over ───────────────────────────────────────────────
+
+const FABRICATION_STATUS_LABELS: Record<string, string> = {
+  pending: "ממתין",
+  acknowledged: "אושר קבלה",
+  in_progress: "בביצוע",
+  ready: "מוכן",
+  completed: "הושלם",
+  issue: "בעיה",
+};
+
+function OrderDetailPanel({ order, onClose }: { order: WorkOrder; onClose: () => void }) {
+  const [pdfExporting, setPdfExporting] = useState(false);
+
+  const signCount = (order.signRows ?? []).filter(r => r.signNumber).length;
+  const miscCount = (order.miscRows ?? []).filter(r => r.description).length;
+  const accessoryCount = (order.accessoryRows ?? []).filter(r => r.description).length;
+
+  async function handlePDF() {
+    setPdfExporting(true);
+    try { await openWorkOrderPDF(order); } finally { setPdfExporting(false); }
+  }
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      {/* Panel */}
+      <div
+        className="fixed top-0 left-0 h-full w-full max-w-lg bg-white z-50 shadow-2xl overflow-y-auto"
+        dir="rtl"
+      >
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-5 py-4 flex items-center justify-between z-10">
+          <div>
+            <p className="font-mono text-xs text-gray-400 font-bold">{order.orderNumber}</p>
+            {order.jobName && (
+              <p className="font-semibold text-gray-900 text-base leading-tight mt-0.5">{order.jobName}</p>
+            )}
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+            aria-label="סגור"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5">
+          {/* Status + Priority */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_COLORS[order.status]}`}>
+              {STATUS_LABELS[order.status]}
+            </span>
+            {order.priority === "urgent" && (
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700">דחוף</span>
+            )}
+            {order.orderType && order.orderType !== "field_work" && (
+              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${ORDER_TYPE_COLORS[order.orderType]}`}>
+                {ORDER_TYPE_LABELS[order.orderType]}
+              </span>
+            )}
+          </div>
+
+          {/* Key details grid */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-[10px] text-gray-400 font-medium mb-0.5">לקוח</p>
+              <p className="text-sm font-semibold text-gray-800">{order.customer || "—"}</p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3">
+              <p className="text-[10px] text-gray-400 font-medium mb-0.5">תאריך</p>
+              <p className="text-sm font-semibold text-gray-800">{formatDate(order.date)}</p>
+            </div>
+            {order.location && (
+              <div className="bg-gray-50 rounded-lg p-3 col-span-2">
+                <p className="text-[10px] text-gray-400 font-medium mb-0.5">מיקום</p>
+                <p className="text-sm font-semibold text-gray-800">{order.location}</p>
+              </div>
+            )}
+            {order.contactPerson && (
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-[10px] text-gray-400 font-medium mb-0.5">איש קשר</p>
+                <p className="text-sm font-semibold text-gray-800">{order.contactPerson}</p>
+              </div>
+            )}
+            {order.orderedBy && (
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-[10px] text-gray-400 font-medium mb-0.5">הוזמן ע״י</p>
+                <p className="text-sm font-semibold text-gray-800">{order.orderedBy}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Department statuses */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 mb-2">שלבי עיבוד</p>
+            <div className="space-y-1.5">
+              {/* Graphics */}
+              <div className="flex items-center justify-between py-1.5 px-3 bg-blue-50 rounded-lg">
+                <span className="text-xs font-medium text-blue-700">גרפיקה</span>
+                <span className="text-xs text-blue-600">
+                  {order.graphicsCompletedAt ? "הושלמה" : order.graphicsAcknowledgedAt ? "בביצוע" : "ממתינה"}
+                </span>
+              </div>
+              {/* Warehouse */}
+              {order.warehouseRequired && (
+                <div className={`flex items-center justify-between py-1.5 px-3 rounded-lg ${
+                  order.warehouseStatus === "ready" ? "bg-green-50" : "bg-amber-50"
+                }`}>
+                  <span className={`text-xs font-medium ${order.warehouseStatus === "ready" ? "text-green-700" : "text-amber-700"}`}>מחסן</span>
+                  <span className={`text-xs ${order.warehouseStatus === "ready" ? "text-green-600" : "text-amber-600"}`}>
+                    {order.warehouseStatus === "ready" ? "מוכן" : order.warehouseStatus === "processing" ? "בביצוע" : "ממתין"}
+                  </span>
+                </div>
+              )}
+              {/* Fabrication */}
+              {order.fabricationRequired && (
+                <div className={`flex items-center justify-between py-1.5 px-3 rounded-lg ${
+                  order.fabricationStatus === "completed" ? "bg-green-50" :
+                  order.fabricationStatus === "issue" ? "bg-red-50" : "bg-orange-50"
+                }`}>
+                  <span className={`text-xs font-medium ${
+                    order.fabricationStatus === "completed" ? "text-green-700" :
+                    order.fabricationStatus === "issue" ? "text-red-700" : "text-orange-700"
+                  }`}>מסגרייה</span>
+                  <span className={`text-xs ${
+                    order.fabricationStatus === "completed" ? "text-green-600" :
+                    order.fabricationStatus === "issue" ? "text-red-600" : "text-orange-600"
+                  }`}>
+                    {order.fabricationStatus ? FABRICATION_STATUS_LABELS[order.fabricationStatus] ?? order.fabricationStatus : "ממתין"}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Items summary */}
+          {(signCount + miscCount + accessoryCount) > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-2">פריטים</p>
+              <div className="flex gap-2 flex-wrap">
+                {signCount > 0 && (
+                  <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">{signCount} תמרורים</span>
+                )}
+                {miscCount > 0 && (
+                  <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">{miscCount} שונות</span>
+                )}
+                {accessoryCount > 0 && (
+                  <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-medium">{accessoryCount} אביזרים</span>
+                )}
+              </div>
+
+              {/* Sign row details */}
+              {(order.signRows ?? []).filter(r => r.signNumber).length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {(order.signRows ?? []).filter(r => r.signNumber).map(r => (
+                    <div key={r.id} className="flex items-center justify-between text-xs py-1 px-2 bg-gray-50 rounded">
+                      <span className="font-mono text-gray-600">{r.signNumber}</span>
+                      <div className="flex items-center gap-2 text-gray-500">
+                        {r.size && <span>{r.size}</span>}
+                        <span>×{r.quantity || 1}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Misc row details */}
+              {(order.miscRows ?? []).filter(r => r.description).length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {(order.miscRows ?? []).filter(r => r.description).map(r => (
+                    <div key={r.id} className="flex items-center justify-between text-xs py-1 px-2 bg-gray-50 rounded">
+                      <span className="text-gray-600">{r.description}</span>
+                      <span className="text-gray-500">×{r.quantity || 1}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Notes */}
+          {(order.generalNotes || order.notes) && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-1">הערות</p>
+              <p className="text-sm text-gray-700 bg-amber-50 rounded-lg p-3">{order.generalNotes || order.notes}</p>
+            </div>
+          )}
+
+          {/* Open problems */}
+          {openProblemsCount(order) > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-red-600 mb-1">בעיות פתוחות ({openProblemsCount(order)})</p>
+              <div className="space-y-1">
+                {(order.problems ?? []).filter(p => p.status === "open").map(p => (
+                  <div key={p.id} className="text-xs text-red-700 bg-red-50 rounded-lg p-2.5">{p.description}</div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Export actions */}
+          <div className="pt-2 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 mb-2">ייצוא</p>
+            <div className="flex gap-2">
+              <button
+                onClick={handlePDF}
+                disabled={pdfExporting}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition-colors disabled:opacity-50"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                {pdfExporting ? "..." : "PDF"}
+              </button>
+              <button
+                onClick={() => exportWorkOrderCSV(order)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 text-sm font-semibold transition-colors"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                CSV
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -642,6 +877,7 @@ export function OrdersTable() {
   const [priorityFilter, setPriorityFilter] = useState<"all" | "normal" | "urgent">("all");
   const [showProblemsOnly, setShowProblemsOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
+  const [selectedOrder, setSelectedOrder] = useState<WorkOrder | null>(null);
 
   // Build phone lookup map from customers
   const phoneMap = useMemo(() => {
@@ -885,6 +1121,7 @@ export function OrdersTable() {
                         riskScore={riskScores.get(order.id)}
                         onUpdateStatus={handleUpdateStatus}
                         onApproveCustomer={approveCustomerOrder}
+                        onSelect={setSelectedOrder}
                       />
                     ))}
                   </tbody>
@@ -942,6 +1179,14 @@ export function OrdersTable() {
           )}
         </div>
       </div>
+
+      {/* Order Detail Slide-Over */}
+      {selectedOrder && (
+        <OrderDetailPanel
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+        />
+      )}
     </div>
   );
 }
