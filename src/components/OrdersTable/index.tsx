@@ -1113,16 +1113,19 @@ export function OrdersTable() {
     return map;
   }, [customers]);
 
-  // Derived counts for KPI cards
-  const counts = useMemo(() => ({
-    total: orders.filter((o) => OPERATIONAL_STATUSES.has(o.status)).length,
-    completed: orders.filter((o) => o.status === "completed").length,
-    graphicsPending: orders.filter((o) => o.status === "graphics_pending").length,
-    graphicsActive: orders.filter((o) => o.status === "graphics_active").length,
-    fabricationActive: orders.filter((o) => o.fabricationRequired && o.fabricationStatus !== "completed").length,
-    withProblems: orders.filter((o) => hasOpenProblems(o)).length,
-    urgent: orders.filter((o) => o.priority === "urgent").length,
-  }), [orders]);
+  // Derived counts for KPI cards — all scoped to operational (non-terminal) orders
+  const counts = useMemo(() => {
+    const operational = orders.filter((o) => OPERATIONAL_STATUSES.has(o.status));
+    return {
+      total: operational.length,
+      completed: orders.filter((o) => o.status === "completed").length,
+      graphicsPending: operational.filter((o) => o.status === "graphics_pending").length,
+      graphicsActive: operational.filter((o) => o.status === "graphics_active").length,
+      fabricationActive: operational.filter((o) => o.fabricationRequired && o.fabricationStatus !== "completed").length,
+      withProblems: operational.filter((o) => hasOpenProblems(o)).length,
+      urgent: operational.filter((o) => o.priority === "urgent").length,
+    };
+  }, [orders]);
 
   const hasFilters = search !== "" || statusFilter !== "all" || priorityFilter !== "all" || showProblemsOnly;
 
