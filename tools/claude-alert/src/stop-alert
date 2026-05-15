@@ -1,4 +1,0 @@
-#!/bin/bash
-# Convenience wrapper — equivalent to: alert stop
-# Installed to ~/.local/bin/stop-alert
-exec "$(dirname "$0")/alert" stop "$@"
