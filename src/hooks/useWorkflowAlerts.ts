@@ -159,7 +159,8 @@ export function useWorkflowAlerts(): WorkflowAlert[] {
 
     // ── Fabrication: issue status (blocked) ──────────────────────────────
     const fabIssues = orders.filter(
-      o => o.fabricationRequired && o.fabricationStatus === "issue"
+      o => o.fabricationRequired && o.fabricationStatus === "issue" &&
+           o.status !== "completed" && o.status !== "cancelled"
     );
     if (fabIssues.length > 0) {
       alerts.push({
@@ -231,9 +232,10 @@ export function useWorkflowAlerts(): WorkflowAlert[] {
       });
     }
 
-    // ── Open problems ────────────────────────────────────────────────────
+    // ── Open problems — only on active operational orders ────────────────
     const ordersWithProblems = orders.filter(
-      o => (o.problems ?? []).some(p => p.status !== "resolved" && p.status !== "cancelled")
+      o => o.status !== "completed" && o.status !== "cancelled" &&
+           (o.problems ?? []).some(p => p.status !== "resolved" && p.status !== "cancelled")
     );
     if (ordersWithProblems.length > 0) {
       const total = ordersWithProblems.reduce(
@@ -300,9 +302,12 @@ export function useWorkflowAlerts(): WorkflowAlert[] {
     }
 
     // ── Diary: scheduled job past execution date — no diary submitted ────
+    // Only fires for ready_installation (still active). Completed orders
+    // have left the active workflow so the diary requirement is no longer
+    // an operational alert (may become an accounting note if needed later).
     const todayStr = new Date().toISOString().slice(0, 10);
     const missingDiary = orders.filter(o => {
-      if (o.status !== "ready_installation" && o.status !== "completed") return false;
+      if (o.status !== "ready_installation") return false;
       if (!o.scheduledDate || o.scheduledDate >= todayStr) return false;
       const linked = getOrderDiaries(diaries, o.id);
       return !linked.some(d => d.status === "submitted");

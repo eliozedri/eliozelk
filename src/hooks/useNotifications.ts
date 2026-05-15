@@ -69,7 +69,11 @@ export function useNotifications(): NotificationCounts {
       o.status === "ready_installation" && !o.scheduledDate
     ).length;
 
-    const problemsOpen  = orders.reduce((sum, o) => sum + openProblemsCount(o), 0);
+    // Only count open problems on active operational orders — completed and
+    // cancelled orders no longer require operational attention.
+    const problemsOpen  = orders
+      .filter(o => o.status !== "completed" && o.status !== "cancelled")
+      .reduce((sum, o) => sum + openProblemsCount(o), 0);
     const urgentActive  = orders.filter(o =>
       o.priority === "urgent" &&
       o.status !== "completed" &&
