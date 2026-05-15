@@ -8,11 +8,11 @@ import type { WorkOrder, WorkOrderStatus, OrderPriority, OrderProblemStatus, Ord
 interface OrdersContextValue {
   orders: WorkOrder[];
   addOrder: (snapshot: OrderState, priority?: OrderPriority, notes?: string) => Promise<WorkOrder>;
-  acknowledgeOrder: (id: string, acknowledgedBy?: string) => void;
-  completeGraphics: (id: string) => void;
-  approveCustomerOrder: (id: string) => void;
-  updateOrderStatus: (id: string, status: WorkOrderStatus) => void;
-  updateOrderFields: (id: string, fields: Partial<WorkOrder>) => void;
+  acknowledgeOrder: (id: string, acknowledgedBy?: string) => Promise<void>;
+  completeGraphics: (id: string) => Promise<void>;
+  approveCustomerOrder: (id: string) => Promise<void>;
+  updateOrderStatus: (id: string, status: WorkOrderStatus) => Promise<void>;
+  updateOrderFields: (id: string, fields: Partial<WorkOrder>) => Promise<void>;
   addOrderActivity: (id: string, type: OrderActivityType, description: string, opts?: { by?: string; department?: string; meta?: Record<string, string> }) => void;
   addOrderProblem: (id: string, problem: { department: "graphics" | "fabrication" | "office"; category: OrderProblemCategory; description: string; reportedBy?: string }) => void;
   resolveOrderProblem: (orderId: string, problemId: string, opts?: { resolvedBy?: string; resolutionNotes?: string; newStatus?: OrderProblemStatus }) => void;

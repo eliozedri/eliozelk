@@ -97,6 +97,12 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    label: "חשבונות",
+    items: [
+      { tabId: "accounting", href: "/accounting", label: "הנהלת חשבונות", icon: <AccountingIcon />, matchFn: (p) => p.startsWith("/accounting") },
+    ],
+  },
+  {
     label: "ניהול",
     items: [
       { tabId: "dashboard", href: "/new-order", label: "הזמנה חדשה", icon: <OrderIcon />, matchFn: (p) => p === "/new-order", noBadge: true },
@@ -114,7 +120,6 @@ const NAV_SECTIONS: NavSection[] = [
       { tabId: "fabrication", href: "/fabrication", label: "מחלקת מסגריה", icon: <FabricationIcon />, matchFn: (p) => p.startsWith("/fabrication") },
       { tabId: "catalog", href: "/catalog", label: "עריכת מוצרים ופריטים", icon: <CatalogIcon />, matchFn: (p) => p.startsWith("/catalog") },
       { tabId: "safety", href: "/safety", label: "קטלוג מוצרים", icon: <SafetyIcon />, matchFn: (p) => p.startsWith("/safety") },
-      { tabId: "accounting", href: "/accounting", label: "הנהלת חשבונות", icon: <AccountingIcon />, matchFn: (p) => p.startsWith("/accounting") },
     ],
   },
   {

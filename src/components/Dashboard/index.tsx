@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useOrdersContext } from "@/context/OrdersContext";
 import { useCustomersContext } from "@/context/CustomersContext";
@@ -83,6 +83,14 @@ function ExternalLinkIcon() {
   );
 }
 
+function CloseIcon() {
+  return (
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
 // ─── Metric Card ───────────────────────────────────────────────────────────
 
 interface MetricCardProps {
@@ -122,9 +130,16 @@ interface PipelineStage {
   color: string;
   textColor: string;
   href: string;
+  status: string;
 }
 
-function PipelineSection({ stages }: { stages: PipelineStage[] }) {
+function PipelineSection({
+  stages,
+  onStageClick,
+}: {
+  stages: PipelineStage[];
+  onStageClick: (label: string, status: string) => void;
+}) {
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
@@ -137,15 +152,15 @@ function PipelineSection({ stages }: { stages: PipelineStage[] }) {
         <div className="flex items-center gap-0 overflow-x-auto pb-1">
           {stages.map((stage, i) => (
             <div key={stage.label} className="flex items-center shrink-0">
-              <Link
-                href={stage.href}
-                className={`flex flex-col items-center px-4 py-3 rounded-xl border ${stage.color} min-w-[88px] hover:opacity-90 transition-opacity`}
+              <button
+                onClick={() => onStageClick(stage.label, stage.status)}
+                className={`flex flex-col items-center px-4 py-3 rounded-xl border ${stage.color} min-w-[88px] hover:opacity-90 transition-opacity cursor-pointer`}
               >
                 <span className={`text-2xl font-black leading-none ${stage.textColor}`}>{stage.count}</span>
                 <span className={`text-[10px] font-medium mt-1 text-center leading-tight ${stage.textColor} opacity-80`}>
                   {stage.label}
                 </span>
-              </Link>
+              </button>
               {i < stages.length - 1 && (
                 <div className="mx-1 shrink-0">
                   <ChevronLeftIcon />
@@ -165,15 +180,16 @@ interface DeptCardProps {
   label: string;
   count: number;
   sub: string;
-  href: string;
+  href?: string;
+  onClick?: () => void;
   icon: React.ReactNode;
   accent: string;
   accentText: string;
 }
 
-function DeptCard({ label, count, sub, href, icon, accent, accentText }: DeptCardProps) {
-  return (
-    <Link href={href} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:shadow-md transition-all group">
+function DeptCard({ label, count, sub, href, onClick, icon, accent, accentText }: DeptCardProps) {
+  const inner = (
+    <>
       <div className={`w-10 h-10 rounded-xl ${accent} flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform`}>
         <span className={accentText}>{icon}</span>
       </div>
@@ -182,6 +198,23 @@ function DeptCard({ label, count, sub, href, icon, accent, accentText }: DeptCar
         <div className="text-xs text-gray-400 truncate">{sub}</div>
       </div>
       <div className="text-2xl font-black text-navy-900 shrink-0">{count}</div>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        onClick={onClick}
+        className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:shadow-md transition-all group cursor-pointer w-full text-right"
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <Link href={href ?? "#"} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:shadow-md transition-all group">
+      {inner}
     </Link>
   );
 }
@@ -193,7 +226,13 @@ const SEVERITY_STYLE = {
   warn:     { icon: "text-amber-500", hover: "hover:bg-amber-50", badge: "bg-amber-100 text-amber-700" },
 };
 
-function AlertsSection({ alerts }: { alerts: WorkflowAlert[] }) {
+function AlertsSection({
+  alerts,
+  onAlertClick,
+}: {
+  alerts: WorkflowAlert[];
+  onAlertClick: (alert: WorkflowAlert) => void;
+}) {
   const criticalCount = alerts.filter(a => a.severity === "critical").length;
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -222,10 +261,10 @@ function AlertsSection({ alerts }: { alerts: WorkflowAlert[] }) {
           alerts.map((alert) => {
             const style = SEVERITY_STYLE[alert.severity];
             return (
-              <Link
+              <button
                 key={alert.id}
-                href={alert.href}
-                className={`flex items-start gap-3 px-4 py-3 ${style.hover} transition-colors`}
+                onClick={() => onAlertClick(alert)}
+                className={`flex items-start gap-3 px-4 py-3 ${style.hover} transition-colors w-full text-right`}
               >
                 <span className={`${style.icon} mt-0.5 shrink-0`}><AlertIcon /></span>
                 <div className="flex-1 min-w-0">
@@ -242,7 +281,7 @@ function AlertsSection({ alerts }: { alerts: WorkflowAlert[] }) {
                     )}
                   </div>
                 </div>
-              </Link>
+              </button>
             );
           })
         )}
@@ -262,6 +301,349 @@ const STATUS_STYLE: Record<string, string> = {
   completed: "bg-gray-100 text-gray-600",
   cancelled: "bg-red-100 text-red-600",
 };
+
+// ─── Drill-Down Panel ──────────────────────────────────────────────────────
+
+interface DrillState {
+  title: string;
+  description: string;
+  getOrders: (allOrders: WorkOrder[]) => WorkOrder[];
+}
+
+const DEPT_STATUS_LABEL: Record<string, string> = {
+  graphics_pending: "ממתין לגרפיקה",
+  graphics_active: "בטיפול גרפיקה",
+  graphics_done: "גרפיקה הושלמה",
+  production: "בייצור",
+  ready_installation: "מוכן לביצוע",
+  completed: "הושלם",
+  cancelled: "בוטל",
+};
+
+function InternalOrderDetail({
+  order,
+  onBack,
+  onUpdateFields,
+}: {
+  order: WorkOrder;
+  onBack: () => void;
+  onUpdateFields: (id: string, fields: Partial<WorkOrder>) => Promise<void>;
+}) {
+  const [notesDraft, setNotesDraft] = useState(order.generalNotes ?? "");
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [noteSaveState, setNoteSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [urgentSaveState, setUrgentSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  useEffect(() => {
+    if (!editingNotes) setNotesDraft(order.generalNotes ?? "");
+  }, [order.generalNotes, editingNotes]);
+
+  async function handleSaveNote() {
+    setNoteSaveState("saving");
+    try {
+      await onUpdateFields(order.id, { generalNotes: notesDraft.trim() });
+      setNoteSaveState("saved");
+      setEditingNotes(false);
+      setTimeout(() => setNoteSaveState("idle"), 2500);
+    } catch {
+      setNoteSaveState("error");
+    }
+  }
+
+  async function handleToggleUrgent() {
+    setUrgentSaveState("saving");
+    try {
+      await onUpdateFields(order.id, {
+        priority: order.priority === "urgent" ? "normal" : "urgent",
+      });
+      setUrgentSaveState("saved");
+      setTimeout(() => setUrgentSaveState("idle"), 2500);
+    } catch {
+      setUrgentSaveState("error");
+      setTimeout(() => setUrgentSaveState("idle"), 3000);
+    }
+  }
+
+  const isTerminal = order.status === "completed" || order.status === "cancelled";
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Sub-header */}
+      <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-3 flex items-center gap-3 z-10">
+        <button
+          onClick={onBack}
+          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          aria-label="חזור"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="font-mono text-xs font-bold text-gray-500">{order.orderNumber}</p>
+          {order.jobName && <p className="text-sm font-semibold text-gray-900 truncate leading-tight">{order.jobName}</p>}
+        </div>
+        <Link
+          href="/orders"
+          className="text-[10px] text-blue-500 hover:text-blue-700 flex items-center gap-1 shrink-0"
+        >
+          פתח בהזמנות
+          <ExternalLinkIcon />
+        </Link>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        {/* Status + priority */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_STYLE[order.status] ?? "bg-gray-100 text-gray-600"}`}>
+            {STATUS_LABELS[order.status] ?? order.status}
+          </span>
+          {order.priority === "urgent" && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">דחוף</span>
+          )}
+        </div>
+
+        {/* Key fields */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="bg-gray-50 rounded-lg p-3">
+            <p className="text-[10px] text-gray-400 mb-0.5">לקוח</p>
+            <p className="text-sm font-semibold text-gray-800 truncate">{order.customer || "—"}</p>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-3">
+            <p className="text-[10px] text-gray-400 mb-0.5">תאריך</p>
+            <p className="text-sm font-semibold text-gray-800">{formatDateShort(order.date)}</p>
+          </div>
+          <div className={`rounded-lg p-3 col-span-2 ${order.location ? "bg-gray-50" : "bg-amber-50 border border-amber-200"}`}>
+            <p className="text-[10px] text-gray-400 mb-0.5">מיקום</p>
+            <p className="text-sm font-semibold text-gray-800">
+              {order.location || <span className="text-amber-600 text-xs">מיקום חסר</span>}
+            </p>
+          </div>
+        </div>
+
+        {/* Department pipeline */}
+        <div>
+          <p className="text-xs font-semibold text-gray-500 mb-2">שלבי עיבוד</p>
+          <div className="space-y-1.5">
+            <div className={`flex items-center justify-between py-1.5 px-3 rounded-lg ${
+              order.graphicsCompletedAt ? "bg-green-50" : order.graphicsAcknowledgedAt ? "bg-blue-50" : "bg-amber-50"
+            }`}>
+              <span className="text-xs font-medium text-gray-700">גרפיקה</span>
+              <span className="text-xs text-gray-500">
+                {order.graphicsCompletedAt ? "הושלמה ✓" : order.graphicsAcknowledgedAt ? "בביצוע" : "ממתינה"}
+              </span>
+            </div>
+            {order.warehouseRequired && (
+              <div className={`flex items-center justify-between py-1.5 px-3 rounded-lg ${
+                order.warehouseStatus === "ready" ? "bg-green-50" : "bg-amber-50"
+              }`}>
+                <span className="text-xs font-medium text-gray-700">מחסן</span>
+                <span className="text-xs text-gray-500">
+                  {order.warehouseStatus === "ready" ? "מוכן ✓" : order.warehouseStatus === "processing" ? "בביצוע" : "ממתין"}
+                </span>
+              </div>
+            )}
+            {order.fabricationRequired && (
+              <div className={`flex items-center justify-between py-1.5 px-3 rounded-lg ${
+                order.fabricationStatus === "completed" ? "bg-green-50" :
+                order.fabricationStatus === "issue" ? "bg-red-50" : "bg-orange-50"
+              }`}>
+                <span className="text-xs font-medium text-gray-700">מסגרייה</span>
+                <span className="text-xs text-gray-500">
+                  {order.fabricationStatus === "completed" ? "הושלם ✓" :
+                   order.fabricationStatus === "in_progress" ? "בביצוע" :
+                   order.fabricationStatus === "issue" ? "בעיה" : "ממתין"}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Manager notes */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-xs font-semibold text-gray-500">הערת מנהל</p>
+            {!editingNotes && (
+              <div className="flex items-center gap-2">
+                {noteSaveState === "saved" && (
+                  <span className="text-[10px] text-green-600 font-medium">✓ נשמר</span>
+                )}
+                <button
+                  onClick={() => { setNotesDraft(order.generalNotes ?? ""); setEditingNotes(true); }}
+                  className="text-[10px] text-blue-500 hover:text-blue-700"
+                >
+                  {order.generalNotes ? "ערוך" : "הוסף הערה"}
+                </button>
+              </div>
+            )}
+          </div>
+          {editingNotes ? (
+            <div className="space-y-2">
+              <textarea
+                value={notesDraft}
+                onChange={e => setNotesDraft(e.target.value)}
+                rows={3}
+                placeholder="הערה פנימית מהמנהל..."
+                className="w-full text-sm border border-blue-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                dir="rtl"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveNote}
+                  disabled={noteSaveState === "saving"}
+                  className="text-xs px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-50"
+                >
+                  {noteSaveState === "saving" ? "שומר..." : "שמור"}
+                </button>
+                <button onClick={() => { setEditingNotes(false); setNoteSaveState("idle"); }} className="text-xs px-3 py-1.5 rounded border border-gray-200 text-gray-500">
+                  ביטול
+                </button>
+                {noteSaveState === "error" && (
+                  <span className="text-[10px] text-red-600 font-medium">שגיאה בשמירה</span>
+                )}
+              </div>
+            </div>
+          ) : order.generalNotes ? (
+            <div className="bg-amber-50 rounded-lg px-3 py-2.5">
+              <p className="text-sm text-gray-700">{order.generalNotes}</p>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-300 italic">אין הערת מנהל</p>
+          )}
+        </div>
+
+        {/* Manager actions */}
+        {!isTerminal && (
+          <div>
+            <p className="text-xs font-semibold text-gray-500 mb-2">פעולות מנהל</p>
+            <div className="flex flex-wrap gap-2 items-center">
+              <button
+                onClick={handleToggleUrgent}
+                disabled={urgentSaveState === "saving"}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
+                  order.priority === "urgent"
+                    ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100"
+                    : "bg-white text-gray-600 border-gray-200 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200"
+                }`}
+              >
+                {urgentSaveState === "saving"
+                  ? "שומר..."
+                  : order.priority === "urgent" ? "הסר עדיפות דחופה" : "סמן כדחוף"}
+              </button>
+              {urgentSaveState === "saved" && (
+                <span className="text-[10px] text-green-600 font-medium">✓ נשמר</span>
+              )}
+              {urgentSaveState === "error" && (
+                <span className="text-[10px] text-red-600 font-medium">שגיאה — לא נשמר</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DrillDownPanel({
+  drill,
+  onClose,
+  onUpdateFields,
+}: {
+  drill: DrillState;
+  onClose: () => void;
+  onUpdateFields: (id: string, fields: Partial<WorkOrder>) => Promise<void>;
+}) {
+  const { orders: allOrders } = useOrdersContext();
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+
+  const liveOrders = useMemo(() => drill.getOrders(allOrders), [drill, allOrders]);
+  const selectedOrder = useMemo(
+    () => selectedOrderId ? allOrders.find((o) => o.id === selectedOrderId) ?? null : null,
+    [selectedOrderId, allOrders],
+  );
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/30 z-40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed top-0 left-0 h-full w-full max-w-lg bg-white z-50 shadow-2xl flex flex-col" dir="rtl">
+
+        {selectedOrder ? (
+          <InternalOrderDetail
+            order={selectedOrder}
+            onBack={() => setSelectedOrderId(null)}
+            onUpdateFields={onUpdateFields}
+          />
+        ) : (
+          <>
+            {/* Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-navy-900">{drill.title}</h2>
+                {drill.description && (
+                  <p className="text-xs text-gray-400 mt-0.5">{drill.description}</p>
+                )}
+                <p className="text-xs text-gray-500 mt-1 font-medium">{liveOrders.length} הזמנות</p>
+              </div>
+              <button
+                onClick={onClose}
+                className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                aria-label="סגור"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            {/* Orders list */}
+            <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+              {liveOrders.length === 0 ? (
+                <div className="px-5 py-10 text-center">
+                  <p className="text-sm text-gray-400">אין הזמנות להצגה</p>
+                </div>
+              ) : (
+                liveOrders.map((order) => (
+                  <button
+                    key={order.id}
+                    onClick={() => setSelectedOrderId(order.id)}
+                    className="flex items-start gap-3 px-5 py-3.5 hover:bg-gray-50 transition-colors w-full text-right"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-bold text-navy-900">{order.orderNumber}</span>
+                        {order.priority === "urgent" && (
+                          <span className="text-[9px] font-bold px-1 py-0.5 rounded bg-red-100 text-red-600">דחוף</span>
+                        )}
+                        {(order.generalNotes || order.notes) && (
+                          <span className="text-amber-500" title="יש הערת מנהל">
+                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                          </span>
+                        )}
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${STATUS_STYLE[order.status] ?? "bg-gray-100 text-gray-600"}`}>
+                          {STATUS_LABELS[order.status] ?? order.status}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-700 font-medium mt-0.5 truncate">{order.customer}</div>
+                      {order.jobName && (
+                        <div className="text-xs text-gray-400 truncate">{order.jobName}</div>
+                      )}
+                      {order.location ? (
+                        <div className="text-[10px] text-gray-400 mt-0.5 truncate">{order.location}</div>
+                      ) : (
+                        <span className="text-[9px] text-amber-600 font-semibold">מיקום חסר</span>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-[10px] text-gray-300 mt-0.5">
+                      {formatDateShort(order.updatedAt ?? order.createdAt)}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
 
 // ─── Stage Health Panel ────────────────────────────────────────────────────
 
@@ -532,9 +914,11 @@ function ForecastPanel() {
 // ─── Main Dashboard ────────────────────────────────────────────────────────
 
 export function DashboardPage() {
-  const { orders } = useOrdersContext();
+  const { orders, updateOrderFields } = useOrdersContext();
   const { customers } = useCustomersContext();
   const { items: catalogItems } = useCatalogContext();
+
+  const [drill, setDrill] = useState<DrillState | null>(null);
 
   const metrics = useMemo(() => {
     const open = orders.filter((o) => o.status !== "completed" && o.status !== "cancelled");
@@ -572,6 +956,7 @@ export function DashboardPage() {
       color: "bg-amber-50 border-amber-200",
       textColor: "text-amber-700",
       href: "/graphics",
+      status: "graphics_pending",
     },
     {
       label: "בטיפול גרפיקה",
@@ -579,6 +964,7 @@ export function DashboardPage() {
       color: "bg-blue-50 border-blue-200",
       textColor: "text-blue-700",
       href: "/graphics",
+      status: "graphics_active",
     },
     {
       label: "גרפיקה הושלמה",
@@ -586,6 +972,7 @@ export function DashboardPage() {
       color: "bg-emerald-50 border-emerald-200",
       textColor: "text-emerald-700",
       href: "/orders",
+      status: "graphics_done",
     },
     {
       label: "בייצור",
@@ -593,6 +980,7 @@ export function DashboardPage() {
       color: "bg-purple-50 border-purple-200",
       textColor: "text-purple-700",
       href: "/orders",
+      status: "production",
     },
     {
       label: "מוכן להתקנה",
@@ -600,6 +988,7 @@ export function DashboardPage() {
       color: "bg-teal-50 border-teal-200",
       textColor: "text-teal-700",
       href: "/orders",
+      status: "ready_installation",
     },
     {
       label: "הושלם",
@@ -607,8 +996,28 @@ export function DashboardPage() {
       color: "bg-green-50 border-green-200",
       textColor: "text-green-700",
       href: "/orders",
+      status: "completed",
     },
   ];
+
+  function handleStageClick(label: string, status: string) {
+    setDrill({
+      title: label,
+      description: `הזמנות בשלב: ${label}`,
+      getOrders: status === "completed"
+        ? (all) => all.filter((o) => o.status === "completed" && isSameMonth(o.updatedAt ?? o.createdAt))
+        : (all) => all.filter((o) => o.status === status),
+    });
+  }
+
+  function handleAlertClick(alert: WorkflowAlert) {
+    const nums = new Set(alert.orderNumbers ?? []);
+    setDrill({
+      title: alert.message,
+      description: DEPT_LABELS[alert.department] ?? alert.department,
+      getOrders: (all) => nums.size > 0 ? all.filter((o) => nums.has(o.orderNumber)) : [],
+    });
+  }
 
   return (
     <div className="min-h-screen bg-surface">
@@ -684,50 +1093,8 @@ export function DashboardPage() {
       {/* ─── Main Content ──────────────────────────────────────── */}
       <div className="px-6 py-6 max-w-7xl mx-auto space-y-5">
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <MetricCard
-            value={metrics.openOrders}
-            label="הזמנות פתוחות"
-            topColor="bg-ek-blue"
-            href="/orders"
-          />
-          <MetricCard
-            value={metrics.pendingGraphics}
-            label="ממתינות לגרפיקה"
-            topColor="bg-amber-400"
-            href="/graphics"
-            alert={metrics.pendingGraphics > 0}
-          />
-          <MetricCard
-            value={metrics.activeGraphics}
-            label="בטיפול גרפיקה"
-            topColor="bg-blue-400"
-            href="/graphics"
-          />
-          <MetricCard
-            value={metrics.inProduction}
-            label="בייצור"
-            topColor="bg-purple-500"
-            href="/orders"
-          />
-          <MetricCard
-            value={metrics.readyInstall}
-            label="מוכן להתקנה"
-            topColor="bg-teal-500"
-            href="/orders"
-          />
-          <MetricCard
-            value={metrics.completedMonth}
-            label="הושלמו החודש"
-            sub={new Date().toLocaleDateString("he-IL", { month: "long" })}
-            topColor="bg-green-500"
-            href="/orders"
-          />
-        </div>
-
         {/* Pipeline */}
-        <PipelineSection stages={pipelineStages} />
+        <PipelineSection stages={pipelineStages} onStageClick={handleStageClick} />
 
         {/* Departments + Alerts/Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
@@ -744,6 +1111,13 @@ export function DashboardPage() {
                   count={metrics.pendingGraphics + metrics.activeGraphics}
                   sub={`${metrics.pendingGraphics} ממתינות · ${metrics.activeGraphics} בטיפול`}
                   href="/graphics"
+                  onClick={() =>
+                    setDrill({
+                      title: "מחלקת גרפיקה",
+                      description: "הזמנות ממתינות ובטיפול גרפיקה",
+                      getOrders: (all) => all.filter((o) => o.status === "graphics_pending" || o.status === "graphics_active"),
+                    })
+                  }
                   accent="bg-amber-50"
                   accentText="text-amber-600"
                   icon={
@@ -761,6 +1135,13 @@ export function DashboardPage() {
                   count={metrics.inProduction + metrics.readyInstall}
                   sub={`${metrics.inProduction} בייצור · ${metrics.readyInstall} מוכן`}
                   href="/orders"
+                  onClick={() =>
+                    setDrill({
+                      title: "ייצור",
+                      description: "הזמנות בייצור ומוכנות להתקנה",
+                      getOrders: (all) => all.filter((o) => o.status === "production" || o.status === "ready_installation"),
+                    })
+                  }
                   accent="bg-purple-50"
                   accentText="text-purple-600"
                   icon={
@@ -772,7 +1153,7 @@ export function DashboardPage() {
                 <DeptCard
                   label="לקוחות"
                   count={metrics.totalCustomers}
-                  sub="לקוחות רשומים במערכת"
+                  sub="לקוחות רשומים ↗ מודול לקוחות"
                   href="/customers"
                   accent="bg-blue-50"
                   accentText="text-blue-600"
@@ -788,7 +1169,7 @@ export function DashboardPage() {
                 <DeptCard
                   label="מוצרים ושירותים"
                   count={metrics.catalogActive}
-                  sub="פריטים פעילים בקטלוג"
+                  sub="פריטים פעילים ↗ עריכת קטלוג"
                   href="/catalog"
                   accent="bg-teal-50"
                   accentText="text-teal-600"
@@ -805,6 +1186,13 @@ export function DashboardPage() {
                   count={metrics.completedMonth}
                   sub="הזמנות שהושלמו החודש"
                   href="/accounting"
+                  onClick={() =>
+                    setDrill({
+                      title: "הנהלת חשבונות",
+                      description: "הזמנות שהושלמו החודש",
+                      getOrders: (all) => all.filter((o) => o.status === "completed" && isSameMonth(o.updatedAt ?? o.createdAt)),
+                    })
+                  }
                   accent="bg-green-50"
                   accentText="text-green-600"
                   icon={
@@ -819,6 +1207,13 @@ export function DashboardPage() {
                   count={metrics.totalOrders}
                   sub={`${metrics.openOrders} פתוחות · ${metrics.urgentOpen} דחופות`}
                   href="/orders"
+                  onClick={() =>
+                    setDrill({
+                      title: "כל ההזמנות",
+                      description: `${metrics.openOrders} פתוחות · ${metrics.urgentOpen} דחופות`,
+                      getOrders: (all) => all.filter((o) => o.status !== "completed" && o.status !== "cancelled"),
+                    })
+                  }
                   accent="bg-navy-800/10"
                   accentText="text-navy-700"
                   icon={
@@ -834,7 +1229,7 @@ export function DashboardPage() {
 
           {/* Alerts + Activity */}
           <div className="lg:col-span-2 flex flex-col gap-4">
-            <AlertsSection alerts={alerts} />
+            <AlertsSection alerts={alerts} onAlertClick={handleAlertClick} />
             <ActivitySection orders={recentActivity} />
           </div>
         </div>
@@ -857,6 +1252,9 @@ export function DashboardPage() {
         </div>
 
       </div>
+
+      {/* Drill-down panel */}
+      {drill && <DrillDownPanel drill={drill} onClose={() => setDrill(null)} onUpdateFields={updateOrderFields} />}
     </div>
   );
 }

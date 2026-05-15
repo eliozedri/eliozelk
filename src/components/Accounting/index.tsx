@@ -4,13 +4,226 @@ import { useState, useMemo } from "react";
 import { useOrdersContext } from "@/context/OrdersContext";
 import type { WorkOrder } from "@/types/workOrder";
 import { STATUS_LABELS, ACCOUNTING_STATUS_LABELS, ACCOUNTING_STATUS_COLORS } from "@/types/workOrder";
-import { exportAccountingCSV, exportAccountingPDF, exportCustomerBillingCSV, exportCustomerBillingPDF } from "@/lib/accountingExport";
+import { exportAccountingCSV, exportAccountingExcel, exportAccountingPDF, exportCustomerBillingCSV, exportCustomerBillingPDF, exportCustomerBillingExcel } from "@/lib/accountingExport";
 import type { AccountingReportData } from "@/components/pdf/AccountingDocument";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { DIARY_STATUS_LABELS, DIARY_STATUS_COLORS } from "@/types/workDiary";
 import { exportWorkDiaryPDF, exportWorkDiaryCSV } from "@/lib/workDiaryExport";
 import { useAuth } from "@/context/AuthContext";
 import { useOperationalKPIs } from "@/hooks/useOperationalKPIs";
+
+// ─── Cancel Order Modal ───────────────────────────────────────────────────────
+
+function CancelOrderModal({
+  order,
+  onConfirm,
+  onClose,
+}: {
+  order: WorkOrder;
+  onConfirm: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  async function handleConfirm() {
+    setSaveState("saving");
+    setErrorMsg("");
+    try {
+      await onConfirm();
+      onClose();
+    } catch (e) {
+      setSaveState("error");
+      setErrorMsg(e instanceof Error ? e.message : "שגיאה לא ידועה");
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" onClick={saveState === "saving" ? undefined : onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" dir="rtl">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <div>
+              <p className="font-bold text-gray-900">ביטול הזמנה</p>
+              <p className="text-xs text-gray-500 mt-0.5">{order.orderNumber} · {order.customer}</p>
+            </div>
+          </div>
+          <div className="text-sm text-gray-600 mb-5 space-y-1.5">
+            <p>פעולה זו תבצע את הפעולות הבאות:</p>
+            <ul className="space-y-1 text-xs text-gray-500 pr-2">
+              <li>• ההזמנה תוסר מרשימת <strong className="text-gray-700">ממתין לחיוב</strong></li>
+              <li>• ההזמנה לא תופיע בסיכומי חיוב ובייצוא נתוני חיוב</li>
+              <li>• הסטטוס יעודכן ל<strong className="text-gray-700">בוטל</strong></li>
+              <li className="text-green-700">• ההזמנה <strong>אינה נמחקת</strong> מהמערכת — ניתן לצפות בה בלשונית הזמנות</li>
+            </ul>
+          </div>
+          {saveState === "error" && (
+            <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              שגיאה: {errorMsg}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={handleConfirm}
+              disabled={saveState === "saving"}
+              className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white transition-colors"
+            >
+              {saveState === "saving" ? "מבטל..." : saveState === "error" ? "נסה שוב" : "אשר ביטול"}
+            </button>
+            <button
+              onClick={onClose}
+              disabled={saveState === "saving"}
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+            >
+              חזור
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Accounting Order Edit Panel ──────────────────────────────────────────────
+
+function AccountingOrderEditPanel({
+  order,
+  onClose,
+  onSave,
+}: {
+  order: WorkOrder;
+  onClose: () => void;
+  onSave: (id: string, fields: Partial<WorkOrder>) => Promise<void>;
+}) {
+  const [jobName, setJobName] = useState(order.jobName ?? "");
+  const [location, setLocation] = useState(order.location ?? "");
+  const [billedAmount, setBilledAmount] = useState(order.billedAmount != null ? String(order.billedAmount) : "");
+  const [invoiceNumber, setInvoiceNumber] = useState(order.invoiceNumber ?? "");
+  const [notes, setNotes] = useState(order.generalNotes ?? "");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  async function handleSave() {
+    setSaveState("saving");
+    setErrorMsg("");
+    const fields: Partial<WorkOrder> = {
+      jobName: jobName.trim() || null,
+      location: location.trim() || undefined,
+      invoiceNumber: invoiceNumber.trim() || null,
+      generalNotes: notes.trim(),
+    };
+    const parsed = parseFloat(billedAmount);
+    if (!isNaN(parsed) && billedAmount.trim() !== "") {
+      fields.billedAmount = parsed;
+    } else if (billedAmount.trim() === "") {
+      fields.billedAmount = null;
+    }
+    try {
+      await onSave(order.id, fields);
+      setSaveState("saved");
+      setTimeout(() => onClose(), 1200);
+    } catch (e) {
+      setSaveState("error");
+      setErrorMsg(e instanceof Error ? e.message : "שגיאה לא ידועה");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir="rtl">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={saveState === "saving" ? undefined : onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 z-10 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">עריכת פרטי הזמנה</h2>
+            <p className="text-xs text-gray-400 font-mono mt-0.5">{order.orderNumber} · {order.customer}</p>
+          </div>
+          <button onClick={onClose} disabled={saveState === "saving"} className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 transition-colors disabled:opacity-40">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        {/* Fields */}
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">שם עבודה</label>
+            <input value={jobName} onChange={e => setJobName(e.target.value)}
+              placeholder="שם העבודה / פרויקט"
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" dir="rtl" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              מיקום
+              {!order.location && <span className="mr-2 text-amber-600 font-normal">(חסר)</span>}
+            </label>
+            <input value={location} onChange={e => setLocation(e.target.value)}
+              placeholder="עיר / כתובת / אתר"
+              className={`w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 ${!order.location ? "border-amber-300 bg-amber-50" : "border-gray-300"}`}
+              dir="rtl" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">סכום לחיוב ₪</label>
+              <input type="number" min={0} step={1} value={billedAmount} onChange={e => setBilledAmount(e.target.value)}
+                placeholder="0"
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" dir="ltr" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">מספר חשבונית</label>
+              <input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
+                placeholder="אופציונלי"
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" dir="ltr" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">הערות חיוב</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+              placeholder="הערות פנימיות לחיוב..."
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" dir="rtl" />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="space-y-2">
+          {saveState === "error" && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200">
+              <svg className="w-4 h-4 text-red-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <p className="text-xs text-red-700 font-medium">שגיאה בשמירה{errorMsg ? `: ${errorMsg}` : ""} — נסה שוב</p>
+            </div>
+          )}
+          {saveState === "saved" && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
+              <svg className="w-4 h-4 text-green-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <p className="text-xs text-green-700 font-medium">✓ נשמר בהצלחה — סוגר...</p>
+            </div>
+          )}
+          <div className="flex gap-3">
+            <button
+              onClick={handleSave}
+              disabled={saveState === "saving" || saveState === "saved"}
+              className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saveState === "saving" ? "שומר..." : "שמור שינויים"}
+            </button>
+            <button
+              onClick={onClose}
+              disabled={saveState === "saving"}
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40"
+            >
+              ביטול
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AccountingIcon() {
   return (
@@ -212,6 +425,8 @@ export function AccountingPage() {
   const [billingDateTo, setBillingDateTo] = useState("");
   const [expandedBillingCustomers, setExpandedBillingCustomers] = useState<Set<string>>(new Set());
   const [billingPdfExporting, setBillingPdfExporting] = useState<string | null>(null);
+  const [editingOrder, setEditingOrder] = useState<WorkOrder | null>(null);
+  const [cancelingOrder, setCancelingOrder] = useState<WorkOrder | null>(null);
 
   // Map orderId → diary revenue for billing queue enrichment
   const orderRevenueMap = useMemo(() => {
@@ -401,6 +616,12 @@ export function AccountingPage() {
     exportAccountingCSV(buildReportData());
   }
 
+  const [exportingExcel, setExportingExcel] = useState(false);
+  async function handleExportExcel() {
+    setExportingExcel(true);
+    try { await exportAccountingExcel(buildReportData()); } finally { setExportingExcel(false); }
+  }
+
   return (
     <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
       <div className="max-w-6xl mx-auto">
@@ -574,10 +795,10 @@ export function AccountingPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); exportCustomerBillingCSV(group.customerName, group.orders); }}
+                            onClick={(e) => { e.stopPropagation(); exportCustomerBillingExcel(group.customerName, group.orders); }}
                             className="flex items-center gap-1 px-2 py-1 rounded text-xs border border-green-300 text-green-700 hover:bg-green-50 transition-colors whitespace-nowrap"
                           >
-                            CSV
+                            Excel
                           </button>
                           <span className={`text-gray-300 transition-transform ${isOpen ? "rotate-180" : ""}`}>
                             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
@@ -598,7 +819,7 @@ export function AccountingPage() {
                                 <th className="px-4 py-2 text-xs font-medium text-gray-500 text-right">הכנסה משוערת</th>
                                 <th className="px-4 py-2 text-xs font-medium text-gray-500 text-right">מס׳ חשבונית</th>
                                 <th className="px-4 py-2 text-xs font-medium text-gray-500 text-right">סכום ₪</th>
-                                <th className="px-4 py-2 w-24"></th>
+                                <th className="px-4 py-2 w-28"></th>
                               </tr>
                             </thead>
                             <tbody>
@@ -614,7 +835,11 @@ export function AccountingPage() {
                                       </div>
                                     </td>
                                     <td className="px-4 py-2.5 text-xs text-gray-700">{(order as { jobName?: string | null }).jobName || "—"}</td>
-                                    <td className="px-4 py-2.5 text-gray-500 text-xs">{order.location || "—"}</td>
+                                    <td className="px-4 py-2.5 text-gray-500 text-xs">
+                                      {order.location ? order.location : (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-200">מיקום חסר</span>
+                                      )}
+                                    </td>
                                     <td className="px-4 py-2.5"><AgingBadge days={days} /></td>
                                     <td className="px-4 py-2.5 text-xs font-medium text-gray-700">
                                       {estRevenue > 0
@@ -639,10 +864,24 @@ export function AccountingPage() {
                                       />
                                     </td>
                                     <td className="px-4 py-2.5">
-                                      <button type="button" onClick={() => handleMarkInvoiced(order)} disabled={invoicingId === order.id}
-                                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium transition-colors disabled:opacity-50 whitespace-nowrap">
-                                        {invoicingId === order.id ? "שומר..." : "סמן כחויב"}
-                                      </button>
+                                      <div className="flex items-center gap-1.5">
+                                        <button type="button" onClick={() => handleMarkInvoiced(order)} disabled={invoicingId === order.id}
+                                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium transition-colors disabled:opacity-50 whitespace-nowrap">
+                                          {invoicingId === order.id ? "שומר..." : "סמן כחויב"}
+                                        </button>
+                                        <button type="button"
+                                          onClick={() => setEditingOrder(order)}
+                                          className="p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                          title="עריכת פרטים">
+                                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                        </button>
+                                        <button type="button"
+                                          onClick={() => setCancelingOrder(order)}
+                                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors whitespace-nowrap">
+                                          <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                          הסר מחיוב
+                                        </button>
+                                      </div>
                                     </td>
                                   </tr>
                                 );
@@ -951,6 +1190,20 @@ export function AccountingPage() {
             </button>
             <button
               type="button"
+              onClick={handleExportExcel}
+              disabled={filtered.length === 0 || exportingExcel}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-green-400 text-green-700 text-sm font-medium hover:bg-green-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="12" y1="18" x2="12" y2="12" />
+                <line x1="9" y1="15" x2="15" y2="15" />
+              </svg>
+              {exportingExcel ? "מייצא..." : "ייצוא Excel"}
+            </button>
+            <button
+              type="button"
               onClick={handleExportPDF}
               disabled={filtered.length === 0 || exporting}
               className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -994,7 +1247,7 @@ export function AccountingPage() {
                     <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">סטטוס</th>
                     <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-16">שלטים</th>
                     <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-16">שונות</th>
-                    <th className="w-10"></th>
+                    <th className="w-16"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1010,7 +1263,11 @@ export function AccountingPage() {
                           <td className="px-4 py-3 text-gray-400 text-xs">{idx + 1}</td>
                           <td className="px-4 py-3 font-medium text-gray-900 text-xs">{order.orderNumber}</td>
                           <td className="px-4 py-3 text-gray-700">{order.customer}</td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">{order.location || "—"}</td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">
+                            {order.location ? order.location : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-200">מיקום חסר</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(order.date)}</td>
                           <td className="px-4 py-3">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-600"}`}>
@@ -1019,8 +1276,18 @@ export function AccountingPage() {
                           </td>
                           <td className="px-4 py-3 text-center text-gray-700 text-sm font-medium">{countSignQty(order) || "—"}</td>
                           <td className="px-4 py-3 text-center text-gray-700 text-sm font-medium">{countMiscQty(order) || "—"}</td>
-                          <td className="px-2 py-3 text-gray-400">
-                            <ChevronIcon open={isExpanded} />
+                          <td className="px-2 py-3">
+                            <div className="flex items-center gap-1 justify-end">
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setEditingOrder(order); }}
+                                className="p-1 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                title="עריכת פרטים"
+                              >
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                              </button>
+                              <ChevronIcon open={isExpanded} />
+                            </div>
                           </td>
                         </tr>
                         {isExpanded && <ExpandedRow key={`${order.id}-expanded`} order={order} />}
@@ -1045,6 +1312,24 @@ export function AccountingPage() {
         </div>
         </>)}
       </div>
+
+      {/* Accounting Order Edit Panel */}
+      {editingOrder && (
+        <AccountingOrderEditPanel
+          order={editingOrder}
+          onClose={() => setEditingOrder(null)}
+          onSave={updateOrderFields}
+        />
+      )}
+
+      {/* Cancel Order Modal */}
+      {cancelingOrder && (
+        <CancelOrderModal
+          order={cancelingOrder}
+          onConfirm={() => updateOrderFields(cancelingOrder.id, { status: "cancelled" })}
+          onClose={() => setCancelingOrder(null)}
+        />
+      )}
     </div>
   );
 }

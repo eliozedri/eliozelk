@@ -390,7 +390,7 @@ export function useOrders() {
   //      optimistic update and re-fetches the authoritative DB state.
   //   5. On success: syncs the server-canonical version + timestamp.
   //
-  const _patchOrder = useCallback((id: string, patch: Partial<WorkOrder>) => {
+  const _patchOrder = useCallback(async (id: string, patch: Partial<WorkOrder>): Promise<void> => {
     const original = ref.current.find(o => o.id === id);
     if (!original) return;
 
@@ -424,32 +424,33 @@ export function useOrders() {
       dbUpdate.data = buildContentBlob(optimistic);
     }
 
-    db.from("work_orders")
+    const { data: returned, error } = await db.from("work_orders")
       .update(dbUpdate)
       .eq("id", id)
       .eq("version", original.version)   // optimistic lock
       .select("id, version, updated_at")
-      .single()
-      .then(({ data: returned, error }) => {
-        if (error?.code === "PGRST116") {
-          // Version conflict: another user updated this order first.
-          // Roll back the optimistic change and re-fetch the canonical state.
-          console.warn("[orders] version conflict on", id, "— rolling back and refetching");
-          setOrders(prev => prev.map(o => o.id === id ? original : o));
-          fetchAll();
-        } else if (error) {
-          console.error("[orders] patch failed:", error.message);
-          setOrders(prev => prev.map(o => o.id === id ? original : o));
-        } else if (returned) {
-          // Sync the server-canonical version and timestamp into local state
-          const r = returned as Record<string, unknown>;
-          setOrders(prev => prev.map(o =>
-            o.id === id
-              ? { ...optimistic, version: r.version as number, updatedAt: r.updated_at as string }
-              : o
-          ));
-        }
-      });
+      .single();
+
+    if (error?.code === "PGRST116") {
+      // Version conflict: another user updated this order first.
+      // Roll back the optimistic change and re-fetch the canonical state.
+      console.warn("[orders] version conflict on", id, "— rolling back and refetching");
+      setOrders(prev => prev.map(o => o.id === id ? original : o));
+      fetchAll();
+      throw new Error("version_conflict");
+    } else if (error) {
+      console.error("[orders] patch failed:", error.message);
+      setOrders(prev => prev.map(o => o.id === id ? original : o));
+      throw new Error(error.message);
+    } else if (returned) {
+      // Sync the server-canonical version and timestamp into local state
+      const r = returned as Record<string, unknown>;
+      setOrders(prev => prev.map(o =>
+        o.id === id
+          ? { ...optimistic, version: r.version as number, updatedAt: r.updated_at as string }
+          : o
+      ));
+    }
   }, [fetchAll]);
 
   // ── addOrder ──────────────────────────────────────────────────────────
@@ -529,9 +530,9 @@ export function useOrders() {
   }, []);
 
   // ── acknowledgeOrder ───────────────────────────────────────────────────
-  const acknowledgeOrder = useCallback((id: string, acknowledgedBy = "גרפיקה") => {
+  const acknowledgeOrder = useCallback(async (id: string, acknowledgedBy = "גרפיקה"): Promise<void> => {
     const now = new Date().toISOString();
-    _patchOrder(id, {
+    await _patchOrder(id, {
       status: "graphics_active",
       graphicsAcknowledgedAt: now,
       graphicsAcknowledgedBy: acknowledgedBy,
@@ -542,14 +543,14 @@ export function useOrders() {
   }, [_patchOrder]);
 
   // ── completeGraphics ───────────────────────────────────────────────────
-  const completeGraphics = useCallback((id: string) => {
+  const completeGraphics = useCallback(async (id: string): Promise<void> => {
     const now = new Date().toISOString();
     const order = ref.current.find(o => o.id === id);
     if (!order) return;
     // If no department work needed, advance directly to ready_installation (skip production)
     const needsDeptWork = order.fabricationRequired || order.warehouseRequired;
     const nextStatus: WorkOrderStatus = needsDeptWork ? "graphics_done" : "ready_installation";
-    _patchOrder(id, {
+    await _patchOrder(id, {
       status: nextStatus,
       graphicsCompletedAt: now,
       ...(nextStatus === "ready_installation" && !order.readyForExecutionAt ? { readyForExecutionAt: now } : {}),
@@ -562,30 +563,24 @@ export function useOrders() {
   }, [_patchOrder]);
 
   // ── approveCustomerOrder ───────────────────────────────────────────────
-  const approveCustomerOrder = useCallback((id: string) => {
-    _patchOrder(id, { customerApprovalStatus: "approved" });
+  const approveCustomerOrder = useCallback(async (id: string): Promise<void> => {
+    await _patchOrder(id, { customerApprovalStatus: "approved" });
     insertActivity(id, "status_changed", "אישור לקוח התקבל — ההזמנה עוברת לשיבוץ");
   }, [_patchOrder]);
 
   // ── updateOrderStatus ──────────────────────────────────────────────────
-  const updateOrderStatus = useCallback((id: string, status: WorkOrderStatus) => {
+  const updateOrderStatus = useCallback(async (id: string, status: WorkOrderStatus): Promise<void> => {
     const original = ref.current.find(o => o.id === id);
     if (!original) return;
 
     if (!canTransition(original.status, status)) {
-      console.warn(
-        `[orders] blocked invalid transition: ${original.status} → ${status} (order ${id})`
-      );
-      return;
+      throw new Error(`מעבר סטטוס לא חוקי: ${original.status} → ${status}`);
     }
 
     if (status === "ready_installation") {
       const fabCheck = canMarkReadyForInstallation(original);
       if (!fabCheck.ok) {
-        console.warn(
-          `[orders] blocked production → ready_installation: ${fabCheck.reason} (order ${id})`
-        );
-        return;
+        throw new Error(fabCheck.reason ?? "תנאי מחלקות לא הושלמו");
       }
     }
 
@@ -593,16 +588,16 @@ export function useOrders() {
     if (status === "ready_installation" && !original.readyForExecutionAt) {
       extra.readyForExecutionAt = new Date().toISOString();
     }
-    _patchOrder(id, { status, ...extra });
+    await _patchOrder(id, { status, ...extra });
   }, [_patchOrder]);
 
   // ── updateOrderFields ──────────────────────────────────────────────────
   // Generic patch — callers pass only the fields they own.
   // The column map ensures only the relevant columns are written.
   // Auto-advances status when department completions satisfy all requirements.
-  const updateOrderFields = useCallback((id: string, fields: Partial<WorkOrder>) => {
+  const updateOrderFields = useCallback(async (id: string, fields: Partial<WorkOrder>): Promise<void> => {
     const current = ref.current.find(o => o.id === id);
-    if (!current) { _patchOrder(id, fields); return; }
+    if (!current) { await _patchOrder(id, fields); return; }
 
     const merged: WorkOrder = { ...current, ...fields };
     const extra: Partial<WorkOrder> = {};
@@ -618,7 +613,7 @@ export function useOrders() {
       }
     }
 
-    _patchOrder(id, { ...fields, ...extra });
+    await _patchOrder(id, { ...fields, ...extra });
 
     if (extra.status === "ready_installation") {
       insertActivity(id, "status_changed", "כל שלבי ההכנה הושלמו — ההזמנה מוכנה לביצוע");

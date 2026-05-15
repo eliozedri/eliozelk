@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useOrdersContext } from "@/context/OrdersContext";
 import { useCustomersContext } from "@/context/CustomersContext";
@@ -34,6 +34,15 @@ const ALL_STATUSES: WorkOrderStatus[] = [
   "completed",
   "cancelled",
 ];
+
+// "all" filter shows only operational orders; completed/cancelled go to Accounting
+const OPERATIONAL_STATUSES = new Set<WorkOrderStatus>([
+  "graphics_pending",
+  "graphics_active",
+  "graphics_done",
+  "production",
+  "ready_installation",
+]);
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -79,37 +88,9 @@ function formatStageAge(hours: number): string {
 // ─── Order-type icons ──────────────────────────────────────────────────────
 
 function OrderTypeIcon({ type }: { type: string }) {
-  if (type === "pickup") {
-    return (
-      <span title="הזמנה לאיסוף">
-        <svg className="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-          <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-          <line x1="12" y1="22.08" x2="12" y2="12" />
-        </svg>
-      </span>
-    );
-  }
-  if (type === "equipment_supply") {
-    return (
-      <span title="אספקת ציוד">
-        <svg className="w-4 h-4 text-orange-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="1" y="3" width="15" height="13" rx="1" />
-          <path d="M16 8h4l3 3v5h-7V8z" />
-          <circle cx="5.5" cy="18.5" r="2.5" />
-          <circle cx="18.5" cy="18.5" r="2.5" />
-        </svg>
-      </span>
-    );
-  }
-  // field_work (default)
-  return (
-    <span title="ביצוע עבודה">
-      <svg className="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16" />
-      </svg>
-    </span>
-  );
+  if (type === "pickup") return <span title="הזמנה לאיסוף" className="text-lg leading-none select-none">📦</span>;
+  if (type === "equipment_supply") return <span title="אספקת ציוד" className="text-lg leading-none select-none">🚚</span>;
+  return <span title="ביצוע עבודה" className="text-lg leading-none select-none">🚧</span>;
 }
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
@@ -372,12 +353,13 @@ interface OrderRowProps {
   index: number;
   phoneMap: Map<string, string>;
   riskScore: OrderRiskScore | undefined;
-  onUpdateStatus: (id: string, status: WorkOrderStatus) => void;
-  onApproveCustomer: (id: string) => void;
+  onUpdateStatus: (id: string, status: WorkOrderStatus) => Promise<void>;
+  onApproveCustomer: (id: string) => Promise<void>;
   onSelect: (order: WorkOrder) => void;
+  onStartComplete: (order: WorkOrder) => void;
 }
 
-function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApproveCustomer, onSelect }: OrderRowProps) {
+function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApproveCustomer, onSelect, onStartComplete }: OrderRowProps) {
   const phone = phoneMap.get(order.customer.trim().toLowerCase());
   const lastUpdated = getLastUpdated(order);
   const relative = relativeTime(lastUpdated);
@@ -422,6 +404,12 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 w-fit">
               <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
               {openProblemsCount(order)} בעיות
+            </span>
+          )}
+          {(order.generalNotes || order.notes) && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-200 w-fit" title={order.generalNotes || order.notes || ""}>
+              <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+              הערה
             </span>
           )}
           {riskScore && riskScore.level !== "low" && (
@@ -469,7 +457,9 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
             <span className="truncate">{order.location}</span>
           </div>
         ) : (
-          <span className="text-gray-300">—</span>
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-200">
+            מיקום חסר
+          </span>
         )}
       </td>
 
@@ -565,7 +555,7 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
           )}
           {order.status === "ready_installation" && (
             <button
-              onClick={() => onUpdateStatus(order.id, "completed")}
+              onClick={() => onStartComplete(order)}
               className="px-2 py-1 rounded-lg text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors whitespace-nowrap"
             >
               סמן כהושלם
@@ -600,6 +590,117 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
   );
 }
 
+// ─── Complete Order Confirmation Modal ────────────────────────────────────
+
+function CompleteOrderModal({ order, onConfirm, onCancel }: {
+  order: WorkOrder;
+  onConfirm: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [checked, setChecked] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir="rtl">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 z-10">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-gray-900">אישור סיום הזמנה</h2>
+            <p className="text-xs text-gray-400">פעולה זו אינה הפיכה בקלות</p>
+          </div>
+        </div>
+
+        {/* Order summary */}
+        <div className="bg-gray-50 rounded-xl p-4 mb-4 space-y-1.5">
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">מספר הזמנה</span>
+            <span className="font-mono font-bold text-gray-900">{order.orderNumber}</span>
+          </div>
+          {order.jobName && (
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">שם עבודה</span>
+              <span className="font-semibold text-gray-900 text-right max-w-[60%] truncate">{order.jobName}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">לקוח</span>
+            <span className="font-semibold text-gray-900">{order.customer}</span>
+          </div>
+          {order.location && (
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">מיקום</span>
+              <span className="text-gray-700 text-right max-w-[60%] truncate">{order.location}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Explanation */}
+        <div className="bg-blue-50 rounded-xl px-4 py-3 mb-4">
+          <p className="text-xs text-blue-700 leading-relaxed">
+            לאחר האישור, ההזמנה תסומן כ<strong>הושלמה</strong> ותועבר אוטומטית להנהלת חשבונות לטיפול בחיוב.
+            היא לא תמחק מהמערכת.
+          </p>
+        </div>
+
+        {/* Checkbox */}
+        <label className="flex items-start gap-3 cursor-pointer mb-5 select-none">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(e) => setChecked(e.target.checked)}
+            className="mt-0.5 w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
+          />
+          <span className="text-sm text-gray-700 leading-snug">
+            אני מאשר/ת שההזמנה הושלמה ומוכנה להעברה לחיוב
+          </span>
+        </label>
+
+        {saveState === "error" && (
+          <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            שגיאה: {errorMsg}
+          </div>
+        )}
+
+        {/* Buttons */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={async () => {
+              setSaveState("saving");
+              setErrorMsg("");
+              try {
+                await onConfirm();
+                onCancel();
+              } catch (e) {
+                setSaveState("error");
+                setErrorMsg(e instanceof Error ? e.message : "שגיאה לא ידועה");
+              }
+            }}
+            disabled={!checked || saveState === "saving"}
+            className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-colors bg-green-600 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {saveState === "saving" ? "שומר..." : saveState === "error" ? "נסה שוב" : "אשר סיום הזמנה"}
+          </button>
+          <button
+            onClick={onCancel}
+            disabled={saveState === "saving"}
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+          >
+            ביטול
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Order Detail Slide-Over ───────────────────────────────────────────────
 
 const FABRICATION_STATUS_LABELS: Record<string, string> = {
@@ -611,8 +712,29 @@ const FABRICATION_STATUS_LABELS: Record<string, string> = {
   issue: "בעיה",
 };
 
-function OrderDetailPanel({ order, onClose }: { order: WorkOrder; onClose: () => void }) {
+function OrderDetailPanel({
+  order,
+  onClose,
+  onUpdateFields,
+}: {
+  order: WorkOrder;
+  onClose: () => void;
+  onUpdateFields: (id: string, fields: Partial<WorkOrder>) => Promise<void>;
+}) {
   const [pdfExporting, setPdfExporting] = useState(false);
+  const [editingLocation, setEditingLocation] = useState(false);
+  const [locationDraft, setLocationDraft] = useState(order.location ?? "");
+  const [locationSaveState, setLocationSaveState] = useState<"idle" | "saved" | "error">("idle");
+  const [editingJobName, setEditingJobName] = useState(false);
+  const [jobNameDraft, setJobNameDraft] = useState(order.jobName ?? "");
+  const [jobNameSaveState, setJobNameSaveState] = useState<"idle" | "saved" | "error">("idle");
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState(order.generalNotes ?? order.notes ?? "");
+  const [notesSaveState, setNotesSaveState] = useState<"idle" | "saved" | "error">("idle");
+
+  useEffect(() => { if (!editingLocation) setLocationDraft(order.location ?? ""); }, [order.location, editingLocation]);
+  useEffect(() => { if (!editingJobName) setJobNameDraft(order.jobName ?? ""); }, [order.jobName, editingJobName]);
+  useEffect(() => { if (!editingNotes) setNotesDraft(order.generalNotes ?? order.notes ?? ""); }, [order.generalNotes, order.notes, editingNotes]);
 
   const signCount = (order.signRows ?? []).filter(r => r.signNumber).length;
   const miscCount = (order.miscRows ?? []).filter(r => r.description).length;
@@ -621,6 +743,42 @@ function OrderDetailPanel({ order, onClose }: { order: WorkOrder; onClose: () =>
   async function handlePDF() {
     setPdfExporting(true);
     try { await openWorkOrderPDF(order); } finally { setPdfExporting(false); }
+  }
+
+  async function saveLocation() {
+    setEditingLocation(false);
+    try {
+      await onUpdateFields(order.id, { location: locationDraft.trim() || undefined });
+      setLocationSaveState("saved");
+      setTimeout(() => setLocationSaveState("idle"), 2500);
+    } catch {
+      setLocationSaveState("error");
+      setTimeout(() => setLocationSaveState("idle"), 3000);
+    }
+  }
+
+  async function saveJobName() {
+    setEditingJobName(false);
+    try {
+      await onUpdateFields(order.id, { jobName: jobNameDraft.trim() || null });
+      setJobNameSaveState("saved");
+      setTimeout(() => setJobNameSaveState("idle"), 2500);
+    } catch {
+      setJobNameSaveState("error");
+      setTimeout(() => setJobNameSaveState("idle"), 3000);
+    }
+  }
+
+  async function saveNotes() {
+    setEditingNotes(false);
+    try {
+      await onUpdateFields(order.id, { generalNotes: notesDraft.trim() });
+      setNotesSaveState("saved");
+      setTimeout(() => setNotesSaveState("idle"), 2500);
+    } catch {
+      setNotesSaveState("error");
+      setTimeout(() => setNotesSaveState("idle"), 3000);
+    }
   }
 
   return (
@@ -670,6 +828,29 @@ function OrderDetailPanel({ order, onClose }: { order: WorkOrder; onClose: () =>
 
           {/* Key details grid */}
           <div className="grid grid-cols-2 gap-3">
+            {/* Job name — editable */}
+            <div className="bg-gray-50 rounded-lg p-3 col-span-2">
+              <div className="flex items-center justify-between mb-0.5">
+                <p className="text-[10px] text-gray-400 font-medium">שם עבודה</p>
+                <div className="flex items-center gap-2">
+                  {jobNameSaveState === "saved" && <span className="text-[10px] text-green-600 font-medium">✓ נשמר</span>}
+                  {jobNameSaveState === "error" && <span className="text-[10px] text-red-600 font-medium">שגיאה</span>}
+                  <button onClick={() => { setJobNameDraft(order.jobName ?? ""); setEditingJobName(true); }} className="text-[10px] text-blue-500 hover:text-blue-700">עריכה</button>
+                </div>
+              </div>
+              {editingJobName ? (
+                <div className="flex gap-2 mt-1">
+                  <input autoFocus value={jobNameDraft} onChange={e => setJobNameDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") saveJobName(); if (e.key === "Escape") setEditingJobName(false); }}
+                    className="flex-1 text-sm border border-blue-300 rounded px-2 py-1 outline-none focus:ring-2 focus:ring-blue-300" dir="rtl" />
+                  <button onClick={saveJobName} className="text-xs px-2 py-1 rounded bg-blue-600 text-white">שמור</button>
+                  <button onClick={() => setEditingJobName(false)} className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500">ביטול</button>
+                </div>
+              ) : (
+                <p className="text-sm font-semibold text-gray-800">{order.jobName || <span className="text-gray-300 font-normal">לא הוזן</span>}</p>
+              )}
+            </div>
+
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="text-[10px] text-gray-400 font-medium mb-0.5">לקוח</p>
               <p className="text-sm font-semibold text-gray-800">{order.customer || "—"}</p>
@@ -678,12 +859,33 @@ function OrderDetailPanel({ order, onClose }: { order: WorkOrder; onClose: () =>
               <p className="text-[10px] text-gray-400 font-medium mb-0.5">תאריך</p>
               <p className="text-sm font-semibold text-gray-800">{formatDate(order.date)}</p>
             </div>
-            {order.location && (
-              <div className="bg-gray-50 rounded-lg p-3 col-span-2">
-                <p className="text-[10px] text-gray-400 font-medium mb-0.5">מיקום</p>
-                <p className="text-sm font-semibold text-gray-800">{order.location}</p>
+
+            {/* Location — always shown, editable */}
+            <div className={`rounded-lg p-3 col-span-2 ${order.location ? "bg-gray-50" : "bg-amber-50 border border-amber-200"}`}>
+              <div className="flex items-center justify-between mb-0.5">
+                <p className="text-[10px] text-gray-400 font-medium">מיקום</p>
+                <div className="flex items-center gap-2">
+                  {locationSaveState === "saved" && <span className="text-[10px] text-green-600 font-medium">✓ נשמר</span>}
+                  {locationSaveState === "error" && <span className="text-[10px] text-red-600 font-medium">שגיאה</span>}
+                  <button onClick={() => { setLocationDraft(order.location ?? ""); setEditingLocation(true); }} className="text-[10px] text-blue-500 hover:text-blue-700">עריכה</button>
+                </div>
               </div>
-            )}
+              {editingLocation ? (
+                <div className="flex gap-2 mt-1">
+                  <input autoFocus value={locationDraft} onChange={e => setLocationDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") saveLocation(); if (e.key === "Escape") setEditingLocation(false); }}
+                    placeholder="הזן מיקום..."
+                    className="flex-1 text-sm border border-blue-300 rounded px-2 py-1 outline-none focus:ring-2 focus:ring-blue-300" dir="rtl" />
+                  <button onClick={saveLocation} className="text-xs px-2 py-1 rounded bg-blue-600 text-white">שמור</button>
+                  <button onClick={() => setEditingLocation(false)} className="text-xs px-2 py-1 rounded border border-gray-200 text-gray-500">ביטול</button>
+                </div>
+              ) : (
+                <p className="text-sm font-semibold text-gray-800">
+                  {order.location || <span className="text-amber-600 font-semibold text-xs">מיקום חסר — לחץ עריכה להוספה</span>}
+                </p>
+              )}
+            </div>
+
             {order.contactPerson && (
               <div className="bg-gray-50 rounded-lg p-3">
                 <p className="text-[10px] text-gray-400 font-medium mb-0.5">איש קשר</p>
@@ -786,13 +988,31 @@ function OrderDetailPanel({ order, onClose }: { order: WorkOrder; onClose: () =>
             </div>
           )}
 
-          {/* Notes */}
-          {(order.generalNotes || order.notes) && (
-            <div>
-              <p className="text-xs font-semibold text-gray-500 mb-1">הערות</p>
-              <p className="text-sm text-gray-700 bg-amber-50 rounded-lg p-3">{order.generalNotes || order.notes}</p>
+          {/* Notes — editable */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-semibold text-gray-500">הערות</p>
+              <div className="flex items-center gap-2">
+                {notesSaveState === "saved" && <span className="text-[10px] text-green-600 font-medium">✓ נשמר</span>}
+                {notesSaveState === "error" && <span className="text-[10px] text-red-600 font-medium">שגיאה</span>}
+                <button onClick={() => { setNotesDraft(order.generalNotes ?? order.notes ?? ""); setEditingNotes(true); }} className="text-[10px] text-blue-500 hover:text-blue-700">עריכה</button>
+              </div>
             </div>
-          )}
+            {editingNotes ? (
+              <div className="space-y-2">
+                <textarea value={notesDraft} onChange={e => setNotesDraft(e.target.value)} rows={3}
+                  className="w-full text-sm border border-blue-300 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-blue-300 resize-none" dir="rtl" />
+                <div className="flex gap-2">
+                  <button onClick={saveNotes} className="text-xs px-3 py-1.5 rounded bg-blue-600 text-white">שמור</button>
+                  <button onClick={() => setEditingNotes(false)} className="text-xs px-3 py-1.5 rounded border border-gray-200 text-gray-500">ביטול</button>
+                </div>
+              </div>
+            ) : (order.generalNotes || order.notes) ? (
+              <p className="text-sm text-gray-700 bg-amber-50 rounded-lg p-3">{order.generalNotes || order.notes}</p>
+            ) : (
+              <p className="text-xs text-gray-300 italic">אין הערות</p>
+            )}
+          </div>
 
           {/* Open problems */}
           {openProblemsCount(order) > 0 && (
@@ -868,7 +1088,7 @@ function EmptyState({ hasFilters, onClear }: { hasFilters: boolean; onClear: () 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export function OrdersTable() {
-  const { orders, updateOrderStatus, approveCustomerOrder } = useOrdersContext();
+  const { orders, updateOrderStatus, updateOrderFields, approveCustomerOrder } = useOrdersContext();
   const { customers } = useCustomersContext();
   const riskScores = useOrderRiskScores();
 
@@ -877,7 +1097,12 @@ export function OrdersTable() {
   const [priorityFilter, setPriorityFilter] = useState<"all" | "normal" | "urgent">("all");
   const [showProblemsOnly, setShowProblemsOnly] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
-  const [selectedOrder, setSelectedOrder] = useState<WorkOrder | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const selectedOrder = useMemo(
+    () => orders.find((o) => o.id === selectedOrderId) ?? null,
+    [orders, selectedOrderId],
+  );
+  const [completingOrder, setCompletingOrder] = useState<WorkOrder | null>(null);
 
   // Build phone lookup map from customers
   const phoneMap = useMemo(() => {
@@ -890,7 +1115,7 @@ export function OrdersTable() {
 
   // Derived counts for KPI cards
   const counts = useMemo(() => ({
-    total: orders.length,
+    total: orders.filter((o) => OPERATIONAL_STATUSES.has(o.status)).length,
     completed: orders.filter((o) => o.status === "completed").length,
     graphicsPending: orders.filter((o) => o.status === "graphics_pending").length,
     graphicsActive: orders.filter((o) => o.status === "graphics_active").length,
@@ -923,7 +1148,9 @@ export function OrdersTable() {
         (o.location ?? "").toLowerCase().includes(q) ||
         o.orderNumber.toLowerCase().includes(q) ||
         (o.reference ?? "").toLowerCase().includes(q);
-      const matchesStatus = statusFilter === "all" || o.status === statusFilter;
+      const matchesStatus = statusFilter === "all"
+        ? OPERATIONAL_STATUSES.has(o.status)
+        : o.status === statusFilter;
       const matchesPriority = priorityFilter === "all" || o.priority === priorityFilter;
       const matchesProblems = !showProblemsOnly || hasOpenProblems(o);
       return matchesSearch && matchesStatus && matchesPriority && matchesProblems;
@@ -936,8 +1163,8 @@ export function OrdersTable() {
   const paginated = filtered.slice(safePage * ROWS_PER_PAGE, (safePage + 1) * ROWS_PER_PAGE);
 
   const handleUpdateStatus = useCallback(
-    (id: string, status: WorkOrderStatus) => {
-      updateOrderStatus(id, status);
+    async (id: string, status: WorkOrderStatus): Promise<void> => {
+      await updateOrderStatus(id, status);
     },
     [updateOrderStatus]
   );
@@ -961,7 +1188,7 @@ export function OrdersTable() {
           {/* Quick status chips */}
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-              <span className="font-bold">{counts.total}</span> סה״כ
+              <span className="font-bold">{counts.total}</span> פעילות
             </span>
             {counts.graphicsPending > 0 && (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
@@ -988,7 +1215,7 @@ export function OrdersTable() {
             icon={<KpiIcon type="total" />}
             iconBg="bg-blue-50 text-blue-600"
             value={counts.total}
-            label="סה״כ הזמנות"
+            label="הזמנות פעילות"
           />
           <KpiCard
             icon={<KpiIcon type="completed" />}
@@ -1048,7 +1275,7 @@ export function OrdersTable() {
               onChange={(e) => { setStatusFilter(e.target.value as WorkOrderStatus | "all"); setCurrentPage(0); }}
               className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-400"
             >
-              <option value="all">הכל</option>
+              <option value="all">פעילות</option>
               {ALL_STATUSES.map((s) => (
                 <option key={s} value={s}>{STATUS_LABELS[s]}</option>
               ))}
@@ -1121,7 +1348,8 @@ export function OrdersTable() {
                         riskScore={riskScores.get(order.id)}
                         onUpdateStatus={handleUpdateStatus}
                         onApproveCustomer={approveCustomerOrder}
-                        onSelect={setSelectedOrder}
+                        onSelect={(o) => setSelectedOrderId(o.id)}
+                        onStartComplete={setCompletingOrder}
                       />
                     ))}
                   </tbody>
@@ -1184,7 +1412,17 @@ export function OrdersTable() {
       {selectedOrder && (
         <OrderDetailPanel
           order={selectedOrder}
-          onClose={() => setSelectedOrder(null)}
+          onClose={() => setSelectedOrderId(null)}
+          onUpdateFields={updateOrderFields}
+        />
+      )}
+
+      {/* Complete Order Confirmation Modal */}
+      {completingOrder && (
+        <CompleteOrderModal
+          order={completingOrder}
+          onConfirm={() => handleUpdateStatus(completingOrder.id, "completed")}
+          onCancel={() => setCompletingOrder(null)}
         />
       )}
     </div>

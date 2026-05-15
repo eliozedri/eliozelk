@@ -120,13 +120,24 @@ function OpenProblems({ order }: { order: WorkOrder }) {
   );
 }
 
-function PendingOrderCard({ order, onAcknowledge }: { order: WorkOrder; onAcknowledge: () => void }) {
+function PendingOrderCard({ order, onAcknowledge }: { order: WorkOrder; onAcknowledge: () => Promise<void> }) {
   const signCount = order.signRows.filter((r) => r.signNumber).length;
   const miscCount = [
     ...order.miscRows.filter((r) => r.description),
     ...(order.accessoryRows ?? []).filter((r) => r.description),
   ].length;
   const [showProblemForm, setShowProblemForm] = useState(false);
+  const [ackState, setAckState] = useState<"idle" | "saving" | "error">("idle");
+
+  async function handleAcknowledge() {
+    setAckState("saving");
+    try {
+      await onAcknowledge();
+    } catch {
+      setAckState("error");
+      setTimeout(() => setAckState("idle"), 3000);
+    }
+  }
 
   return (
     <div className="bg-white rounded-xl border border-amber-200 shadow-sm p-4 flex flex-col gap-3">
@@ -186,13 +197,22 @@ function PendingOrderCard({ order, onAcknowledge }: { order: WorkOrder; onAcknow
       ) : (
         <div className="flex gap-2">
           <button
-            onClick={onAcknowledge}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+            onClick={handleAcknowledge}
+            disabled={ackState === "saving"}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 transition-colors"
           >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            אישור קבלה
+            {ackState === "saving" ? (
+              <span>שומר...</span>
+            ) : ackState === "error" ? (
+              <span className="text-red-200">שגיאה — לחץ לנסות שוב</span>
+            ) : (
+              <>
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                אישור קבלה
+              </>
+            )}
           </button>
           <button
             onClick={() => setShowProblemForm(true)}
@@ -206,23 +226,44 @@ function PendingOrderCard({ order, onAcknowledge }: { order: WorkOrder; onAcknow
   );
 }
 
-function ConfirmModal({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
+function ConfirmModal({ message, onConfirm, onCancel }: { message: string; onConfirm: () => Promise<void>; onCancel: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  async function handleConfirm() {
+    setSaving(true);
+    setErrorMsg("");
+    try {
+      await onConfirm();
+    } catch (e) {
+      setSaving(false);
+      setErrorMsg(e instanceof Error ? e.message : "שגיאה לא ידועה");
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 flex flex-col gap-4">
         <p className="text-sm font-medium text-gray-800 text-center leading-relaxed">{message}</p>
+        {errorMsg && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-center">
+            שגיאה: {errorMsg}
+          </p>
+        )}
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={onConfirm}
-            className="flex-1 py-2.5 rounded-lg text-sm font-bold text-white bg-green-600 hover:bg-green-700 transition-colors"
+            onClick={handleConfirm}
+            disabled={saving}
+            className="flex-1 py-2.5 rounded-lg text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors"
           >
-            כן, מוכן
+            {saving ? "שומר..." : errorMsg ? "נסה שוב" : "כן, מוכן"}
           </button>
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 py-2.5 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors"
+            disabled={saving}
+            className="flex-1 py-2.5 rounded-lg text-sm font-medium text-gray-600 border border-gray-200 hover:bg-gray-50 disabled:opacity-60 transition-colors"
           >
             ביטול
           </button>
@@ -232,7 +273,7 @@ function ConfirmModal({ message, onConfirm, onCancel }: { message: string; onCon
   );
 }
 
-function ActiveOrderCard({ order, onComplete }: { order: WorkOrder; onComplete: () => void }) {
+function ActiveOrderCard({ order, onComplete }: { order: WorkOrder; onComplete: () => Promise<void> }) {
   const signCount = order.signRows.filter((r) => r.signNumber).length;
   const miscCount = [
     ...order.miscRows.filter((r) => r.description),
@@ -246,7 +287,7 @@ function ActiveOrderCard({ order, onComplete }: { order: WorkOrder; onComplete: 
       {showConfirm && (
         <ConfirmModal
           message="האם ההזמנה מוכנה בוודאות וניתן להעביר אותה להתקנה?"
-          onConfirm={() => { setShowConfirm(false); onComplete(); }}
+          onConfirm={async () => { await onComplete(); setShowConfirm(false); }}
           onCancel={() => setShowConfirm(false)}
         />
       )}

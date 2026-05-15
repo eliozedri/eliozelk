@@ -16,152 +16,209 @@ Font.register({
   ],
 });
 
-const styles = StyleSheet.create({
+const PRIMARY   = "#1d4ed8";
+const LIGHT     = "#eff6ff";
+const BORDER    = "#bfdbfe";
+const GRAY      = "#6b7280";
+const DARK      = "#111827";
+const GOLD      = "#d97706";
+const GOLD_BG   = "#fffbeb";
+const GOLD_BORDER = "#fde68a";
+
+const s = StyleSheet.create({
   page: {
     fontFamily: "Heebo",
-    fontSize: 10,
-    padding: 36,
+    fontSize: 9,
     direction: "rtl",
+    backgroundColor: "#ffffff",
+    paddingBottom: 44,
   },
-  companyName: {
-    fontSize: 15,
-    fontWeight: 700,
-    textAlign: "right",
-    marginBottom: 2,
+
+  /* ── Header band ── */
+  headerBand: {
+    backgroundColor: PRIMARY,
+    paddingTop: 14,
+    paddingBottom: 12,
+    paddingHorizontal: 28,
   },
-  reportTitle: {
-    fontSize: 12,
-    fontWeight: 700,
-    textAlign: "right",
-    color: "#1d4ed8",
-    marginBottom: 2,
+  headerTop: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 10,
   },
-  customerLine: {
-    fontSize: 10,
-    textAlign: "right",
-    color: "#374151",
-    marginBottom: 2,
+  companyBlock: { alignItems: "flex-end" },
+  companyName: { fontSize: 15, fontWeight: 700, color: "#ffffff" },
+  companyTagline: { fontSize: 7, color: "#93c5fd", marginTop: 2 },
+  companyContact: { fontSize: 7, color: "#bfdbfe", marginTop: 3 },
+
+  docBlock: { alignItems: "flex-start" },
+  docTitle: { fontSize: 13, fontWeight: 700, color: "#ffffff" },
+  docSubtitle: { fontSize: 8, color: "#93c5fd", marginTop: 2 },
+
+  /* ── Customer banner ── */
+  customerBanner: {
+    backgroundColor: "#1e40af",
+    borderRadius: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
   },
-  meta: {
-    fontSize: 8,
-    color: "#6b7280",
-    textAlign: "right",
-    marginBottom: 12,
-  },
-  divider: {
-    borderBottom: "1 solid #e5e7eb",
-    marginBottom: 12,
-  },
+  customerLabel: { fontSize: 7, color: "#93c5fd" },
+  customerName: { fontSize: 11, fontWeight: 700, color: "#ffffff" },
+  periodLabel: { fontSize: 7, color: "#bfdbfe" },
+  periodValue: { fontSize: 9, color: "#e0f2fe" },
+
+  body: { paddingHorizontal: 28, paddingTop: 14 },
+
+  /* ── Summary chips ── */
   summaryRow: {
     flexDirection: "row-reverse",
-    gap: 12,
-    marginBottom: 14,
-    paddingBottom: 10,
-    borderBottom: "1 solid #e5e7eb",
+    gap: 8,
+    marginBottom: 16,
   },
-  summaryChip: {
-    backgroundColor: "#eff6ff",
-    borderRadius: 4,
-    paddingVertical: 5,
+  chip: {
+    flex: 1,
+    backgroundColor: LIGHT,
+    border: `1 solid ${BORDER}`,
+    borderRadius: 6,
+    paddingVertical: 8,
     paddingHorizontal: 10,
+    alignItems: "flex-end",
   },
-  summaryLabel: {
-    fontSize: 7,
-    color: "#6b7280",
-    textAlign: "right",
+  chipGold: {
+    flex: 1,
+    backgroundColor: GOLD_BG,
+    border: `1 solid ${GOLD_BORDER}`,
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    alignItems: "flex-end",
   },
-  summaryValue: {
-    fontSize: 12,
-    fontWeight: 700,
-    textAlign: "right",
-    color: "#1d4ed8",
+  chipLabel: { fontSize: 7, color: GRAY },
+  chipValue: { fontSize: 14, fontWeight: 700, color: PRIMARY, marginTop: 2 },
+  chipValueGold: { fontSize: 14, fontWeight: 700, color: GOLD, marginTop: 2 },
+
+  /* ── Table ── */
+  table: {
+    border: `1 solid ${BORDER}`,
+    borderRadius: 4,
+    marginBottom: 12,
   },
   tableHeader: {
     flexDirection: "row-reverse",
-    backgroundColor: "#1d4ed8",
+    backgroundColor: PRIMARY,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
     paddingVertical: 6,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
   },
   tableRow: {
     flexDirection: "row-reverse",
-    borderBottom: "1 solid #f3f4f6",
+    borderBottom: `1 solid #f0f4ff`,
     paddingVertical: 5,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
   },
   tableRowAlt: {
     flexDirection: "row-reverse",
-    borderBottom: "1 solid #f3f4f6",
+    borderBottom: `1 solid #f0f4ff`,
     paddingVertical: 5,
-    paddingHorizontal: 4,
-    backgroundColor: "#f8fafc",
+    paddingHorizontal: 6,
+    backgroundColor: LIGHT,
   },
   totalsRow: {
     flexDirection: "row-reverse",
-    borderTop: "2 solid #1d4ed8",
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    backgroundColor: "#eff6ff",
-    marginTop: 2,
+    borderTop: `2 solid ${PRIMARY}`,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+    backgroundColor: "#dbeafe",
   },
-  th: {
-    fontSize: 8,
-    fontWeight: 700,
-    textAlign: "right",
-    color: "#ffffff",
-  },
-  td: {
-    fontSize: 8,
-    textAlign: "right",
-    color: "#111827",
-  },
-  tdBold: {
-    fontSize: 8,
-    fontWeight: 700,
-    textAlign: "right",
-    color: "#111827",
-  },
+  th: { fontSize: 8, fontWeight: 700, color: "#ffffff", textAlign: "right" },
+  td: { fontSize: 8, color: DARK, textAlign: "right" },
+  tdBold: { fontSize: 8, fontWeight: 700, color: DARK, textAlign: "right" },
+  tdGold: { fontSize: 8, fontWeight: 700, color: GOLD, textAlign: "right" },
+
   colNum:      { width: "5%"  },
-  colOrder:    { width: "14%" },
+  colOrder:    { width: "13%" },
   colJob:      { width: "22%" },
   colLocation: { width: "20%" },
   colDate:     { width: "12%" },
-  colSigns:    { width: "9%"  },
-  colMisc:     { width: "9%"  },
-  colAmount:   { width: "9%"  },
+  colSigns:    { width: "8%"  },
+  colMisc:     { width: "8%"  },
+  colStatus:   { width: "12%" },
+
+  /* ── Grand total box ── */
+  grandTotal: {
+    backgroundColor: GOLD_BG,
+    border: `2 solid ${GOLD_BORDER}`,
+    borderRadius: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  grandTotalLabel: { fontSize: 10, fontWeight: 700, color: "#92400e" },
+  grandTotalAmount: { fontSize: 16, fontWeight: 700, color: GOLD },
+
+  /* ── Notes ── */
+  notesBox: {
+    backgroundColor: "#fefce8",
+    border: `1 solid ${GOLD_BORDER}`,
+    borderRadius: 4,
+    padding: 8,
+    marginBottom: 14,
+  },
+  notesLabel: { fontSize: 8, fontWeight: 700, color: "#92400e", marginBottom: 3 },
+  notesText: { fontSize: 8, color: "#78350f" },
+
+  /* ── Per-order manager notes ── */
+  managerNotesSection: {
+    backgroundColor: "#fefce8",
+    border: `1 solid ${GOLD_BORDER}`,
+    borderRadius: 4,
+    padding: 8,
+    marginBottom: 14,
+  },
+  managerNotesSectionTitle: { fontSize: 8, fontWeight: 700, color: "#92400e", marginBottom: 5, textAlign: "right" },
+  managerNotesRow: { flexDirection: "row-reverse", gap: 6, marginBottom: 2 },
+  managerNotesNum: { fontSize: 7, fontWeight: 700, color: "#92400e", textAlign: "right", width: "12%" },
+  managerNotesText: { fontSize: 7, color: "#78350f", textAlign: "right", flex: 1 },
+
+  /* ── Signature block ── */
+  sigSection: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    gap: 20,
+    marginTop: 16,
+    borderTop: `1 solid ${BORDER}`,
+    paddingTop: 12,
+  },
+  sigBox: { flex: 1 },
+  sigLabel: { fontSize: 7, color: GRAY },
+  sigLine: { marginTop: 28, borderBottom: `1 dashed #d1d5db`, marginBottom: 4 },
+
+  /* ── Footer ── */
   footer: {
     position: "absolute",
-    bottom: 20,
-    right: 36,
-    left: 36,
-    fontSize: 7,
-    color: "#9ca3af",
-    textAlign: "right",
-    borderTop: "1 solid #e5e7eb",
-    paddingTop: 4,
+    bottom: 0,
+    right: 0,
+    left: 0,
+    backgroundColor: "#f8fafc",
+    borderTop: `1 solid ${BORDER}`,
+    paddingVertical: 5,
+    paddingHorizontal: 28,
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
   },
-  notesBox: {
-    marginTop: 16,
-    padding: 8,
-    backgroundColor: "#fefce8",
-    borderRadius: 4,
-    border: "1 solid #fde047",
-  },
-  notesLabel: {
-    fontSize: 8,
-    fontWeight: 700,
-    textAlign: "right",
-    color: "#92400e",
-    marginBottom: 3,
-  },
-  notesText: {
-    fontSize: 8,
-    textAlign: "right",
-    color: "#78350f",
-  },
+  footerText: { fontSize: 6, color: "#9ca3af" },
 });
 
 function formatDate(iso: string): string {
-  if (!iso) return "";
+  if (!iso) return "—";
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
 }
@@ -173,6 +230,16 @@ function countSignQty(order: WorkOrder): number {
 function countMiscQty(order: WorkOrder): number {
   return order.miscRows.reduce((sum, r) => sum + (parseInt(r.quantity) || 0), 0);
 }
+
+const STATUS_LABELS: Record<string, string> = {
+  graphics_pending:   "ממתין לגרפיקה",
+  graphics_active:    "גרפיקה",
+  graphics_done:      "גרפיקה הושלמה",
+  production:         "בייצור",
+  ready_installation: "מוכן לביצוע",
+  completed:          "הושלם",
+  cancelled:          "בוטל",
+};
 
 export interface CustomerBillingData {
   customerName: string;
@@ -187,7 +254,8 @@ export function CustomerBillingDocument({ data }: { data: CustomerBillingData })
   const { customerName, orders, dateFrom, dateTo, generatedAt, notes } = data;
 
   const totalSigns = orders.reduce((s, o) => s + countSignQty(o), 0);
-  const totalMisc = orders.reduce((s, o) => s + countMiscQty(o), 0);
+  const totalMisc  = orders.reduce((s, o) => s + countMiscQty(o), 0);
+  const grandTotal = orders.reduce((s, o) => s + (o.billedAmount ?? 0), 0);
 
   const periodLabel =
     dateFrom && dateTo
@@ -198,91 +266,163 @@ export function CustomerBillingDocument({ data }: { data: CustomerBillingData })
       ? `עד ${formatDate(dateTo)}`
       : "כל התקופה";
 
+  const generatedDate = formatDate(generatedAt.split("T")[0]);
+
   return (
     <Document>
-      <Page size="A4" style={styles.page}>
-        {/* Header */}
-        <Text style={styles.companyName}>אלקיים סימון כבישים בע״מ</Text>
-        <Text style={styles.reportTitle}>דוח חיוב לקוח</Text>
-        <Text style={styles.customerLine}>לקוח: {customerName}</Text>
-        <Text style={styles.meta}>תקופה: {periodLabel}</Text>
-        <Text style={styles.meta}>נוצר: {formatDate(generatedAt.split("T")[0])}</Text>
-        <View style={styles.divider} />
+      <Page size="A4" style={s.page}>
 
-        {/* Summary chips */}
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryChip}>
-            <Text style={styles.summaryLabel}>הזמנות</Text>
-            <Text style={styles.summaryValue}>{orders.length}</Text>
+        {/* Header band */}
+        <View style={s.headerBand}>
+          <View style={s.headerTop}>
+            <View style={s.companyBlock}>
+              <Text style={s.companyName}>אלקיים סימון כבישים בע״מ</Text>
+              <Text style={s.companyTagline}>Road Marking & Signage Solutions</Text>
+              <Text style={s.companyContact}>טל׳: 04-XXXXXXX · elkayam.co.il</Text>
+            </View>
+            <View style={s.docBlock}>
+              <Text style={s.docTitle}>דוח חיוב לקוח</Text>
+              <Text style={s.docSubtitle}>Customer Billing Report</Text>
+            </View>
           </View>
-          <View style={styles.summaryChip}>
-            <Text style={styles.summaryLabel}>שלטים (סה״כ)</Text>
-            <Text style={styles.summaryValue}>{totalSigns}</Text>
-          </View>
-          <View style={styles.summaryChip}>
-            <Text style={styles.summaryLabel}>פריטי שונות (סה״כ)</Text>
-            <Text style={styles.summaryValue}>{totalMisc}</Text>
+
+          <View style={s.customerBanner}>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={s.customerLabel}>לקוח</Text>
+              <Text style={s.customerName}>{customerName}</Text>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={s.periodLabel}>תקופה</Text>
+              <Text style={s.periodValue}>{periodLabel}</Text>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={s.periodLabel}>תאריך הפקה</Text>
+              <Text style={s.periodValue}>{generatedDate}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Table header */}
-        <View style={styles.tableHeader}>
-          <Text style={[styles.th, styles.colNum]}>#</Text>
-          <Text style={[styles.th, styles.colOrder]}>מס׳ הזמנה</Text>
-          <Text style={[styles.th, styles.colJob]}>שם עבודה</Text>
-          <Text style={[styles.th, styles.colLocation]}>מיקום</Text>
-          <Text style={[styles.th, styles.colDate]}>תאריך</Text>
-          <Text style={[styles.th, styles.colSigns]}>שלטים</Text>
-          <Text style={[styles.th, styles.colMisc]}>שונות</Text>
-          <Text style={[styles.th, styles.colAmount]}>לחיוב</Text>
+        <View style={s.body}>
+
+          {/* Summary chips */}
+          <View style={s.summaryRow}>
+            <View style={s.chip}>
+              <Text style={s.chipLabel}>הזמנות</Text>
+              <Text style={s.chipValue}>{orders.length}</Text>
+            </View>
+            <View style={s.chip}>
+              <Text style={s.chipLabel}>שלטים (סה״כ)</Text>
+              <Text style={s.chipValue}>{totalSigns}</Text>
+            </View>
+            <View style={s.chip}>
+              <Text style={s.chipLabel}>פריטי שונות</Text>
+              <Text style={s.chipValue}>{totalMisc}</Text>
+            </View>
+            <View style={s.chipGold}>
+              <Text style={s.chipLabel}>סה״כ לחיוב</Text>
+              <Text style={s.chipValueGold}>
+                {grandTotal > 0 ? `₪${grandTotal.toLocaleString()}` : "—"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Table */}
+          <View style={s.table}>
+            <View style={s.tableHeader}>
+              <Text style={[s.th, s.colNum]}>#</Text>
+              <Text style={[s.th, s.colOrder]}>מס׳ הזמנה</Text>
+              <Text style={[s.th, s.colJob]}>שם עבודה</Text>
+              <Text style={[s.th, s.colLocation]}>מיקום</Text>
+              <Text style={[s.th, s.colDate]}>תאריך</Text>
+              <Text style={[s.th, s.colSigns]}>שלטים</Text>
+              <Text style={[s.th, s.colMisc]}>שונות</Text>
+              <Text style={[s.th, s.colStatus]}>לחיוב ₪</Text>
+            </View>
+
+            {orders.map((order, idx) => (
+              <View key={order.id} style={idx % 2 === 0 ? s.tableRow : s.tableRowAlt}>
+                <Text style={[s.td, s.colNum]}>{idx + 1}</Text>
+                <Text style={[s.td, s.colOrder]}>{order.orderNumber}</Text>
+                <Text style={[s.td, s.colJob]}>{order.jobName || "—"}</Text>
+                <Text style={[s.td, s.colLocation]}>{order.location || "—"}</Text>
+                <Text style={[s.td, s.colDate]}>{formatDate(order.date)}</Text>
+                <Text style={[s.td, s.colSigns]}>{countSignQty(order) || "—"}</Text>
+                <Text style={[s.td, s.colMisc]}>{countMiscQty(order) || "—"}</Text>
+                <Text style={[s.td, s.colStatus]}>
+                  {order.billedAmount != null ? `₪${order.billedAmount.toLocaleString()}` : "—"}
+                </Text>
+              </View>
+            ))}
+
+            {orders.length > 0 && (
+              <View style={s.totalsRow}>
+                <Text style={[s.tdBold, s.colNum]}></Text>
+                <Text style={[s.tdBold, s.colOrder]}>סה״כ</Text>
+                <Text style={[s.tdBold, s.colJob]}></Text>
+                <Text style={[s.tdBold, s.colLocation]}></Text>
+                <Text style={[s.tdBold, s.colDate]}>{orders.length} הזמנות</Text>
+                <Text style={[s.tdBold, s.colSigns]}>{totalSigns}</Text>
+                <Text style={[s.tdBold, s.colMisc]}>{totalMisc}</Text>
+                <Text style={[s.tdGold, s.colStatus]}>
+                  {grandTotal > 0 ? `₪${grandTotal.toLocaleString()}` : "—"}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Grand total highlight */}
+          {grandTotal > 0 && (
+            <View style={s.grandTotal}>
+              <Text style={s.grandTotalLabel}>סכום כולל לחיוב</Text>
+              <Text style={s.grandTotalAmount}>₪{grandTotal.toLocaleString()}</Text>
+            </View>
+          )}
+
+          {/* Per-order manager notes */}
+          {orders.some(o => (o as { generalNotes?: string }).generalNotes) && (
+            <View style={s.managerNotesSection}>
+              <Text style={s.managerNotesSectionTitle}>הערות מנהל לפי הזמנה</Text>
+              {orders
+                .filter(o => (o as { generalNotes?: string }).generalNotes)
+                .map(o => (
+                  <View key={o.id} style={s.managerNotesRow}>
+                    <Text style={s.managerNotesNum}>{o.orderNumber}</Text>
+                    <Text style={s.managerNotesText}>{(o as { generalNotes?: string }).generalNotes}</Text>
+                  </View>
+                ))}
+            </View>
+          )}
+
+          {/* Billing notes */}
+          {notes && (
+            <View style={s.notesBox}>
+              <Text style={s.notesLabel}>הערות חיוב</Text>
+              <Text style={s.notesText}>{notes}</Text>
+            </View>
+          )}
+
+          {/* Signature area */}
+          <View style={s.sigSection}>
+            <View style={s.sigBox}>
+              <Text style={s.sigLabel}>אישור לקוח</Text>
+              <View style={s.sigLine} />
+              <Text style={s.sigLabel}>חתימה ותאריך</Text>
+            </View>
+            <View style={s.sigBox}>
+              <Text style={s.sigLabel}>אישור מנהל חשבונות</Text>
+              <View style={s.sigLine} />
+              <Text style={s.sigLabel}>חתימה ותאריך</Text>
+            </View>
+          </View>
+
         </View>
 
-        {/* Order rows */}
-        {orders.map((order, idx) => (
-          <View key={order.id} style={idx % 2 === 0 ? styles.tableRow : styles.tableRowAlt}>
-            <Text style={[styles.td, styles.colNum]}>{idx + 1}</Text>
-            <Text style={[styles.td, styles.colOrder]}>{order.orderNumber}</Text>
-            <Text style={[styles.td, styles.colJob]}>{order.jobName || "—"}</Text>
-            <Text style={[styles.td, styles.colLocation]}>{order.location || "—"}</Text>
-            <Text style={[styles.td, styles.colDate]}>{formatDate(order.date)}</Text>
-            <Text style={[styles.td, styles.colSigns]}>{countSignQty(order) || "—"}</Text>
-            <Text style={[styles.td, styles.colMisc]}>{countMiscQty(order) || "—"}</Text>
-            <Text style={[styles.td, styles.colAmount]}>
-              {order.billedAmount != null ? `₪${order.billedAmount.toLocaleString()}` : "—"}
-            </Text>
-          </View>
-        ))}
+        {/* Footer */}
+        <View style={s.footer} fixed>
+          <Text style={s.footerText}>אלקיים סימון כבישים בע״מ · דוח חיוב ל{customerName} · {periodLabel}</Text>
+          <Text style={s.footerText}>הופק: {generatedDate} · סודי — לשימוש פנימי בלבד</Text>
+        </View>
 
-        {/* Totals */}
-        {orders.length > 0 && (
-          <View style={styles.totalsRow}>
-            <Text style={[styles.tdBold, styles.colNum]}></Text>
-            <Text style={[styles.tdBold, styles.colOrder]}>סה״כ</Text>
-            <Text style={[styles.tdBold, styles.colJob]}></Text>
-            <Text style={[styles.tdBold, styles.colLocation]}></Text>
-            <Text style={[styles.tdBold, styles.colDate]}>{orders.length} הזמנות</Text>
-            <Text style={[styles.tdBold, styles.colSigns]}>{totalSigns}</Text>
-            <Text style={[styles.tdBold, styles.colMisc]}>{totalMisc}</Text>
-            <Text style={[styles.tdBold, styles.colAmount]}>
-              {(() => {
-                const total = orders.reduce((s, o) => s + (o.billedAmount ?? 0), 0);
-                return total > 0 ? `₪${total.toLocaleString()}` : "—";
-              })()}
-            </Text>
-          </View>
-        )}
-
-        {/* Notes */}
-        {notes && (
-          <View style={styles.notesBox}>
-            <Text style={styles.notesLabel}>הערות</Text>
-            <Text style={styles.notesText}>{notes}</Text>
-          </View>
-        )}
-
-        <Text style={styles.footer}>
-          נוצר ב-{formatDate(generatedAt.split("T")[0])} · אלקיים סימון כבישים בע״מ · מסמך זה מיועד לשימוש פנימי בלבד
-        </Text>
       </Page>
     </Document>
   );
