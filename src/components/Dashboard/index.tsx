@@ -1043,6 +1043,12 @@ export function DashboardPage() {
                 הזמנה חדשה
               </Link>
               <Link
+                href="/work-diary"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-sm font-medium transition-colors border border-white/15 hover:bg-white/8"
+              >
+                יומן חדש
+              </Link>
+              <Link
                 href="/orders"
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-sm font-medium transition-colors border border-white/15 hover:bg-white/8"
               >

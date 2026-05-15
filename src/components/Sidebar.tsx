@@ -86,28 +86,28 @@ function NavBadge({ count, variant = "amber" }: { count: number; variant?: "ambe
   );
 }
 
-interface NavItem { tabId: TabId; href: string; label: string; icon: React.ReactNode; matchFn: (p: string) => boolean; noBadge?: boolean; }
+interface NavItem { tabId: TabId; href: string; label: string; icon: React.ReactNode; matchFn: (p: string) => boolean; noBadge?: boolean; title?: string; }
 interface NavSection { label: string; items: NavItem[]; }
 
 const NAV_SECTIONS: NavSection[] = [
   {
     label: "מרכז שליטה",
     items: [
-      { tabId: "dashboard", href: "/", label: "מרכז שליטה", icon: <ControlCenterIcon />, matchFn: (p) => p === "/" },
+      { tabId: "dashboard", href: "/", label: "מרכז שליטה", icon: <ControlCenterIcon />, matchFn: (p) => p === "/", title: "בעיות פתוחות בהזמנות" },
+      { tabId: "orders", href: "/orders", label: "טבלת הזמנות", icon: <TableIcon />, matchFn: (p) => p.startsWith("/orders") },
     ],
   },
   {
     label: "חשבונות",
     items: [
       { tabId: "accounting", href: "/accounting", label: "הנהלת חשבונות", icon: <AccountingIcon />, matchFn: (p) => p.startsWith("/accounting") },
+      { tabId: "customers", href: "/customers", label: "לקוחות", icon: <CustomersIcon />, matchFn: (p) => p.startsWith("/customers") },
     ],
   },
   {
     label: "ניהול",
     items: [
       { tabId: "dashboard", href: "/new-order", label: "הזמנה חדשה", icon: <OrderIcon />, matchFn: (p) => p === "/new-order", noBadge: true },
-      { tabId: "orders", href: "/orders", label: "טבלת הזמנות", icon: <TableIcon />, matchFn: (p) => p.startsWith("/orders") },
-      { tabId: "customers", href: "/customers", label: "לקוחות", icon: <CustomersIcon />, matchFn: (p) => p.startsWith("/customers") },
       { tabId: "schedule", href: "/schedule", label: "סידור שבועי", icon: <CalendarIcon />, matchFn: (p) => p.startsWith("/schedule") },
       { tabId: "work-diary", href: "/work-diary", label: "יומן עבודה חדש", icon: <DiaryIcon />, matchFn: (p) => p.startsWith("/work-diary") },
     ],
@@ -118,6 +118,11 @@ const NAV_SECTIONS: NavSection[] = [
       { tabId: "graphics", href: "/graphics", label: "מחלקת גרפיקה", icon: <GraphicsIcon />, matchFn: (p) => p.startsWith("/graphics") },
       { tabId: "warehouse", href: "/warehouse", label: "מחלקת מחסן", icon: <WarehouseIcon />, matchFn: (p) => p.startsWith("/warehouse") },
       { tabId: "fabrication", href: "/fabrication", label: "מחלקת מסגריה", icon: <FabricationIcon />, matchFn: (p) => p.startsWith("/fabrication") },
+    ],
+  },
+  {
+    label: "בנוסף",
+    items: [
       { tabId: "catalog", href: "/catalog", label: "עריכת מוצרים ופריטים", icon: <CatalogIcon />, matchFn: (p) => p.startsWith("/catalog") },
       { tabId: "safety", href: "/safety", label: "קטלוג מוצרים", icon: <SafetyIcon />, matchFn: (p) => p.startsWith("/safety") },
     ],
@@ -138,12 +143,12 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-function SidebarLink({ href, label, active, icon, onClick, badge, badgeVariant }: {
+function SidebarLink({ href, label, active, icon, onClick, badge, badgeVariant, title }: {
   href: string; label: string; active: boolean; icon: React.ReactNode;
-  onClick?: () => void; badge?: number; badgeVariant?: "amber" | "red" | "blue" | "teal";
+  onClick?: () => void; badge?: number; badgeVariant?: "amber" | "red" | "blue" | "teal"; title?: string;
 }) {
   return (
-    <Link href={href} onClick={onClick}
+    <Link href={href} onClick={onClick} title={title}
       style={active
         ? { backgroundColor: "rgba(255,255,255,0.10)", color: "#ffffff", fontWeight: 600, borderLeftColor: EK_GOLD, borderLeftWidth: 2, borderLeftStyle: "solid" }
         : { color: "rgba(255,255,255,0.55)", borderLeftColor: "transparent", borderLeftWidth: 2, borderLeftStyle: "solid" }}
@@ -219,7 +224,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                   <SidebarLink key={item.href} href={item.href} label={item.label}
                     active={item.matchFn(pathname)} icon={item.icon} onClick={handleNavClick}
                     badge={cfg ? notif[cfg.count] : undefined}
-                    badgeVariant={cfg?.variant} />
+                    badgeVariant={cfg?.variant} title={item.title} />
                 );
               })}
             </div>
