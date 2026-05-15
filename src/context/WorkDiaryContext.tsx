@@ -10,6 +10,7 @@ interface WorkDiaryContextValue {
   saveDiary: (diary: WorkDiary) => void;
   submitDiary: (id: string) => void;
   deleteDiary: (id: string) => void;
+  cancelDiary: (id: string) => void;
   approveDiary: (id: string, approvedBy: string) => void;
   rejectDiary: (id: string, reason: string) => void;
 }

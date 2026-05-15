@@ -250,6 +250,28 @@ export function useWorkDiaries() {
     }
   }, []);
 
+  const cancelDiary = useCallback((id: string) => {
+    const now = new Date().toISOString();
+    const original = ref.current.find(d => d.id === id);
+    if (!original) return;
+    const updated: WorkDiary = { ...original, status: "cancelled", cancelledAt: now, updatedAt: now };
+    const next = ref.current.map(d => d.id === id ? updated : d);
+    setDiaries(next);
+    saveLocal(next);
+    const db = getSupabase();
+    if (db) {
+      db.from("work_diaries")
+        .update({ status: "cancelled", updated_at: now, data: updated })
+        .eq("id", id)
+        .then(({ error }) => {
+          if (error) {
+            console.error("[diaries] cancel failed:", error.message);
+            if (original) setDiaries(prev => prev.map(d => d.id === id ? original : d));
+          }
+        });
+    }
+  }, []);
+
   const approveDiary = useCallback((id: string, approvedBy: string) => {
     const now = new Date().toISOString();
     const original = ref.current.find(d => d.id === id);
@@ -318,5 +340,5 @@ export function useWorkDiaries() {
     }
   }, []);
 
-  return { diaries, createDiary, saveDiary, submitDiary, deleteDiary, approveDiary, rejectDiary };
+  return { diaries, createDiary, saveDiary, submitDiary, deleteDiary, cancelDiary, approveDiary, rejectDiary };
 }

@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 
-export type WorkDiaryStatus = "draft" | "submitted";
+export type WorkDiaryStatus = "draft" | "submitted" | "cancelled";
 
 export interface PaintingItem {
   id: string;
@@ -98,6 +98,7 @@ export interface WorkDiary {
   createdAt: string;
   updatedAt: string;
   submittedAt: string | null;
+  cancelledAt?: string;
 
   // ─── Profitability & billing ──────────────────────────────
   orderId?: string;             // link to WorkOrder.id
@@ -249,9 +250,11 @@ export function createEmptyDiary(diaryNumber: string): WorkDiary {
 export const DIARY_STATUS_LABELS: Record<WorkDiaryStatus, string> = {
   draft: "טיוטה",
   submitted: "נשלח",
+  cancelled: "בוטל",
 };
 
 export const DIARY_STATUS_COLORS: Record<WorkDiaryStatus, string> = {
   draft: "bg-amber-100 text-amber-700",
   submitted: "bg-green-100 text-green-700",
+  cancelled: "bg-red-100 text-red-600",
 };
