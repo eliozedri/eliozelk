@@ -275,13 +275,15 @@ export function OrderForm() {
           onChange={(partial) => updateHeader(partial as Partial<OrderHeaderType>)}
         />
 
-        {/* שם עבודה + מקום עבודה — field_work only */}
-        {order.orderType === "field_work" && (
+        {/* שם עבודה + מקום עבודה — available for all order types */}
+        {order.orderType && (
           <div className="grid grid-cols-2 gap-3 mt-1">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">
-                שם עבודה
-                <span className="text-gray-400 font-normal mr-1">(לזיהוי בסידור השבועי)</span>
+                שם עבודה / תיאור
+                {order.orderType === "field_work" && (
+                  <span className="text-gray-400 font-normal mr-1">(לזיהוי בסידור השבועי)</span>
+                )}
               </label>
               <input
                 type="text"
@@ -292,7 +294,7 @@ export function OrderForm() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">מקום עבודה</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">מיקום / כתובת</label>
               <input
                 type="text"
                 value={order.location ?? ""}

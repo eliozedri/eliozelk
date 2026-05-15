@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { nanoid } from "nanoid";
 import { useCatalogContext } from "@/context/CatalogContext";
 import type { CatalogFormState, CatalogItemType, LinkedProductEntry } from "@/types/catalog";
-import { TYPE_LABELS, TYPE_COLORS, UNIT_OPTIONS, DIMENSION_UNIT_OPTIONS } from "@/types/catalog";
+import { TYPE_LABELS, TYPE_COLORS, UNIT_OPTIONS, DIMENSION_UNIT_OPTIONS, LENGTH_UNITS, AREA_UNITS, NO_DIMENSION_UNITS } from "@/types/catalog";
 import { SAFETY_ACCESSORIES } from "@/data/safetyAccessories";
 
 const inputCls =
@@ -78,20 +78,30 @@ function CategoryInput({ value, onChange, categories }: { value: string; onChang
 
 // ── Linked products panel ─────────────────────────────────────────────────────
 
+const emptyNewLinked: CatalogFormState = {
+  name: "", type: "product", category: "", unitOfMeasure: "יחידה",
+  dimensionValue: "", dimensionUnit: "", defaultPrice: "", description: "",
+};
+
 function LinkedProductsPanel({
   links,
   allItems,
   itemId,
   onChange,
+  onCreateNew,
 }: {
   links: LinkedProductEntry[];
   allItems: { id: string; name: string }[];
   itemId: string;
   onChange: (links: LinkedProductEntry[]) => void;
+  onCreateNew?: (form: CatalogFormState) => Promise<{ id: string; name: string }>;
 }) {
   const available = allItems.filter((i) => i.id !== itemId);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newForm, setNewForm] = useState<CatalogFormState>(emptyNewLinked);
+  const [creating, setCreating] = useState(false);
 
-  function addLink() {
+  function addExistingLink() {
     if (available.length === 0) return;
     const first = available[0];
     onChange([...links, { id: first.id, name: first.name, qty: 1, required: false }]);
@@ -110,8 +120,17 @@ function LinkedProductsPanel({
     if (item) update(idx, { id, name: item.name });
   }
 
-  if (available.length === 0) {
-    return <p className="text-xs text-gray-400 italic">אין מוצרים אחרים בקטלוג לשיוך. הוסף מוצרים נוספים תחילה.</p>;
+  async function handleCreateNew() {
+    if (!newForm.name.trim() || !onCreateNew) return;
+    setCreating(true);
+    try {
+      const created = await onCreateNew(newForm);
+      onChange([...links, { id: created.id, name: created.name, qty: 1, required: false }]);
+      setNewForm(emptyNewLinked);
+      setShowNewForm(false);
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
@@ -141,13 +160,83 @@ function LinkedProductsPanel({
           </button>
         </div>
       ))}
-      <button
-        type="button"
-        onClick={addLink}
-        className="flex items-center gap-1 px-3 py-1 rounded border border-dashed border-gray-300 text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
-      >
-        + הוסף מוצר נלווה
-      </button>
+
+      {showNewForm && (
+        <div className="bg-white rounded-lg border border-blue-200 p-3 space-y-2">
+          <p className="text-xs font-semibold text-blue-700">פריט חדש לקטלוג ושיוך</p>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="text" placeholder="שם פריט *"
+              value={newForm.name}
+              onChange={(e) => setNewForm(f => ({ ...f, name: e.target.value }))}
+              className="px-2 py-1 text-xs rounded border border-gray-300 bg-white col-span-2"
+            />
+            <select
+              value={newForm.type}
+              onChange={(e) => setNewForm(f => ({ ...f, type: e.target.value as CatalogItemType }))}
+              className="px-2 py-1 text-xs rounded border border-gray-300 bg-white"
+            >
+              {(Object.entries(TYPE_LABELS) as [CatalogItemType, string][]).map(([k, l]) => (
+                <option key={k} value={k}>{l}</option>
+              ))}
+            </select>
+            <select
+              value={newForm.unitOfMeasure}
+              onChange={(e) => setNewForm(f => ({ ...f, unitOfMeasure: e.target.value }))}
+              className="px-2 py-1 text-xs rounded border border-gray-300 bg-white"
+            >
+              {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+            <input
+              type="text" placeholder="תיאור / מפרט"
+              value={newForm.description}
+              onChange={(e) => setNewForm(f => ({ ...f, description: e.target.value }))}
+              className="px-2 py-1 text-xs rounded border border-gray-300 bg-white col-span-2"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleCreateNew}
+              disabled={creating || !newForm.name.trim()}
+              className="px-3 py-1 rounded bg-blue-600 text-white text-xs font-medium disabled:opacity-50 transition-colors hover:bg-blue-700"
+            >
+              {creating ? "יוצר..." : "צור ושייך"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowNewForm(false); setNewForm(emptyNewLinked); }}
+              className="px-3 py-1 rounded border border-gray-300 text-gray-600 text-xs hover:bg-gray-50 transition-colors"
+            >
+              ביטול
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 flex-wrap">
+        {available.length > 0 && (
+          <button
+            type="button"
+            onClick={addExistingLink}
+            className="flex items-center gap-1 px-3 py-1 rounded border border-dashed border-gray-300 text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
+          >
+            + שייך מוצר קיים
+          </button>
+        )}
+        {onCreateNew && !showNewForm && (
+          <button
+            type="button"
+            onClick={() => setShowNewForm(true)}
+            className="flex items-center gap-1 px-3 py-1 rounded border border-dashed border-green-300 text-xs text-green-600 hover:border-green-500 hover:text-green-700 transition-colors"
+          >
+            + צור מוצר חדש ושייך
+          </button>
+        )}
+        {available.length === 0 && !onCreateNew && (
+          <p className="text-xs text-gray-400 italic">אין מוצרים אחרים בקטלוג לשיוך.</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -161,14 +250,36 @@ interface FormFieldsProps {
   nameError?: string;
   linkedProducts?: LinkedProductEntry[];
   onLinkedProductsChange?: (links: LinkedProductEntry[]) => void;
+  onCreateLinked?: (form: CatalogFormState) => Promise<{ id: string; name: string }>;
   allItems?: { id: string; name: string }[];
   itemId?: string;
   compact?: boolean;
 }
 
-function FormFields({ form, update, categories, nameError, linkedProducts, onLinkedProductsChange, allItems, itemId, compact }: FormFieldsProps) {
+function FormFields({ form, update, categories, nameError, linkedProducts, onLinkedProductsChange, onCreateLinked, allItems, itemId, compact }: FormFieldsProps) {
   const unitHint = UNIT_HINTS[form.unitOfMeasure];
   const [showLinked, setShowLinked] = useState((linkedProducts?.length ?? 0) > 0);
+
+  const isLength = LENGTH_UNITS.has(form.unitOfMeasure);
+  const isArea   = AREA_UNITS.has(form.unitOfMeasure);
+  const noDim    = NO_DIMENSION_UNITS.has(form.unitOfMeasure);
+
+  function getDimLabel() {
+    if (isLength) return "מידת אורך";
+    if (isArea)   return "שטח / מידות";
+    if (noDim)    return "";
+    return "מידה פיזית";
+  }
+  function getDimPlaceholder() {
+    if (isLength) return "לדוג׳: 1.2";
+    if (isArea)   return "לדוג׳: 0.9";
+    return "גודל";
+  }
+  function getDimUnitOptions() {
+    if (isLength) return ["מטר", "ס\"מ", "מ\"מ"];
+    if (isArea)   return ["מ\"ר", "ס\"מ²"];
+    return DIMENSION_UNIT_OPTIONS;
+  }
 
   return (
     <>
@@ -209,15 +320,24 @@ function FormFields({ form, update, categories, nameError, linkedProducts, onLin
           )}
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">מידה פיזית</label>
-          <div className="flex gap-1">
-            <input type="number" min="0" step="0.01" value={form.dimensionValue} onChange={(e) => update("dimensionValue", e.target.value)} placeholder="גודל" className={`${inputCls} w-20 shrink-0`} dir="ltr" />
-            <select value={form.dimensionUnit} onChange={(e) => update("dimensionUnit", e.target.value)} className={inputCls}>
-              {DIMENSION_UNIT_OPTIONS.map((u) => <option key={u} value={u}>{u || "— יחידה —"}</option>)}
-            </select>
+        {!noDim && (
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">{getDimLabel()}</label>
+            <div className="flex gap-1">
+              <input
+                type="number" min="0" step="0.01"
+                value={form.dimensionValue}
+                onChange={(e) => update("dimensionValue", e.target.value)}
+                placeholder={getDimPlaceholder()}
+                className={`${inputCls} w-20 shrink-0`}
+                dir="ltr"
+              />
+              <select value={form.dimensionUnit} onChange={(e) => update("dimensionUnit", e.target.value)} className={inputCls}>
+                {getDimUnitOptions().map((u) => <option key={u} value={u}>{u || "— יחידה —"}</option>)}
+              </select>
+            </div>
           </div>
-        </div>
+        )}
 
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">מחיר ברירת מחדל (₪)</label>
@@ -250,6 +370,7 @@ function FormFields({ form, update, categories, nameError, linkedProducts, onLin
                 allItems={allItems ?? []}
                 itemId={itemId ?? ""}
                 onChange={onLinkedProductsChange}
+                onCreateNew={onCreateLinked}
               />
             </div>
           )}
@@ -263,11 +384,12 @@ function FormFields({ form, update, categories, nameError, linkedProducts, onLin
 
 interface AddItemFormProps {
   onAdd: (form: CatalogFormState, linkedProducts: LinkedProductEntry[]) => void;
+  onCreateAndLink: (form: CatalogFormState) => Promise<{ id: string; name: string }>;
   categories: string[];
   allItems: { id: string; name: string }[];
 }
 
-function AddItemForm({ onAdd, categories, allItems }: AddItemFormProps) {
+function AddItemForm({ onAdd, onCreateAndLink, categories, allItems }: AddItemFormProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState<CatalogFormState>(emptyForm);
   const [nameError, setNameError] = useState("");
@@ -313,6 +435,7 @@ function AddItemForm({ onAdd, categories, allItems }: AddItemFormProps) {
         nameError={nameError}
         linkedProducts={linked}
         onLinkedProductsChange={setLinked}
+        onCreateLinked={onCreateAndLink}
         allItems={allItems}
         itemId=""
       />
@@ -378,6 +501,11 @@ export function CatalogPage() {
 
   function handleAdd(form: CatalogFormState, links: LinkedProductEntry[]) {
     addItem(form, links);
+  }
+
+  async function handleCreateAndLink(form: CatalogFormState): Promise<{ id: string; name: string }> {
+    const item = addItem(form, []);
+    return { id: item.id, name: item.name };
   }
 
   const filtered = useMemo(() => {
@@ -459,7 +587,7 @@ export function CatalogPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <AddItemForm onAdd={handleAdd} categories={categories} allItems={allItemRefs} />
+          <AddItemForm onAdd={handleAdd} onCreateAndLink={handleCreateAndLink} categories={categories} allItems={allItemRefs} />
 
           <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100 bg-gray-50 flex-wrap">
             <input
@@ -515,6 +643,7 @@ export function CatalogPage() {
                             categories={categories}
                             linkedProducts={editLinked}
                             onLinkedProductsChange={setEditLinked}
+                            onCreateLinked={handleCreateAndLink}
                             allItems={allItemRefs}
                             itemId={item.id}
                             compact

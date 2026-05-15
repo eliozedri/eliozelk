@@ -40,6 +40,40 @@ export async function exportAccountingPDF(data: AccountingReportData): Promise<v
   URL.revokeObjectURL(url);
 }
 
+export function exportCustomerBillingCSV(customerName: string, orders: WorkOrder[]): void {
+  const rows: string[] = [];
+  const generatedDate = formatDate(new Date().toISOString().split("T")[0]);
+
+  const header = [
+    "מספר הזמנה", "שם עבודה", "מיקום", "תאריך", "שלטים", "שונות", "הכנסה משוערת"
+  ];
+  rows.push(header.map(csvEscape).join(","));
+
+  for (const o of orders) {
+    const signQty = o.signRows.reduce((s, r) => s + (parseInt(r.quantity) || 0), 0);
+    const miscQty = o.miscRows.reduce((s, r) => s + (parseInt(r.quantity) || 0), 0);
+    rows.push([
+      o.orderNumber,
+      (o as { jobName?: string | null }).jobName || "",
+      o.location || "",
+      formatDate(o.date),
+      String(signQty),
+      String(miscQty),
+      "",
+    ].map(csvEscape).join(","));
+  }
+
+  const bom = "﻿";
+  const content = bom + rows.join("\n");
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `חיוב_${customerName}_${generatedDate.replace(/\//g, "-")}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function exportAccountingCSV(data: AccountingReportData): void {
   const rows: string[] = [];
 

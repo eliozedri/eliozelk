@@ -19,6 +19,7 @@ import type { WorkOrder, WorkOrderStatus } from "@/types/workOrder";
 import { getStageSlaColor, hoursInCurrentStage, canMarkReadyForInstallation } from "@/lib/workflowEngine";
 import { useOrderRiskScores } from "@/hooks/useOrderRiskScores";
 import type { OrderRiskScore } from "@/hooks/useOrderRiskScores";
+import { openWorkOrderPDF, exportWorkOrderCSV } from "@/lib/pdfExport";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -73,6 +74,42 @@ function formatStageAge(hours: number): string {
   const days = Math.floor(hours / 24);
   const rem  = Math.round(hours % 24);
   return rem > 0 ? `${days}י ${rem}ש׳` : `${days} ימים`;
+}
+
+// ─── Order-type icons ──────────────────────────────────────────────────────
+
+function OrderTypeIcon({ type }: { type: string }) {
+  if (type === "pickup") {
+    return (
+      <span title="הזמנה לאיסוף">
+        <svg className="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+          <line x1="12" y1="22.08" x2="12" y2="12" />
+        </svg>
+      </span>
+    );
+  }
+  if (type === "equipment_supply") {
+    return (
+      <span title="אספקת ציוד">
+        <svg className="w-4 h-4 text-orange-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="1" y="3" width="15" height="13" rx="1" />
+          <path d="M16 8h4l3 3v5h-7V8z" />
+          <circle cx="5.5" cy="18.5" r="2.5" />
+          <circle cx="18.5" cy="18.5" r="2.5" />
+        </svg>
+      </span>
+    );
+  }
+  // field_work (default)
+  return (
+    <span title="ביצוע עבודה">
+      <svg className="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 4v16" />
+      </svg>
+    </span>
+  );
 }
 
 // ─── SVG Icons ─────────────────────────────────────────────────────────────
@@ -228,7 +265,8 @@ function StatusBadge({ status }: { status: WorkOrderStatus }) {
   );
 }
 
-function ProgressTracker({ status }: { status: WorkOrderStatus }) {
+function ProgressTracker({ order }: { order: WorkOrder }) {
+  const { status } = order;
   const { completedSteps, activeStep, isPending } = getProgressState(status);
   const n = LIFECYCLE_STAGES.length;
 
@@ -238,8 +276,13 @@ function ProgressTracker({ status }: { status: WorkOrderStatus }) {
     );
   }
 
+  const warehouseStatus = order.warehouseStatus;
+  const fabStatus = order.fabricationStatus;
+  const showWarehouse = order.warehouseRequired;
+  const showFab = order.fabricationRequired;
+
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-center gap-1 min-w-[100px]">
       <div className="flex items-center">
         {LIFECYCLE_STAGES.map((stage, i) => {
           const isDone = i < completedSteps;
@@ -261,7 +304,7 @@ function ProgressTracker({ status }: { status: WorkOrderStatus }) {
           );
         })}
       </div>
-      {/* Stage labels — only for current active or show abbreviated */}
+      {/* Stage labels */}
       <div className="flex items-center gap-0">
         {LIFECYCLE_STAGES.map((stage, i) => {
           const isActive = i === activeStep;
@@ -281,6 +324,36 @@ function ProgressTracker({ status }: { status: WorkOrderStatus }) {
           );
         })}
       </div>
+      {/* Department sub-indicators */}
+      {(showWarehouse || showFab) && (
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {showWarehouse && (
+            <span
+              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+                warehouseStatus === "ready"      ? "bg-green-100 text-green-700" :
+                warehouseStatus === "processing" ? "bg-blue-100 text-blue-700" :
+                                                   "bg-gray-100 text-gray-500"
+              }`}
+              title="מחסן"
+            >
+              {warehouseStatus === "ready" ? "✓ מחסן" : warehouseStatus === "processing" ? "מחסן" : "מחסן ⏳"}
+            </span>
+          )}
+          {showFab && (
+            <span
+              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+                fabStatus === "completed" || fabStatus === "ready" ? "bg-green-100 text-green-700" :
+                fabStatus === "in_progress"                        ? "bg-purple-100 text-purple-700" :
+                fabStatus === "acknowledged"                       ? "bg-blue-100 text-blue-700" :
+                                                                     "bg-gray-100 text-gray-500"
+              }`}
+              title="מסגרייה"
+            >
+              {fabStatus === "completed" || fabStatus === "ready" ? "✓ מסגר" : fabStatus === "in_progress" ? "מסגר" : "מסגר ⏳"}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -326,10 +399,20 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
       {/* # */}
       <td className="px-3 py-3.5 text-gray-400 text-xs w-8 text-center">{index}</td>
 
-      {/* Order number */}
+      {/* Order type icon */}
+      <td className="px-2 py-3.5 text-center w-8">
+        <OrderTypeIcon type={order.orderType ?? "field_work"} />
+      </td>
+
+      {/* Order number + job name */}
       <td className="px-3 py-3.5">
         <div className="flex flex-col gap-0.5">
-          <span className="font-mono text-sm font-bold text-gray-800 tracking-tight">{order.orderNumber}</span>
+          {order.jobName && (
+            <span className="text-sm font-semibold text-gray-800 truncate max-w-[160px]" title={order.jobName}>
+              {order.jobName}
+            </span>
+          )}
+          <span className="font-mono text-xs font-bold text-gray-500 tracking-tight">{order.orderNumber}</span>
           {order.priority === "urgent" && (
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 w-fit">דחוף</span>
           )}
@@ -434,7 +517,7 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
 
       {/* Progress */}
       <td className="px-3 py-3.5">
-        <ProgressTracker status={order.status} />
+        <ProgressTracker order={order} />
       </td>
 
       {/* Last update */}
@@ -495,6 +578,20 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
               <XSmallIcon />
             </button>
           )}
+          <button
+            onClick={() => openWorkOrderPDF(order)}
+            title="ייצוא PDF"
+            className="px-1.5 py-1 rounded text-[10px] font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors"
+          >
+            PDF
+          </button>
+          <button
+            onClick={() => exportWorkOrderCSV(order)}
+            title="ייצוא Excel"
+            className="px-1.5 py-1 rounded text-[10px] font-semibold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors"
+          >
+            XLS
+          </button>
         </div>
       </td>
     </tr>
@@ -767,7 +864,8 @@ export function OrdersTable() {
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th className="px-3 py-3 text-xs font-semibold text-gray-500 w-8 text-center">#</th>
-                      <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">מספר הזמנה</th>
+                      <th className="px-2 py-3 text-xs font-semibold text-gray-500 w-8 text-center whitespace-nowrap">אופי</th>
+                      <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">שם / מספר הזמנה</th>
                       <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">לקוח</th>
                       <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">מיקום</th>
                       <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">תאריך יצירה</th>

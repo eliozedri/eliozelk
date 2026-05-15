@@ -18,6 +18,9 @@ function OrderIcon() {
 function TableIcon() {
   return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18" /><path d="M3 15h18" /><path d="M9 3v18" /></svg>;
 }
+function ControlCenterIcon() {
+  return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>;
+}
 function CustomersIcon() {
   return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
 }
@@ -88,9 +91,14 @@ interface NavSection { label: string; items: NavItem[]; }
 
 const NAV_SECTIONS: NavSection[] = [
   {
+    label: "מרכז שליטה",
+    items: [
+      { tabId: "dashboard", href: "/", label: "מרכז שליטה", icon: <ControlCenterIcon />, matchFn: (p) => p === "/" },
+    ],
+  },
+  {
     label: "ניהול",
     items: [
-      { tabId: "dashboard", href: "/", label: "לוח בקרה", icon: <TableIcon />, matchFn: (p) => p === "/" },
       { tabId: "dashboard", href: "/new-order", label: "הזמנה חדשה", icon: <OrderIcon />, matchFn: (p) => p === "/new-order", noBadge: true },
       { tabId: "orders", href: "/orders", label: "טבלת הזמנות", icon: <TableIcon />, matchFn: (p) => p.startsWith("/orders") },
       { tabId: "customers", href: "/customers", label: "לקוחות", icon: <CustomersIcon />, matchFn: (p) => p.startsWith("/customers") },

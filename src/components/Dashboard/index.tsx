@@ -729,12 +729,6 @@ export function DashboardPage() {
         {/* Pipeline */}
         <PipelineSection stages={pipelineStages} />
 
-        {/* Stage Health (bottleneck radar) */}
-        <StageHealthPanel orders={orders} />
-
-        {/* Operational Forecast */}
-        <ForecastPanel />
-
         {/* Departments + Alerts/Activity */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
 
@@ -844,6 +838,9 @@ export function DashboardPage() {
             <ActivitySection orders={recentActivity} />
           </div>
         </div>
+
+        {/* Operational Forecast */}
+        <ForecastPanel />
 
         {/* Map Section */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
