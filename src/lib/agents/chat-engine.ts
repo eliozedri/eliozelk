@@ -765,6 +765,9 @@ export async function runChatEngine(
       const wantsLowConf = lower.includes("ביטחון נמוך") || lower.includes("ודאות נמוכה") || (lower.includes("ביטחון") && lower.includes("נמוך")) || lower.includes("low confidence") || lower.includes("אמינות");
       const wantsNegative = lower.includes("הפסדיות") || lower.includes("הזמנות מפסידות") || (lower.includes("הפסד") && (lower.includes("איזה") || lower.includes("אילו") || lower.includes("רשימ")));
       const wantsStale = lower.includes("לא עודכנו") || lower.includes("לא עדכניות") || (lower.includes("מתי") && lower.includes("עודכן")) || lower.includes("ישנים");
+      const wantsBelowTarget = lower.includes("מתחת ליעד") || lower.includes("פחות מיעד") || lower.includes("מתחת לסף") || (lower.includes("מתחת") && lower.includes("יעד"));
+      const wantsNearTarget = lower.includes("קרוב ליעד") || lower.includes("קרובות ליעד");
+      const wantsTargetInfo = lower.includes("מה יעד") || lower.includes("כמה יעד") || lower.includes("יעד הרווחיות") || (lower.includes("יעד") && lower.includes("מרווח"));
 
       if (wantsRevenue) {
         const { data: orders } = await db
@@ -830,7 +833,7 @@ export async function runChatEngine(
       if (wantsLowConf) {
         const { data: lowSnaps } = await db
           .from("profitability_snapshots")
-          .select("order_id,confidence_level,missing_data,updated_at")
+          .select("order_id,confidence_level,missing_data,updated_at,work_orders(order_number,customer)")
           .is("work_diary_id", null)
           .in("confidence_level", ["low", "missing_data"])
           .order("updated_at", { ascending: true })
@@ -842,7 +845,10 @@ export async function runChatEngine(
         const lines: string[] = [`⚠️ **${list.length} הזמנות עם ביטחון נמוך / נתונים חסרים:**\n`];
         for (const s of list.slice(0, 10)) {
           const tags = (s.missing_data as string[] | null) ?? [];
-          lines.push(`· הזמנה ${(s.order_id as string).slice(0, 8)} — ${s.confidence_level as string}${tags.length > 0 ? ` | ${tags[0]}` : ""}`);
+          const wo = (Array.isArray(s.work_orders) ? (s.work_orders as Array<{ order_number: string | null; customer: string | null }>)[0] ?? null : null);
+          const label = wo?.order_number || (s.order_id as string).slice(0, 8);
+          const customer = wo?.customer ? ` — ${wo.customer}` : "";
+          lines.push(`· הזמנה ${label}${customer} | ${s.confidence_level as string}${tags.length > 0 ? ` | ${tags[0]}` : ""}`);
         }
         lines.push(`\nלתיקון: CFO ליי → השלם נתונים חסרים → לחץ "חשב"`);
         return { content: lines.join("\n"), sourceRefs: [] };
@@ -852,7 +858,7 @@ export async function runChatEngine(
       if (wantsNegative) {
         const { data: negSnaps } = await db
           .from("profitability_snapshots")
-          .select("order_id,revenue,gross_profit,gross_margin_percent,updated_at")
+          .select("order_id,revenue,gross_profit,gross_margin_percent,updated_at,work_orders(order_number,customer)")
           .is("work_diary_id", null)
           .lt("gross_profit", 0)
           .order("gross_profit", { ascending: true })
@@ -865,7 +871,10 @@ export async function runChatEngine(
         for (const s of list.slice(0, 10)) {
           const profit = Math.round(s.gross_profit as number);
           const margin = (s.gross_margin_percent as number).toFixed(1);
-          lines.push(`· הזמנה ${(s.order_id as string).slice(0, 8)} — הפסד ₪${Math.abs(profit).toLocaleString()} | מרווח ${margin}%`);
+          const wo = (Array.isArray(s.work_orders) ? (s.work_orders as Array<{ order_number: string | null; customer: string | null }>)[0] ?? null : null);
+          const label = wo?.order_number || (s.order_id as string).slice(0, 8);
+          const customer = wo?.customer ? ` (${wo.customer})` : "";
+          lines.push(`· הזמנה ${label}${customer} — הפסד ₪${Math.abs(profit).toLocaleString()} | מרווח ${margin}%`);
         }
         lines.push(`\nבדוק תמחור ועלויות ב-CFO ליי.`);
         return { content: lines.join("\n"), sourceRefs: [] };
@@ -875,7 +884,7 @@ export async function runChatEngine(
       if (wantsStale) {
         const { data: staleSnaps } = await db
           .from("profitability_snapshots")
-          .select("order_id,confidence_level,updated_at")
+          .select("order_id,confidence_level,updated_at,work_orders(order_number,customer)")
           .is("work_diary_id", null)
           .order("updated_at", { ascending: true })
           .limit(10);
@@ -886,10 +895,88 @@ export async function runChatEngine(
         const lines: string[] = [`🕐 **חישובים ישנים ביותר:**\n`];
         for (const s of list.slice(0, 8)) {
           const updatedAt = new Date(s.updated_at as string).toLocaleDateString("he-IL");
-          lines.push(`· הזמנה ${(s.order_id as string).slice(0, 8)} — עודכן ${updatedAt} | ביטחון: ${s.confidence_level as string}`);
+          const wo = (Array.isArray(s.work_orders) ? (s.work_orders as Array<{ order_number: string | null; customer: string | null }>)[0] ?? null : null);
+          const label = wo?.order_number || (s.order_id as string).slice(0, 8);
+          const customer = wo?.customer ? ` — ${wo.customer}` : "";
+          lines.push(`· הזמנה ${label}${customer} | עודכן ${updatedAt} | ביטחון: ${s.confidence_level as string}`);
         }
         lines.push(`\nלרענון: CFO ליי → "חשב מחדש הכל"`);
         return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      // ── Below target threshold ──
+      if (wantsBelowTarget) {
+        const { data: ratesRow } = await db.from("cost_rates").select("data").eq("id", 1).maybeSingle();
+        const ratesData = (ratesRow?.data ?? {}) as Record<string, unknown>;
+        const warningThreshold = typeof ratesData.warningMarginPercentage === "number" ? ratesData.warningMarginPercentage : 12;
+        const targetMargin = typeof ratesData.targetMarginPercentage === "number" ? ratesData.targetMarginPercentage : 28;
+        const { data: belowSnaps } = await db
+          .from("profitability_snapshots")
+          .select("order_id,gross_profit,gross_margin_percent,work_orders(order_number,customer)")
+          .is("work_diary_id", null)
+          .gte("gross_profit", 0)
+          .lt("gross_margin_percent", warningThreshold)
+          .order("gross_margin_percent", { ascending: true })
+          .limit(15);
+        const list = belowSnaps ?? [];
+        if (list.length === 0) {
+          return { content: `✅ אין הזמנות עם מרווח מתחת לסף האזהרה (${warningThreshold}%).`, sourceRefs: [] };
+        }
+        const lines: string[] = [`🟠 **${list.length} הזמנות מתחת לסף האזהרה (${warningThreshold}%):**\n`];
+        for (const s of list.slice(0, 10)) {
+          const margin = (s.gross_margin_percent as number).toFixed(1);
+          const wo = (Array.isArray(s.work_orders) ? (s.work_orders as Array<{ order_number: string | null; customer: string | null }>)[0] ?? null : null);
+          const label = wo?.order_number || (s.order_id as string).slice(0, 8);
+          const customer = wo?.customer ? ` (${wo.customer})` : "";
+          lines.push(`· הזמנה ${label}${customer} — מרווח ${margin}%`);
+        }
+        lines.push(`\nיעד: ${targetMargin}% | לשיפור: בדוק תמחור ועלויות ב-CFO ליי`);
+        return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      // ── Near target (between warning and target) ──
+      if (wantsNearTarget) {
+        const { data: ratesRow } = await db.from("cost_rates").select("data").eq("id", 1).maybeSingle();
+        const ratesData = (ratesRow?.data ?? {}) as Record<string, unknown>;
+        const warningThreshold = typeof ratesData.warningMarginPercentage === "number" ? ratesData.warningMarginPercentage : 12;
+        const targetMargin = typeof ratesData.targetMarginPercentage === "number" ? ratesData.targetMarginPercentage : 28;
+        const { data: nearSnaps } = await db
+          .from("profitability_snapshots")
+          .select("order_id,gross_profit,gross_margin_percent,work_orders(order_number,customer)")
+          .is("work_diary_id", null)
+          .gte("gross_profit", 0)
+          .gte("gross_margin_percent", warningThreshold)
+          .lt("gross_margin_percent", targetMargin)
+          .order("gross_margin_percent", { ascending: false })
+          .limit(15);
+        const list = nearSnaps ?? [];
+        if (list.length === 0) {
+          return { content: `✅ אין הזמנות בטווח "קרוב ליעד" (${warningThreshold}%–${targetMargin}%) כרגע.`, sourceRefs: [] };
+        }
+        const lines: string[] = [`🟡 **${list.length} הזמנות קרובות ליעד (${warningThreshold}%–${targetMargin}%):**\n`];
+        for (const s of list.slice(0, 10)) {
+          const margin = (s.gross_margin_percent as number).toFixed(1);
+          const gap = ((s.gross_margin_percent as number) - targetMargin).toFixed(1);
+          const wo = (Array.isArray(s.work_orders) ? (s.work_orders as Array<{ order_number: string | null; customer: string | null }>)[0] ?? null : null);
+          const label = wo?.order_number || (s.order_id as string).slice(0, 8);
+          const customer = wo?.customer ? ` (${wo.customer})` : "";
+          lines.push(`· הזמנה ${label}${customer} — מרווח ${margin}% | פער ${gap}% מהיעד`);
+        }
+        lines.push(`\nיעד: ${targetMargin}%`);
+        return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      // ── Target info ──
+      if (wantsTargetInfo) {
+        const { data: ratesRow } = await db.from("cost_rates").select("data").eq("id", 1).maybeSingle();
+        const ratesData = (ratesRow?.data ?? {}) as Record<string, unknown>;
+        const target = typeof ratesData.targetMarginPercentage === "number" ? ratesData.targetMarginPercentage : 28;
+        const warning = typeof ratesData.warningMarginPercentage === "number" ? ratesData.warningMarginPercentage : 12;
+        const loss = typeof ratesData.lossThresholdPercentage === "number" ? ratesData.lossThresholdPercentage : 0;
+        return {
+          content: `🎯 **יעדי רווחיות מוגדרים:**\n\n· יעד מרווח: **${target}%** ✅\n· סף אזהרה: **${warning}%** 🟠\n· סף הפסד: **${loss}%** 🔴\n\nלשינוי: לשונית "הגדרות עלות" בדף הרווחיות.`,
+          sourceRefs: [],
+        };
       }
 
       // ── Default: summary of snapshots ──

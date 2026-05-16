@@ -280,6 +280,8 @@ export async function POST(req: NextRequest) {
     let missingSnapshotCount = 0;
     let lowConfidenceCount = 0;
     let negativeMarginCount = 0;
+    let belowTargetCount = 0;
+    let nearTargetCount = 0;
 
     for (const order of (activeOrders ?? [])) {
       const orderId = order.id as string;
@@ -354,12 +356,48 @@ export async function POST(req: NextRequest) {
             recommendedAction: "פתח CFO ליי → בדוק עלויות → שקול תיקון תמחור עתידי",
           }, taskDedupeMap, result);
         }
+
+        // Below warning threshold (but not negative)
+        if (grossProfit >= 0 && (snap.gross_margin_percent as number) < rates.warningMarginPercentage) {
+          belowTargetCount++;
+          const margin = snap.gross_margin_percent as number;
+          const k = dedupeKey("snapshot_below_target", "work_order", orderId);
+          activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "snapshot_below_target",
+            entityType: "work_order",
+            entityId: orderId,
+            severity: "warn",
+            title: `מרווח מתחת לסף — הזמנה ${orderLabel} (${margin.toFixed(1)}%)`,
+            description: `לקוח: ${order.customer as string} | מרווח: ${margin.toFixed(1)}% | סף אזהרה: ${rates.warningMarginPercentage}% | יעד: ${rates.targetMarginPercentage}%`,
+            detectedFromData: { orderNumber: orderLabel, grossMarginPercent: margin, warningThreshold: rates.warningMarginPercentage, targetMargin: rates.targetMarginPercentage },
+            recommendedResolution: "שקול העלאת תמחור — המרווח מתחת לסף האזהרה",
+          }, dedupeMap, result);
+        }
+
+        // Near target (between warning and target)
+        else if (grossProfit >= 0 && (snap.gross_margin_percent as number) < rates.targetMarginPercentage) {
+          nearTargetCount++;
+          const margin = snap.gross_margin_percent as number;
+          const k = dedupeKey("snapshot_near_target", "work_order", orderId);
+          activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "snapshot_near_target",
+            entityType: "work_order",
+            entityId: orderId,
+            severity: "info",
+            title: `מרווח קרוב ליעד — הזמנה ${orderLabel} (${margin.toFixed(1)}%)`,
+            description: `לקוח: ${order.customer as string} | מרווח: ${margin.toFixed(1)}% | יעד: ${rates.targetMarginPercentage}% | פער: ${(margin - rates.targetMarginPercentage).toFixed(1)}%`,
+            detectedFromData: { orderNumber: orderLabel, grossMarginPercent: margin, targetMargin: rates.targetMarginPercentage },
+            recommendedResolution: "מרווח תקין — מעקב שוטף מומלץ",
+          }, dedupeMap, result);
+        }
       }
     }
 
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 
-    const summary = `סריקה כספית: ${result.entitiesScanned} יומנים | ${totalLoss} הפסד | ${totalMarginal} שולי | ${totalMissingData} חסר נתונים | ${missingCostPriceCount} חסרי עלות | ${missingSnapshotCount} snapshot חסר | ${lowConfidenceCount} ביטחון נמוך | ${negativeMarginCount} הפסד בהזמנה | ${result.exceptionsCreated} חריגות חדשות`;
+    const summary = `סריקה כספית: ${result.entitiesScanned} יומנים | ${totalLoss} הפסד | ${totalMarginal} שולי | ${totalMissingData} חסר נתונים | ${missingCostPriceCount} חסרי עלות | ${missingSnapshotCount} snapshot חסר | ${lowConfidenceCount} ביטחון נמוך | ${negativeMarginCount} הפסד בהזמנה | ${belowTargetCount} מתחת לסף | ${nearTargetCount} קרוב ליעד | ${result.exceptionsCreated} חריגות חדשות`;
     await writeAgentActivity(db, AGENT_ID, "detection", summary, {
       entitiesScanned: result.entitiesScanned,
       lossJobs: totalLoss,
@@ -369,6 +407,8 @@ export async function POST(req: NextRequest) {
       missingSnapshots: missingSnapshotCount,
       lowConfidenceSnapshots: lowConfidenceCount,
       negativeMarginOrders: negativeMarginCount,
+      belowTargetOrders: belowTargetCount,
+      nearTargetOrders: nearTargetCount,
       exceptionsCreated: result.exceptionsCreated,
       exceptionsResolved: result.exceptionsResolved,
     });

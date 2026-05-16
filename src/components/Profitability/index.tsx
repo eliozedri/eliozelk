@@ -16,8 +16,11 @@ import {
   CONFIDENCE_COLORS,
   MISSING_DATA_LABELS,
   MISSING_DATA_ACTIONS,
+  MARGIN_STATUS_LABELS,
+  MARGIN_STATUS_COLORS,
+  getMarginStatus,
 } from "@/lib/profitability";
-import type { ProfitabilityStatus, ConfidenceLevel, MissingDataTag } from "@/lib/profitability";
+import type { ProfitabilityStatus, ConfidenceLevel, MissingDataTag, MarginStatus } from "@/lib/profitability";
 import type { CrewMetrics, OrderProfitabilitySummary, WeeklyBucket, CustomerMetrics } from "@/lib/operationalKPIs";
 import type { DiagnosticFinding } from "@/hooks/useOperationalKPIs";
 import { DIARY_STATUS_LABELS } from "@/types/workDiary";
@@ -741,6 +744,7 @@ interface CfoSnapshot {
 function CfoTab() {
   const { orders: contextOrders, updateOrderFields, addOrderActivity } = useOrdersContext();
   const { profile } = useAuth();
+  const { rates } = useCostRatesContext();
 
   const [snapshots, setSnapshots] = useState<CfoSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
@@ -954,7 +958,12 @@ function CfoTab() {
                   </th>
                   <th className="px-3 py-2 text-right">עלות</th>
                   <th className="px-3 py-2 text-right">רווח</th>
-                  <th className="px-3 py-2 text-right">מרווח</th>
+                  <th className="px-3 py-2 text-right">
+                    מרווח
+                    <div className="text-[9px] text-gray-400 font-normal normal-case leading-tight mt-0.5">
+                      יעד {rates.targetMarginPercentage}%
+                    </div>
+                  </th>
                   <th className="px-3 py-2 text-right">ביטחון</th>
                   <th className="px-3 py-2 text-right">חשב</th>
                 </tr>
@@ -1014,9 +1023,25 @@ function CfoTab() {
                             {fmt(snap.gross_profit)}
                           </td>
                           <td className="px-3 py-2 text-xs">
-                            <span className={`font-bold ${snap.gross_profit >= 0 ? "text-green-700" : "text-red-600"}`}>
-                              {pct(snap.gross_margin_percent)}
-                            </span>
+                            {(() => {
+                              const ms = getMarginStatus(snap, rates);
+                              const gap = snap.gross_margin_percent - rates.targetMarginPercentage;
+                              return (
+                                <>
+                                  <span className={`font-bold ${snap.gross_profit >= 0 ? "text-green-700" : "text-red-600"}`}>
+                                    {pct(snap.gross_margin_percent)}
+                                  </span>
+                                  <span className={`ml-1 inline-flex items-center text-[9px] font-bold px-1 py-0.5 rounded-full ${MARGIN_STATUS_COLORS[ms]}`}>
+                                    {MARGIN_STATUS_LABELS[ms]}
+                                  </span>
+                                  {ms !== "missing_data" && (
+                                    <div className={`text-[9px] mt-0.5 ${gap >= 0 ? "text-green-600" : "text-red-500"}`}>
+                                      {gap >= 0 ? `+${gap.toFixed(1)}%` : `${gap.toFixed(1)}%`} מהיעד
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </td>
                           <td className="px-3 py-2">
                             <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full ${CONFIDENCE_COLORS[snap.confidence_level]}`}>

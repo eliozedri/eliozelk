@@ -350,6 +350,37 @@ export const CONFIDENCE_COLORS: Record<ConfidenceLevel, string> = {
   missing_data: "bg-gray-100 text-gray-500",
 };
 
+// ─── Margin status vs. target (Phase 4.4) ────────────────────────────────────
+
+export type MarginStatus = "above_target" | "near_target" | "below_target" | "negative_margin" | "missing_data";
+
+export const MARGIN_STATUS_LABELS: Record<MarginStatus, string> = {
+  above_target: "מעל היעד",
+  near_target: "קרוב ליעד",
+  below_target: "מתחת ליעד",
+  negative_margin: "הפסדי",
+  missing_data: "חסרים נתונים",
+};
+
+export const MARGIN_STATUS_COLORS: Record<MarginStatus, string> = {
+  above_target: "bg-green-100 text-green-800",
+  near_target: "bg-yellow-100 text-yellow-800",
+  below_target: "bg-orange-100 text-orange-800",
+  negative_margin: "bg-red-100 text-red-800",
+  missing_data: "bg-gray-100 text-gray-500",
+};
+
+export function getMarginStatus(
+  snap: { gross_profit: number; gross_margin_percent: number; confidence_level: string },
+  rates: { targetMarginPercentage: number; warningMarginPercentage: number }
+): MarginStatus {
+  if (snap.confidence_level === "missing_data") return "missing_data";
+  if (snap.gross_profit < 0) return "negative_margin";
+  if (snap.gross_margin_percent < rates.warningMarginPercentage) return "below_target";
+  if (snap.gross_margin_percent < rates.targetMarginPercentage) return "near_target";
+  return "above_target";
+}
+
 export interface InventoryConsumptionInput {
   itemId: string;
   quantity: number;
