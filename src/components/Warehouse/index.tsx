@@ -219,21 +219,60 @@ function AdjustModal({ item, onClose, onSave }: AdjustModalProps) {
   );
 }
 
+// ── Reservation detail per item ───────────────────────────────────────────────
+
+interface OrderReservation { orderNumber: string; qty: number; orderId: string }
+
+function ReservationDetail({ reservations }: { reservations: OrderReservation[] }) {
+  if (reservations.length === 0) return null;
+  return (
+    <div className="mt-1 text-xs text-gray-500 space-y-0.5">
+      {reservations.map((r, i) => (
+        <div key={i} className="flex gap-1">
+          <span className="text-amber-600 font-semibold">{r.orderNumber}</span>
+          <span>← {r.qty}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Inventory item row ─────────────────────────────────────────────────────────
 
-function InventoryRow({ item, onAdjust }: { item: CatalogItem; onAdjust: (item: CatalogItem) => void }) {
+function InventoryRow({
+  item, onAdjust, reservationsByItem,
+}: {
+  item: CatalogItem;
+  onAdjust: (item: CatalogItem) => void;
+  reservationsByItem: Map<string, OrderReservation[]>;
+}) {
+  const [showReservations, setShowReservations] = useState(false);
   const stockStatus = getStockStatus(item.currentQuantity, item.minimumQuantity);
   const statusLabel = STOCK_STATUS_LABELS[stockStatus];
   const statusColor = STOCK_STATUS_COLORS[stockStatus];
-  const available   = item.currentQuantity - item.reservedQuantity;
+  const available      = item.currentQuantity - item.reservedQuantity;
+  const itemReservations = reservationsByItem.get(item.id) ?? [];
 
   return (
-    <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+    <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors align-top">
       <td className="px-3 py-2.5 text-sm font-semibold text-gray-900">{item.name}</td>
       <td className="px-3 py-2.5 text-xs text-gray-500">{item.category}</td>
       <td className="px-3 py-2.5 text-sm text-center font-mono">{item.currentQuantity}</td>
       <td className="px-3 py-2.5 text-sm text-center font-mono text-gray-500">{item.minimumQuantity || "—"}</td>
-      <td className="px-3 py-2.5 text-sm text-center font-mono text-amber-700">{item.reservedQuantity > 0 ? item.reservedQuantity : "—"}</td>
+      <td className="px-3 py-2.5 text-sm text-center font-mono text-amber-700">
+        {item.reservedQuantity > 0 ? (
+          <button
+            onClick={() => setShowReservations(v => !v)}
+            className="underline decoration-dotted hover:text-amber-900 transition-colors"
+            title="הצג הזמנות שומרות"
+          >
+            {item.reservedQuantity}
+          </button>
+        ) : "—"}
+        {showReservations && itemReservations.length > 0 && (
+          <ReservationDetail reservations={itemReservations} />
+        )}
+      </td>
       <td className="px-3 py-2.5 text-sm text-center font-mono">{available}</td>
       <td className="px-3 py-2.5 text-xs text-gray-500">{item.unitOfMeasure}</td>
       <td className="px-3 py-2.5">
@@ -255,7 +294,7 @@ function InventoryRow({ item, onAdjust }: { item: CatalogItem; onAdjust: (item: 
 
 type StockFilter = "all" | "low_stock" | "negative" | "out_of_stock" | "untracked";
 
-function InventoryPanel() {
+function InventoryPanel({ reservationsByItem }: { reservationsByItem: Map<string, OrderReservation[]> }) {
   const { items, adjustStock } = useCatalogContext();
   const { profile } = useAuth();
   const [filter, setFilter]     = useState<StockFilter>("all");
@@ -348,7 +387,7 @@ function InventoryPanel() {
             </thead>
             <tbody>
               {filteredItems.map(item => (
-                <InventoryRow key={item.id} item={item} onAdjust={setAdjusting} />
+                <InventoryRow key={item.id} item={item} onAdjust={setAdjusting} reservationsByItem={reservationsByItem} />
               ))}
             </tbody>
           </table>
@@ -371,6 +410,22 @@ export function Warehouse() {
   const [activeTab, setActiveTab] = useState<"orders" | "inventory">("orders");
 
   const catalogMap = new Map<string, CatalogItem>(catalogItems.map(i => [i.id, i]));
+
+  // Build per-item reservation breakdown from active warehouse orders (derived, no extra query)
+  const reservationsByItem = new Map<string, OrderReservation[]>();
+  for (const order of orders) {
+    if (order.status === "completed" || order.status === "cancelled") continue;
+    if (!order.warehouseRequired) continue;
+    const rows = [...(order.accessoryRows ?? []), ...(order.miscRows ?? [])];
+    for (const row of rows) {
+      if (!row.catalogItemId) continue;
+      const qty = parseFloat(row.quantity) || 0;
+      if (qty <= 0) continue;
+      const existing = reservationsByItem.get(row.catalogItemId) ?? [];
+      existing.push({ orderNumber: order.orderNumber, qty, orderId: order.id });
+      reservationsByItem.set(row.catalogItemId, existing);
+    }
+  }
 
   const warehouseOrders = orders
     .filter(o => o.warehouseRequired && o.status !== "completed" && o.status !== "cancelled")
@@ -464,7 +519,7 @@ export function Warehouse() {
         )}
 
         {/* Inventory tab */}
-        {activeTab === "inventory" && <InventoryPanel />}
+        {activeTab === "inventory" && <InventoryPanel reservationsByItem={reservationsByItem} />}
       </div>
     </div>
   );

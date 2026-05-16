@@ -31,7 +31,7 @@ const INTENT_KEYWORDS: Record<Exclude<ChatIntent, "general">, string[]> = {
   summary:    ["סיכום", "מצב", "יום", "תעדכן", "תסכם", "קורה", "overview"],
   orders:     ["הזמנה", "פרויקט", "לקוח", "order"],
   restored:   ["שוחזר", "שחזור", "restore", "ביטול", "ארכיון"],
-  inventory:  ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים"],
+  inventory:  ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער"],
 };
 
 export function detectIntent(message: string): ChatIntent {
@@ -341,7 +341,9 @@ export async function runChatEngine(
     }
 
     case "inventory": {
-      const [excRes, itemsRes] = await Promise.all([
+      const isReservationQuery = /שריון|שמור|שמורים|reserv|שוחרר|פער/.test(message);
+
+      const [excRes, itemsRes, reservationsRes] = await Promise.all([
         db.from("agent_exceptions")
           .select("id,severity,title,category,related_entity_id")
           .in("status", ["open", "acknowledged"])
@@ -350,26 +352,98 @@ export async function runChatEngine(
         db.from("catalog_items")
           .select("id,name,unit_of_measure,current_quantity,minimum_quantity,reserved_quantity,is_active")
           .eq("is_active", true),
+        db.from("inventory_reservations")
+          .select("id,item_id,order_id,order_item_key,quantity,status,metadata")
+          .eq("status", "active")
+          .limit(200),
       ]);
 
-      const excs  = excRes.data ?? [];
-      const items = itemsRes.data ?? [];
+      const excs         = excRes.data ?? [];
+      const items        = itemsRes.data ?? [];
+      const reservations = reservationsRes.data ?? [];
 
-      const negative  = items.filter(i => (i.current_quantity as number) < 0);
+      const itemMap = new Map(items.map(i => [i.id as string, i]));
+
+      // ── Reservation-specific queries ────────────────────────────────────
+      if (isReservationQuery) {
+        const lines: string[] = [`🔒 **שריונות מלאי פעילים — ${new Date().toLocaleDateString("he-IL")}**\n`];
+
+        if (reservations.length === 0) {
+          lines.push("אין שריונות פעילים כרגע.");
+          return { content: lines.join("\n"), sourceRefs: [] };
+        }
+
+        // Group reservations by item
+        const byItem = new Map<string, typeof reservations>();
+        for (const r of reservations) {
+          const itemId = r.item_id as string;
+          if (!byItem.has(itemId)) byItem.set(itemId, []);
+          byItem.get(itemId)!.push(r);
+        }
+
+        lines.push(`סה"כ שריונות פעילים: **${reservations.length}** | פריטים שמורים: **${byItem.size}**\n`);
+
+        // Cache mismatch check
+        const mismatches: string[] = [];
+        for (const item of items) {
+          const active = reservations.filter(r => r.item_id === item.id);
+          const computed = active.reduce((s, r) => s + (r.quantity as number), 0);
+          if (Math.abs(computed - (item.reserved_quantity as number)) > 0.0001) {
+            mismatches.push(`${item.name as string}: מטמון=${item.reserved_quantity} | מחושב=${computed}`);
+          }
+        }
+        if (mismatches.length > 0) {
+          lines.push(`⚠️ **פערים במטמון שריונות (${mismatches.length}):**`);
+          mismatches.slice(0, 3).forEach(m => lines.push(`  • ${m}`));
+          lines.push("בצע סנכרון שריונות לתיקון.\n");
+        } else {
+          lines.push("✅ מטמון reserved_quantity תואם לשריונות הפעילים\n");
+        }
+
+        // Per-item breakdown
+        lines.push("**פריטים עם שריונות פעילים:**");
+        let shown = 0;
+        for (const [itemId, itemRes] of byItem) {
+          if (shown >= 8) { lines.push(`  ... ועוד ${byItem.size - shown} פריטים`); break; }
+          const item   = itemMap.get(itemId);
+          const name   = item ? (item.name as string) : itemId;
+          const unit   = item ? (item.unit_of_measure as string) : "";
+          const total  = itemRes.reduce((s, r) => s + (r.quantity as number), 0);
+          const orders = [...new Set(itemRes.map(r => (r.metadata as { orderNumber?: string } | null)?.orderNumber ?? r.order_id as string))];
+          lines.push(`  📦 **${name}** — שמור: ${total} ${unit} | הזמנות: ${orders.slice(0, 3).join(", ")}${orders.length > 3 ? ` +${orders.length - 3}` : ""}`);
+          shown++;
+        }
+
+        // Stale/invalid exceptions
+        const reservationExcs = excs.filter(e => ["stale_reservation","duplicate_reservation","reserved_cache_mismatch","invalid_reservation_quantity","missing_reservation"].includes(e.category as string));
+        if (reservationExcs.length > 0) {
+          lines.push(`\n⚠️ **חריגות שריון פתוחות: ${reservationExcs.length}**`);
+          reservationExcs.slice(0, 3).forEach(e => lines.push(`  • ${e.title as string}`));
+        }
+
+        return {
+          content: lines.join("\n"),
+          sourceRefs: reservationExcs.slice(0, 3).map(e => ({ table: "agent_exceptions", id: e.id as string, label: e.title as string })),
+        };
+      }
+
+      // ── Standard stock summary ──────────────────────────────────────────
+      const negative   = items.filter(i => (i.current_quantity as number) < 0);
       const outOfStock = items.filter(i => (i.current_quantity as number) === 0 && (i.minimum_quantity as number) > 0);
-      const lowStock  = items.filter(i => (i.minimum_quantity as number) > 0 && (i.current_quantity as number) > 0 && (i.current_quantity as number) < (i.minimum_quantity as number));
-      const tracked   = items.filter(i => (i.minimum_quantity as number) > 0);
+      const lowStock   = items.filter(i => (i.minimum_quantity as number) > 0 && (i.current_quantity as number) > 0 && (i.current_quantity as number) < (i.minimum_quantity as number));
+      const tracked    = items.filter(i => (i.minimum_quantity as number) > 0);
+      const withReservations = items.filter(i => (i.reserved_quantity as number) > 0);
 
       if (items.length === 0) {
         return { content: "📦 אין פריטי מלאי מוגדרים במערכת. הוסף פריטים בקטלוג ועדכן כמויות.", sourceRefs: [] };
       }
 
       const lines: string[] = [`📦 **מצב מחסן — ${new Date().toLocaleDateString("he-IL")}**\n`];
-      lines.push(`פריטים פעילים: **${items.length}** | מנוהלי מלאי: **${tracked.length}**`);
+      lines.push(`פריטים פעילים: **${items.length}** | מנוהלי מלאי: **${tracked.length}** | עם שריונות: **${withReservations.length}**`);
 
-      if (negative.length > 0)  lines.push(`🔴 מלאי שלילי: **${negative.length}** פריטים — דורש טיפול מיידי`);
-      if (outOfStock.length > 0) lines.push(`🟠 חסר (מלאי אפס): **${outOfStock.length}** פריטים`);
-      if (lowStock.length > 0)   lines.push(`🟡 מלאי נמוך: **${lowStock.length}** פריטים`);
+      if (negative.length > 0)   lines.push(`🔴 מלאי שלילי: **${negative.length}** פריטים — דורש טיפול מיידי`);
+      if (outOfStock.length > 0)  lines.push(`🟠 חסר (מלאי אפס): **${outOfStock.length}** פריטים`);
+      if (lowStock.length > 0)    lines.push(`🟡 מלאי נמוך: **${lowStock.length}** פריטים`);
 
       if (negative.length === 0 && outOfStock.length === 0 && lowStock.length === 0 && tracked.length > 0) {
         lines.push(`✅ כל הפריטים המנוהלים עומדים בסף המינימום`);
@@ -395,6 +469,15 @@ export async function runChatEngine(
           const shortage = (i.minimum_quantity as number) - (i.current_quantity as number);
           lines.push(`  🟡 ${i.name as string} — ${i.current_quantity as number}/${i.minimum_quantity as number} (קצר: ${shortage}) ${i.unit_of_measure as string}`);
         });
+      }
+
+      if (withReservations.length > 0) {
+        lines.push(`\n**פריטים עם שריונות פעילים:**`);
+        withReservations.slice(0, 4).forEach(i => {
+          const avail = (i.current_quantity as number) - (i.reserved_quantity as number);
+          lines.push(`  🔒 ${i.name as string} — שמור: ${i.reserved_quantity} | זמין: ${avail} ${i.unit_of_measure as string}`);
+        });
+        if (withReservations.length > 4) lines.push(`  ... ועוד ${withReservations.length - 4}`);
       }
 
       if (excs.length > 0) {
