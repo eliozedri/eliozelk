@@ -19,6 +19,7 @@ const emptyForm: CatalogFormState = {
   dimensionValue: "",
   dimensionUnit: "",
   defaultPrice: "",
+  costPrice: "",
   description: "",
 };
 
@@ -81,7 +82,7 @@ function CategoryInput({ value, onChange, categories }: { value: string; onChang
 
 const emptyNewLinked: CatalogFormState = {
   name: "", type: "product", category: "", unitOfMeasure: "יחידה",
-  dimensionValue: "", dimensionUnit: "", defaultPrice: "", description: "",
+  dimensionValue: "", dimensionUnit: "", defaultPrice: "", costPrice: "", description: "",
 };
 
 function LinkedProductsPanel({
@@ -345,6 +346,11 @@ function FormFields({ form, update, categories, nameError, linkedProducts, onLin
           <input type="number" min="0" step="0.01" value={form.defaultPrice} onChange={(e) => update("defaultPrice", e.target.value)} placeholder="0.00" className={inputCls} dir="ltr" />
         </div>
 
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">מחיר עלות (₪)</label>
+          <input type="number" min="0" step="0.01" value={form.costPrice} onChange={(e) => update("costPrice", e.target.value)} placeholder="0.00" className={inputCls} dir="ltr" />
+        </div>
+
         <div className={compact ? "" : "lg:col-span-3"}>
           <label className="block text-xs font-medium text-gray-600 mb-1">תיאור / מפרט</label>
           <input type="text" value={form.description} onChange={(e) => update("description", e.target.value)} placeholder="מידות, מפרט טכני..." className={inputCls} />
@@ -468,6 +474,7 @@ function useSafetyImport(existingNames: Set<string>, onAdd: (form: CatalogFormSt
         dimensionValue: item.dimensions ?? "",
         dimensionUnit: "",
         defaultPrice: "",
+        costPrice: "",
         description: [item.description, item.material ? `חומר: ${item.material}` : "", item.intendedUse ? `שימוש: ${item.intendedUse}` : ""].filter(Boolean).join(" · "),
       }, []);
       added++;
@@ -483,7 +490,7 @@ function useSafetyImport(existingNames: Set<string>, onAdd: (form: CatalogFormSt
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function CatalogPage() {
-  const { items, addItem, updateItem, toggleActive, deleteItem, updateStockConfig } = useCatalogContext();
+  const { items, addItem, updateItem, toggleActive, deleteItem, updateStockConfig, updateCostPrice } = useCatalogContext();
 
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<CatalogItemType | "all">("all");
@@ -546,6 +553,7 @@ export function CatalogPage() {
       dimensionValue: item.dimensionValue ?? "",
       dimensionUnit: item.dimensionUnit ?? "",
       defaultPrice: item.defaultPrice !== null ? String(item.defaultPrice) : "",
+      costPrice: item.costPrice != null ? String(item.costPrice) : "",
       description: item.description,
     });
     setEditLinked(item.linkedProducts ?? []);
@@ -558,6 +566,9 @@ export function CatalogPage() {
     updateItem(id, editForm, editLinked);
     const minQty = parseFloat(editMinQty) || 0;
     updateStockConfig(id, minQty, editSupplierId || null);
+    const cpStr = editForm.costPrice.trim();
+    const cpVal = cpStr !== "" ? parseFloat(cpStr) : null;
+    updateCostPrice(id, cpVal !== null && isNaN(cpVal) ? null : cpVal);
     setEditingId(null);
   }
 

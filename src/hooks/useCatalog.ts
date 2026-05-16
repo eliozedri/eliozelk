@@ -17,6 +17,7 @@ function fromRow(r: Record<string, unknown>): CatalogItem {
     dimensionValue: r.dimension_value as string | undefined,
     dimensionUnit: r.dimension_unit as string | undefined,
     defaultPrice: r.default_price != null ? Number(r.default_price) : null,
+    costPrice: r.cost_price != null ? Number(r.cost_price) : null,
     description: r.description as string,
     isActive: r.is_active as boolean,
     hoursPerUnit: r.hours_per_unit != null ? Number(r.hours_per_unit) : undefined,
@@ -40,6 +41,7 @@ function toRow(item: CatalogItem) {
     dimension_value: item.dimensionValue ?? null,
     dimension_unit: item.dimensionUnit ?? null,
     default_price: item.defaultPrice,
+    cost_price: item.costPrice ?? null,
     description: item.description,
     is_active: item.isActive,
     hours_per_unit: item.hoursPerUnit ?? null,
@@ -160,6 +162,7 @@ export function useCatalog() {
       dimensionValue: form.dimensionValue || undefined,
       dimensionUnit: form.dimensionUnit || undefined,
       defaultPrice: form.defaultPrice ? parseFloat(form.defaultPrice) : null,
+      costPrice: form.costPrice ? parseFloat(form.costPrice) : null,
       description: form.description.trim(),
       isActive: true,
       linkedProducts: linkedProducts ?? [],
@@ -322,5 +325,32 @@ export function useCatalog() {
     }
   }, []);
 
-  return { items, addItem, updateItem, toggleActive, deleteItem, adjustStock, updateStockConfig };
+  const updateCostPrice = useCallback((
+    itemId: string,
+    costPrice: number | null,
+  ) => {
+    const now = new Date().toISOString();
+    const original = ref.current.find(i => i.id === itemId);
+    if (!original) return;
+
+    const updated = { ...original, costPrice, updatedAt: now };
+    setItems(prev => prev.map(i => i.id === itemId ? updated : i));
+    ref.current = ref.current.map(i => i.id === itemId ? updated : i);
+
+    const db = getSupabase();
+    if (db) {
+      db.from("catalog_items")
+        .update({ cost_price: costPrice, updated_at: now })
+        .eq("id", itemId)
+        .then(({ error }) => {
+          if (error) {
+            console.error("[catalog] updateCostPrice failed:", error.message);
+            setItems(prev => prev.map(i => i.id === itemId ? original : i));
+            ref.current = ref.current.map(i => i.id === itemId ? original : i);
+          }
+        });
+    }
+  }, []);
+
+  return { items, addItem, updateItem, toggleActive, deleteItem, adjustStock, updateStockConfig, updateCostPrice };
 }

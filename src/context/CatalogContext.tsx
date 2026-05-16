@@ -18,6 +18,7 @@ interface CatalogContextValue {
     createdBy: string,
   ) => Promise<{ ok: boolean; error?: string }>;
   updateStockConfig: (itemId: string, minimumQuantity: number, supplierId?: string | null) => void;
+  updateCostPrice: (itemId: string, costPrice: number | null) => void;
 }
 
 const CatalogContext = createContext<CatalogContextValue | null>(null);

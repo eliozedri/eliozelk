@@ -31,6 +31,7 @@ export interface CatalogItem {
   minimumQuantity: number;    // reorder threshold; 0 = not configured
   reservedQuantity: number;   // units reserved by open orders
   supplierId?: string;        // preferred supplier
+  costPrice?: number | null;  // purchase/cost price for CFO profitability calculations
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +44,7 @@ export interface CatalogFormState {
   dimensionValue: string;
   dimensionUnit: string;
   defaultPrice: string;
+  costPrice: string;
   description: string;
 }
 
