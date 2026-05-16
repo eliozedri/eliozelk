@@ -212,14 +212,40 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Order-level: detect catalog items missing cost_price ──────────────────
+    const { data: catalogItems } = await db
+      .from("catalog_items")
+      .select("id,name,type")
+      .in("type", ["material", "product"])
+      .eq("is_active", true)
+      .is("cost_price", null);
+
+    let missingCostPriceCount = 0;
+    for (const item of (catalogItems ?? [])) {
+      missingCostPriceCount++;
+      const k = dedupeKey("missing_cost_price", "catalog_item", item.id as string);
+      activeDedupeKeys.add(k);
+      await upsertException(db, AGENT_ID, {
+        category: "missing_cost_price",
+        entityType: "catalog_item",
+        entityId: item.id as string,
+        severity: "info",
+        title: `מחיר עלות חסר — ${item.name as string}`,
+        description: `פריט מסוג ${item.type as string} ללא מחיר עלות — חישוב רווחיות הזמנות יהיה חלקי`,
+        detectedFromData: { itemName: item.name, itemType: item.type },
+        recommendedResolution: "הזן מחיר עלות בקטלוג כדי לאפשר חישוב מלא של רווחיות הזמנות",
+      }, dedupeMap, result);
+    }
+
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 
-    const summary = `סריקה כספית: ${result.entitiesScanned} יומנים | ${totalLoss} הפסד | ${totalMarginal} שולי | ${totalMissingData} חסר נתונים | ${result.exceptionsCreated} חריגות חדשות`;
+    const summary = `סריקה כספית: ${result.entitiesScanned} יומנים | ${totalLoss} הפסד | ${totalMarginal} שולי | ${totalMissingData} חסר נתונים | ${missingCostPriceCount} חסרי עלות | ${result.exceptionsCreated} חריגות חדשות`;
     await writeAgentActivity(db, AGENT_ID, "detection", summary, {
       entitiesScanned: result.entitiesScanned,
       lossJobs: totalLoss,
       marginalJobs: totalMarginal,
       missingDataJobs: totalMissingData,
+      missingCostPriceItems: missingCostPriceCount,
       exceptionsCreated: result.exceptionsCreated,
       exceptionsResolved: result.exceptionsResolved,
     });
