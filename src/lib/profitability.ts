@@ -302,3 +302,183 @@ export const STATUS_DOT: Record<ProfitabilityStatus, string> = {
   loss: "bg-red-500",
   no_data: "bg-gray-300",
 };
+
+// ─── Order-level profitability (Phase 4.0 CFO Lite) ─────────────────────────
+
+export type ConfidenceLevel = "high" | "medium" | "low" | "missing_data";
+
+export type MissingDataTag =
+  | "no_revenue"
+  | "no_linked_diaries"
+  | "no_crew_data"
+  | "missing_cost_price"
+  | "no_material_cost"
+  | "no_vehicle_data"
+  | "no_approved_diary";
+
+export const MISSING_DATA_LABELS: Record<MissingDataTag, string> = {
+  no_revenue: "אין הכנסה מוגדרת",
+  no_linked_diaries: "אין יומני עבודה מקושרים",
+  no_crew_data: "אין נתוני צוות",
+  missing_cost_price: "חסרים מחירי עלות בקטלוג",
+  no_material_cost: "אין נתוני חומרים",
+  no_vehicle_data: "אין נתוני רכב",
+  no_approved_diary: "אין יומן עבודה מאושר",
+};
+
+export const CONFIDENCE_LABELS: Record<ConfidenceLevel, string> = {
+  high: "גבוה",
+  medium: "בינוני",
+  low: "נמוך",
+  missing_data: "נתונים חסרים",
+};
+
+export const CONFIDENCE_COLORS: Record<ConfidenceLevel, string> = {
+  high: "bg-green-100 text-green-800",
+  medium: "bg-yellow-100 text-yellow-800",
+  low: "bg-orange-100 text-orange-800",
+  missing_data: "bg-gray-100 text-gray-500",
+};
+
+export interface InventoryConsumptionInput {
+  itemId: string;
+  quantity: number;
+  costPrice: number | null;
+}
+
+export interface DiaryForProfitability {
+  id: string;
+  isApproved: boolean;
+  crewCount: number;
+  hasVehicle: boolean;
+  vehicleCostOverride?: number | null;
+  equipmentCost?: number;
+  materialCost?: number;
+  laborCost?: number;
+}
+
+export interface OrderProfitabilityInput {
+  orderId: string;
+  customerId?: string;
+  revenue: number;
+  diaries: DiaryForProfitability[];
+  consumptions: InventoryConsumptionInput[];
+  rates: CostRates;
+}
+
+export interface OrderProfitabilitySnapshot {
+  orderId: string;
+  customerId?: string;
+  revenue: number;
+  laborCost: number;
+  materialCost: number;
+  vehicleCost: number;
+  equipmentCost: number;
+  subcontractorCost: number;
+  otherCost: number;
+  overheadCost: number;
+  totalCost: number;
+  grossProfit: number;
+  grossMarginPercent: number;
+  confidenceLevel: ConfidenceLevel;
+  missingData: MissingDataTag[];
+  sourceData: Record<string, unknown>;
+}
+
+const ORDER_OVERHEAD_RATE = 0.12;
+
+export function calculateOrderProfitability(
+  input: OrderProfitabilityInput,
+): OrderProfitabilitySnapshot {
+  const { orderId, customerId, revenue, diaries, consumptions, rates } = input;
+  const missing: MissingDataTag[] = [];
+
+  if (revenue <= 0) missing.push("no_revenue");
+  if (diaries.length === 0) missing.push("no_linked_diaries");
+  if (diaries.length > 0 && !diaries.some(d => d.isApproved)) missing.push("no_approved_diary");
+
+  // Labor
+  let laborCost = 0;
+  let hasCrew = false;
+  for (const d of diaries) {
+    if (d.laborCost != null) {
+      laborCost += d.laborCost;
+      if (d.crewCount > 0) hasCrew = true;
+    } else if (d.crewCount > 0) {
+      hasCrew = true;
+      laborCost += d.crewCount * rates.workerDailyCost;
+    }
+  }
+  if (diaries.length > 0 && !hasCrew) missing.push("no_crew_data");
+
+  // Vehicle
+  let vehicleCost = 0;
+  let hasVehicle = false;
+  for (const d of diaries) {
+    if (d.hasVehicle) {
+      hasVehicle = true;
+      vehicleCost += d.vehicleCostOverride != null
+        ? d.vehicleCostOverride
+        : rates.vehicleDailyCost + rates.fuelCostPerDay;
+    }
+  }
+  if (diaries.length > 0 && !hasVehicle) missing.push("no_vehicle_data");
+
+  // Equipment
+  const equipmentCost = diaries.reduce((s, d) => s + (d.equipmentCost ?? 0), 0);
+
+  // Materials (diary-level + inventory consumptions)
+  const diaryMaterialCost = diaries.reduce((s, d) => s + (d.materialCost ?? 0), 0);
+  let inventoryMaterialCost = 0;
+  let hasMissingCostPrice = false;
+  for (const c of consumptions) {
+    if (c.costPrice != null && c.costPrice > 0) {
+      inventoryMaterialCost += c.quantity * c.costPrice;
+    } else {
+      hasMissingCostPrice = true;
+    }
+  }
+  if (hasMissingCostPrice) missing.push("missing_cost_price");
+  const materialCost = diaryMaterialCost + inventoryMaterialCost;
+  if (consumptions.length === 0 && diaryMaterialCost === 0) missing.push("no_material_cost");
+
+  const directCost = laborCost + vehicleCost + equipmentCost + materialCost;
+  const overheadCost = directCost * ORDER_OVERHEAD_RATE;
+  const totalCost = directCost + overheadCost;
+  const grossProfit = revenue - totalCost;
+  const grossMarginPercent = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
+
+  let confidenceLevel: ConfidenceLevel;
+  if (missing.includes("no_revenue") || missing.includes("no_linked_diaries")) {
+    confidenceLevel = "missing_data";
+  } else if (missing.length === 0) {
+    confidenceLevel = "high";
+  } else if (missing.length <= 2) {
+    confidenceLevel = "medium";
+  } else {
+    confidenceLevel = "low";
+  }
+
+  return {
+    orderId,
+    customerId,
+    revenue,
+    laborCost,
+    materialCost,
+    vehicleCost,
+    equipmentCost,
+    subcontractorCost: 0,
+    otherCost: 0,
+    overheadCost,
+    totalCost,
+    grossProfit,
+    grossMarginPercent,
+    confidenceLevel,
+    missingData: missing,
+    sourceData: {
+      diaryCount: diaries.length,
+      consumptionCount: consumptions.length,
+      approvedDiaryCount: diaries.filter(d => d.isApproved).length,
+    },
+  };
+}
