@@ -31,7 +31,7 @@ const INTENT_KEYWORDS: Record<Exclude<ChatIntent, "general">, string[]> = {
   summary:    ["סיכום", "מצב", "יום", "תעדכן", "תסכם", "קורה", "overview"],
   orders:     ["הזמנה", "פרויקט", "לקוח", "order"],
   restored:   ["שוחזר", "שחזור", "restore", "ביטול", "ארכיון"],
-  inventory:  ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער", "צריכה", "נצרך", "נצרכו", "התאמה", "יומן", "בוצע", "ניוצל", "consump", "החזר", "החזרה", "הוחזר", "תעודת", "תעודה", "קליטה", "נקלט", "נקלטה", "delivery", "return_from", "ספירה"],
+  inventory:  ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער", "צריכה", "נצרך", "נצרכו", "התאמה", "יומן", "בוצע", "ניוצל", "consump", "החזר", "החזרה", "הוחזר", "תעודת", "תעודה", "קליטה", "נקלט", "נקלטה", "delivery", "return_from", "ספירה", "המלצ", "לרכוש", "לקנות", "לדרוג", "דחוף.*רכש", "purchase", "recommend"],
 };
 
 export function detectIntent(message: string): ChatIntent {
@@ -341,10 +341,11 @@ export async function runChatEngine(
     }
 
     case "inventory": {
-      const isReservationQuery  = /שריון|שמור|שמורים|reserv|שוחרר|פער/.test(message);
-      const isConsumptionQuery  = /צריכה|נצרך|נצרכו|התאמה|יומן.*מלאי|בוצע.*מלאי|ניוצל|consump|ממתין.*התאמ|פער.*מתוכנן|כפולה/.test(message);
-      const isDeliveryNoteQuery = /תעודת|תעודה|קליטה|נקלט|delivery|ספירה|סחורה.*הגיע|הגיע.*סחורה/.test(message);
-      const isReturnQuery       = /החזר|החזרה|הוחזר|return_from|חזר.*שטח|שטח.*חזר/.test(message);
+      const isReservationQuery    = /שריון|שמור|שמורים|reserv|שוחרר|פער/.test(message);
+      const isConsumptionQuery    = /צריכה|נצרך|נצרכו|התאמה|יומן.*מלאי|בוצע.*מלאי|ניוצל|consump|ממתין.*התאמ|פער.*מתוכנן|כפולה/.test(message);
+      const isDeliveryNoteQuery   = /תעודת|תעודה|קליטה|נקלט|delivery|ספירה|סחורה.*הגיע|הגיע.*סחורה/.test(message);
+      const isReturnQuery         = /החזר|החזרה|הוחזר|return_from|חזר.*שטח|שטח.*חזר/.test(message);
+      const isPurchaseQuery       = /המלצ|לרכוש|לקנות|להזמין|purchase|recommend|מה.*דחוף.*רכש|מה.*צריך.*להזמין|פריטים.*בלי.*ספק|ספק.*חסר/.test(message);
 
       const [excRes, itemsRes, reservationsRes, consumptionsRes] = await Promise.all([
         db.from("agent_exceptions")
@@ -353,7 +354,7 @@ export async function runChatEngine(
           .eq("agent_id", "inventory-agent")
           .limit(20),
         db.from("catalog_items")
-          .select("id,name,unit_of_measure,current_quantity,minimum_quantity,reserved_quantity,is_active")
+          .select("id,name,unit_of_measure,current_quantity,minimum_quantity,reserved_quantity,supplier_id,is_active")
           .eq("is_active", true),
         db.from("inventory_reservations")
           .select("id,item_id,order_id,order_item_key,quantity,status,metadata")
@@ -587,6 +588,80 @@ export async function runChatEngine(
           lines.push(`\n✅ אין הזמנות ממתינות לדיווח החזרת ציוד`);
         }
 
+        return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      // ── Purchase recommendation queries ────────────────────────────────
+      if (isPurchaseQuery) {
+        const [recRes, suppliersRes] = await Promise.all([
+          db.from("purchase_recommendations")
+            .select("id,item_id,supplier_id,recommendation_type,current_quantity,minimum_quantity,recommended_quantity,urgency,status,reason")
+            .not("status", "in", '("dismissed","resolved","converted_to_order_later")')
+            .order("urgency", { ascending: false })
+            .limit(50),
+          db.from("suppliers").select("id,name").eq("is_active", true).limit(100),
+        ]);
+
+        const recs      = recRes.data ?? [];
+        const suppMap   = new Map((suppliersRes.data ?? []).map(s => [s.id as string, s.name as string]));
+        const urgencyOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+        const urgencyHe: Record<string, string> = { critical: "קריטי", high: "גבוה", medium: "בינוני", low: "נמוך" };
+        const urgencyIcon: Record<string, string> = { critical: "🔴", high: "🟠", medium: "🟡", low: "🔵" };
+        const typeHe: Record<string, string> = {
+          negative_stock: "מלאי שלילי", out_of_stock: "חסר", low_stock: "נמוך",
+          over_reserved: "שריון חורג", delivery_note_gap: "פער תעודה", manual: "ידני",
+        };
+        const sorted = [...recs].sort((a, b) =>
+          (urgencyOrder[a.urgency as string] ?? 9) - (urgencyOrder[b.urgency as string] ?? 9)
+        );
+
+        const lines: string[] = [`🛒 **המלצות רכש — ${new Date().toLocaleDateString("he-IL")}**\n`];
+
+        if (sorted.length === 0) {
+          lines.push("אין המלצות רכש פתוחות כרגע.");
+          lines.push("הרץ סריקת מלאי לעדכון המלצות אוטומטיות.");
+          return { content: lines.join("\n"), sourceRefs: [] };
+        }
+
+        const critical = sorted.filter(r => r.urgency === "critical");
+        const high     = sorted.filter(r => r.urgency === "high");
+        const rest     = sorted.filter(r => r.urgency !== "critical" && r.urgency !== "high");
+
+        lines.push(`סה״כ המלצות פתוחות: **${sorted.length}** | קריטי: **${critical.length}** | גבוה: **${high.length}**\n`);
+
+        const printRec = (r: typeof recs[0]) => {
+          const catItem = items.find(i => i.id === r.item_id);
+          const name    = catItem ? catItem.name as string : (r.item_id as string).slice(0, 8);
+          const unit    = catItem ? catItem.unit_of_measure as string : "";
+          const icon    = urgencyIcon[r.urgency as string] ?? "⚪";
+          const urgHe   = urgencyHe[r.urgency as string] ?? r.urgency;
+          const typeStr = typeHe[r.recommendation_type as string] ?? r.recommendation_type;
+          const supplier = r.supplier_id ? suppMap.get(r.supplier_id as string) : null;
+          lines.push(`  ${icon} **${name}** — ${typeStr} | מומלץ: ${r.recommended_quantity} ${unit} | דחיפות: ${urgHe}${supplier ? ` | ספק: ${supplier}` : " | ⚠ ספק חסר"}`);
+        };
+
+        if (critical.length > 0) {
+          lines.push("**קריטי — טיפול מיידי:**");
+          critical.slice(0, 5).forEach(printRec);
+        }
+        if (high.length > 0) {
+          lines.push("\n**גבוה:**");
+          high.slice(0, 5).forEach(printRec);
+        }
+        if (rest.length > 0) {
+          lines.push(`\n**בינוני/נמוך: ${rest.length} פריטים נוספים**`);
+          rest.slice(0, 3).forEach(printRec);
+        }
+
+        // Items missing supplier
+        const missingSupplier = items.filter(i =>
+          (i.minimum_quantity as number) > 0 && !i.supplier_id
+        );
+        if (missingSupplier.length > 0) {
+          lines.push(`\n⚠ **פריטים ללא ספק (${missingSupplier.length}):** ${missingSupplier.slice(0, 3).map(i => i.name as string).join(", ")}${missingSupplier.length > 3 ? " ועוד..." : ""}`);
+        }
+
+        lines.push(`\n_לניהול המלצות: לשונית "המלצות רכש" במחלקת מחסן_`);
         return { content: lines.join("\n"), sourceRefs: [] };
       }
 

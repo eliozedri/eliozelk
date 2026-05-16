@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { nanoid } from "nanoid";
 import { useCatalogContext } from "@/context/CatalogContext";
 import type { CatalogFormState, CatalogItemType, LinkedProductEntry } from "@/types/catalog";
 import { TYPE_LABELS, TYPE_COLORS, UNIT_OPTIONS, DIMENSION_UNIT_OPTIONS, LENGTH_UNITS, AREA_UNITS, NO_DIMENSION_UNITS } from "@/types/catalog";
 import { SAFETY_ACCESSORIES } from "@/data/safetyAccessories";
+import { getSupabase } from "@/lib/supabase/client";
 
 const inputCls =
   "w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 transition-all";
@@ -482,7 +483,7 @@ function useSafetyImport(existingNames: Set<string>, onAdd: (form: CatalogFormSt
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function CatalogPage() {
-  const { items, addItem, updateItem, toggleActive, deleteItem } = useCatalogContext();
+  const { items, addItem, updateItem, toggleActive, deleteItem, updateStockConfig } = useCatalogContext();
 
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<CatalogItemType | "all">("all");
@@ -490,6 +491,16 @@ export function CatalogPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CatalogFormState>(emptyForm);
   const [editLinked, setEditLinked] = useState<LinkedProductEntry[]>([]);
+  const [editMinQty, setEditMinQty] = useState("");
+  const [editSupplierId, setEditSupplierId] = useState("");
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    const db = getSupabase();
+    if (!db) return;
+    db.from("suppliers").select("id,name").eq("is_active", true).order("name")
+      .then(({ data }) => { if (data) setSuppliers(data as { id: string; name: string }[]); });
+  }, []);
 
   const categories = useMemo(() => {
     const cats = new Set(items.map((i) => i.category).filter(Boolean));
@@ -538,11 +549,15 @@ export function CatalogPage() {
       description: item.description,
     });
     setEditLinked(item.linkedProducts ?? []);
+    setEditMinQty(item.minimumQuantity > 0 ? String(item.minimumQuantity) : "");
+    setEditSupplierId(item.supplierId ?? "");
     setEditingId(id);
   }
 
   function saveEdit(id: string) {
     updateItem(id, editForm, editLinked);
+    const minQty = parseFloat(editMinQty) || 0;
+    updateStockConfig(id, minQty, editSupplierId || null);
     setEditingId(null);
   }
 
@@ -648,7 +663,33 @@ export function CatalogPage() {
                             itemId={item.id}
                             compact
                           />
-                          <div className="flex items-center justify-end gap-2 mt-2">
+                          {/* Stock config — minimum qty + supplier */}
+                          <div className="mt-3 pt-3 border-t border-blue-100">
+                            <p className="text-xs font-semibold text-gray-600 mb-2">הגדרות מלאי</p>
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">כמות מינימום (לרכש)</label>
+                                <input type="number" min="0" step="0.01" value={editMinQty}
+                                  onChange={e => setEditMinQty(e.target.value)}
+                                  placeholder="0"
+                                  className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">ספק מועדף</label>
+                                <select value={editSupplierId} onChange={e => setEditSupplierId(e.target.value)}
+                                  className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+                                  <option value="">— ללא ספק —</option>
+                                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                              </div>
+                              <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2 self-end">
+                                <div>נוכחי: <strong>{item.currentQuantity}</strong></div>
+                                <div>שמור: <strong className="text-amber-600">{item.reservedQuantity}</strong></div>
+                                <div>זמין: <strong>{item.currentQuantity - item.reservedQuantity}</strong></div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-end gap-2 mt-3">
                             <button type="button" onClick={() => saveEdit(item.id)} className="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors">שמור</button>
                             <button type="button" onClick={cancelEdit} className="px-3 py-1 rounded-lg border border-gray-300 text-xs text-gray-600 hover:bg-gray-50 transition-colors">ביטול</button>
                           </div>

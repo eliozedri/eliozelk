@@ -14,6 +14,12 @@ import {
 } from "@/lib/agents/scan-utils";
 import { emptyScanResult } from "@/lib/agents/types";
 import { syncAllReservations } from "@/lib/inventory/syncReservations";
+import {
+  upsertPurchaseRecommendation,
+  resolvePurchaseRecommendations,
+  calcRecommendedQuantity,
+  calcUrgency,
+} from "@/lib/inventory/purchaseRecommendations";
 
 const AGENT_ID   = "inventory-agent";
 const AGENT_NAME = "מנהל מחסן";
@@ -800,6 +806,78 @@ export async function POST(req: NextRequest) {
 
     // ── 29. Double receiving risk — approved delivery note items counted twice
     // (prevented at DB by uq_delivery_note_item_approved index; no scan check needed)
+
+    // ── Purchase recommendations — upsert for all stock issues ────────────────
+    const resolvedItemIds: string[] = [];
+    for (const item of items) {
+      const available = item.current_quantity - item.reserved_quantity;
+
+      // Determine which recommendation type applies (priority order matters)
+      let recType: import("@/lib/inventory/purchaseRecommendations").RecommendationType | null = null;
+      if (item.current_quantity < 0) {
+        recType = "negative_stock";
+      } else if (item.current_quantity === 0 && item.minimum_quantity > 0) {
+        recType = "out_of_stock";
+      } else if (item.minimum_quantity > 0 && item.current_quantity > 0 && item.current_quantity < item.minimum_quantity) {
+        recType = "low_stock";
+      } else if (item.reserved_quantity > 0 && item.reserved_quantity > item.current_quantity) {
+        recType = "over_reserved";
+      }
+
+      if (recType) {
+        const recQty = calcRecommendedQuantity(recType, item.current_quantity, item.reserved_quantity, item.minimum_quantity);
+        const urgency = calcUrgency(recType, item.current_quantity, item.minimum_quantity);
+        const reasonMap: Partial<Record<import("@/lib/inventory/purchaseRecommendations").RecommendationType, string>> = {
+          negative_stock: `מלאי שלילי — ${item.current_quantity} ${item.unit_of_measure}`,
+          out_of_stock:   `אזל המלאי — מינימום: ${item.minimum_quantity} ${item.unit_of_measure}`,
+          low_stock:      `מלאי נמוך — ${item.current_quantity}/${item.minimum_quantity} ${item.unit_of_measure}`,
+          over_reserved:  `שריון עולה על מלאי — שמור: ${item.reserved_quantity}, נוכחי: ${item.current_quantity}`,
+        };
+        await upsertPurchaseRecommendation(db, {
+          itemId:              item.id,
+          supplierId:          item.supplier_id,
+          recommendationType:  recType,
+          currentQuantity:     item.current_quantity,
+          reservedQuantity:    item.reserved_quantity,
+          availableQuantity:   available,
+          minimumQuantity:     item.minimum_quantity,
+          recommendedQuantity: recQty,
+          urgency,
+          reason:              reasonMap[recType] ?? recType,
+          sourceType:          "inventory_scan",
+          createdBy:           "system:inventory-scan",
+        });
+      } else if (
+        item.minimum_quantity > 0 &&
+        item.current_quantity >= item.minimum_quantity &&
+        item.reserved_quantity <= item.current_quantity
+      ) {
+        // Stock is now adequate — resolve any open recommendations for this item
+        resolvedItemIds.push(item.id);
+      }
+
+      // Missing supplier: item needs reorder (has minimum) but no supplier linked
+      if (item.minimum_quantity > 0 && !item.supplier_id) {
+        const k = dedupeKey("missing_supplier", "catalog_item", item.id);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "missing_supplier",
+          entityType: "catalog_item",
+          entityId: item.id,
+          severity: "warn",
+          title: `ספק חסר — ${item.name}`,
+          description: `פריט עם כמות מינימום (${item.minimum_quantity} ${item.unit_of_measure}) ללא ספק מקושר — לא ניתן לייצר המלצת רכש מלאה`,
+          detectedFromData: { itemName: item.name, minimumQuantity: item.minimum_quantity },
+          recommendedResolution: "קשר ספק לפריט זה בקטלוג",
+        }, dedupeMap, result);
+      }
+    }
+
+    if (resolvedItemIds.length > 0) {
+      await resolvePurchaseRecommendations(db, resolvedItemIds).catch(e =>
+        result.errors.push(`resolve recommendations: ${e instanceof Error ? e.message : String(e)}`)
+      );
+    }
 
     // ── Auto-resolve stale exceptions ──────────────────────────────────────
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);

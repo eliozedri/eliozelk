@@ -772,10 +772,231 @@ function ReturnFromFieldPanel({
   );
 }
 
+// ── Purchase Recommendations Panel ───────────────────────────────────────────
+
+interface PurchaseRecommendationRecord {
+  id: string;
+  item_id: string;
+  supplier_id: string | null;
+  recommendation_type: string;
+  current_quantity: number;
+  reserved_quantity: number;
+  available_quantity: number;
+  minimum_quantity: number;
+  recommended_quantity: number;
+  urgency: string;
+  status: string;
+  reason: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  dismissed_reason: string | null;
+  created_at: string;
+}
+
+const REC_URGENCY_LABELS: Record<string, string> = {
+  critical: "קריטי",
+  high:     "גבוה",
+  medium:   "בינוני",
+  low:      "נמוך",
+};
+
+const REC_URGENCY_COLORS: Record<string, string> = {
+  critical: "bg-red-100 text-red-700",
+  high:     "bg-orange-100 text-orange-700",
+  medium:   "bg-amber-100 text-amber-700",
+  low:      "bg-gray-100 text-gray-600",
+};
+
+const REC_STATUS_LABELS: Record<string, string> = {
+  draft:                    "טיוטה",
+  pending_approval:         "ממתין לאישור",
+  approved_internal:        "אושר פנימית",
+  dismissed:                "נדחה",
+  converted_to_order_later: "הועבר להזמנה",
+  resolved:                 "טופל",
+};
+
+const REC_STATUS_COLORS: Record<string, string> = {
+  draft:                    "bg-gray-100 text-gray-600",
+  pending_approval:         "bg-blue-100 text-blue-700",
+  approved_internal:        "bg-green-100 text-green-700",
+  dismissed:                "bg-red-50 text-red-500",
+  converted_to_order_later: "bg-purple-100 text-purple-700",
+  resolved:                 "bg-teal-100 text-teal-700",
+};
+
+const REC_TYPE_LABELS: Record<string, string> = {
+  low_stock:        "מלאי נמוך",
+  out_of_stock:     "חסר",
+  over_reserved:    "שריון חורג",
+  negative_stock:   "מלאי שלילי",
+  delivery_note_gap:"פער תעודה",
+  manual:           "ידני",
+};
+
+function PurchaseRecommendationsPanel({ catalogMap }: { catalogMap: Map<string, CatalogItem> }) {
+  const [recs, setRecs] = useState<PurchaseRecommendationRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [acting, setActing] = useState<string | null>(null);
+  const [msgs, setMsgs] = useState<Record<string, { text: string; ok: boolean }>>({});
+  const [editQty, setEditQty] = useState<Record<string, string>>({});
+
+  async function fetchRecs() {
+    const db = getSupabase();
+    if (!db) return;
+    const { data: { session } } = await db.auth.getSession();
+    if (!session?.access_token) return;
+    const res = await fetch("/api/inventory/purchase-recommendations", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (res.ok) setRecs(await res.json() as PurchaseRecommendationRecord[]);
+    setLoading(false);
+  }
+
+  useEffect(() => { fetchRecs(); }, []);
+
+  async function sendAction(id: string, action: "approve_internal" | "dismiss" | "update_quantity", extra?: Record<string, unknown>) {
+    setActing(id); setMsgs(prev => ({ ...prev, [id]: { text: "", ok: true } }));
+    try {
+      const db = getSupabase();
+      if (!db) return;
+      const { data: { session } } = await db.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch(`/api/inventory/purchase-recommendations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action, ...extra }),
+      });
+      const body = await res.json() as { ok?: boolean; error?: string };
+      if (res.ok) {
+        const label = action === "approve_internal" ? "אושר פנימית" : action === "dismiss" ? "נדחה" : "עודכן";
+        setMsgs(prev => ({ ...prev, [id]: { text: label, ok: true } }));
+        await fetchRecs();
+      } else {
+        setMsgs(prev => ({ ...prev, [id]: { text: body.error ?? "שגיאה", ok: false } }));
+      }
+    } finally { setActing(null); }
+  }
+
+  const activeRecs = recs.filter(r => r.status !== "dismissed" && r.status !== "resolved");
+  const urgencyOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  const sorted = [...activeRecs].sort((a, b) =>
+    (urgencyOrder[a.urgency] ?? 9) - (urgencyOrder[b.urgency] ?? 9)
+  );
+
+  if (loading) return <div className="p-8 text-center text-gray-400 text-sm">טוען המלצות רכש...</div>;
+
+  if (sorted.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+        <p className="text-gray-400 text-sm">אין המלצות רכש פתוחות</p>
+        <p className="text-xs text-gray-400 mt-1">הרץ סריקת מלאי לעדכון המלצות, או הוסף המלצה ידנית</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-black text-gray-900">המלצות רכש</h2>
+        <span className="text-xs text-gray-500">{sorted.length} המלצות פתוחות</span>
+      </div>
+      <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        אישור פנימי אינו שולח הזמנה לספק. זהו אישור לתכנון פנימי בלבד.
+      </p>
+      <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+        <table className="w-full text-right text-sm min-w-[900px]">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              {["פריט","סוג","נוכחי","שמור","זמין","מינימום","מומלץ","דחיפות","סטטוס","ספק","סיבה",""].map(h => (
+                <th key={h} className="px-2 py-2.5 text-xs font-bold text-gray-500 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map(r => {
+              const item = catalogMap.get(r.item_id);
+              const msg = msgs[r.id];
+              const canAct = r.status === "draft" || r.status === "pending_approval";
+              return (
+                <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50 align-top">
+                  <td className="px-2 py-2.5 font-semibold text-gray-900 whitespace-nowrap">{item?.name ?? r.item_id.slice(0,8)}</td>
+                  <td className="px-2 py-2.5">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                      {REC_TYPE_LABELS[r.recommendation_type] ?? r.recommendation_type}
+                    </span>
+                  </td>
+                  <td className="px-2 py-2.5 text-center font-mono text-sm">{r.current_quantity}</td>
+                  <td className="px-2 py-2.5 text-center font-mono text-sm text-amber-700">{r.reserved_quantity}</td>
+                  <td className="px-2 py-2.5 text-center font-mono text-sm">{r.available_quantity}</td>
+                  <td className="px-2 py-2.5 text-center font-mono text-sm text-gray-400">{r.minimum_quantity}</td>
+                  <td className="px-2 py-2.5 text-center">
+                    {canAct ? (
+                      <input
+                        type="number" min="0.01" step="0.01"
+                        value={editQty[r.id] ?? String(r.recommended_quantity)}
+                        onChange={e => setEditQty(prev => ({ ...prev, [r.id]: e.target.value }))}
+                        className="w-16 border border-gray-200 rounded px-1.5 py-0.5 text-xs text-center focus:outline-none focus:ring-1 focus:ring-teal-400"
+                      />
+                    ) : (
+                      <span className="font-mono">{r.recommended_quantity}</span>
+                    )}
+                  </td>
+                  <td className="px-2 py-2.5">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-semibold ${REC_URGENCY_COLORS[r.urgency] ?? "bg-gray-100 text-gray-500"}`}>
+                      {REC_URGENCY_LABELS[r.urgency] ?? r.urgency}
+                    </span>
+                  </td>
+                  <td className="px-2 py-2.5">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-semibold ${REC_STATUS_COLORS[r.status] ?? "bg-gray-100 text-gray-500"}`}>
+                      {REC_STATUS_LABELS[r.status] ?? r.status}
+                    </span>
+                  </td>
+                  <td className="px-2 py-2.5 text-xs text-gray-500 max-w-[100px] truncate">
+                    {r.supplier_id ? (r.supplier_id.slice(0, 8) + "…") : "—"}
+                  </td>
+                  <td className="px-2 py-2.5 text-xs text-gray-500 max-w-[140px]">
+                    <span className="line-clamp-2">{r.reason}</span>
+                  </td>
+                  <td className="px-2 py-2.5 text-left">
+                    {msg?.text ? (
+                      <span className={`text-xs font-medium ${msg.ok ? "text-green-600" : "text-red-600"}`}>{msg.text}</span>
+                    ) : canAct ? (
+                      <div className="flex flex-col gap-1 min-w-[120px]">
+                        {editQty[r.id] && editQty[r.id] !== String(r.recommended_quantity) && (
+                          <button onClick={() => sendAction(r.id, "update_quantity", { recommendedQuantity: parseFloat(editQty[r.id]) })}
+                            disabled={acting === r.id}
+                            className="text-xs px-2 py-0.5 rounded bg-gray-50 text-gray-700 hover:bg-gray-100 font-medium disabled:opacity-40">
+                            שמור כמות
+                          </button>
+                        )}
+                        <button onClick={() => sendAction(r.id, "approve_internal")}
+                          disabled={acting === r.id}
+                          className="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 font-semibold disabled:opacity-40 transition-colors">
+                          {acting === r.id ? "..." : "אשר פנימית"}
+                        </button>
+                        <button onClick={() => sendAction(r.id, "dismiss", { dismissReason: "user_dismissed" })}
+                          disabled={acting === r.id}
+                          className="text-xs px-2 py-0.5 rounded bg-red-50 text-red-600 hover:bg-red-100 font-medium disabled:opacity-40 transition-colors">
+                          דחה
+                        </button>
+                      </div>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function Warehouse() {
   const { orders } = useOrdersContext();
   const { items: catalogItems } = useCatalogContext();
-  const [activeTab, setActiveTab] = useState<"orders" | "inventory" | "delivery" | "returns">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "inventory" | "delivery" | "returns" | "recommendations">("orders");
   const [consumptions, setConsumptions] = useState<ConsumptionRecord[]>([]);
   const [approvedDiaryOrderIds, setApprovedDiaryOrderIds] = useState<Set<string>>(new Set());
   const [reconciling, setReconciling] = useState<string | null>(null);
@@ -912,6 +1133,7 @@ export function Warehouse() {
     { key: "inventory" as const, label: "מלאי פריטים" },
     { key: "delivery" as const,  label: "קליטת סחורה" },
     { key: "returns" as const,   label: `החזרות מהשטח${returnCandidates.length > 0 ? ` (${returnCandidates.length})` : ""}` },
+    { key: "recommendations" as const, label: "המלצות רכש" },
   ];
 
   return (
@@ -1012,6 +1234,9 @@ export function Warehouse() {
         {activeTab === "returns" && (
           <ReturnFromFieldPanel returnCandidates={returnCandidates} catalogMap={catalogMap} />
         )}
+
+        {/* Purchase recommendations tab */}
+        {activeTab === "recommendations" && <PurchaseRecommendationsPanel catalogMap={catalogMap} />}
       </div>
     </div>
   );
