@@ -124,6 +124,7 @@ async function syncOrderReservations(
   db: SupabaseClient,
   desired: Map<string, DesiredReservation>,
   activeOrderIds: Set<string>,
+  cancelledOrderIds: Set<string>,
   result: SyncResult,
 ): Promise<void> {
   // Load only active reservations — released rows remain as immutable history
@@ -167,10 +168,10 @@ async function syncOrderReservations(
         itemId: des.itemId, orderId: des.orderId,
         movementType: "reserve",
         quantity: des.quantity,
-        notes: `שריון חדש — ${des.description || "פריט ללא שם"} | הזמנה ${des.orderNumber}`,
+        notes: `שריון חדש — ${des.description || "פריט ללא שם"} | הזמנה ${des.orderNumber} | מפתח פריט: ${des.orderItemKey}`,
       }, result);
 
-    } else if (ex.quantity !== des.quantity) {
+    } else if (Math.abs(ex.quantity - des.quantity) > 0.0001) {
       // UPDATE quantity only — same active row, quantity changed
       const delta = des.quantity - ex.quantity;
       const { error: updateErr } = await db.from("inventory_reservations")
@@ -185,7 +186,7 @@ async function syncOrderReservations(
         itemId: des.itemId, orderId: des.orderId,
         movementType: "correction",
         quantity: delta,
-        notes: `עדכון כמות שריון — מ-${ex.quantity} ל-${des.quantity} (הפרש: ${delta > 0 ? "+" : ""}${delta}) | הזמנה ${des.orderNumber}`,
+        notes: `עדכון כמות שריון — מ-${ex.quantity} ל-${des.quantity} (הפרש: ${delta > 0 ? "+" : ""}${delta}) | הזמנה ${des.orderNumber} | מפתח פריט: ${des.orderItemKey}`,
       }, result);
     }
     // else: active and same quantity → no-op (fully idempotent)
@@ -195,7 +196,7 @@ async function syncOrderReservations(
   for (const [key, ex] of existingActive) {
     if (desired.has(key)) continue;
 
-    const isCancelled = !activeOrderIds.has(ex.order_id);
+    const isCancelled = cancelledOrderIds.has(ex.order_id);
     const newStatus    = isCancelled ? "cancelled" : "released";
     const releaseReason = isCancelled ? "order_cancelled" : "order_item_removed";
 
@@ -211,7 +212,7 @@ async function syncOrderReservations(
       itemId: ex.item_id, orderId: ex.order_id,
       movementType: "release_reservation",
       quantity: -ex.quantity,
-      notes: `שריון שוחרר — סיבה: ${releaseReason} | מפתח: ${key}`,
+      notes: `שריון שוחרר — סיבה: ${releaseReason} | מפתח פריט: ${ex.order_item_key} | מפתח: ${key}`,
     }, result);
   }
 }
@@ -271,15 +272,27 @@ export async function syncAllReservations(db: SupabaseClient): Promise<SyncResul
     durationMs: 0,
   };
 
-  const { desired, activeOrderIds, error: computeErr } = await computeDesiredReservations(db);
+  const [computedResult, cancelledRes] = await Promise.all([
+    computeDesiredReservations(db),
+    db.from("work_orders").select("id").eq("status", "cancelled"),
+  ]);
+
+  const { desired, activeOrderIds, error: computeErr } = computedResult;
   if (computeErr) {
     result.errors.push(`compute desired: ${computeErr}`);
     result.durationMs = Date.now() - start;
     return result;
   }
+  if (cancelledRes.error) {
+    result.warnings.push(`load cancelled orders: ${cancelledRes.error.message}`);
+  }
+
+  const cancelledOrderIds = new Set<string>(
+    ((cancelledRes.data ?? []) as Array<{ id: string }>).map(o => o.id),
+  );
 
   result.desiredCount = desired.size;
-  await syncOrderReservations(db, desired, activeOrderIds, result);
+  await syncOrderReservations(db, desired, activeOrderIds, cancelledOrderIds, result);
   await recalculateReservedQuantityCache(db, result);
 
   result.durationMs = Date.now() - start;
