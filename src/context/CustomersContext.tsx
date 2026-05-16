@@ -52,8 +52,6 @@ function fromRow(r: Record<string, unknown>): Customer {
 }
 
 function toRow(c: Customer) {
-  // contact_person / contact_email / contact_phone omitted until migration
-  // 20260516200000_customer_contact_fields.sql is applied to the live DB.
   return {
     id: c.id,
     name: c.name,
@@ -62,6 +60,9 @@ function toRow(c: Customer) {
     last_order: c.lastOrder,
     notes: c.notes ?? null,
     payment_terms: c.paymentTerms ?? null,
+    contact_person: c.contactPerson ?? null,
+    contact_email: c.contactEmail ?? null,
+    contact_phone: c.contactPhone ?? null,
     created_at: c.createdAt,
     updated_at: c.updatedAt,
   };
