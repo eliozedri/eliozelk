@@ -526,7 +526,7 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
       {/* Actions */}
       <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-1.5">
-          {order.status === "graphics_done" && order.fabricationRequired && (
+          {order.status === "graphics_done" && (order.fabricationRequired || order.warehouseRequired) && (
             <button
               onClick={() => onUpdateStatus(order.id, "production")}
               className="px-2 py-1 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors whitespace-nowrap"
@@ -534,7 +534,7 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
               שלח לייצור
             </button>
           )}
-          {order.status === "graphics_done" && !order.fabricationRequired && (
+          {order.status === "graphics_done" && !order.fabricationRequired && !order.warehouseRequired && (
             <button
               onClick={() => onUpdateStatus(order.id, "ready_installation")}
               className="px-2 py-1 rounded-lg text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors whitespace-nowrap"

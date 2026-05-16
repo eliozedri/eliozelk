@@ -67,7 +67,7 @@ export function computeDiagnostics(
       billingLeakage.uninvoicedCompletedOrders >= 5 ? "critical" :
       billingLeakage.uninvoicedCompletedOrders >= 2 ? "warn" : "info";
     const names = orders
-      .filter(o => o.status === "completed" && !o.invoicedAt && (!o.accountingStatus || o.accountingStatus === "pending"))
+      .filter(o => o.status === "completed" && !o.invoicedAt && (!o.accountingStatus || o.accountingStatus === "pending" || o.accountingStatus === "verified"))
       .slice(0, 5)
       .map(o => o.orderNumber);
     findings.push({

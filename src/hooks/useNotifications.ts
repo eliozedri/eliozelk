@@ -51,7 +51,7 @@ export function useNotifications(): NotificationCounts {
     // accountingStatus defaults to "pending" when absent (backward compat).
     const accountingPending = orders.filter(o =>
       o.status === "completed" &&
-      (!o.accountingStatus || o.accountingStatus === "pending") &&
+      (!o.accountingStatus || o.accountingStatus === "pending" || o.accountingStatus === "verified") &&
       !o.invoicedAt
     ).length;
 

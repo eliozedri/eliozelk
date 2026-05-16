@@ -207,7 +207,7 @@ export function useWorkflowAlerts(): WorkflowAlert[] {
     // ── Accounting: completed but uninvoiced ────────────────────────────
     const uninvoiced = orders.filter(
       o => o.status === "completed" &&
-           (!o.accountingStatus || o.accountingStatus === "pending") &&
+           (!o.accountingStatus || o.accountingStatus === "pending" || o.accountingStatus === "verified") &&
            !o.invoicedAt
     );
     const accCritical = uninvoiced.filter(o => h(o.updatedAt) >= 168);

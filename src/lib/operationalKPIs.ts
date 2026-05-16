@@ -490,7 +490,7 @@ export function computeOperationalKPIs(
   const uninvoicedOrders = orders.filter(o =>
     o.status === "completed" &&
     !o.invoicedAt &&
-    (!o.accountingStatus || o.accountingStatus === "pending")
+    (!o.accountingStatus || o.accountingStatus === "pending" || o.accountingStatus === "verified")
   );
   const uninvoicedEstimatedRevenue = uninvoicedOrders.reduce((sum, o) => {
     const linked = diaryByOrderId.get(o.id) ?? [];

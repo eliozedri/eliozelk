@@ -410,6 +410,7 @@ function ApproveToBillingModal({
   onClose,
   titleText,
   confirmLabel,
+  successNote,
 }: {
   order: WorkOrder;
   blockers: string[];
@@ -417,6 +418,7 @@ function ApproveToBillingModal({
   onClose: () => void;
   titleText?: string;
   confirmLabel?: string;
+  successNote?: string;
 }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -475,7 +477,7 @@ function ApproveToBillingModal({
                 <li>• אין חסמים לחיוב</li>
               </ul>
               <p className="text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 mt-2">
-                לא תונפק חשבונית אוטומטית — האישור מעביר את ההזמנה לתור ״מאושר לחיוב״.
+                {successNote ?? "לא תונפק חשבונית אוטומטית — האישור מעביר את ההזמנה לתור ״מאושר לחיוב״."}
               </p>
             </div>
           )}
@@ -831,13 +833,13 @@ export function AccountingPage() {
   async function handleRestoreOrder(order: WorkOrder) {
     setRestoringOrderId(order.id);
     try {
-      // Restore to ready_installation — re-enters operational workflow for scheduling.
-      // Do not restore to "completed" to avoid billing the order without verification.
-      await updateOrderFields(order.id, { status: "ready_installation" });
+      // Reset accountingStatus to "pending" so the order re-enters the billing
+      // verification flow when it gets completed again.
+      await updateOrderFields(order.id, { status: "ready_installation", accountingStatus: "pending" });
       addOrderActivity(
         order.id,
         "status_changed",
-        `הזמנה שוחזרה מארכיון לשלב "מוכן להתקנה" — נדרש תיאום ביצוע מחדש`,
+        `הזמנה שוחזרה לשלב "מוכן להתקנה" — סטטוס חיוב אופס, נדרש אימות חיוב מחדש`,
         { by: profile?.name ?? undefined }
       );
     } finally {
@@ -1880,6 +1882,7 @@ export function AccountingPage() {
           onClose={() => setVerifyingOrder(null)}
           titleText="בדיקת מוכנות לחיוב"
           confirmLabel="אמת מוכנות לחיוב"
+          successNote="לא תונפק חשבונית אוטומטית — האימות מעביר את ההזמנה לסטטוס ״מאומת ומוכן לחיוב״, לפני אישור הנה״ח."
         />
       )}
 

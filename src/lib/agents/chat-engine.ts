@@ -164,8 +164,8 @@ export async function runChatEngine(
           .limit(15),
         db.from("work_orders")
           .select("id,order_number,customer,accounting_status")
-          .neq("status", "cancelled")
-          .eq("accounting_status", "pending")
+          .eq("status", "completed")
+          .in("accounting_status", ["pending", "verified"])
           .limit(10),
       ]);
       const billingExcs = excRes.data ?? [];
@@ -345,7 +345,7 @@ export async function runChatEngine(
         db.from("agent_tasks").select("id,priority,status").in("status", ["open","in_progress"]),
         db.from("agent_approvals").select("id,risk_level").eq("status", "pending"),
         db.from("work_diaries").select("id,approval_status").not("approval_status", "in", '("approved","rejected")'),
-        db.from("work_orders").select("id,status,accounting_status").neq("status","cancelled").neq("status","completed"),
+        db.from("work_orders").select("id,accounting_status").eq("status","completed").not("accounting_status","in",'("invoiced","paid","disputed")'),
       ]);
 
       const excs     = excRes.data ?? [];
@@ -357,7 +357,7 @@ export async function runChatEngine(
       const critical     = excs.filter(e => e.severity === "critical").length;
       const errors       = excs.filter(e => e.severity === "error").length;
       const highTasks    = tasks.filter(t => ["high","critical"].includes(t.priority as string)).length;
-      const pendingBill  = orders.filter(o => o.accounting_status === "pending").length;
+      const pendingBill  = orders.filter(o => !o.accounting_status || o.accounting_status === "pending" || o.accounting_status === "verified").length;
 
       const lines: string[] = [
         `📊 **סיכום מצב — ${new Date().toLocaleDateString("he-IL")}**\n`,
@@ -370,7 +370,7 @@ export async function runChatEngine(
       lines.push(`⚡ משימות: **${tasks.length} פתוחות** (${highTasks} בעדיפות גבוהה)`);
       lines.push(`📋 אישורים ממתינים: **${approvs.length}**`);
       lines.push(`📝 יומנים ממתינים לאישור: **${diaries.length}**`);
-      lines.push(`💰 הזמנות ממתינות לחיוב: **${pendingBill} מתוך ${orders.length} פעילות**`);
+      lines.push(`💰 הזמנות מושלמות ממתינות לחיוב: **${pendingBill}**`);
 
       if (critical > 0) {
         lines.push(`\n⚠️ **דורש טיפול מיידי:** ${critical} חריגות קריטיות פתוחות. שאל "מה הכי דחוף?" לפרטים.`);
