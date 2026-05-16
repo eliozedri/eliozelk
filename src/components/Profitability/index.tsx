@@ -873,17 +873,20 @@ function CfoTab() {
 
   // ── Derived stats ──
   const activeOrders = contextOrders.filter(o => o.status !== "cancelled");
+  const activeOrderIds = new Set(activeOrders.map(o => o.id));
   const missingRevenue = activeOrders.filter(o => !o.billedAmount).length;
-  const snapsWithMissingData = snapshots.filter(s => s.confidence_level === "missing_data").length;
-  const snapsWithLow = snapshots.filter(s => s.confidence_level === "low").length;
+  // Only count snapshots for active (non-cancelled) orders — cancelled orders may have stale snapshots
+  const activeSnapshots = snapshots.filter(s => activeOrderIds.has(s.order_id));
+  const snapsWithMissingData = activeSnapshots.filter(s => s.confidence_level === "missing_data").length;
+  const snapsWithLow = activeSnapshots.filter(s => s.confidence_level === "low").length;
   const noSnapshotCount = activeOrders.filter(o => !snapshotMap.has(o.id)).length;
 
-  const totalRevenue = snapshots.reduce((s, r) => s + r.revenue, 0);
-  const totalProfit = snapshots.reduce((s, r) => s + r.gross_profit, 0);
-  const avgMargin = snapshots.length > 0
-    ? snapshots.reduce((s, r) => s + r.gross_margin_percent, 0) / snapshots.length
+  const totalRevenue = activeSnapshots.reduce((s, r) => s + r.revenue, 0);
+  const totalProfit = activeSnapshots.reduce((s, r) => s + r.gross_profit, 0);
+  const avgMargin = activeSnapshots.length > 0
+    ? activeSnapshots.reduce((s, r) => s + r.gross_margin_percent, 0) / activeSnapshots.length
     : 0;
-  const losingCount = snapshots.filter(s => s.gross_profit < 0).length;
+  const losingCount = activeSnapshots.filter(s => s.gross_profit < 0).length;
 
   // ── Customer-level aggregation (Phase 4.6) ──
   const customerStats = useMemo<CustomerStat[]>(() => {
@@ -951,12 +954,12 @@ function CfoTab() {
       )}
 
       {/* ── KPI summary (only when snapshots with revenue exist) ── */}
-      {snapshots.some(s => s.revenue > 0) && (
+      {activeSnapshots.some(s => s.revenue > 0) && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <KpiCard label="הכנסה כוללת" value={fmt(totalRevenue)} accent="bg-blue-500" />
           <KpiCard label="רווח ברוטו" value={fmt(totalProfit)} accent={totalProfit >= 0 ? "bg-green-500" : "bg-red-500"} />
           <KpiCard label="מרווח ממוצע" value={pct(avgMargin)} accent={avgMargin >= 20 ? "bg-emerald-400" : avgMargin >= 0 ? "bg-amber-400" : "bg-red-400"} />
-          <KpiCard label="הזמנות מפסידות" value={String(losingCount)} sub={`מתוך ${snapshots.length}`} accent={losingCount > 0 ? "bg-red-500" : "bg-gray-300"} />
+          <KpiCard label="הזמנות מפסידות" value={String(losingCount)} sub={`מתוך ${activeSnapshots.length}`} accent={losingCount > 0 ? "bg-red-500" : "bg-gray-300"} />
         </div>
       )}
 
