@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { useCostRatesContext } from "@/context/CostRatesContext";
@@ -10,11 +10,15 @@ import {
   STATUS_LABELS,
   STATUS_COLORS,
   STATUS_DOT,
+  CONFIDENCE_LABELS,
+  CONFIDENCE_COLORS,
+  MISSING_DATA_LABELS,
 } from "@/lib/profitability";
-import type { ProfitabilityStatus } from "@/lib/profitability";
+import type { ProfitabilityStatus, ConfidenceLevel, MissingDataTag } from "@/lib/profitability";
 import type { CrewMetrics, OrderProfitabilitySummary, WeeklyBucket, CustomerMetrics } from "@/lib/operationalKPIs";
 import type { DiagnosticFinding } from "@/hooks/useOperationalKPIs";
 import { DIARY_STATUS_LABELS } from "@/types/workDiary";
+import { getSupabase } from "@/lib/supabase/client";
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -59,13 +63,14 @@ function StatusBadge({ status }: { status: ProfitabilityStatus }) {
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
-type Tab = "diaries" | "orders" | "crews" | "trends" | "management";
+type Tab = "diaries" | "orders" | "crews" | "trends" | "management" | "cfo";
 const TABS: { id: Tab; label: string }[] = [
   { id: "diaries",    label: "יומנים" },
   { id: "orders",     label: "עבודות" },
   { id: "crews",      label: "צוותים" },
   { id: "trends",     label: "מגמות" },
   { id: "management", label: "ניהול" },
+  { id: "cfo",        label: "CFO ליי" },
 ];
 
 // ── Trend indicator ───────────────────────────────────────────────────────────
@@ -717,6 +722,186 @@ function ManagementTab({ diagnostics, byCustomer, billingLeakage }: {
   );
 }
 
+// ── CFO Lite Tab ──────────────────────────────────────────────────────────────
+
+interface CfoSnapshot {
+  order_id: string;
+  revenue: number;
+  total_cost: number;
+  gross_profit: number;
+  gross_margin_percent: number;
+  confidence_level: ConfidenceLevel;
+  missing_data: MissingDataTag[];
+  updated_at: string;
+}
+
+function CfoTab() {
+  const [snapshots, setSnapshots] = useState<CfoSnapshot[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [orders, setOrders] = useState<{ id: string; order_number: string; customer: string; billed_amount: number | null }[]>([]);
+
+  const fetchSnapshots = useCallback(async () => {
+    const db = getSupabase();
+    if (!db) return;
+    const { data: { session } } = await db.auth.getSession();
+    if (!session?.access_token) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/profitability/snapshots", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json() as { snapshots?: CfoSnapshot[]; error?: string };
+      if (json.error) { setError(json.error); return; }
+      setSnapshots(json.snapshots ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const db = getSupabase();
+    if (!db) return;
+    Promise.all([
+      fetchSnapshots(),
+      db.from("work_orders")
+        .select("id,order_number,customer,billed_amount")
+        .order("created_at", { ascending: false })
+        .limit(100)
+        .then(({ data }) => { if (data) setOrders(data as typeof orders); }),
+    ]);
+  }, [fetchSnapshots]);
+
+  async function generateSnapshot(orderId: string) {
+    const db = getSupabase();
+    if (!db) return;
+    const { data: { session } } = await db.auth.getSession();
+    if (!session?.access_token) return;
+    setGenerating(orderId);
+    setError(null);
+    try {
+      const res = await fetch("/api/profitability/snapshots/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ orderId }),
+      });
+      const json = await res.json() as { error?: string };
+      if (json.error) { setError(json.error); return; }
+      await fetchSnapshots();
+    } finally {
+      setGenerating(null);
+    }
+  }
+
+  const snapshotMap = useMemo(() => new Map(snapshots.map(s => [s.order_id, s])), [snapshots]);
+
+  const totalRevenue = snapshots.reduce((s, r) => s + r.revenue, 0);
+  const totalProfit = snapshots.reduce((s, r) => s + r.gross_profit, 0);
+  const avgMargin = snapshots.length > 0
+    ? snapshots.reduce((s, r) => s + r.gross_margin_percent, 0) / snapshots.length
+    : 0;
+  const losingCount = snapshots.filter(s => s.gross_profit < 0).length;
+
+  return (
+    <div className="space-y-5">
+      {/* KPIs */}
+      {snapshots.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <KpiCard label="הכנסה כוללת" value={fmt(totalRevenue)} accent="bg-blue-500" />
+          <KpiCard label="רווח ברוטו" value={fmt(totalProfit)} accent={totalProfit >= 0 ? "bg-green-500" : "bg-red-500"} />
+          <KpiCard label="מרווח ממוצע" value={pct(avgMargin)} accent={avgMargin >= 20 ? "bg-emerald-400" : avgMargin >= 0 ? "bg-amber-400" : "bg-red-400"} />
+          <KpiCard label="הזמנות מפסידות" value={String(losingCount)} sub={`מתוך ${snapshots.length}`} accent={losingCount > 0 ? "bg-red-500" : "bg-gray-300"} />
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
+      )}
+
+      {/* Orders table */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-800">רווחיות הזמנות</h3>
+          {loading && <span className="text-xs text-gray-400 animate-pulse">טוען…</span>}
+        </div>
+        {orders.length === 0 ? (
+          <div className="px-4 py-8 text-center text-gray-400 text-sm">אין הזמנות</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" dir="rtl">
+              <thead>
+                <tr className="bg-gray-50 text-xs text-gray-500">
+                  <th className="px-4 py-2 text-right">הזמנה</th>
+                  <th className="px-4 py-2 text-right">לקוח</th>
+                  <th className="px-4 py-2 text-right">הכנסה</th>
+                  <th className="px-4 py-2 text-right">עלות</th>
+                  <th className="px-4 py-2 text-right">רווח</th>
+                  <th className="px-4 py-2 text-right">מרווח</th>
+                  <th className="px-4 py-2 text-right">ביטחון</th>
+                  <th className="px-4 py-2 text-right">פעולות</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map(order => {
+                  const snap = snapshotMap.get(order.id);
+                  const isGenerating = generating === order.id;
+                  return (
+                    <tr key={order.id} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs text-gray-600">{order.order_number || order.id.slice(0, 8)}</td>
+                      <td className="px-4 py-3 text-gray-700 max-w-[140px] truncate">{order.customer}</td>
+                      <td className="px-4 py-3 font-medium">{order.billed_amount != null ? fmt(order.billed_amount) : "—"}</td>
+                      {snap ? (
+                        <>
+                          <td className="px-4 py-3 text-gray-600">{fmt(snap.total_cost)}</td>
+                          <td className={`px-4 py-3 font-semibold ${snap.gross_profit >= 0 ? "text-green-700" : "text-red-600"}`}>
+                            {fmt(snap.gross_profit)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`text-xs font-bold ${snap.gross_profit >= 0 ? "text-green-700" : "text-red-600"}`}>
+                              {pct(snap.gross_margin_percent)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full ${CONFIDENCE_COLORS[snap.confidence_level]}`}>
+                              {CONFIDENCE_LABELS[snap.confidence_level]}
+                            </span>
+                            {snap.missing_data.length > 0 && (
+                              <div className="mt-0.5 text-[10px] text-gray-400">
+                                {snap.missing_data.map(tag => MISSING_DATA_LABELS[tag]).join(", ")}
+                              </div>
+                            )}
+                          </td>
+                        </>
+                      ) : (
+                        <td colSpan={4} className="px-4 py-3 text-gray-400 text-xs">לא חושב עדיין</td>
+                      )}
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          disabled={isGenerating}
+                          onClick={() => generateSnapshot(order.id)}
+                          className="px-2 py-1 text-[11px] font-medium rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition-colors"
+                        >
+                          {isGenerating ? "מחשב…" : snap ? "עדכן" : "חשב"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="text-xs text-gray-400 text-center">
+        הנתונים אנליטיים בלבד · אינם משפיעים על חיוב לקוח · עודכן לאחרונה: {snapshots[0] ? new Date(snapshots[0].updated_at).toLocaleDateString("he-IL") : "—"}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ProfitabilityPage() {
@@ -820,6 +1005,7 @@ export function ProfitabilityPage() {
         {activeTab === "management" && (
           <ManagementTab diagnostics={diagnostics} byCustomer={byCustomer} billingLeakage={billingLeakage} />
         )}
+        {activeTab === "cfo" && <CfoTab />}
 
         <div className="text-xs text-gray-400 text-center px-4 py-2">
           הנתונים מבוססים על יומני עבודה שמולאו ·{" "}
