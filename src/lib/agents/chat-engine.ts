@@ -23,17 +23,19 @@ export type ChatIntent =
   | "general";
 
 const INTENT_KEYWORDS: Record<Exclude<ChatIntent, "general">, string[]> = {
-  urgent:     ["דחוף", "קריטי", "חירום", "מיידי", "ביותר"],
-  approvals:  ["אישור", "לאשר", "ממתינ"],
-  billing:    ["חיוב", "חשבונית", "תשלום", "גבייה", "חוב", "billing", "חסום", "חסומות", "חסומים", "חסומ.*מלאי", "מלאי.*חסום", "התאמת.*מלאי.*חיוב", "חיוב.*מלאי"],
-  diaries:    ["יומן", "שטח", "ביצוע", "צוות", "נהג", "diary"],
-  exceptions: ["חריג", "בעיה", "שגיאה", "אזהרה", "exception"],
-  scan:       ["סריקה", "האחרונה", "מצאו", "ממצאים", "פעילות", "scan"],
-  summary:    ["סיכום", "מצב", "יום", "תעדכן", "תסכם", "קורה", "overview"],
-  orders:     ["הזמנה", "פרויקט", "לקוח", "order"],
-  restored:   ["שוחזר", "שחזור", "restore", "ביטול", "ארכיון"],
-  inventory:       ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער", "צריכה", "נצרך", "נצרכו", "התאמה", "יומן", "בוצע", "ניוצל", "consump", "החזר", "החזרה", "הוחזר", "תעודת", "תעודה", "קליטה", "נקלט", "נקלטה", "delivery", "return_from", "ספירה", "המלצ", "לרכוש", "לקנות", "לדרוג", "דחוף.*רכש", "purchase", "recommend"],
-  profitability:   ["רווח", "רווחיות", "הפסד", "שולי", "מרווח", "cfo", "כספי", "כלכלי", "snapshot", "פרופיטביליט", "להשלים", "missing_data", "חסרות הזמנות", "חסרים פריטים", "למה הרווחיות", "מה צריך"],
+  urgent:        ["דחוף", "קריטי", "חירום", "מיידי", "ביותר"],
+  approvals:     ["אישור", "לאשר", "ממתינ"],
+  billing:       ["חיוב", "חשבונית", "תשלום", "גבייה", "חוב", "billing", "חסום", "חסומות", "חסומים", "חסומ.*מלאי", "מלאי.*חסום", "התאמת.*מלאי.*חיוב", "חיוב.*מלאי"],
+  diaries:       ["יומן", "שטח", "ביצוע", "צוות", "נהג", "diary"],
+  exceptions:    ["חריג", "בעיה", "שגיאה", "אזהרה", "exception"],
+  scan:          ["סריקה", "האחרונה", "מצאו", "ממצאים", "פעילות", "scan"],
+  summary:       ["סיכום", "מצב", "יום", "תעדכן", "תסכם", "קורה", "overview"],
+  // profitability before orders: "לקוח" is in orders keywords; profitability-customer
+  // queries must be detected first to reach their sub-routes.
+  profitability: ["רווח", "רווחיות", "הפסד", "שולי", "מרווח", "cfo", "כספי", "כלכלי", "snapshot", "פרופיטביליט", "להשלים", "missing_data", "חסרות הזמנות", "חסרים פריטים", "למה הרווחיות", "מה צריך", "פירוט עבודות", "למה לקוח"],
+  orders:        ["הזמנה", "פרויקט", "לקוח", "order"],
+  restored:      ["שוחזר", "שחזור", "restore", "ביטול", "ארכיון"],
+  inventory:     ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער", "צריכה", "נצרך", "נצרכו", "התאמה", "יומן", "בוצע", "ניוצל", "consump", "החזר", "החזרה", "הוחזר", "תעודת", "תעודה", "קליטה", "נקלט", "נקלטה", "delivery", "return_from", "ספירה", "המלצ", "לרכוש", "לקנות", "לדרוג", "דחוף.*רכש", "purchase", "recommend"],
 };
 
 export function detectIntent(message: string): ChatIntent {
@@ -772,6 +774,7 @@ export async function runChatEngine(
       const wantsCustomerProfit = lower.includes("לפי לקוח") || lower.includes("רווחיות לקוח") || lower.includes("לקוחות רווחי") || lower.includes("הכי רווחי") || lower.includes("לקוח רווח");
       const wantsUnprofitableCustomers = lower.includes("לקוחות פחות רווחי") || lower.includes("לקוחות הפסד") || lower.includes("לקוחות עם הפסד") || (lower.includes("לקוח") && lower.includes("הפסד")) || (lower.includes("לקוח") && lower.includes("הפסדי"));
       const wantsCustomerMissingData = lower.includes("לקוחות חסרים") || (lower.includes("לקוח") && lower.includes("חסר") && lower.includes("נתון"));
+      const wantsCustomerDrilldown = (lower.includes("פירוט") && lower.includes("לקוח")) || (lower.includes("עבודות") && lower.includes("לקוח")) || lower.includes("למה לקוח");
 
       if (wantsRevenue) {
         const { data: orders } = await db
@@ -981,6 +984,85 @@ export async function runChatEngine(
           content: `🎯 **יעדי רווחיות מוגדרים:**\n\n· יעד מרווח: **${target}%** ✅\n· סף אזהרה: **${warning}%** 🟠\n· סף הפסד: **${loss}%** 🔴\n\nלשינוי: עמוד "הגדרות עלות" (/cost-settings).`,
           sourceRefs: [],
         };
+      }
+
+      // ── Customer drill-down (specific customer's orders) ──
+      if (wantsCustomerDrilldown) {
+        const nameMatch = message.match(/(?:של לקוח|ללקוח|לקוח)\s+(.+?)(?:\s*[?!.,]|$)/);
+        const requestedName = nameMatch?.[1]?.trim() || null;
+
+        const { data: allSnaps } = await db
+          .from("profitability_snapshots")
+          .select("order_id,revenue,total_cost,gross_profit,gross_margin_percent,confidence_level,missing_data,work_orders(order_number,customer,status)")
+          .is("work_diary_id", null)
+          .not("order_id", "is", null);
+
+        type DrillRow = { orderNum: string; revenue: number; totalCost: number; grossProfit: number; margin: number; confidence: string; missing: string[] };
+        const custMap = new Map<string, DrillRow[]>();
+        for (const s of (allSnaps ?? [])) {
+          const woArr = s.work_orders as Array<{ order_number: string | null; customer: string | null; status: string | null }> | null;
+          const orderStatus = (Array.isArray(woArr) ? woArr[0]?.status : null);
+          if (orderStatus === "cancelled") continue;
+          const name = (Array.isArray(woArr) ? woArr[0]?.customer : null)?.trim() || "לא ידוע";
+          const orderNum = (Array.isArray(woArr) ? woArr[0]?.order_number : null) || (s.order_id as string).slice(0, 8);
+          if (!custMap.has(name)) custMap.set(name, []);
+          custMap.get(name)!.push({
+            orderNum,
+            revenue: s.revenue as number,
+            totalCost: s.total_cost as number,
+            grossProfit: s.gross_profit as number,
+            margin: s.gross_margin_percent as number,
+            confidence: s.confidence_level as string,
+            missing: (s.missing_data as string[] | null) ?? [],
+          });
+        }
+
+        let matchedName: string | null = null;
+        if (requestedName) {
+          for (const name of custMap.keys()) {
+            if (name.toLowerCase().includes(requestedName.toLowerCase()) || requestedName.toLowerCase().includes(name.toLowerCase())) {
+              matchedName = name;
+              break;
+            }
+          }
+        }
+
+        if (!matchedName) {
+          const allCusts = Array.from(custMap.entries())
+            .map(([name, orders]) => ({ name, count: orders.length, profit: orders.reduce((s, o) => s + o.grossProfit, 0) }))
+            .sort((a, b) => b.profit - a.profit);
+          if (allCusts.length === 0) {
+            return { content: "אין נתוני רווחיות מחושבים עדיין. הרץ חישוב בלשונית CFO ליי.", sourceRefs: [] };
+          }
+          const lines = requestedName
+            ? [`לא נמצא לקוח "${requestedName}". לקוחות עם נתוני רווחיות:\n`]
+            : [`📊 **לקוחות עם פירוט עבודות:**\n`];
+          for (const c of allCusts.slice(0, 10)) {
+            const icon = c.profit >= 0 ? "🟢" : "🔴";
+            lines.push(`${icon} **${c.name}** — ${c.count} עבודות | רווח ₪${Math.round(c.profit).toLocaleString()}`);
+          }
+          lines.push(`\nנסה: "תראה לי פירוט עבודות של לקוח [שם הלקוח]"`);
+          return { content: lines.join("\n"), sourceRefs: [] };
+        }
+
+        const MISSING_HE: Record<string, string> = {
+          no_revenue: "הזן הכנסה", no_linked_diaries: "קשר יומן", no_approved_diary: "אשר יומן",
+          missing_cost_price: "השלם מחיר עלות", no_crew_data: "בדוק צוות",
+          no_material_cost: "עדכן חומרים", no_vehicle_data: "בדוק רכב",
+        };
+        const orders = (custMap.get(matchedName) ?? []).sort((a, b) => a.grossProfit - b.grossProfit);
+        const lines: string[] = [`📋 **פירוט עבודות — ${matchedName}** (${orders.length} עבודות)\n`];
+        for (const o of orders) {
+          const profit = Math.round(o.grossProfit);
+          const icon = o.grossProfit >= 0 ? (o.margin >= 28 ? "🟢" : "🟡") : "🔴";
+          const confBadge = o.confidence !== "high" ? ` | ⚠ ${o.confidence}` : "";
+          const action = o.missing.length > 0 ? ` | → ${MISSING_HE[o.missing[0]] ?? o.missing[0]}` : "";
+          lines.push(`${icon} **${o.orderNum}** — הכנסה ₪${Math.round(o.revenue).toLocaleString()} | רווח ₪${Math.abs(profit).toLocaleString()}${profit < 0 ? " 🔴" : ""} | ${o.margin.toFixed(1)}%${confBadge}${action}`);
+        }
+        const totalP = orders.reduce((s, o) => s + o.grossProfit, 0);
+        const avgM = orders.length > 0 ? orders.reduce((s, o) => s + o.margin, 0) / orders.length : 0;
+        lines.push(`\n**סיכום ${matchedName}:** רווח כולל ₪${Math.round(totalP).toLocaleString()} | מרווח ממוצע ${avgM.toFixed(1)}%`);
+        return { content: lines.join("\n"), sourceRefs: [] };
       }
 
       // ── Customer aggregation helper (used by customer sub-routes) ──

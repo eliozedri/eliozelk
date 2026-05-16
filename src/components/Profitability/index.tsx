@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, Fragment } from "react";
 import Link from "next/link";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { useCostRatesContext } from "@/context/CostRatesContext";
@@ -767,6 +767,9 @@ function CfoTab() {
   const [savingRevenue, setSavingRevenue] = useState<string | null>(null);
   // Missing cost_price count (loaded once)
   const [missingCostPriceCount, setMissingCostPriceCount] = useState<number | null>(null);
+  // Customer drill-down state
+  const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
+  const [drillSortAsc, setDrillSortAsc] = useState(true);
 
   const fetchSnapshots = useCallback(async () => {
     const db = getSupabase();
@@ -1113,12 +1116,12 @@ function CfoTab() {
         )}
       </div>
 
-      {/* ── Customer profitability section (Phase 4.6) ── */}
+      {/* ── Customer profitability section with drill-down (Phase 4.8) ── */}
       {customerStats.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <h3 className="text-sm font-bold text-gray-800">רווחיות לפי לקוח</h3>
-            <span className="text-xs text-gray-400">{customerStats.length} לקוחות עם נתונים</span>
+            <span className="text-xs text-gray-400">{customerStats.length} לקוחות · לחץ לקוח לפירוט עבודות</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs" dir="rtl">
@@ -1135,46 +1138,151 @@ function CfoTab() {
                   </th>
                   <th className="px-3 py-2 text-right font-medium">הפסדיות</th>
                   <th className="px-3 py-2 text-right font-medium">חסרי נתונים</th>
+                  <th className="px-3 py-2 w-6" />
                 </tr>
               </thead>
               <tbody>
                 {customerStats.slice(0, 20).map(c => {
+                  const isExpanded = expandedCustomer === c.customer;
                   const isProfit = c.grossProfit >= 0;
                   let marginColor = "text-green-700";
                   if (c.avgMargin < 0) marginColor = "text-red-600";
                   else if (c.avgMargin < rates.warningMarginPercentage) marginColor = "text-orange-600";
                   else if (c.avgMargin < rates.targetMarginPercentage) marginColor = "text-yellow-600";
+
+                  const drillOrders = isExpanded
+                    ? activeOrders
+                        .filter(o => (o.customer?.trim() || "לא ידוע") === c.customer)
+                        .map(o => ({ order: o, snap: snapshotMap.get(o.id) }))
+                        .sort((a, b) => {
+                          const pa = a.snap?.gross_profit ?? -Infinity;
+                          const pb = b.snap?.gross_profit ?? -Infinity;
+                          return drillSortAsc ? pa - pb : pb - pa;
+                        })
+                    : [];
+
                   return (
-                    <tr key={c.customer} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
-                      <td className="px-3 py-2 font-medium text-gray-800 max-w-[140px] truncate">{c.customer}</td>
-                      <td className="px-3 py-2 text-gray-600 text-center">{c.orderCount}</td>
-                      <td className="px-3 py-2 text-gray-600">{fmt(c.revenue)}</td>
-                      <td className="px-3 py-2 text-gray-600">{fmt(c.totalCost)}</td>
-                      <td className={`px-3 py-2 font-semibold ${isProfit ? "text-green-700" : "text-red-600"}`}>
-                        {fmt(c.grossProfit)}
-                      </td>
-                      <td className={`px-3 py-2 font-bold ${marginColor}`}>
-                        {pct(c.avgMargin)}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {c.negativeCount > 0 ? (
-                          <span className="inline-flex items-center bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                            {c.negativeCount}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {c.lowConfidenceCount > 0 ? (
-                          <span className="inline-flex items-center bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                            {c.lowConfidenceCount}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </td>
-                    </tr>
+                    <Fragment key={c.customer}>
+                      <tr
+                        className="border-t border-gray-50 hover:bg-blue-50/40 cursor-pointer transition-colors select-none"
+                        onClick={() => setExpandedCustomer(isExpanded ? null : c.customer)}
+                      >
+                        <td className="px-3 py-2 font-medium text-gray-800 max-w-[140px] truncate">{c.customer}</td>
+                        <td className="px-3 py-2 text-gray-600 text-center">{c.orderCount}</td>
+                        <td className="px-3 py-2 text-gray-600">{fmt(c.revenue)}</td>
+                        <td className="px-3 py-2 text-gray-600">{fmt(c.totalCost)}</td>
+                        <td className={`px-3 py-2 font-semibold ${isProfit ? "text-green-700" : "text-red-600"}`}>
+                          {fmt(c.grossProfit)}
+                        </td>
+                        <td className={`px-3 py-2 font-bold ${marginColor}`}>
+                          {pct(c.avgMargin)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {c.negativeCount > 0 ? (
+                            <span className="inline-flex items-center bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                              {c.negativeCount}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {c.lowConfidenceCount > 0 ? (
+                            <span className="inline-flex items-center bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                              {c.lowConfidenceCount}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center text-gray-400 text-[11px]">
+                          {isExpanded ? "▾" : "▸"}
+                        </td>
+                      </tr>
+
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={9} className="p-0 bg-slate-50 border-t border-slate-100">
+                            <div className="px-6 py-3">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="text-[11px] font-bold text-slate-600">פירוט עבודות לקוח — {c.customer}</span>
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); setDrillSortAsc(v => !v); }}
+                                  className="text-[10px] text-slate-500 hover:text-slate-700 underline"
+                                >
+                                  {drillSortAsc ? "מיין: גרוע → טוב ▲" : "מיין: טוב → גרוע ▼"}
+                                </button>
+                              </div>
+
+                              {drillOrders.length === 0 ? (
+                                <p className="text-[11px] text-gray-400 italic">
+                                  אין הזמנות ללקוח זה עם חישוב רווחיות. לחץ &quot;חשב מחדש הכל&quot; למעלה.
+                                </p>
+                              ) : (
+                                <table className="w-full text-[11px]" dir="rtl">
+                                  <thead>
+                                    <tr className="text-gray-400 font-medium">
+                                      <th className="pb-1.5 text-right pr-3">הזמנה</th>
+                                      <th className="pb-1.5 text-right">הכנסה</th>
+                                      <th className="pb-1.5 text-right">עלות</th>
+                                      <th className="pb-1.5 text-right">רווח גולמי</th>
+                                      <th className="pb-1.5 text-right">מרווח</th>
+                                      <th className="pb-1.5 text-right">ביטחון</th>
+                                      <th className="pb-1.5 text-right">פעולה נדרשת</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {drillOrders.map(({ order, snap }) => {
+                                      const hasSnap = snap != null;
+                                      const isNeg = hasSnap && snap.gross_profit < 0;
+                                      const isMissing = hasSnap && snap.confidence_level === "missing_data";
+                                      const rowBg = isNeg ? "bg-red-50" : isMissing ? "bg-amber-50/60" : "";
+                                      const ms = hasSnap ? getMarginStatus(snap, rates) : null;
+                                      return (
+                                        <tr key={order.id} className={`border-t border-slate-100 ${rowBg}`}>
+                                          <td className="py-1.5 pr-3 font-mono text-gray-600 whitespace-nowrap">
+                                            {order.orderNumber || order.id.slice(0, 8)}
+                                          </td>
+                                          {hasSnap ? (
+                                            <>
+                                              <td className="py-1.5 text-gray-600 whitespace-nowrap">{fmt(snap.revenue)}</td>
+                                              <td className="py-1.5 text-gray-600 whitespace-nowrap">{fmt(snap.total_cost)}</td>
+                                              <td className={`py-1.5 font-semibold whitespace-nowrap ${isNeg ? "text-red-600" : "text-green-700"}`}>
+                                                {fmt(snap.gross_profit)}
+                                              </td>
+                                              <td className="py-1.5 whitespace-nowrap">
+                                                {ms && (
+                                                  <span className={`inline-flex text-[9px] font-bold px-1 py-0.5 rounded-full ${MARGIN_STATUS_COLORS[ms]}`}>
+                                                    {pct(snap.gross_margin_percent)}
+                                                  </span>
+                                                )}
+                                              </td>
+                                              <td className="py-1.5">
+                                                <span className={`inline-flex text-[9px] font-bold px-1 py-0.5 rounded-full ${CONFIDENCE_COLORS[snap.confidence_level]}`}>
+                                                  {CONFIDENCE_LABELS[snap.confidence_level]}
+                                                </span>
+                                              </td>
+                                              <td className="py-1.5 text-amber-600 text-[10px]">
+                                                {snap.missing_data.length > 0
+                                                  ? (MISSING_DATA_ACTIONS[snap.missing_data[0] as keyof typeof MISSING_DATA_ACTIONS] ?? MISSING_DATA_LABELS[snap.missing_data[0] as keyof typeof MISSING_DATA_LABELS])
+                                                  : <span className="text-green-600 font-bold">✓</span>}
+                                              </td>
+                                            </>
+                                          ) : (
+                                            <td colSpan={6} className="py-1.5 text-gray-400 italic">לא חושב עדיין</td>
+                                          )}
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>
