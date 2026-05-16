@@ -49,6 +49,7 @@ export type TabId =
   | "work-diary"
   | "profitability"
   | "cost-settings"
+  | "agents"
   | "access";
 
 export const ALL_TABS: { id: TabId; label: string; path: string; section: string }[] = [
@@ -67,6 +68,7 @@ export const ALL_TABS: { id: TabId; label: string; path: string; section: string
   { id: "work-diary", label: "יומן עבודה", path: "/work-diary", section: "בקרת שטח" },
   { id: "profitability", label: "דשבורד רווחיות", path: "/profitability", section: "ניתוח" },
   { id: "cost-settings", label: "תעריפי עלות", path: "/cost-settings", section: "ניתוח" },
+  { id: "agents", label: "מרכז פיקוד דיגיטלי", path: "/agents", section: "בינה מלאכותית" },
   { id: "access", label: "הרשאות גישה", path: "/access", section: "מערכת" },
 ];
 
@@ -124,7 +126,7 @@ export const ROLE_DEFAULTS: Record<Role, { tabs: TabId[] | ["*"]; actions: Actio
     actions: ["create_order", "view_accounting"],
   },
   finance_manager: {
-    tabs: ["dashboard", "accounting", "profitability", "cost-settings"],
+    tabs: ["dashboard", "accounting", "profitability", "cost-settings", "agents"],
     actions: ["view_accounting", "export_accounting"],
   },
   fleet_manager: {

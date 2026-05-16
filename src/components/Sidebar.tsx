@@ -57,6 +57,9 @@ function DiaryIcon() {
 function ProfitabilityIcon() {
   return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>;
 }
+function AgentsIcon() {
+  return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/><path d="M2 14h2m16 0h2"/><path d="M4.93 6.93l1.41 1.41M17.66 8.34l1.41-1.41"/></svg>;
+}
 function SettingsIcon() {
   return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" /></svg>;
 }
@@ -139,6 +142,12 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "profitability", href: "/profitability", label: "דשבורד רווחיות", icon: <ProfitabilityIcon />, matchFn: (p) => p.startsWith("/profitability") },
       { tabId: "cost-settings", href: "/cost-settings", label: "תעריפי עלות", icon: <SettingsIcon />, matchFn: (p) => p.startsWith("/cost-settings") },
+    ],
+  },
+  {
+    label: "בינה מלאכותית",
+    items: [
+      { tabId: "agents", href: "/agents", label: "מרכז פיקוד דיגיטלי", icon: <AgentsIcon />, matchFn: (p) => p.startsWith("/agents"), noBadge: true },
     ],
   },
 ];
