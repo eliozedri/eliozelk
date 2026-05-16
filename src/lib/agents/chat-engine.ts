@@ -761,7 +761,7 @@ export async function runChatEngine(
       // ── Sub-query routing ──
       const wantsRevenue = lower.includes("חסר") && (lower.includes("הכנסה") || lower.includes("סכום"));
       const wantsCostPrice = lower.includes("עלות") && (lower.includes("חסר") || lower.includes("פריט"));
-      const wantsMissingData = lower.includes("missing") || (lower.includes("חסר") && lower.includes("נתון")) || lower.includes("להשלים") || lower.includes("מה צריך");
+      const wantsMissingData = !lower.includes("לקוחות") && (lower.includes("missing") || (lower.includes("חסר") && lower.includes("נתון")) || lower.includes("להשלים") || lower.includes("מה צריך"));
       const wantsLowConf = lower.includes("ביטחון נמוך") || lower.includes("ודאות נמוכה") || (lower.includes("ביטחון") && lower.includes("נמוך")) || lower.includes("low confidence") || lower.includes("אמינות");
       const wantsNegative = lower.includes("הפסדיות") || lower.includes("הזמנות מפסידות") || (lower.includes("הפסד") && (lower.includes("איזה") || lower.includes("אילו") || lower.includes("רשימ")));
       const wantsStale = lower.includes("לא עודכנו") || lower.includes("לא עדכניות") || (lower.includes("מתי") && lower.includes("עודכן")) || lower.includes("ישנים");
@@ -987,13 +987,15 @@ export async function runChatEngine(
       async function buildCustomerStats() {
         const { data: snaps } = await db
           .from("profitability_snapshots")
-          .select("order_id,revenue,total_cost,gross_profit,gross_margin_percent,confidence_level,work_orders(customer)")
+          .select("order_id,revenue,total_cost,gross_profit,gross_margin_percent,confidence_level,work_orders(customer,status)")
           .is("work_diary_id", null)
           .not("order_id", "is", null);
         type CAgg = { customer: string; orderCount: number; revenue: number; totalCost: number; grossProfit: number; marginSum: number; negativeCount: number; lowConfCount: number };
         const map = new Map<string, CAgg>();
         for (const s of (snaps ?? [])) {
-          const woArr = s.work_orders as Array<{ customer: string | null }> | null;
+          const woArr = s.work_orders as Array<{ customer: string | null; status: string | null }> | null;
+          const orderStatus = (Array.isArray(woArr) ? woArr[0]?.status : null);
+          if (orderStatus === "cancelled") continue;
           const name = (Array.isArray(woArr) ? woArr[0]?.customer : null)?.trim() || "לא ידוע";
           const ex = map.get(name) ?? { customer: name, orderCount: 0, revenue: 0, totalCost: 0, grossProfit: 0, marginSum: 0, negativeCount: 0, lowConfCount: 0 };
           ex.orderCount++;
