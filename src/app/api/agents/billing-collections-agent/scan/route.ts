@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     const [ordersRes, diariesRes] = await Promise.all([
       db.from("work_orders")
         .select("id,order_number,status,priority,customer,city,order_date,created_at,updated_at,accounting_status,invoiced_at,billed_amount,data")
-        .in("status", ["completed", "ready_installation"]),
+        .eq("status", "completed"),
       db.from("work_diaries")
         .select("id,diary_number,status,customer_name,site_name,execution_date,submitted_at,order_id,approval_status,approved_at,created_at,updated_at,data")
         .in("status", ["submitted"])
@@ -61,17 +61,20 @@ export async function POST(req: NextRequest) {
 
     // ── Scan completed orders ─────────────────────────────────────────────
     for (const order of orders) {
-      if (order.status !== "completed") continue;
-
-      const isPending  = !order.accounting_status || order.accounting_status === "pending";
       const notInvoiced = !order.invoiced_at;
+      const acctStatus  = order.accounting_status ?? "pending";
 
-      if (isPending && notInvoiced) {
-        const hrs = hoursSince(order.updated_at, nowMs);
+      // approved or invoiced/paid — no billing exceptions needed
+      if (!notInvoiced || acctStatus === "approved" || acctStatus === "invoiced" ||
+          acctStatus === "paid" || acctStatus === "partial") continue;
 
+      const hrs = hoursSince(order.updated_at, nowMs);
+
+      if (acctStatus === "pending" || !order.accounting_status) {
+        // Stage 1: needs billing verification (blocker check not yet done)
         if (hrs >= BILLING_WARN_HOURS) {
           const severity = hrs >= BILLING_CRITICAL_HOURS ? "critical" : "warn";
-          const category = hrs >= BILLING_CRITICAL_HOURS ? "order_uninvoiced_critical" : "order_uninvoiced_warning";
+          const category = "order_pending_billing_verification";
           const k = dedupeKey(category, "work_order", order.id);
           activeDedupeKeys.add(k);
 
@@ -80,29 +83,54 @@ export async function POST(req: NextRequest) {
             entityType: "work_order",
             entityId: order.id,
             severity,
-            title: `הזמנה ${order.order_number} לא חויבה — ${Math.round(hrs / 24)} ימים`,
-            description: `לקוח: ${order.customer} | הושלמה לפני ${Math.round(hrs)} שעות`,
+            title: `הזמנה ${order.order_number} ממתינה לאימות מוכנות לחיוב — ${Math.round(hrs / 24)} ימים`,
+            description: `לקוח: ${order.customer} | הושלמה תפעולית לפני ${Math.round(hrs)} שעות. נדרש אימות בהנה״ח.`,
             detectedFromData: {
               orderNumber: order.order_number,
               customer: order.customer,
               completedAt: order.updated_at,
               hoursUnbilled: Math.round(hrs),
-              billedAmount: order.billed_amount,
+              accountingStatus: acctStatus,
             },
-            recommendedResolution: `הכן חשבונית עבור הזמנה ${order.order_number} ללקוח ${order.customer}`,
+            recommendedResolution: `פתח את הזמנה ${order.order_number} בהנהלת חשבונות ← ממתין לחיוב, ולחץ "בדוק מוכנות לחיוב"`,
           }, dedupeMap, result);
 
-          // Also create a task for follow-up
           await upsertTask(db, AGENT_ID, {
             category,
             entityType: "work_order",
             entityId: order.id,
-            title: `הנפק חשבונית — הזמנה ${order.order_number}`,
-            description: `לקוח: ${order.customer} | ${Math.round(hrs / 24)} ימים ללא חיוב`,
+            title: `אמת מוכנות לחיוב — הזמנה ${order.order_number}`,
+            description: `לקוח: ${order.customer} | ${Math.round(hrs / 24)} ימים ממתינה לאימות`,
             priority: severity === "critical" ? "critical" : "high",
-            recommendedAction: "הכן ושלח חשבונית ללקוח לאחר קבלת אישור",
-            requiresApproval: true,
+            recommendedAction: "פתח הנה״ח ← ממתין לחיוב ולחץ 'בדוק מוכנות לחיוב'",
+            requiresApproval: false,
           }, taskDedupeMap, result);
+        }
+      } else if (acctStatus === "verified") {
+        // Stage 2: verified but not yet approved for billing
+        const VERIFIED_WARN_H = 48;
+        const VERIFIED_CRIT_H = 120;
+        if (hrs >= VERIFIED_WARN_H) {
+          const severity = hrs >= VERIFIED_CRIT_H ? "critical" : "warn";
+          const category = "order_awaiting_billing_approval";
+          const k = dedupeKey(category, "work_order", order.id);
+          activeDedupeKeys.add(k);
+
+          await upsertException(db, AGENT_ID, {
+            category,
+            entityType: "work_order",
+            entityId: order.id,
+            severity,
+            title: `הזמנה ${order.order_number} מאומתת — ממתינה לאישור חיוב (${Math.round(hrs / 24)} ימים)`,
+            description: `לקוח: ${order.customer} | עברה אימות אך טרם אושרה לחיוב`,
+            detectedFromData: {
+              orderNumber: order.order_number,
+              customer: order.customer,
+              verifiedAt: order.updated_at,
+              hoursWaiting: Math.round(hrs),
+            },
+            recommendedResolution: `פתח הנה״ח ← ממתין לחיוב, מצא את ההזמנה בטבלה "מאומת ומוכן לחיוב" ולחץ "אשר לחיוב"`,
+          }, dedupeMap, result);
         }
       }
     }

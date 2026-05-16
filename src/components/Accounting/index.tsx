@@ -408,11 +408,15 @@ function ApproveToBillingModal({
   blockers,
   onConfirm,
   onClose,
+  titleText,
+  confirmLabel,
 }: {
   order: WorkOrder;
   blockers: string[];
   onConfirm: () => Promise<void>;
   onClose: () => void;
+  titleText?: string;
+  confirmLabel?: string;
 }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -444,7 +448,7 @@ function ApproveToBillingModal({
               )}
             </div>
             <div>
-              <p className="font-bold text-gray-900">אישור העברה לחיוב</p>
+              <p className="font-bold text-gray-900">{titleText ?? "אישור העברה לחיוב"}</p>
               <p className="text-xs text-gray-500 mt-0.5">{order.orderNumber} · {order.customer}</p>
             </div>
           </div>
@@ -489,7 +493,7 @@ function ApproveToBillingModal({
                 disabled={saving}
                 className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white transition-colors"
               >
-                {saving ? "מאשר..." : "אשר העברה לחיוב"}
+                {saving ? "מאשר..." : (confirmLabel ?? "אשר העברה לחיוב")}
               </button>
             )}
             <button
@@ -534,6 +538,7 @@ export function AccountingPage() {
   const [cancelingDiaryId, setCancelingDiaryId] = useState<string | null>(null);
   const [restoringOrderId, setRestoringOrderId] = useState<string | null>(null);
   const [billingCustomerFilter, setBillingCustomerFilter] = useState("");
+  const [verifyingOrder, setVerifyingOrder] = useState<WorkOrder | null>(null);
   const [approvingOrder, setApprovingOrder] = useState<WorkOrder | null>(null);
 
   // Map orderId → diary revenue for billing queue enrichment
@@ -581,6 +586,17 @@ export function AccountingPage() {
              (!o.accountingStatus || o.accountingStatus === "pending") &&
              !o.invoicedAt
     ),
+    [orders]
+  );
+
+  const verifiedBilling = useMemo(
+    () => orders
+      .filter(
+        (o) => o.status === "completed" &&
+               o.accountingStatus === "verified" &&
+               !o.invoicedAt
+      )
+      .sort((a, b) => new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime()),
     [orders]
   );
 
@@ -772,25 +788,41 @@ export function AccountingPage() {
     try { await exportAccountingExcel(buildReportData()); } finally { setExportingExcel(false); }
   }
 
-  // ── Approve to billing ────────────────────────────────────────────────
+  // ── Billing workflow ───────────────────────────────────────────────────
   function getBillingBlockers(order: WorkOrder): string[] {
     const blockers: string[] = [];
     if (!order.customer?.trim()) blockers.push("שם חברה / לקוח חסר");
     if (!order.jobName?.trim() && !order.location?.trim()) blockers.push("שם עבודה / מיקום חסר");
-    const linkedDiary = diaries.find(d =>
-      d.orderId === order.id && d.status === "submitted"
-    );
-    if (!linkedDiary) blockers.push("אין יומן שטח מוגש המקושר להזמנה");
-    else if (linkedDiary.approvalStatus !== "approved") blockers.push("יומן השטח טרם אושר");
+    // Diary required only for field_work orders that go on-site
+    if (order.orderType === "field_work" || !order.orderType) {
+      const linkedDiary = diaries.find(d =>
+        d.orderId === order.id && d.status === "submitted"
+      );
+      if (!linkedDiary) blockers.push("אין יומן שטח מוגש המקושר להזמנה");
+      else if (linkedDiary.approvalStatus !== "approved") blockers.push("יומן השטח טרם אושר");
+    }
     return blockers;
   }
 
-  async function handleConfirmApproval(order: WorkOrder) {
+  // Stage 1 verify: pending → verified (blocker check)
+  async function handleVerifyForBilling(order: WorkOrder) {
+    await updateOrderFields(order.id, { accountingStatus: "verified" });
+    addOrderActivity(
+      order.id,
+      "billing_verified",
+      "מוכנות לחיוב אומתה — ללא חסמים, ממתינה לאישור חיוב",
+      { by: profile?.name ?? undefined }
+    );
+    setVerifyingOrder(null);
+  }
+
+  // Stage 2 approve: verified → approved (no additional check)
+  async function handleApproveForBilling(order: WorkOrder) {
     await updateOrderFields(order.id, { accountingStatus: "approved" });
     addOrderActivity(
       order.id,
-      "status_changed",
-      "הזמנה אושרה להעברה לחיוב — כמויות אומתו ויומן השטח מאושר",
+      "billing_approved",
+      "הזמנה אושרה לחיוב — הועברה לתור חיוב",
       { by: profile?.name ?? undefined }
     );
     setApprovingOrder(null);
@@ -862,9 +894,9 @@ export function AccountingPage() {
             }`}
           >
             ממתין לחיוב
-            {pendingBilling.length > 0 && (
+            {(pendingBilling.length + verifiedBilling.length) > 0 && (
               <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full text-xs font-bold ${activeTab === "billing" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700"}`}>
-                {pendingBilling.length}
+                {pendingBilling.length + verifiedBilling.length}
               </span>
             )}
           </button>
@@ -975,6 +1007,49 @@ export function AccountingPage() {
                 </div>
               )}
             </div>
+
+            {/* Verified-for-billing section — passed blockers, awaiting approval */}
+            {verifiedBilling.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                  <span className="text-sm font-bold text-blue-700">מאומת ומוכן לחיוב — ממתין לאישור</span>
+                  <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">{verifiedBilling.length}</span>
+                </div>
+                <div className="bg-white rounded-xl border border-blue-200 shadow-sm overflow-hidden">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-blue-50 border-b border-blue-100">
+                        <th className="px-4 py-2 text-xs font-medium text-blue-700 text-right">הזמנה</th>
+                        <th className="px-4 py-2 text-xs font-medium text-blue-700 text-right">לקוח</th>
+                        <th className="px-4 py-2 text-xs font-medium text-blue-700 text-right">שם עבודה</th>
+                        <th className="px-4 py-2 text-xs font-medium text-blue-700 text-right">המתנה</th>
+                        <th className="px-4 py-2 w-28"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {verifiedBilling.map(order => {
+                        const days = agingDays(order.updatedAt);
+                        return (
+                          <tr key={order.id} className="border-b border-blue-50 hover:bg-blue-50/30 transition-colors">
+                            <td className="px-4 py-2.5 font-mono text-xs font-bold text-gray-900">{order.orderNumber}</td>
+                            <td className="px-4 py-2.5 text-sm text-gray-700">{order.customer}</td>
+                            <td className="px-4 py-2.5 text-xs text-gray-500">{(order as { jobName?: string | null }).jobName || order.location || "—"}</td>
+                            <td className="px-4 py-2.5"><AgingBadge days={days} /></td>
+                            <td className="px-4 py-2.5">
+                              <button type="button" onClick={() => setApprovingOrder(order)}
+                                className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-colors whitespace-nowrap">
+                                אשר לחיוב
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Approved-for-billing section */}
             {approvedBilling.length > 0 && (
@@ -1154,9 +1229,9 @@ export function AccountingPage() {
                                     </td>
                                     <td className="px-4 py-2.5">
                                       <div className="flex items-center gap-1.5 flex-wrap">
-                                        <button type="button" onClick={() => setApprovingOrder(order)}
-                                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium transition-colors whitespace-nowrap">
-                                          אשר לחיוב
+                                        <button type="button" onClick={() => setVerifyingOrder(order)}
+                                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors whitespace-nowrap">
+                                          בדוק מוכנות לחיוב
                                         </button>
                                         <button type="button" onClick={() => handleMarkInvoiced(order)} disabled={invoicingId === order.id}
                                           className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium transition-colors disabled:opacity-50 whitespace-nowrap">
@@ -1796,13 +1871,27 @@ export function AccountingPage() {
         />
       )}
 
-      {/* Approve to Billing Modal */}
+      {/* Verify for Billing Modal — pending → verified (checks blockers) */}
+      {verifyingOrder && (
+        <ApproveToBillingModal
+          order={verifyingOrder}
+          blockers={getBillingBlockers(verifyingOrder)}
+          onConfirm={() => handleVerifyForBilling(verifyingOrder)}
+          onClose={() => setVerifyingOrder(null)}
+          titleText="בדיקת מוכנות לחיוב"
+          confirmLabel="אמת מוכנות לחיוב"
+        />
+      )}
+
+      {/* Approve for Billing Modal — verified → approved (no blocker check) */}
       {approvingOrder && (
         <ApproveToBillingModal
           order={approvingOrder}
-          blockers={getBillingBlockers(approvingOrder)}
-          onConfirm={() => handleConfirmApproval(approvingOrder)}
+          blockers={[]}
+          onConfirm={() => handleApproveForBilling(approvingOrder)}
           onClose={() => setApprovingOrder(null)}
+          titleText="אישור לחיוב"
+          confirmLabel="אשר לחיוב"
         />
       )}
 

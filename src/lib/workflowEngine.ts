@@ -13,11 +13,12 @@ export function isSchedulingCandidate(order: WorkOrder): boolean {
 
 // ── Valid status transitions ──────────────────────────────────────────────
 // Finite state machine for the order lifecycle.
-// updateOrderStatus enforces this — no jump can skip a stage.
+// graphics_done → ready_installation is allowed for orders without fabrication
+// (skip the production stage when no manufacturing work is needed).
 export const VALID_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
   graphics_pending:   ["graphics_active", "cancelled"],
   graphics_active:    ["graphics_done",   "cancelled"],
-  graphics_done:      ["production",      "cancelled"],
+  graphics_done:      ["production", "ready_installation", "cancelled"],
   production:         ["ready_installation", "cancelled"],
   ready_installation: ["completed",       "cancelled"],
   completed:          [],
@@ -41,6 +42,30 @@ export function canMarkReadyForInstallation(
     order.fabricationStatus === "acknowledged" ? "אישור קבלה — טרם הושלם" :
                                                  "טרם הושלם";
   return { ok: false, reason: `ייצור מסגרייה: ${label}` };
+}
+
+// Business rule: ready_installation → completed requires all active departments to be done.
+// Checks fabrication (if required) and warehouse (if required).
+// Returns the first blocker found, or {ok:true}.
+export function canMarkOperationallyComplete(
+  order: WorkOrder
+): { ok: boolean; reason?: string } {
+  if (order.fabricationRequired && order.fabricationStatus !== "completed") {
+    const label =
+      order.fabricationStatus === "issue"        ? "בעיה בייצור" :
+      order.fabricationStatus === "in_progress"  ? "בייצור עדיין פעיל" :
+      order.fabricationStatus === "ready"        ? "מוכן — ממתין לסיום רשמי" :
+      order.fabricationStatus === "acknowledged" ? "אישור קבלה — טרם הושלם" :
+                                                   "טרם הושלם";
+    return { ok: false, reason: `מסגרייה: ${label}` };
+  }
+  if (order.warehouseRequired && order.warehouseStatus !== "ready") {
+    const label =
+      order.warehouseStatus === "processing" ? "בהכנה" :
+                                               "טרם מוכן";
+    return { ok: false, reason: `מחסן: ${label}` };
+  }
+  return { ok: true };
 }
 
 // ── Stage entry timestamps ────────────────────────────────────────────────

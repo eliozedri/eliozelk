@@ -16,7 +16,7 @@ import {
   FULFILLMENT_LABELS,
 } from "@/types/workOrder";
 import type { WorkOrder, WorkOrderStatus } from "@/types/workOrder";
-import { getStageSlaColor, hoursInCurrentStage, canMarkReadyForInstallation } from "@/lib/workflowEngine";
+import { getStageSlaColor, hoursInCurrentStage, canMarkReadyForInstallation, canMarkOperationallyComplete } from "@/lib/workflowEngine";
 import { useOrderRiskScores } from "@/hooks/useOrderRiskScores";
 import type { OrderRiskScore } from "@/hooks/useOrderRiskScores";
 import { openWorkOrderPDF, exportWorkOrderCSV } from "@/lib/pdfExport";
@@ -369,8 +369,11 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
   const isTerminal = order.status === "completed" || order.status === "cancelled";
   const slaColor   = !isTerminal ? getStageSlaColor(order) : "gray";
   const stageHours = !isTerminal ? hoursInCurrentStage(order) : 0;
-  const fabCheck   = order.status === "production"
+  const fabCheck      = order.status === "production"
     ? canMarkReadyForInstallation(order)
+    : { ok: true, reason: undefined };
+  const completeCheck = order.status === "ready_installation"
+    ? canMarkOperationallyComplete(order)
     : { ok: true, reason: undefined };
 
   return (
@@ -523,12 +526,20 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
       {/* Actions */}
       <td className="px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-1.5">
-          {order.status === "graphics_done" && (
+          {order.status === "graphics_done" && order.fabricationRequired && (
             <button
               onClick={() => onUpdateStatus(order.id, "production")}
               className="px-2 py-1 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors whitespace-nowrap"
             >
-              העבר לייצור
+              שלח לייצור
+            </button>
+          )}
+          {order.status === "graphics_done" && !order.fabricationRequired && (
+            <button
+              onClick={() => onUpdateStatus(order.id, "ready_installation")}
+              className="px-2 py-1 rounded-lg text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors whitespace-nowrap"
+            >
+              מוכן להתקנה
             </button>
           )}
           {order.status === "production" && (
@@ -555,10 +566,16 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
           )}
           {order.status === "ready_installation" && (
             <button
-              onClick={() => onStartComplete(order)}
-              className="px-2 py-1 rounded-lg text-xs font-semibold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors whitespace-nowrap"
+              onClick={() => { if (completeCheck.ok) onStartComplete(order); }}
+              disabled={!completeCheck.ok}
+              title={!completeCheck.ok ? completeCheck.reason : undefined}
+              className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-colors whitespace-nowrap ${
+                completeCheck.ok
+                  ? "text-green-700 bg-green-50 hover:bg-green-100 border-green-200"
+                  : "text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-60"
+              }`}
             >
-              סמן כהושלם
+              סמן כהושלם תפעולית
             </button>
           )}
           {!isTerminal && (
@@ -613,8 +630,8 @@ function CompleteOrderModal({ order, onConfirm, onCancel }: {
             </svg>
           </div>
           <div>
-            <h2 className="text-base font-bold text-gray-900">אישור סיום הזמנה</h2>
-            <p className="text-xs text-gray-400">פעולה זו אינה הפיכה בקלות</p>
+            <h2 className="text-base font-bold text-gray-900">סיום תפעולי</h2>
+            <p className="text-xs text-gray-400">הושלם תפעולית — יועבר לאימות חיוב</p>
           </div>
         </div>
 
@@ -645,8 +662,8 @@ function CompleteOrderModal({ order, onConfirm, onCancel }: {
         {/* Explanation */}
         <div className="bg-blue-50 rounded-xl px-4 py-3 mb-4">
           <p className="text-xs text-blue-700 leading-relaxed">
-            לאחר האישור, ההזמנה תסומן כ<strong>הושלמה</strong> ותועבר אוטומטית להנהלת חשבונות לטיפול בחיוב.
-            היא לא תמחק מהמערכת.
+            לאחר האישור, ההזמנה תסומן כ<strong>הושלמה תפעולית</strong> ותופיע בהנהלת חשבונות לאימות מוכנות לחיוב.
+            לא תישלח חשבונית אוטומטית.
           </p>
         </div>
 
@@ -659,7 +676,7 @@ function CompleteOrderModal({ order, onConfirm, onCancel }: {
             className="mt-0.5 w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
           />
           <span className="text-sm text-gray-700 leading-snug">
-            אני מאשר/ת שההזמנה הושלמה ומוכנה להעברה לחיוב
+            אני מאשר/ת שהעבודה הושלמה תפעולית — מוכן לאימות חיוב
           </span>
         </label>
 
@@ -686,7 +703,7 @@ function CompleteOrderModal({ order, onConfirm, onCancel }: {
             disabled={!checked || saveState === "saving"}
             className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-colors bg-green-600 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {saveState === "saving" ? "שומר..." : saveState === "error" ? "נסה שוב" : "אשר סיום הזמנה"}
+            {saveState === "saving" ? "שומר..." : saveState === "error" ? "נסה שוב" : "אשר סיום תפעולי"}
           </button>
           <button
             onClick={onCancel}

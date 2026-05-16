@@ -232,24 +232,27 @@ export async function POST(req: NextRequest) {
         }, dedupeMap, result);
       }
 
-      // ── Uninvoiced completed orders > threshold ───────────────────────
+      // ── Operationally complete but not yet entered billing verification ─
+      // The billing-collections-agent owns deeper billing exceptions.
+      // ops-orchestrator gives a short nudge: if an order sits in "pending"
+      // accounting status for more than 24h, flag it so it enters the billing flow.
       if (order.status === "completed" &&
           (!order.accounting_status || order.accounting_status === "pending") &&
           !order.invoiced_at) {
         const hrs = hoursSince(order.updated_at, nowMs);
-        if (hrs >= 72) {
-          const severity = hrs >= 168 ? "critical" : "warn";
-          const k = dedupeKey("uninvoiced_completed", "work_order", order.id);
+        if (hrs >= 24) {
+          const severity = hrs >= 72 ? "critical" : "warn";
+          const k = dedupeKey("not_verified_for_billing", "work_order", order.id);
           activeDedupeKeys.add(k);
           await upsertException(db, AGENT_ID, {
-            category: "uninvoiced_completed",
+            category: "not_verified_for_billing",
             entityType: "work_order",
             entityId: order.id,
             severity,
-            title: `הזמנה ${order.order_number} הושלמה — לא חויבה (${Math.round(hrs / 24)} ימים)`,
-            description: `לקוח: ${order.customer} | הושלמה לפני ${Math.round(hrs)} שעות`,
-            detectedFromData: { orderNumber: order.order_number, hoursCompleted: Math.round(hrs) },
-            recommendedResolution: "הנפק חשבונית עבור ההזמנה שהושלמה",
+            title: `הזמנה ${order.order_number} הושלמה תפעולית — נדרש אימות מוכנות לחיוב (${Math.round(hrs / 24)} ימים)`,
+            description: `לקוח: ${order.customer} | הושלמה לפני ${Math.round(hrs)} שעות ועדיין בסטטוס "ממתין לאימות"`,
+            detectedFromData: { orderNumber: order.order_number, hoursCompleted: Math.round(hrs), accountingStatus: order.accounting_status ?? "pending" },
+            recommendedResolution: "בצע אימות מוכנות לחיוב בהנהלת חשבונות — בדוק חסמים ואשר",
           }, dedupeMap, result);
         }
       }

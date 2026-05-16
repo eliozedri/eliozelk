@@ -140,7 +140,9 @@ export type OrderActivityType =
   | "correction_added"
   | "file_attached"
   | "status_changed"
-  | "note_added";
+  | "note_added"
+  | "billing_verified"
+  | "billing_approved";
 
 export interface OrderActivity {
   id: string;
@@ -169,26 +171,29 @@ export type OrderPriority = "normal" | "urgent";
 // ─── Accounting workflow state ────────────────────────────────────────────────
 
 export type AccountingStatus =
-  | "pending"    // completed, awaiting invoice
+  | "pending"    // operationally complete, not yet verified for billing
+  | "verified"   // billing readiness verified — all blockers cleared, awaiting approval
   | "invoiced"   // invoice issued
   | "partial"    // partially billed (reserved for future split-billing)
-  | "approved"   // finance approved (reserved for future approval workflow)
+  | "approved"   // approved for billing queue — ready for invoice generation
   | "paid"       // payment confirmed (reserved for future payment tracking)
   | "disputed";  // billing dispute in progress
 
 export const ACCOUNTING_STATUS_LABELS: Record<AccountingStatus, string> = {
-  pending:  "ממתין לחיוב",
+  pending:  "ממתין לאימות",
+  verified: "מאומת ומוכן לחיוב",
   invoiced: "חויב",
   partial:  "חויב חלקית",
-  approved: "אושר",
+  approved: "אושר לחיוב",
   paid:     "שולם",
   disputed: "בסכסוך",
 };
 
 export const ACCOUNTING_STATUS_COLORS: Record<AccountingStatus, string> = {
   pending:  "bg-amber-100 text-amber-700",
+  verified: "bg-blue-100 text-blue-700",
   invoiced: "bg-green-100 text-green-700",
-  partial:  "bg-blue-100 text-blue-700",
+  partial:  "bg-indigo-100 text-indigo-700",
   approved: "bg-teal-100 text-teal-700",
   paid:     "bg-gray-100 text-gray-600",
   disputed: "bg-red-100 text-red-700",
