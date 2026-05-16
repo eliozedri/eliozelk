@@ -974,7 +974,7 @@ export async function runChatEngine(
         const warning = typeof ratesData.warningMarginPercentage === "number" ? ratesData.warningMarginPercentage : 12;
         const loss = typeof ratesData.lossThresholdPercentage === "number" ? ratesData.lossThresholdPercentage : 0;
         return {
-          content: `🎯 **יעדי רווחיות מוגדרים:**\n\n· יעד מרווח: **${target}%** ✅\n· סף אזהרה: **${warning}%** 🟠\n· סף הפסד: **${loss}%** 🔴\n\nלשינוי: לשונית "הגדרות עלות" בדף הרווחיות.`,
+          content: `🎯 **יעדי רווחיות מוגדרים:**\n\n· יעד מרווח: **${target}%** ✅\n· סף אזהרה: **${warning}%** 🟠\n· סף הפסד: **${loss}%** 🔴\n\nלשינוי: עמוד "הגדרות עלות" (/cost-settings).`,
           sourceRefs: [],
         };
       }
