@@ -220,21 +220,48 @@ export async function POST(req: NextRequest) {
       .eq("is_active", true)
       .is("cost_price", null);
 
+    // Find which of those items have been actually consumed (affects live profitability)
+    const allMissingIds = (catalogItems ?? []).map(i => i.id as string);
+    let consumedMissingIds = new Set<string>();
+    if (allMissingIds.length > 0) {
+      const { data: consumed } = await db
+        .from("inventory_consumptions")
+        .select("item_id")
+        .in("item_id", allMissingIds);
+      consumedMissingIds = new Set((consumed ?? []).map(c => c.item_id as string));
+    }
+
     let missingCostPriceCount = 0;
     for (const item of (catalogItems ?? [])) {
       missingCostPriceCount++;
-      const k = dedupeKey("missing_cost_price", "catalog_item", item.id as string);
+      const itemId = item.id as string;
+      const k = dedupeKey("missing_cost_price", "catalog_item", itemId);
       activeDedupeKeys.add(k);
       await upsertException(db, AGENT_ID, {
         category: "missing_cost_price",
         entityType: "catalog_item",
-        entityId: item.id as string,
+        entityId: itemId,
         severity: "info",
         title: `מחיר עלות חסר — ${item.name as string}`,
         description: `פריט מסוג ${item.type as string} ללא מחיר עלות — חישוב רווחיות הזמנות יהיה חלקי`,
         detectedFromData: { itemName: item.name, itemType: item.type },
         recommendedResolution: "הזן מחיר עלות בקטלוג כדי לאפשר חישוב מלא של רווחיות הזמנות",
       }, dedupeMap, result);
+
+      // Create a task only for items that have actually been consumed
+      if (consumedMissingIds.has(itemId)) {
+        const tk = dedupeKey("fill_cost_price", "catalog_item", itemId);
+        activeDedupeKeys.add(tk);
+        await upsertTask(db, AGENT_ID, {
+          category: "fill_cost_price",
+          entityType: "catalog_item",
+          entityId: itemId,
+          title: `הזן מחיר עלות — ${item.name as string}`,
+          description: `פריט זה נוצל בהזמנות ולא ניתן לחשב רווחיות מלאה ללא מחיר עלות`,
+          priority: "normal",
+          recommendedAction: "פתח קטלוג → סנן חסרי מחיר עלות → הזן עלות רכישה",
+        }, taskDedupeMap, result);
+      }
     }
 
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);

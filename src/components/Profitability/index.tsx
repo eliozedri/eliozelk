@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { useCostRatesContext } from "@/context/CostRatesContext";
 import { useOperationalKPIs } from "@/hooks/useOperationalKPIs";
+import { useOrdersContext } from "@/context/OrdersContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   calculateProfitability,
   STATUS_LABELS,
@@ -736,11 +738,19 @@ interface CfoSnapshot {
 }
 
 function CfoTab() {
+  const { orders: contextOrders, updateOrderFields, addOrderActivity } = useOrdersContext();
+  const { profile } = useAuth();
+
   const [snapshots, setSnapshots] = useState<CfoSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [generatingAll, setGeneratingAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [orders, setOrders] = useState<{ id: string; order_number: string; customer: string; billed_amount: number | null }[]>([]);
+  // Per-order revenue input state
+  const [revenueInputs, setRevenueInputs] = useState<Record<string, string>>({});
+  const [savingRevenue, setSavingRevenue] = useState<string | null>(null);
+  // Missing cost_price count (loaded once)
+  const [missingCostPriceCount, setMissingCostPriceCount] = useState<number | null>(null);
 
   const fetchSnapshots = useCallback(async () => {
     const db = getSupabase();
@@ -761,16 +771,16 @@ function CfoTab() {
   }, []);
 
   useEffect(() => {
+    fetchSnapshots();
     const db = getSupabase();
-    if (!db) return;
-    Promise.all([
-      fetchSnapshots(),
-      db.from("work_orders")
-        .select("id,order_number,customer,billed_amount")
-        .order("created_at", { ascending: false })
-        .limit(100)
-        .then(({ data }) => { if (data) setOrders(data as typeof orders); }),
-    ]);
+    if (db) {
+      db.from("catalog_items")
+        .select("id", { count: "exact", head: true })
+        .in("type", ["material", "product"])
+        .eq("is_active", true)
+        .is("cost_price", null)
+        .then(({ count }) => setMissingCostPriceCount(count ?? 0));
+    }
   }, [fetchSnapshots]);
 
   async function generateSnapshot(orderId: string) {
@@ -794,7 +804,57 @@ function CfoTab() {
     }
   }
 
+  async function handleSaveRevenue(orderId: string) {
+    const raw = (revenueInputs[orderId] ?? "").trim();
+    const value = raw === "" ? null : parseFloat(raw);
+    if (value !== null && isNaN(value)) return;
+    setSavingRevenue(orderId);
+    try {
+      await updateOrderFields(orderId, { billedAmount: value });
+      addOrderActivity(
+        orderId,
+        "revenue_set",
+        value !== null
+          ? `סכום לחישוב רווחיות הוזן: ₪${Math.round(value).toLocaleString("he-IL")}`
+          : "סכום לחישוב רווחיות נמחק",
+        { by: profile?.name ?? "משתמש" },
+      );
+      setRevenueInputs(prev => { const n = { ...prev }; delete n[orderId]; return n; });
+      await generateSnapshot(orderId);
+    } finally {
+      setSavingRevenue(null);
+    }
+  }
+
+  async function handleGenerateAll() {
+    setGeneratingAll(true);
+    setError(null);
+    const db = getSupabase();
+    if (!db) { setGeneratingAll(false); return; }
+    const { data: { session } } = await db.auth.getSession();
+    if (!session?.access_token) { setGeneratingAll(false); return; }
+    const idsToGenerate = contextOrders
+      .filter(o => o.status !== "cancelled")
+      .map(o => o.id);
+    for (const id of idsToGenerate) {
+      await fetch("/api/profitability/snapshots/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ orderId: id }),
+      });
+    }
+    await fetchSnapshots();
+    setGeneratingAll(false);
+  }
+
   const snapshotMap = useMemo(() => new Map(snapshots.map(s => [s.order_id, s])), [snapshots]);
+
+  // ── Derived stats ──
+  const activeOrders = contextOrders.filter(o => o.status !== "cancelled");
+  const missingRevenue = activeOrders.filter(o => !o.billedAmount).length;
+  const snapsWithMissingData = snapshots.filter(s => s.confidence_level === "missing_data").length;
+  const snapsWithLow = snapshots.filter(s => s.confidence_level === "low").length;
+  const noSnapshotCount = activeOrders.filter(o => !snapshotMap.has(o.id)).length;
 
   const totalRevenue = snapshots.reduce((s, r) => s + r.revenue, 0);
   const totalProfit = snapshots.reduce((s, r) => s + r.gross_profit, 0);
@@ -804,9 +864,47 @@ function CfoTab() {
   const losingCount = snapshots.filter(s => s.gross_profit < 0).length;
 
   return (
-    <div className="space-y-5">
-      {/* KPIs */}
-      {snapshots.length > 0 && (
+    <div className="space-y-5" dir="rtl">
+
+      {/* ── Missing data dashboard ── */}
+      {(missingRevenue > 0 || (missingCostPriceCount ?? 0) > 0 || snapsWithMissingData > 0 || noSnapshotCount > 0) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <p className="text-xs font-bold text-amber-800 mb-2">⚠ חסרי נתונים — יש להשלים לקבלת רווחיות מהימנה</p>
+          <div className="flex flex-wrap gap-2">
+            {missingRevenue > 0 && (
+              <span className="text-xs bg-red-100 text-red-700 border border-red-200 rounded-full px-2.5 py-1 font-medium">
+                {missingRevenue} הזמנות ללא סכום הכנסה
+              </span>
+            )}
+            {(missingCostPriceCount ?? 0) > 0 && (
+              <span className="text-xs bg-orange-100 text-orange-700 border border-orange-200 rounded-full px-2.5 py-1 font-medium">
+                {missingCostPriceCount} פריטי קטלוג ללא מחיר עלות
+              </span>
+            )}
+            {snapsWithMissingData > 0 && (
+              <span className="text-xs bg-gray-100 text-gray-600 border border-gray-200 rounded-full px-2.5 py-1 font-medium">
+                {snapsWithMissingData} סנאפשוטים — נתונים חסרים
+              </span>
+            )}
+            {snapsWithLow > 0 && (
+              <span className="text-xs bg-orange-100 text-orange-700 border border-orange-200 rounded-full px-2.5 py-1 font-medium">
+                {snapsWithLow} סנאפשוטים — ביטחון נמוך
+              </span>
+            )}
+            {noSnapshotCount > 0 && (
+              <span className="text-xs bg-blue-100 text-blue-700 border border-blue-200 rounded-full px-2.5 py-1 font-medium">
+                {noSnapshotCount} הזמנות ללא חישוב
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] text-amber-600 mt-2">
+            הזן סכום הכנסה לכל הזמנה ← מחיר עלות בקטלוג ← לחץ &quot;חשב&quot; לחישוב רווחיות
+          </p>
+        </div>
+      )}
+
+      {/* ── KPI summary (only when snapshots with revenue exist) ── */}
+      {snapshots.some(s => s.revenue > 0) && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <KpiCard label="הכנסה כוללת" value={fmt(totalRevenue)} accent="bg-blue-500" />
           <KpiCard label="רווח ברוטו" value={fmt(totalProfit)} accent={totalProfit >= 0 ? "bg-green-500" : "bg-red-500"} />
@@ -819,71 +917,121 @@ function CfoTab() {
         <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
       )}
 
-      {/* Orders table */}
+      {/* ── Orders table ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
           <h3 className="text-sm font-semibold text-gray-800">רווחיות הזמנות</h3>
-          {loading && <span className="text-xs text-gray-400 animate-pulse">טוען…</span>}
+          <div className="flex items-center gap-2">
+            {loading && <span className="text-xs text-gray-400 animate-pulse">טוען…</span>}
+            <button
+              type="button"
+              disabled={generatingAll || activeOrders.length === 0}
+              onClick={handleGenerateAll}
+              className="px-3 py-1.5 text-[11px] font-medium rounded-lg border border-teal-400 text-teal-700 hover:bg-teal-50 disabled:opacity-50 transition-colors"
+            >
+              {generatingAll ? "מחשב הכל…" : "חשב מחדש הכל"}
+            </button>
+          </div>
         </div>
-        {orders.length === 0 ? (
+        {activeOrders.length === 0 ? (
           <div className="px-4 py-8 text-center text-gray-400 text-sm">אין הזמנות</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm" dir="rtl">
               <thead>
                 <tr className="bg-gray-50 text-xs text-gray-500">
-                  <th className="px-4 py-2 text-right">הזמנה</th>
-                  <th className="px-4 py-2 text-right">לקוח</th>
-                  <th className="px-4 py-2 text-right">הכנסה</th>
-                  <th className="px-4 py-2 text-right">עלות</th>
-                  <th className="px-4 py-2 text-right">רווח</th>
-                  <th className="px-4 py-2 text-right">מרווח</th>
-                  <th className="px-4 py-2 text-right">ביטחון</th>
-                  <th className="px-4 py-2 text-right">פעולות</th>
+                  <th className="px-3 py-2 text-right">הזמנה</th>
+                  <th className="px-3 py-2 text-right">לקוח</th>
+                  <th className="px-3 py-2 text-right w-40">סכום לחישוב רווחיות</th>
+                  <th className="px-3 py-2 text-right">עלות</th>
+                  <th className="px-3 py-2 text-right">רווח</th>
+                  <th className="px-3 py-2 text-right">מרווח</th>
+                  <th className="px-3 py-2 text-right">ביטחון</th>
+                  <th className="px-3 py-2 text-right">חשב</th>
                 </tr>
               </thead>
               <tbody>
-                {orders.map(order => {
+                {activeOrders.map(order => {
                   const snap = snapshotMap.get(order.id);
                   const isGenerating = generating === order.id;
+                  const isSaving = savingRevenue === order.id;
+                  const inputVal = revenueInputs[order.id] ?? "";
+                  const hasInput = inputVal !== "";
+                  const currentRevenue = order.billedAmount;
+
                   return (
                     <tr key={order.id} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs text-gray-600">{order.order_number || order.id.slice(0, 8)}</td>
-                      <td className="px-4 py-3 text-gray-700 max-w-[140px] truncate">{order.customer}</td>
-                      <td className="px-4 py-3 font-medium">{order.billed_amount != null ? fmt(order.billed_amount) : "—"}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-gray-500">{order.orderNumber || order.id.slice(0, 8)}</td>
+                      <td className="px-3 py-2 text-gray-700 text-xs max-w-[120px] truncate">{order.customer}</td>
+
+                      {/* Revenue input cell */}
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            placeholder={currentRevenue != null ? String(Math.round(currentRevenue)) : "0"}
+                            value={inputVal}
+                            onChange={e => setRevenueInputs(prev => ({ ...prev, [order.id]: e.target.value }))}
+                            onKeyDown={e => { if (e.key === "Enter") handleSaveRevenue(order.id); }}
+                            className={`w-24 px-2 py-1 text-xs rounded-lg border focus:outline-none focus:ring-1 focus:ring-blue-400 dir-ltr ${
+                              currentRevenue == null && !hasInput
+                                ? "border-amber-300 bg-amber-50"
+                                : "border-gray-300 bg-white"
+                            }`}
+                            dir="ltr"
+                          />
+                          {currentRevenue != null && !hasInput && (
+                            <span className="text-xs text-green-700 font-medium whitespace-nowrap">₪{Math.round(currentRevenue).toLocaleString()}</span>
+                          )}
+                          {hasInput && (
+                            <button
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => handleSaveRevenue(order.id)}
+                              className="px-1.5 py-0.5 text-[10px] rounded bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {isSaving ? "…" : "שמור"}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+
                       {snap ? (
                         <>
-                          <td className="px-4 py-3 text-gray-600">{fmt(snap.total_cost)}</td>
-                          <td className={`px-4 py-3 font-semibold ${snap.gross_profit >= 0 ? "text-green-700" : "text-red-600"}`}>
+                          <td className="px-3 py-2 text-gray-600 text-xs">{fmt(snap.total_cost)}</td>
+                          <td className={`px-3 py-2 text-xs font-semibold ${snap.gross_profit >= 0 ? "text-green-700" : "text-red-600"}`}>
                             {fmt(snap.gross_profit)}
                           </td>
-                          <td className="px-4 py-3">
-                            <span className={`text-xs font-bold ${snap.gross_profit >= 0 ? "text-green-700" : "text-red-600"}`}>
+                          <td className="px-3 py-2 text-xs">
+                            <span className={`font-bold ${snap.gross_profit >= 0 ? "text-green-700" : "text-red-600"}`}>
                               {pct(snap.gross_margin_percent)}
                             </span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-3 py-2">
                             <span className={`inline-flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded-full ${CONFIDENCE_COLORS[snap.confidence_level]}`}>
                               {CONFIDENCE_LABELS[snap.confidence_level]}
                             </span>
                             {snap.missing_data.length > 0 && (
-                              <div className="mt-0.5 text-[10px] text-gray-400">
-                                {snap.missing_data.map(tag => MISSING_DATA_LABELS[tag]).join(", ")}
+                              <div className="mt-0.5 text-[10px] text-gray-400 leading-tight">
+                                {snap.missing_data.slice(0, 2).map(tag => MISSING_DATA_LABELS[tag]).join(" · ")}
                               </div>
                             )}
                           </td>
                         </>
                       ) : (
-                        <td colSpan={4} className="px-4 py-3 text-gray-400 text-xs">לא חושב עדיין</td>
+                        <td colSpan={4} className="px-3 py-2 text-gray-400 text-xs italic">לא חושב עדיין</td>
                       )}
-                      <td className="px-4 py-3">
+
+                      <td className="px-3 py-2">
                         <button
                           type="button"
-                          disabled={isGenerating}
+                          disabled={isGenerating || generatingAll}
                           onClick={() => generateSnapshot(order.id)}
-                          className="px-2 py-1 text-[11px] font-medium rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition-colors"
+                          className="px-2 py-1 text-[10px] font-medium rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-50 transition-colors"
                         >
-                          {isGenerating ? "מחשב…" : snap ? "עדכן" : "חשב"}
+                          {isGenerating ? "…" : snap ? "עדכן" : "חשב"}
                         </button>
                       </td>
                     </tr>
@@ -896,7 +1044,8 @@ function CfoTab() {
       </div>
 
       <div className="text-xs text-gray-400 text-center">
-        הנתונים אנליטיים בלבד · אינם משפיעים על חיוב לקוח · עודכן לאחרונה: {snapshots[0] ? new Date(snapshots[0].updated_at).toLocaleDateString("he-IL") : "—"}
+        נתונים אנליטיים בלבד · אינם משפיעים על חיוב לקוח או מצב חשבונאי ·{" "}
+        <Link href="/catalog" className="text-blue-400 hover:underline">עדכן מחירי עלות בקטלוג</Link>
       </div>
     </div>
   );

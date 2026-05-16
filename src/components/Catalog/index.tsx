@@ -495,6 +495,7 @@ export function CatalogPage() {
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<CatalogItemType | "all">("all");
   const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
+  const [filterMissingCost, setFilterMissingCost] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CatalogFormState>(emptyForm);
   const [editLinked, setEditLinked] = useState<LinkedProductEntry[]>([]);
@@ -526,6 +527,11 @@ export function CatalogPage() {
     return { id: item.id, name: item.name };
   }
 
+  const missingCostCount = useMemo(
+    () => items.filter(i => i.isActive && ["material", "product"].includes(i.type) && i.costPrice == null).length,
+    [items]
+  );
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return items.filter((item) => {
@@ -533,9 +539,10 @@ export function CatalogPage() {
       if (filterType !== "all" && item.type !== filterType) return false;
       if (filterActive === "active" && !item.isActive) return false;
       if (filterActive === "inactive" && item.isActive) return false;
+      if (filterMissingCost && !(["material", "product"].includes(item.type) && item.costPrice == null)) return false;
       return true;
     });
-  }, [items, search, filterType, filterActive]);
+  }, [items, search, filterType, filterActive, filterMissingCost]);
 
   const stats = useMemo(() => {
     const activeCount = items.filter((i) => i.isActive).length;
@@ -632,6 +639,17 @@ export function CatalogPage() {
               <option value="active">פעילים בלבד</option>
               <option value="inactive">לא פעילים</option>
             </select>
+            <button
+              type="button"
+              onClick={() => setFilterMissingCost(v => !v)}
+              className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors whitespace-nowrap ${
+                filterMissingCost
+                  ? "border-orange-400 bg-orange-50 text-orange-700"
+                  : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {filterMissingCost ? `✕ חסרי עלות (${filtered.length})` : `חסרי מחיר עלות${missingCostCount > 0 ? ` (${missingCostCount})` : ""}`}
+            </button>
           </div>
 
           {filtered.length === 0 ? (

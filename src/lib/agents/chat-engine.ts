@@ -33,7 +33,7 @@ const INTENT_KEYWORDS: Record<Exclude<ChatIntent, "general">, string[]> = {
   orders:     ["הזמנה", "פרויקט", "לקוח", "order"],
   restored:   ["שוחזר", "שחזור", "restore", "ביטול", "ארכיון"],
   inventory:       ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער", "צריכה", "נצרך", "נצרכו", "התאמה", "יומן", "בוצע", "ניוצל", "consump", "החזר", "החזרה", "הוחזר", "תעודת", "תעודה", "קליטה", "נקלט", "נקלטה", "delivery", "return_from", "ספירה", "המלצ", "לרכוש", "לקנות", "לדרוג", "דחוף.*רכש", "purchase", "recommend"],
-  profitability:   ["רווח", "רווחיות", "הפסד", "שולי", "עלות", "מרווח", "cfo", "כספי", "כלכלי", "snapshot", "פרופיטביליט", "בוצע.*רווח", "רווח.*הזמנה"],
+  profitability:   ["רווח", "רווחיות", "הפסד", "שולי", "מרווח", "cfo", "כספי", "כלכלי", "snapshot", "פרופיטביליט", "להשלים", "missing_data", "חסרות הזמנות", "חסרים פריטים", "למה הרווחיות", "מה צריך"],
 };
 
 export function detectIntent(message: string): ChatIntent {
@@ -756,6 +756,74 @@ export async function runChatEngine(
     }
 
     case "profitability": {
+      const lower = message.toLowerCase();
+
+      // ── Missing revenue sub-query ──
+      const wantsRevenue = lower.includes("חסר") && (lower.includes("הכנסה") || lower.includes("חיוב") || lower.includes("סכום"));
+      const wantsCostPrice = lower.includes("עלות") && (lower.includes("חסר") || lower.includes("פריט"));
+      const wantsMissingData = lower.includes("missing") || (lower.includes("חסר") && lower.includes("נתון")) || lower.includes("להשלים") || lower.includes("מה צריך");
+
+      if (wantsRevenue) {
+        const { data: orders } = await db
+          .from("work_orders")
+          .select("id,order_number,customer,status,billed_amount")
+          .is("billed_amount", null)
+          .not("status", "in", '("cancelled")')
+          .order("created_at", { ascending: false })
+          .limit(15);
+        const list = orders ?? [];
+        if (list.length === 0) {
+          return { content: "✅ כל ההזמנות הפעילות כבר מכילות סכום הכנסה.", sourceRefs: [] };
+        }
+        const lines: string[] = [`💰 **${list.length} הזמנות ללא סכום לחישוב רווחיות:**\n`];
+        for (const o of list.slice(0, 10)) {
+          lines.push(`· ${o.order_number as string} — ${o.customer as string} (${o.status as string})`);
+        }
+        lines.push(`\nכדי להזין סכום: /profitability ← לשונית CFO ליי ← שדה "סכום לחישוב רווחיות"`);
+        return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      if (wantsCostPrice) {
+        const { data: items } = await db
+          .from("catalog_items")
+          .select("id,name,type")
+          .in("type", ["material", "product"])
+          .eq("is_active", true)
+          .is("cost_price", null)
+          .limit(15);
+        const list = items ?? [];
+        if (list.length === 0) {
+          return { content: "✅ כל פריטי החומרים והמוצרים הפעילים מכילים מחיר עלות.", sourceRefs: [] };
+        }
+        const lines: string[] = [`🏷 **${list.length} פריטי קטלוג ללא מחיר עלות:**\n`];
+        for (const i of list.slice(0, 10)) {
+          lines.push(`· ${i.name as string} (${i.type as string})`);
+        }
+        lines.push(`\nכדי לעדכן: /catalog ← לחץ על הפריט ← "מחיר עלות (₪)"`);
+        return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      if (wantsMissingData) {
+        const [ordersRes, snapsRes, itemsRes] = await Promise.all([
+          db.from("work_orders").select("id", { count: "exact", head: true }).is("billed_amount", null).not("status", "in", '("cancelled")'),
+          db.from("profitability_snapshots").select("order_id,confidence_level,missing_data").is("work_diary_id", null),
+          db.from("catalog_items").select("id", { count: "exact", head: true }).in("type", ["material","product"]).eq("is_active", true).is("cost_price", null),
+        ]);
+        const missingRev = ordersRes.count ?? 0;
+        const missingCp = itemsRes.count ?? 0;
+        const snaps = snapsRes.data ?? [];
+        const missingDataSnaps = snaps.filter(s => s.confidence_level === "missing_data").length;
+        const lowSnaps = snaps.filter(s => s.confidence_level === "low").length;
+        const lines: string[] = [`📋 **מה צריך להשלים לחישוב רווחיות:**\n`];
+        if (missingRev > 0) lines.push(`🔴 ${missingRev} הזמנות ללא סכום הכנסה — הזן בלשונית CFO ליי`);
+        if (missingCp > 0) lines.push(`🟠 ${missingCp} פריטי קטלוג ללא מחיר עלות — עדכן בקטלוג`);
+        if (missingDataSnaps > 0) lines.push(`⚪ ${missingDataSnaps} חישובים במצב "נתונים חסרים"`);
+        if (lowSnaps > 0) lines.push(`🟡 ${lowSnaps} חישובים עם ביטחון נמוך`);
+        if (missingRev === 0 && missingCp === 0) lines.push(`✅ הנתונים הבסיסיים מלאים — לחץ "חשב מחדש הכל" בלשונית CFO ליי לעדכון`);
+        return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      // ── Default: summary of snapshots ──
       const { data: snapshots } = await db
         .from("profitability_snapshots")
         .select("order_id,revenue,total_cost,gross_profit,gross_margin_percent,confidence_level,missing_data,updated_at")
@@ -765,7 +833,7 @@ export async function runChatEngine(
 
       if (!snapshots || snapshots.length === 0) {
         return {
-          content: "📊 **רווחיות הזמנות**\n\nאין תמונות מצב של רווחיות שנוצרו עדיין.\n\nכדי לחשב רווחיות, לחץ \"חשב רווחיות\" ליד הזמנה בדף הרווחיות.",
+          content: "📊 **רווחיות הזמנות**\n\nאין תמונות מצב של רווחיות שנוצרו עדיין.\n\nכדי לחשב רווחיות: לשונית CFO ליי בדף הרווחיות → \"חשב\" ליד הזמנה.",
           sourceRefs: [],
         };
       }
@@ -781,7 +849,7 @@ export async function runChatEngine(
 
       for (const s of snapshots.slice(0, 8)) {
         const icon = (s.gross_profit as number) >= 0 ? "🟢" : "🔴";
-        const conf = s.confidence_level === "high" ? "" : ` (ביטחון: ${s.confidence_level})`;
+        const conf = s.confidence_level === "high" ? "" : ` (ביטחון: ${s.confidence_level as string})`;
         lines.push(`${icon} הזמנה ${(s.order_id as string).slice(0, 8)} — הכנסה ₪${Math.round(s.revenue as number).toLocaleString()} | רווח ₪${Math.round(s.gross_profit as number).toLocaleString()} | ${(s.gross_margin_percent as number).toFixed(1)}%${conf}`);
       }
 

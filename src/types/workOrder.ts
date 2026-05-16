@@ -142,7 +142,8 @@ export type OrderActivityType =
   | "status_changed"
   | "note_added"
   | "billing_verified"
-  | "billing_approved";
+  | "billing_approved"
+  | "revenue_set";
 
 export interface OrderActivity {
   id: string;
