@@ -125,6 +125,7 @@ async function syncOrderReservations(
   desired: Map<string, DesiredReservation>,
   activeOrderIds: Set<string>,
   cancelledOrderIds: Set<string>,
+  completedOrderIds: Set<string>,
   result: SyncResult,
 ): Promise<void> {
   // Load only active reservations — released rows remain as immutable history
@@ -197,8 +198,11 @@ async function syncOrderReservations(
     if (desired.has(key)) continue;
 
     const isCancelled = cancelledOrderIds.has(ex.order_id);
+    const isCompleted = completedOrderIds.has(ex.order_id);
     const newStatus    = isCancelled ? "cancelled" : "released";
-    const releaseReason = isCancelled ? "order_cancelled" : "order_item_removed";
+    const releaseReason = isCancelled ? "order_cancelled"
+      : isCompleted     ? "order_completed"
+      : "order_item_removed";
 
     const { error: releaseErr } = await db.from("inventory_reservations")
       .update({ status: newStatus, released_at: now, release_reason: releaseReason, updated_at: now })
@@ -272,9 +276,10 @@ export async function syncAllReservations(db: SupabaseClient): Promise<SyncResul
     durationMs: 0,
   };
 
-  const [computedResult, cancelledRes] = await Promise.all([
+  const [computedResult, cancelledRes, completedRes] = await Promise.all([
     computeDesiredReservations(db),
     db.from("work_orders").select("id").eq("status", "cancelled"),
+    db.from("work_orders").select("id").eq("status", "completed"),
   ]);
 
   const { desired, activeOrderIds, error: computeErr } = computedResult;
@@ -286,13 +291,19 @@ export async function syncAllReservations(db: SupabaseClient): Promise<SyncResul
   if (cancelledRes.error) {
     result.warnings.push(`load cancelled orders: ${cancelledRes.error.message}`);
   }
+  if (completedRes.error) {
+    result.warnings.push(`load completed orders: ${completedRes.error.message}`);
+  }
 
   const cancelledOrderIds = new Set<string>(
     ((cancelledRes.data ?? []) as Array<{ id: string }>).map(o => o.id),
   );
+  const completedOrderIds = new Set<string>(
+    ((completedRes.data ?? []) as Array<{ id: string }>).map(o => o.id),
+  );
 
   result.desiredCount = desired.size;
-  await syncOrderReservations(db, desired, activeOrderIds, cancelledOrderIds, result);
+  await syncOrderReservations(db, desired, activeOrderIds, cancelledOrderIds, completedOrderIds, result);
   await recalculateReservedQuantityCache(db, result);
 
   result.durationMs = Date.now() - start;

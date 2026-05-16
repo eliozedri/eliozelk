@@ -31,7 +31,7 @@ const INTENT_KEYWORDS: Record<Exclude<ChatIntent, "general">, string[]> = {
   summary:    ["סיכום", "מצב", "יום", "תעדכן", "תסכם", "קורה", "overview"],
   orders:     ["הזמנה", "פרויקט", "לקוח", "order"],
   restored:   ["שוחזר", "שחזור", "restore", "ביטול", "ארכיון"],
-  inventory:  ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער"],
+  inventory:  ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער", "צריכה", "נצרך", "נצרכו", "התאמה", "יומן", "בוצע", "ניוצל", "consump"],
 };
 
 export function detectIntent(message: string): ChatIntent {
@@ -342,8 +342,9 @@ export async function runChatEngine(
 
     case "inventory": {
       const isReservationQuery = /שריון|שמור|שמורים|reserv|שוחרר|פער/.test(message);
+      const isConsumptionQuery = /צריכה|נצרך|נצרכו|התאמה|יומן.*מלאי|בוצע.*מלאי|ניוצל|consump|ממתין.*התאמ|פער.*מתוכנן|כפולה/.test(message);
 
-      const [excRes, itemsRes, reservationsRes] = await Promise.all([
+      const [excRes, itemsRes, reservationsRes, consumptionsRes] = await Promise.all([
         db.from("agent_exceptions")
           .select("id,severity,title,category,related_entity_id")
           .in("status", ["open", "acknowledged"])
@@ -356,13 +357,76 @@ export async function runChatEngine(
           .select("id,item_id,order_id,order_item_key,quantity,status,metadata")
           .eq("status", "active")
           .limit(200),
+        db.from("inventory_consumptions")
+          .select("id,item_id,order_id,work_diary_id,order_item_key,quantity,status,metadata,consumed_at")
+          .in("status", ["consumed", "pending_review"])
+          .order("consumed_at", { ascending: false })
+          .limit(100),
       ]);
 
       const excs         = excRes.data ?? [];
       const items        = itemsRes.data ?? [];
       const reservations = reservationsRes.data ?? [];
+      const consumptions = consumptionsRes.data ?? [];
 
       const itemMap = new Map(items.map(i => [i.id as string, i]));
+
+      // ── Consumption-specific queries ────────────────────────────────────
+      if (isConsumptionQuery) {
+        const lines: string[] = [`📊 **צריכת מלאי — ${new Date().toLocaleDateString("he-IL")}**\n`];
+
+        if (consumptions.length === 0) {
+          lines.push("אין רשומות צריכת מלאי עדיין.");
+          lines.push("\nכדי להפעיל צריכה: אשר יומן שטח המקושר להזמנה עם פריטי קטלוג.");
+          return { content: lines.join("\n"), sourceRefs: [] };
+        }
+
+        // Group by item
+        const byItem = new Map<string, typeof consumptions>();
+        for (const c of consumptions) {
+          const iid = c.item_id as string;
+          if (!byItem.has(iid)) byItem.set(iid, []);
+          byItem.get(iid)!.push(c);
+        }
+
+        // Group by order
+        const byOrder = new Map<string, typeof consumptions>();
+        for (const c of consumptions) {
+          const oid = c.order_id as string;
+          if (!byOrder.has(oid)) byOrder.set(oid, []);
+          byOrder.get(oid)!.push(c);
+        }
+
+        lines.push(`סה"כ רשומות צריכה: **${consumptions.length}** | פריטים שנצרכו: **${byItem.size}** | הזמנות מטופלות: **${byOrder.size}**\n`);
+
+        // Items consumed
+        lines.push("**פריטים שנצרכו לאחרונה:**");
+        let shown = 0;
+        for (const [itemId, cons] of byItem) {
+          if (shown >= 6) { lines.push(`  ... ועוד ${byItem.size - shown} פריטים`); break; }
+          const item = itemMap.get(itemId);
+          const name = item ? (item.name as string) : itemId;
+          const unit = item ? (item.unit_of_measure as string) : "";
+          const total = cons.reduce((s, c) => s + (c.quantity as number), 0);
+          const orderNums = [...new Set(cons.map(c => (c.metadata as { orderNumber?: string } | null)?.orderNumber ?? c.order_id as string))];
+          lines.push(`  🔧 **${name}** — נצרך: ${total} ${unit} | הזמנות: ${orderNums.slice(0, 2).join(", ")}${orderNums.length > 2 ? ` +${orderNums.length - 2}` : ""}`);
+          shown++;
+        }
+
+        // Orders pending reconciliation
+        const consumptionExcs = excs.filter(e => ["missing_consumption","completed_order_no_reconciliation","over_consumption","consumption_unapproved_diary","duplicate_consumption"].includes(e.category as string));
+        if (consumptionExcs.length > 0) {
+          lines.push(`\n⚠️ **חריגות התאמת מלאי פתוחות: ${consumptionExcs.length}**`);
+          consumptionExcs.slice(0, 4).forEach(e => lines.push(`  • ${e.title as string}`));
+        } else {
+          lines.push("\n✅ אין חריגות התאמת מלאי פתוחות");
+        }
+
+        return {
+          content: lines.join("\n"),
+          sourceRefs: consumptionExcs.slice(0, 3).map(e => ({ table: "agent_exceptions", id: e.id as string, label: e.title as string })),
+        };
+      }
 
       // ── Reservation-specific queries ────────────────────────────────────
       if (isReservationQuery) {

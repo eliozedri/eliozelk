@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useOrdersContext } from "@/context/OrdersContext";
 import { useCatalogContext } from "@/context/CatalogContext";
 import { useAuth } from "@/context/AuthContext";
 import { getStockStatus, STOCK_STATUS_LABELS, STOCK_STATUS_COLORS } from "@/types/inventory";
+import { getSupabase } from "@/lib/supabase/client";
 import type { WorkOrder } from "@/types/workOrder";
 import type { CatalogItem } from "@/types/catalog";
 import type { MiscRow } from "@/types/order";
@@ -18,6 +19,24 @@ function formatDate(iso: string): string {
 function UrgentBadge() {
   return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">דחוף</span>;
 }
+
+// ── Reconciliation status ─────────────────────────────────────────────────────
+
+type ReconciliationStatus = "not_required" | "pending" | "reconciled" | "needs_review";
+
+const RECONCILIATION_LABELS: Record<ReconciliationStatus, string> = {
+  not_required: "לא נדרש",
+  pending:      "ממתין להתאמת מלאי",
+  reconciled:   "מלאי הותאם",
+  needs_review: "דורש בדיקה",
+};
+
+const RECONCILIATION_COLORS: Record<ReconciliationStatus, string> = {
+  not_required: "bg-gray-100 text-gray-500",
+  pending:      "bg-amber-100 text-amber-700",
+  reconciled:   "bg-green-100 text-green-700",
+  needs_review: "bg-red-100 text-red-700",
+};
 
 // ── Order-prep column config ──────────────────────────────────────────────────
 
@@ -56,7 +75,14 @@ function AvailabilityBadge({ row, catalogMap }: { row: MiscRow; catalogMap: Map<
 
 // ── Order card ────────────────────────────────────────────────────────────────
 
-function OrderCard({ order, catalogMap }: { order: WorkOrder; catalogMap: Map<string, CatalogItem> }) {
+function OrderCard({
+  order, catalogMap, reconciliationStatus, onReconcile,
+}: {
+  order: WorkOrder;
+  catalogMap: Map<string, CatalogItem>;
+  reconciliationStatus: ReconciliationStatus;
+  onReconcile: (order: WorkOrder) => void;
+}) {
   const { updateOrderFields } = useOrdersContext();
   const warehouseStatus = order.warehouseStatus ?? "pending";
   const cfg = STATUS_CONFIG[warehouseStatus] ?? STATUS_CONFIG.pending;
@@ -107,6 +133,24 @@ function OrderCard({ order, catalogMap }: { order: WorkOrder; catalogMap: Map<st
           }`}>
           {warehouseStatus === "pending" ? "אשר קבלה — התחל הכנה" : "סמן כמוכן"}
         </button>
+      )}
+
+      {/* Reconciliation status + manual trigger */}
+      {reconciliationStatus !== "not_required" && (
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${RECONCILIATION_COLORS[reconciliationStatus]}`}>
+            {RECONCILIATION_LABELS[reconciliationStatus]}
+          </span>
+          {reconciliationStatus === "pending" && (
+            <button
+              type="button"
+              onClick={() => onReconcile(order)}
+              className="text-xs px-2 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 font-semibold transition-colors border border-amber-200"
+            >
+              בצע התאמת מלאי
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -404,10 +448,45 @@ function InventoryPanel({ reservationsByItem }: { reservationsByItem: Map<string
 
 // ── Main Warehouse component ──────────────────────────────────────────────────
 
+interface ConsumptionRecord {
+  order_id: string;
+  order_item_key: string | null;
+  status: string;
+  work_diary_id: string | null;
+}
+
+interface DiaryRecord {
+  id: string;
+  order_id: string | null;
+  status: string;
+  approval_status: string;
+}
+
 export function Warehouse() {
   const { orders } = useOrdersContext();
   const { items: catalogItems } = useCatalogContext();
   const [activeTab, setActiveTab] = useState<"orders" | "inventory">("orders");
+  const [consumptions, setConsumptions] = useState<ConsumptionRecord[]>([]);
+  const [approvedDiaryOrderIds, setApprovedDiaryOrderIds] = useState<Set<string>>(new Set());
+  const [reconciling, setReconciling] = useState<string | null>(null);
+  const [reconcileMsg, setReconcileMsg] = useState<{ orderId: string; text: string; ok: boolean } | null>(null);
+
+  // Load consumptions and approved diaries once on mount
+  useEffect(() => {
+    const db = getSupabase();
+    if (!db) return;
+    Promise.all([
+      db.from("inventory_consumptions").select("order_id,order_item_key,status,work_diary_id").in("status", ["consumed", "pending_review"]),
+      db.from("work_diaries").select("id,order_id,status,approval_status").eq("status", "submitted").eq("approval_status", "approved"),
+    ]).then(([consRes, diaryRes]) => {
+      if (!consRes.error && consRes.data) setConsumptions(consRes.data as ConsumptionRecord[]);
+      if (!diaryRes.error && diaryRes.data) {
+        setApprovedDiaryOrderIds(new Set(
+          (diaryRes.data as DiaryRecord[]).map(d => d.order_id).filter(Boolean) as string[]
+        ));
+      }
+    });
+  }, []);
 
   const catalogMap = new Map<string, CatalogItem>(catalogItems.map(i => [i.id, i]));
 
@@ -424,6 +503,61 @@ export function Warehouse() {
       const existing = reservationsByItem.get(row.catalogItemId) ?? [];
       existing.push({ orderNumber: order.orderNumber, qty, orderId: order.id });
       reservationsByItem.set(row.catalogItemId, existing);
+    }
+  }
+
+  // Derive reconciliation status per order
+  function getReconciliationStatus(order: WorkOrder): ReconciliationStatus {
+    const hasMappedItems = [...(order.accessoryRows ?? []), ...(order.miscRows ?? [])]
+      .some(r => r.catalogItemId && (parseFloat(r.quantity) || 0) > 0);
+    if (!hasMappedItems) return "not_required";
+    const hasApprovedDiary = approvedDiaryOrderIds.has(order.id);
+    if (!hasApprovedDiary) return "not_required";
+    const orderConsumptions = consumptions.filter(c => c.order_id === order.id && (c.status === "consumed" || c.status === "pending_review"));
+    if (orderConsumptions.length === 0) return "pending";
+    return "reconciled";
+  }
+
+  // Manual reconciliation trigger
+  async function handleReconcile(order: WorkOrder) {
+    setReconciling(order.id);
+    setReconcileMsg(null);
+    try {
+      const db = getSupabase();
+      if (!db) throw new Error("לא מחובר לבסיס הנתונים");
+      const { data: { session } } = await db.auth.getSession();
+      if (!session?.access_token) throw new Error("אין הרשאה — יש להתחבר מחדש");
+
+      // Find approved diary for this order
+      const { data: diaries } = await db.from("work_diaries")
+        .select("id").eq("order_id", order.id).eq("approval_status", "approved").limit(1);
+      const diaryId = (diaries as Array<{ id: string }> | null)?.[0]?.id;
+      if (!diaryId) throw new Error("לא נמצא יומן מאושר להזמנה זו");
+
+      const res = await fetch("/api/inventory/consume-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+        body: JSON.stringify({ orderId: order.id, diaryId }),
+      });
+      const body = await res.json() as { consumptionsCreated?: number; error?: string; warnings?: string[] };
+      if (!res.ok) throw new Error(body.error ?? `שגיאה ${res.status}`);
+
+      const created = body.consumptionsCreated ?? 0;
+      setReconcileMsg({
+        orderId: order.id,
+        text: created > 0 ? `התאמת מלאי בוצעה — ${created} פריטים הותאמו` : "אין פריטים חדשים להתאמה",
+        ok: true,
+      });
+
+      // Refresh consumptions
+      const { data: fresh } = await db.from("inventory_consumptions")
+        .select("order_id,order_item_key,status,work_diary_id")
+        .in("status", ["consumed", "pending_review"]);
+      if (fresh) setConsumptions(fresh as ConsumptionRecord[]);
+    } catch (err) {
+      setReconcileMsg({ orderId: order.id, text: err instanceof Error ? err.message : "שגיאה בהתאמת מלאי", ok: false });
+    } finally {
+      setReconciling(null);
     }
   }
 
@@ -508,7 +642,21 @@ export function Warehouse() {
                           <p className="text-xs text-gray-400">אין הזמנות</p>
                         </div>
                       ) : (
-                        groupOrders.map(o => <OrderCard key={o.id} order={o} catalogMap={catalogMap} />)
+                        groupOrders.map(o => (
+                          <div key={o.id}>
+                            <OrderCard
+                              order={o}
+                              catalogMap={catalogMap}
+                              reconciliationStatus={getReconciliationStatus(o)}
+                              onReconcile={handleReconcile}
+                            />
+                            {reconcileMsg?.orderId === o.id && (
+                              <p className={`text-xs px-3 py-1.5 rounded-lg mt-1 ${reconcileMsg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                                {reconciling === o.id ? "מבצע התאמת מלאי..." : reconcileMsg.text}
+                              </p>
+                            )}
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>

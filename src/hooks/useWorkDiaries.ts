@@ -297,10 +297,33 @@ export function useWorkDiaries() {
           data: updated,
         })
         .eq("id", id)
-        .then(({ error }) => {
+        .then(async ({ error }) => {
           if (error) {
             console.error("[diaries] approve failed:", error.message);
             setDiaries(prev => prev.map(d => d.id === id ? original : d));
+            return;
+          }
+          // Trigger inventory consumption for order-linked diaries
+          if (updated.orderId) {
+            try {
+              const { data: { session } } = await db.auth.getSession();
+              if (session?.access_token) {
+                const res = await fetch("/api/inventory/consume-order", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${session.access_token}`,
+                  },
+                  body: JSON.stringify({ orderId: updated.orderId, diaryId: id }),
+                });
+                if (!res.ok) {
+                  const body = await res.json().catch(() => ({})) as { error?: string };
+                  console.warn("[diaries] consumption sync warning:", body.error ?? res.status);
+                }
+              }
+            } catch (consumeErr) {
+              console.warn("[diaries] consumption trigger failed (non-fatal):", consumeErr);
+            }
           }
         });
     }

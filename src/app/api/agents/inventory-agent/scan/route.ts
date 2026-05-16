@@ -36,6 +36,7 @@ interface DbOrderRow {
   order_number: string;
   status: string;
   customer: string;
+  warehouse_required?: boolean;
   data: {
     accessoryRows?: Array<{
       id?: string;
@@ -61,6 +62,23 @@ interface DbReservationRow {
   status: string;
 }
 
+interface DbConsumptionRow {
+  id: string;
+  item_id: string;
+  order_id: string;
+  work_diary_id: string | null;
+  order_item_key: string | null;
+  quantity: number;
+  status: string;
+}
+
+interface DbDiaryRow {
+  id: string;
+  order_id: string | null;
+  status: string;
+  approval_status: string;
+}
+
 export async function POST(req: NextRequest) {
   const db = getServiceSupabase();
   const start = Date.now();
@@ -78,25 +96,35 @@ export async function POST(req: NextRequest) {
     await syncAllReservations(db);
 
     // ── Load data ──────────────────────────────────────────────────────────
-    const [itemsRes, ordersRes, reservationsRes] = await Promise.all([
+    const [itemsRes, ordersRes, reservationsRes, consumptionsRes, diariesRes] = await Promise.all([
       db.from("catalog_items")
         .select("id,name,type,category,unit_of_measure,current_quantity,minimum_quantity,reserved_quantity,supplier_id,is_active")
         .eq("is_active", true),
       db.from("work_orders")
-        .select("id,order_number,status,customer,data")
-        .not("status", "in", '("completed","cancelled")'),
+        .select("id,order_number,status,customer,data,warehouse_required")
+        .not("status", "in", '("cancelled")'),
       db.from("inventory_reservations")
         .select("id,item_id,order_id,order_item_key,quantity,status"),
+      db.from("inventory_consumptions")
+        .select("id,item_id,order_id,work_diary_id,order_item_key,quantity,status"),
+      db.from("work_diaries")
+        .select("id,order_id,status,approval_status")
+        .not("status", "in", '("cancelled")'),
     ]);
 
     if (itemsRes.error)        throw new Error(itemsRes.error.message);
     if (ordersRes.error)       throw new Error(ordersRes.error.message);
     if (reservationsRes.error) throw new Error(reservationsRes.error.message);
+    if (consumptionsRes.error) result.errors.push(`load consumptions: ${consumptionsRes.error.message}`);
+    if (diariesRes.error)      result.errors.push(`load diaries: ${diariesRes.error.message}`);
 
     const items        = (itemsRes.data        ?? []) as DbCatalogItem[];
-    const orders       = (ordersRes.data        ?? []) as DbOrderRow[];
+    const allOrders    = (ordersRes.data        ?? []) as DbOrderRow[];
+    const orders       = allOrders.filter(o => o.status !== "completed");
     const reservations = (reservationsRes.data  ?? []) as DbReservationRow[];
-    result.entitiesScanned = items.length + orders.length + reservations.length;
+    const consumptions = (consumptionsRes.data  ?? []) as DbConsumptionRow[];
+    const diaries      = (diariesRes.data       ?? []) as DbDiaryRow[];
+    result.entitiesScanned = items.length + allOrders.length + reservations.length + consumptions.length;
 
     const catalogItemIds = new Set(items.map(i => i.id));
     const activeOrderIds  = new Set(orders.map(o => o.id));
@@ -408,6 +436,213 @@ export async function POST(req: NextRequest) {
         }, dedupeMap, result);
       }
     }
+
+    // ── Consumption lookup helpers ─────────────────────────────────────────
+    const activeConsumptions = consumptions.filter(c => c.status === "consumed" || c.status === "pending_review");
+    const consumedOrderItems = new Map<string, DbConsumptionRow>(); // `orderId:orderItemKey` → row
+    const consumedByDiary = new Map<string, DbConsumptionRow[]>(); // diaryId → rows
+    for (const c of activeConsumptions) {
+      if (c.order_item_key) consumedOrderItems.set(`${c.order_id}:${c.order_item_key}`, c);
+      if (c.work_diary_id) {
+        const arr = consumedByDiary.get(c.work_diary_id) ?? [];
+        arr.push(c);
+        consumedByDiary.set(c.work_diary_id, arr);
+      }
+    }
+    const approvedDiaries = diaries.filter(d => d.status === "submitted" && d.approval_status === "approved");
+    const approvedDiaryOrderIds = new Set<string>(approvedDiaries.map(d => d.order_id).filter(Boolean) as string[]);
+
+    // Compute reserved quantity from active reservations (for check 17)
+    const reservedByOrderItem = new Map<string, number>();
+    for (const r of reservations.filter(r => r.status === "active")) {
+      reservedByOrderItem.set(`${r.order_id}:${r.order_item_key}`, r.quantity);
+    }
+
+    // ── 12. Approved diary with mapped items but no consumption record ───────
+    for (const diary of approvedDiaries) {
+      if (!diary.order_id) continue;
+      const order = allOrders.find(o => o.id === diary.order_id);
+      if (!order) continue;
+      const allRows = [...(order.data?.accessoryRows ?? []), ...(order.data?.miscRows ?? [])];
+      const mappedRows = allRows.filter(r => r.id && r.catalogItemId && catalogItemIds.has(r.catalogItemId) && (parseFloat(r.quantity ?? "0") || 0) > 0);
+      if (mappedRows.length === 0) continue;
+
+      const hasMissingConsumption = mappedRows.some(r => !consumedOrderItems.has(`${order.id}:${r.id}`));
+      if (hasMissingConsumption) {
+        const k = dedupeKey("missing_consumption", "work_order", order.id);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "missing_consumption",
+          entityType: "work_order",
+          entityId: order.id,
+          severity: "warn",
+          title: `יומן אושר ללא התאמת מלאי — הזמנה ${order.order_number}`,
+          description: `יומן ${diary.id} אושר אך חסרות רשומות צריכה עבור פריטי קטלוג מקושרים`,
+          detectedFromData: { orderId: order.id, diaryId: diary.id, mappedItems: mappedRows.length },
+          recommendedResolution: "הפעל התאמת מלאי עבור יומן זה",
+        }, dedupeMap, result);
+      }
+    }
+
+    // ── 13. Consumption exists for unapproved/draft diary ───────────────────
+    for (const c of activeConsumptions) {
+      if (!c.work_diary_id) continue;
+      const diary = diaries.find(d => d.id === c.work_diary_id);
+      if (!diary) continue;
+      const isDiaryApproved = diary.status === "submitted" && diary.approval_status === "approved";
+      if (!isDiaryApproved) {
+        const k = dedupeKey("consumption_unapproved_diary", "inventory_consumptions", c.id);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "consumption_unapproved_diary",
+          entityType: "inventory_consumptions",
+          entityId: c.id,
+          severity: "error",
+          title: `צריכה עבור יומן לא מאושר — פריט ${c.item_id}`,
+          description: `רשומת צריכה ${c.id} מקושרת ליומן ${c.work_diary_id} שאינו מאושר (status=${diary.status}, approval=${diary.approval_status})`,
+          detectedFromData: { consumptionId: c.id, diaryId: c.work_diary_id, diaryStatus: diary.status, diaryApproval: diary.approval_status },
+          recommendedResolution: "בדוק ובטל או תקן את רשומת הצריכה",
+        }, dedupeMap, result);
+      }
+    }
+
+    // ── 14. Duplicate consumption for same diary item ────────────────────────
+    const dupConsKey = new Map<string, string>();
+    for (const c of activeConsumptions) {
+      if (!c.work_diary_id || !c.order_item_key) continue;
+      const key = `${c.order_id}:${c.order_item_key}:${c.work_diary_id}`;
+      if (dupConsKey.has(key)) {
+        const k = dedupeKey("duplicate_consumption", "inventory_consumptions", key);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "duplicate_consumption",
+          entityType: "inventory_consumptions",
+          entityId: key,
+          severity: "error",
+          title: `צריכה כפולה — פריט הזמנה ${c.order_item_key}`,
+          description: `שתי רשומות צריכה פעילות לאותו פריט הזמנה ${c.order_item_key} ביומן ${c.work_diary_id}`,
+          detectedFromData: { orderId: c.order_id, orderItemKey: c.order_item_key, diaryId: c.work_diary_id, firstId: dupConsKey.get(key), duplicateId: c.id },
+          recommendedResolution: "בטל את הרשומה הכפולה ידנית",
+        }, dedupeMap, result);
+      } else {
+        dupConsKey.set(key, c.id);
+      }
+    }
+
+    // ── 15. Consumption quantity greater than reservation/planned quantity ────
+    for (const c of activeConsumptions) {
+      if (!c.order_item_key) continue;
+      const reserved = reservedByOrderItem.get(`${c.order_id}:${c.order_item_key}`);
+      const order = allOrders.find(o => o.id === c.order_id);
+      if (!order) continue;
+      const allRows = [...(order.data?.accessoryRows ?? []), ...(order.data?.miscRows ?? [])];
+      const row = allRows.find(r => r.id === c.order_item_key);
+      const plannedQty = row ? (parseFloat(row.quantity ?? "0") || 0) : 0;
+      const referenceQty = reserved ?? plannedQty;
+      if (referenceQty > 0 && c.quantity > referenceQty + 0.0001) {
+        const k = dedupeKey("over_consumption", "inventory_consumptions", c.id);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "over_consumption",
+          entityType: "inventory_consumptions",
+          entityId: c.id,
+          severity: "warn",
+          title: `צריכה עולה על שריון — פריט ${c.item_id}`,
+          description: `צריכה: ${c.quantity} | שריון/מתוכנן: ${referenceQty} | עודף: ${c.quantity - referenceQty}`,
+          detectedFromData: { consumptionId: c.id, itemId: c.item_id, consumed: c.quantity, reference: referenceQty },
+          recommendedResolution: "בדוק כמות בפועל ותקן ידנית אם נדרש",
+        }, dedupeMap, result);
+      }
+    }
+
+    // ── 16. Reservation remains active after full consumption ────────────────
+    for (const r of reservations.filter(res => res.status === "active")) {
+      const consumptionKey = `${r.order_id}:${r.order_item_key}`;
+      if (consumedOrderItems.has(consumptionKey)) {
+        const k = dedupeKey("stale_active_reservation_after_consumption", "inventory_reservations", r.id);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "stale_active_reservation_after_consumption",
+          entityType: "inventory_reservations",
+          entityId: r.id,
+          severity: "warn",
+          title: `שריון פעיל אחרי צריכה — פריט ${r.item_id}`,
+          description: `שריון ${r.id} עדיין פעיל למרות שנוצרה רשומת צריכה עבור ${consumptionKey}`,
+          detectedFromData: { reservationId: r.id, itemId: r.item_id, orderId: r.order_id, orderItemKey: r.order_item_key },
+          recommendedResolution: "הפעל סנכרון שריונות לעדכון מצב השריון",
+        }, dedupeMap, result);
+      }
+    }
+
+    // ── 17. Completed warehouse order with no inventory reconciliation ────────
+    const completedWarehouseOrders = allOrders.filter(o =>
+      o.status === "completed" && o.warehouse_required === true
+    );
+    for (const order of completedWarehouseOrders) {
+      const hasAnyConsumption = activeConsumptions.some(c => c.order_id === order.id);
+      const hasApprovedDiary = approvedDiaryOrderIds.has(order.id);
+      if (!hasAnyConsumption && hasApprovedDiary) {
+        const k = dedupeKey("completed_order_no_reconciliation", "work_order", order.id);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "completed_order_no_reconciliation",
+          entityType: "work_order",
+          entityId: order.id,
+          severity: "warn",
+          title: `הזמנה הושלמה ללא התאמת מלאי — ${order.order_number}`,
+          description: `הזמנה ${order.order_number} הסתיימה עם יומן מאושר אך אין רשומות צריכת מלאי`,
+          detectedFromData: { orderId: order.id, orderNumber: order.order_number },
+          recommendedResolution: "הפעל התאמת מלאי עבור הזמנה זו",
+        }, dedupeMap, result);
+      }
+    }
+
+    // ── 18. Unmapped diary item requiring catalog mapping ────────────────────
+    for (const diary of approvedDiaries) {
+      if (!diary.order_id) continue;
+      const order = allOrders.find(o => o.id === diary.order_id);
+      if (!order) continue;
+      const allRows = [...(order.data?.accessoryRows ?? []), ...(order.data?.miscRows ?? [])];
+      const unmappedRows = allRows.filter(r => r.description?.trim() && (!r.catalogItemId || !catalogItemIds.has(r.catalogItemId)));
+      for (const row of unmappedRows) {
+        const entityId = `${order.id}:${row.description?.trim()}`;
+        const k = dedupeKey("diary_unmapped_item", "work_order", entityId);
+        activeDedupeKeys.add(k);
+        await upsertTask(db, AGENT_ID, {
+          category: "diary_unmapped_item",
+          entityType: "work_order",
+          entityId,
+          title: `מיפוי קטלוג נדרש — "${row.description?.trim()}"`,
+          description: `יומן ${diary.id} אושר | פריט "${row.description?.trim()}" בהזמנה ${order.order_number} לא מקושר לקטלוג`,
+          priority: "normal",
+          recommendedAction: "קשר פריט זה לקטלוג כדי לאפשר מעקב צריכה",
+        }, taskDedupeMap, result);
+      }
+    }
+
+    // ── 19. Negative stock after consumption ─────────────────────────────────
+    for (const item of items) {
+      if (item.current_quantity < 0) {
+        const hasConsumption = activeConsumptions.some(c => c.item_id === item.id);
+        if (hasConsumption) {
+          const k = dedupeKey("negative_stock_after_consumption", "catalog_item", item.id);
+          activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "negative_stock_after_consumption",
+            entityType: "catalog_item",
+            entityId: item.id,
+            severity: "critical",
+            title: `מלאי שלילי לאחר צריכה — ${item.name} (${item.current_quantity})`,
+            description: `פריט ${item.name} הגיע למלאי שלילי (${item.current_quantity}) לאחר פעולות צריכה`,
+            detectedFromData: { itemName: item.name, currentQuantity: item.current_quantity, unit: item.unit_of_measure },
+            recommendedResolution: "בדוק תנועות מלאי ותקן על ידי קבלת סחורה או תיקון ידני מבוקר",
+          }, dedupeMap, result);
+        }
+      }
+    }
+
+    // ── 20. manual correction mismatch risk ─────────────────────────────────
+    // (no additional check beyond existing negative_stock rule 1; rule 19 is consumption-specific)
 
     // ── Auto-resolve stale exceptions ──────────────────────────────────────
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
