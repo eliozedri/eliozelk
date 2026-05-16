@@ -13,6 +13,7 @@ import {
   dedupeKey,
 } from "@/lib/agents/scan-utils";
 import { emptyScanResult } from "@/lib/agents/types";
+import { syncReservations } from "@/lib/inventory/syncReservations";
 
 const AGENT_ID   = "inventory-agent";
 const AGENT_NAME = "מנהל מחסן";
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
 
   try {
     await updateAgentRunStatus(db, AGENT_ID, "active");
+
+    // ── Sync reservations from active orders before scanning ───────────────
+    await syncReservations(db);
 
     // ── Load data ──────────────────────────────────────────────────────────
     const [itemsRes, ordersRes] = await Promise.all([

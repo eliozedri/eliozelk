@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { getStockStatus, STOCK_STATUS_LABELS, STOCK_STATUS_COLORS } from "@/types/inventory";
 import type { WorkOrder } from "@/types/workOrder";
 import type { CatalogItem } from "@/types/catalog";
+import type { MiscRow } from "@/types/order";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -26,9 +27,36 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; border: string;
   ready:      { label: "מוכן",         bg: "bg-green-50",  border: "border-green-200",  badge: "bg-green-100 text-green-700" },
 };
 
+// ── Availability badge for a single linked accessory row ─────────────────────
+
+function AvailabilityBadge({ row, catalogMap }: { row: MiscRow; catalogMap: Map<string, CatalogItem> }) {
+  if (!row.catalogItemId) return null;
+  const item = catalogMap.get(row.catalogItemId);
+  if (!item) return null;
+
+  const needed    = parseFloat(row.quantity) || 0;
+  const available = item.currentQuantity - item.reservedQuantity;
+
+  let color = "bg-green-100 text-green-700";
+  let label = `זמין: ${available} ${item.unitOfMeasure}`;
+  if (available <= 0) {
+    color = "bg-red-100 text-red-700";
+    label = `חסר (${available} ${item.unitOfMeasure})`;
+  } else if (needed > 0 && available < needed) {
+    color = "bg-amber-100 text-amber-700";
+    label = `חלקי: ${available}/${needed} ${item.unitOfMeasure}`;
+  }
+
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${color}`}>
+      {label}
+    </span>
+  );
+}
+
 // ── Order card ────────────────────────────────────────────────────────────────
 
-function OrderCard({ order }: { order: WorkOrder }) {
+function OrderCard({ order, catalogMap }: { order: WorkOrder; catalogMap: Map<string, CatalogItem> }) {
   const { updateOrderFields } = useOrdersContext();
   const warehouseStatus = order.warehouseStatus ?? "pending";
   const cfg = STATUS_CONFIG[warehouseStatus] ?? STATUS_CONFIG.pending;
@@ -55,11 +83,14 @@ function OrderCard({ order }: { order: WorkOrder }) {
       </div>
 
       {accessoryItems.length > 0 && (
-        <ul className="text-xs text-gray-700 space-y-1 bg-white/70 rounded-lg px-3 py-2 border border-gray-100">
+        <ul className="text-xs text-gray-700 space-y-1.5 bg-white/70 rounded-lg px-3 py-2 border border-gray-100">
           {accessoryItems.map((row, i) => (
-            <li key={i} className="flex justify-between gap-2">
-              <span className="truncate">{row.description}</span>
-              {row.quantity && <span className="shrink-0 text-gray-500">× {row.quantity}</span>}
+            <li key={i} className="flex flex-col gap-0.5">
+              <div className="flex justify-between gap-2">
+                <span className="truncate">{row.description}</span>
+                {row.quantity && <span className="shrink-0 text-gray-500">× {row.quantity}</span>}
+              </div>
+              <AvailabilityBadge row={row} catalogMap={catalogMap} />
             </li>
           ))}
         </ul>
@@ -336,7 +367,10 @@ function InventoryPanel() {
 
 export function Warehouse() {
   const { orders } = useOrdersContext();
+  const { items: catalogItems } = useCatalogContext();
   const [activeTab, setActiveTab] = useState<"orders" | "inventory">("orders");
+
+  const catalogMap = new Map<string, CatalogItem>(catalogItems.map(i => [i.id, i]));
 
   const warehouseOrders = orders
     .filter(o => o.warehouseRequired && o.status !== "completed" && o.status !== "cancelled")
@@ -419,7 +453,7 @@ export function Warehouse() {
                           <p className="text-xs text-gray-400">אין הזמנות</p>
                         </div>
                       ) : (
-                        groupOrders.map(o => <OrderCard key={o.id} order={o} />)
+                        groupOrders.map(o => <OrderCard key={o.id} order={o} catalogMap={catalogMap} />)
                       )}
                     </div>
                   </div>
