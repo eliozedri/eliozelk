@@ -43,6 +43,8 @@ function fromRow(r: Record<string, unknown>): Customer {
     lastOrder: (r.last_order as string) ?? "",
     notes: r.notes as string | undefined,
     paymentTerms: r.payment_terms as string | undefined,
+    contactPerson: r.contact_person as string | undefined,
+    contactEmail: r.contact_email as string | undefined,
     createdAt: (r.created_at as string) ?? new Date().toISOString(),
     updatedAt: (r.updated_at as string) ?? new Date().toISOString(),
   };
@@ -57,6 +59,8 @@ function toRow(c: Customer) {
     last_order: c.lastOrder,
     notes: c.notes ?? null,
     payment_terms: c.paymentTerms ?? null,
+    contact_person: c.contactPerson ?? null,
+    contact_email: c.contactEmail ?? null,
     created_at: c.createdAt,
     updated_at: c.updatedAt,
   };
@@ -192,6 +196,8 @@ export function CustomersProvider({ children }: { children: React.ReactNode }) {
       lastOrder: form.lastOrder ?? "",
       notes: form.notes,
       paymentTerms: form.paymentTerms,
+      contactPerson: form.contactPerson,
+      contactEmail: form.contactEmail,
       createdAt: now,
       updatedAt: now,
     };

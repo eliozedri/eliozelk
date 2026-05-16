@@ -98,6 +98,8 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "dashboard", href: "/", label: "מרכז שליטה", icon: <ControlCenterIcon />, matchFn: (p) => p === "/", title: "בעיות פתוחות בהזמנות" },
       { tabId: "orders", href: "/orders", label: "טבלת הזמנות", icon: <TableIcon />, matchFn: (p) => p.startsWith("/orders") },
+      { tabId: "schedule", href: "/schedule", label: "סידור שבועי", icon: <CalendarIcon />, matchFn: (p) => p.startsWith("/schedule") },
+      { tabId: "agents", href: "/agents", label: "מרכז פיקוד דיגיטלי", icon: <AgentsIcon />, matchFn: (p) => p.startsWith("/agents"), noBadge: true },
     ],
   },
   {
@@ -111,7 +113,6 @@ const NAV_SECTIONS: NavSection[] = [
     label: "ניהול",
     items: [
       { tabId: "dashboard", href: "/new-order", label: "הזמנה חדשה", icon: <OrderIcon />, matchFn: (p) => p === "/new-order", noBadge: true },
-      { tabId: "schedule", href: "/schedule", label: "סידור שבועי", icon: <CalendarIcon />, matchFn: (p) => p.startsWith("/schedule") },
       { tabId: "work-diary", href: "/work-diary", label: "יומן עבודה חדש", icon: <DiaryIcon />, matchFn: (p) => p.startsWith("/work-diary") },
     ],
   },
@@ -142,12 +143,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "profitability", href: "/profitability", label: "דשבורד רווחיות", icon: <ProfitabilityIcon />, matchFn: (p) => p.startsWith("/profitability") },
       { tabId: "cost-settings", href: "/cost-settings", label: "תעריפי עלות", icon: <SettingsIcon />, matchFn: (p) => p.startsWith("/cost-settings") },
-    ],
-  },
-  {
-    label: "בינה מלאכותית",
-    items: [
-      { tabId: "agents", href: "/agents", label: "מרכז פיקוד דיגיטלי", icon: <AgentsIcon />, matchFn: (p) => p.startsWith("/agents"), noBadge: true },
     ],
   },
 ];

@@ -14,6 +14,9 @@ const emptyForm: CustomerFormState = {
   location: "",
   phone: "",
   lastOrder: "",
+  contactPerson: "",
+  contactEmail: "",
+  paymentTerms: "",
 };
 
 function validatePhone(phone: string): boolean {
@@ -92,32 +95,20 @@ export function AddCustomerForm({ onAdd }: Props) {
 
   return (
     <div className="border-b border-gray-100 px-5 py-4 bg-blue-50/20 no-print">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">
-            שם לקוח <span className="text-red-500">*</span>
+            שם לקוח / חברה <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             value={form.name}
             onChange={(e) => update("name", e.target.value)}
-            placeholder="שם הלקוח"
+            placeholder="שם הלקוח או החברה"
             className={errors.name ? inputErrCls : inputCls}
             disabled={saving}
           />
           {errors.name && <p className="text-xs text-red-500 mt-0.5">{errors.name}</p>}
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">מיקום</label>
-          <input
-            type="text"
-            value={form.location}
-            onChange={(e) => update("location", e.target.value)}
-            placeholder="מיקום (אופציונלי)"
-            className={inputCls}
-            disabled={saving}
-          />
         </div>
 
         <div>
@@ -137,12 +128,49 @@ export function AddCustomerForm({ onAdd }: Props) {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">הזמנה אחרונה</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">מיקום</label>
           <input
             type="text"
-            value={form.lastOrder}
-            onChange={(e) => update("lastOrder", e.target.value)}
-            placeholder="הזמנה אחרונה (אופציונלי)"
+            value={form.location}
+            onChange={(e) => update("location", e.target.value)}
+            placeholder="עיר / כתובת (אופציונלי)"
+            className={inputCls}
+            disabled={saving}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">איש קשר</label>
+          <input
+            type="text"
+            value={form.contactPerson ?? ""}
+            onChange={(e) => update("contactPerson", e.target.value)}
+            placeholder="שם איש הקשר (אופציונלי)"
+            className={inputCls}
+            disabled={saving}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">דוא״ל</label>
+          <input
+            type="email"
+            value={form.contactEmail ?? ""}
+            onChange={(e) => update("contactEmail", e.target.value)}
+            placeholder="כתובת דוא״ל (אופציונלי)"
+            dir="ltr"
+            className={inputCls}
+            disabled={saving}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">תנאי תשלום</label>
+          <input
+            type="text"
+            value={form.paymentTerms ?? ""}
+            onChange={(e) => update("paymentTerms", e.target.value)}
+            placeholder='לדוגמה: שוטף + 30, מזומן'
             className={inputCls}
             disabled={saving}
           />

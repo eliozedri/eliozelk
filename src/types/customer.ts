@@ -6,6 +6,8 @@ export interface Customer {
   lastOrder: string;
   notes?: string;
   paymentTerms?: string;  // e.g. "שוטף + 30", "מזומן", "60 יום"
+  contactPerson?: string;
+  contactEmail?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -17,6 +19,8 @@ export interface CustomerFormState {
   lastOrder: string;
   notes?: string;
   paymentTerms?: string;
+  contactPerson?: string;
+  contactEmail?: string;
 }
 
 export type CustomerErrors = Partial<Record<keyof CustomerFormState, string>>;

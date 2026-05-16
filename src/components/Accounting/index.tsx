@@ -427,6 +427,8 @@ export function AccountingPage() {
   const [editingOrder, setEditingOrder] = useState<WorkOrder | null>(null);
   const [cancelingOrder, setCancelingOrder] = useState<WorkOrder | null>(null);
   const [cancelingDiaryId, setCancelingDiaryId] = useState<string | null>(null);
+  const [restoringOrderId, setRestoringOrderId] = useState<string | null>(null);
+  const [billingCustomerFilter, setBillingCustomerFilter] = useState("");
 
   // Map orderId → diary revenue for billing queue enrichment
   const orderRevenueMap = useMemo(() => {
@@ -478,11 +480,12 @@ export function AccountingPage() {
 
   const pendingBillingFiltered = useMemo(() => {
     return pendingBilling.filter((o) => {
+      if (billingCustomerFilter && !o.customer.toLowerCase().includes(billingCustomerFilter.toLowerCase())) return false;
       if (billingDateFrom && o.date < billingDateFrom) return false;
       if (billingDateTo && o.date > billingDateTo) return false;
       return true;
     });
-  }, [pendingBilling, billingDateFrom, billingDateTo]);
+  }, [pendingBilling, billingCustomerFilter, billingDateFrom, billingDateTo]);
 
   interface CustomerBillingGroup {
     customerName: string;
@@ -654,6 +657,15 @@ export function AccountingPage() {
     try { await exportAccountingExcel(buildReportData()); } finally { setExportingExcel(false); }
   }
 
+  async function handleRestoreOrder(order: WorkOrder) {
+    setRestoringOrderId(order.id);
+    try {
+      await updateOrderFields(order.id, { status: "completed" });
+    } finally {
+      setRestoringOrderId(null);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
       <div className="max-w-6xl mx-auto">
@@ -679,22 +691,6 @@ export function AccountingPage() {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("billing")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === "billing"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
-          >
-            ממתין לחיוב
-            {pendingBilling.length > 0 && (
-              <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full text-xs font-bold ${activeTab === "billing" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700"}`}>
-                {pendingBilling.length}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
             onClick={() => setActiveTab("work-diaries")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === "work-diaries"
@@ -706,6 +702,22 @@ export function AccountingPage() {
             {submittedDiaries.length > 0 && (
               <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold ${activeTab === "work-diaries" ? "bg-white/20 text-white" : "bg-blue-100 text-blue-700"}`}>
                 {submittedDiaries.length}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("billing")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === "billing"
+                ? "bg-blue-600 text-white shadow-sm"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            ממתין לחיוב
+            {pendingBilling.length > 0 && (
+              <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full text-xs font-bold ${activeTab === "billing" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700"}`}>
+                {pendingBilling.length}
               </span>
             )}
           </button>
@@ -786,10 +798,16 @@ export function AccountingPage() {
               </div>
             </div>
 
-            {/* Date filter for billing */}
+            {/* Billing filters */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-4 px-5 py-4">
-              <p className="text-xs font-semibold text-gray-600 mb-3">סינון לפי תאריך ביצוע</p>
-              <div className="grid grid-cols-2 gap-3">
+              <p className="text-xs font-semibold text-gray-600 mb-3">סינון</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">לקוח / חברה</label>
+                  <input type="text" value={billingCustomerFilter} onChange={(e) => setBillingCustomerFilter(e.target.value)}
+                    placeholder="חיפוש לפי שם לקוח"
+                    className="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-400" />
+                </div>
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">מתאריך</label>
                   <input type="date" value={billingDateFrom} onChange={(e) => setBillingDateFrom(e.target.value)} dir="ltr"
@@ -801,9 +819,9 @@ export function AccountingPage() {
                     className="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400" />
                 </div>
               </div>
-              {(billingDateFrom || billingDateTo) && (
+              {(billingCustomerFilter || billingDateFrom || billingDateTo) && (
                 <div className="flex justify-end mt-2">
-                  <button type="button" onClick={() => { setBillingDateFrom(""); setBillingDateTo(""); }}
+                  <button type="button" onClick={() => { setBillingCustomerFilter(""); setBillingDateFrom(""); setBillingDateTo(""); }}
                     className="px-3 py-1 rounded border border-gray-300 text-xs text-gray-500 hover:bg-gray-50 transition-colors">
                     נקה סינון
                   </button>
@@ -1033,8 +1051,8 @@ export function AccountingPage() {
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-200">
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">מס׳ יומן</th>
-                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">קבלן</th>
-                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">אתר</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">לקוח / חברה</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">עבודה / אתר</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">תאריך</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">שעות</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">סטטוס</th>
@@ -1221,6 +1239,7 @@ export function AccountingPage() {
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">תאריך ביטול</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-16">שלטים</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-16">שונות</th>
+                        <th className="px-4 py-2.5 w-24"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1241,6 +1260,16 @@ export function AccountingPage() {
                               <td className="px-4 py-3 text-gray-400 text-xs">{formatDate((order.updatedAt ?? order.createdAt).slice(0, 10))}</td>
                               <td className="px-4 py-3 text-center text-gray-400 text-sm">{countSignQty(order) || "—"}</td>
                               <td className="px-4 py-3 text-center text-gray-400 text-sm">{countMiscQty(order) || "—"}</td>
+                              <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRestoreOrder(order)}
+                                  disabled={restoringOrderId === order.id}
+                                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors whitespace-nowrap disabled:opacity-50"
+                                >
+                                  {restoringOrderId === order.id ? "משחזר..." : "שחזר הזמנה"}
+                                </button>
+                              </td>
                             </tr>
                             {isExpanded && <ExpandedRow key={`${order.id}-expanded`} order={order} />}
                           </>
@@ -1297,8 +1326,8 @@ export function AccountingPage() {
                       <tr className="bg-gray-50 border-b border-gray-200">
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">#</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">מס׳ יומן</th>
-                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">קבלן</th>
-                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">אתר</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">לקוח / חברה</th>
+                        <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">עבודה / אתר</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">תאריך ביצוע</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">תאריך ביטול</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">סטטוס לפני ביטול</th>

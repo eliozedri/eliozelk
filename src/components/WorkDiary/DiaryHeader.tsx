@@ -88,11 +88,11 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
       {/* פרטי עבודה — section 1 */}
       <SectionCard title="פרטי עבודה">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="שם הקבלן *">
-            <input type="text" placeholder="שם הקבלן או הלקוח" {...inp("customerName")} />
+          <Field label="שם חברה / לקוח *">
+            <input type="text" placeholder="שם הלקוח או החברה" {...inp("customerName")} />
           </Field>
-          <Field label="אתר העבודה *">
-            <input type="text" placeholder="כתובת / שם האתר" {...inp("siteName")} />
+          <Field label="שם עבודה / אתר עבודה *">
+            <input type="text" placeholder="שם הפרויקט / כתובת האתר" {...inp("siteName")} />
           </Field>
           <Field label="תאריך ביצוע *">
             <input type="date" dir="ltr" {...inp("executionDate")} />
@@ -118,10 +118,15 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
                   value={diary.orderId ?? ""}
                   onChange={(e) => {
                     const order = orders.find((o) => o.id === e.target.value);
-                    onChange({
+                    const patch: Partial<WorkDiary> = {
                       orderId: e.target.value || undefined,
                       orderNumber: order?.orderNumber ?? undefined,
-                    });
+                    };
+                    if (order) {
+                      if (!diary.customerName?.trim()) patch.customerName = order.customer;
+                      if (!diary.siteName?.trim()) patch.siteName = order.jobName ?? order.city ?? "";
+                    }
+                    onChange(patch);
                   }}
                   disabled={disabled}
                   className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
