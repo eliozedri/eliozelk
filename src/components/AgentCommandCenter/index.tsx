@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useAgentContext } from "@/context/AgentContext";
+import { getSupabase } from "@/lib/supabase/client";
+import type { ScanResult } from "@/lib/agents/types";
 import type {
   Agent,
   AgentTask,
@@ -32,6 +34,16 @@ const NAVY = "#0d1b2e";
 const NAVY_MID = "#1a2d4a";
 const EK_BLUE = "#1d6fd8";
 const EK_GOLD = "#f59e0b";
+
+// ── Scannable agents ─────────────────────────────────────────────────────────
+const SCANNABLE_AGENTS = new Set([
+  "ops-orchestrator",
+  "field-ops-agent",
+  "billing-collections-agent",
+  "cfo-agent",
+]);
+
+type ScanStatus = "idle" | "running" | "success" | "error";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +77,17 @@ function CloseIcon() {
 }
 function EyeIcon() {
   return <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+}
+function PlayIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>;
+}
+function SpinnerIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={`${className} animate-spin`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeOpacity="0.4"/>
+      <path d="M12 2v4" strokeOpacity="1"/>
+    </svg>
+  );
 }
 
 // ── KPI Card ─────────────────────────────────────────────────────────────────
@@ -173,12 +196,21 @@ function OrgChart({ agents, onSelect }: { agents: Agent[]; onSelect: (a: Agent) 
 
 // ── Agent Card ────────────────────────────────────────────────────────────────
 
-function AgentCard({ agent, stats, onSelect }: {
+function AgentCard({ agent, stats, onSelect, scanStatus }: {
   agent: Agent;
   stats: { openTasks: number; openExceptions: number; pendingApprovals: number; criticalExceptions: number };
   onSelect: () => void;
+  scanStatus?: ScanStatus;
 }) {
   const hasAlert = stats.criticalExceptions > 0 || stats.pendingApprovals > 0;
+
+  const scanDot = scanStatus === "running"
+    ? "bg-blue-400 animate-pulse"
+    : scanStatus === "success"
+    ? "bg-green-400"
+    : scanStatus === "error"
+    ? "bg-red-400"
+    : null;
 
   return (
     <button
@@ -191,6 +223,9 @@ function AgentCard({ agent, stats, onSelect }: {
     >
       {hasAlert && (
         <span className="absolute top-2 left-2 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.8)]" />
+      )}
+      {scanDot && !hasAlert && (
+        <span className={`absolute top-2 left-2 w-2 h-2 rounded-full ${scanDot}`} />
       )}
 
       {/* Header */}
@@ -241,8 +276,15 @@ function AgentCard({ agent, stats, onSelect }: {
         </div>
       </div>
 
+      {/* Last run */}
+      {agent.last_run_at && (
+        <div className="mt-3 text-[9px] text-white/25 text-left">
+          סריקה אחרונה: {relativeTime(agent.last_run_at)}
+        </div>
+      )}
+
       {/* Hover CTA */}
-      <div className="mt-3 text-[10px] text-white/0 group-hover:text-white/40 transition-colors text-center">
+      <div className="mt-1 text-[10px] text-white/0 group-hover:text-white/40 transition-colors text-center">
         לחץ לפתיחת חדר הסוכן ←
       </div>
     </button>
@@ -253,7 +295,7 @@ function AgentCard({ agent, stats, onSelect }: {
 
 type RoomTab = "tasks" | "exceptions" | "approvals" | "activity";
 
-function AgentRoom({ agent, tasks, exceptions, approvals, activity, onClose, onApprove, onReject, onDismissException, onAcknowledgeException, onTaskStatus }: {
+function AgentRoom({ agent, tasks, exceptions, approvals, activity, onClose, onApprove, onReject, onDismissException, onAcknowledgeException, onTaskStatus, onScan, scanRunning, scanSummary, scanStatus }: {
   agent: Agent;
   tasks: AgentTask[];
   exceptions: AgentException[];
@@ -265,8 +307,13 @@ function AgentRoom({ agent, tasks, exceptions, approvals, activity, onClose, onA
   onDismissException: (id: string) => void;
   onAcknowledgeException: (id: string) => void;
   onTaskStatus: (id: string, s: AgentTask["status"]) => void;
+  onScan?: () => void;
+  scanRunning?: boolean;
+  scanSummary?: string;
+  scanStatus?: ScanStatus;
 }) {
   const [tab, setTab] = useState<RoomTab>("tasks");
+  const isScannable = SCANNABLE_AGENTS.has(agent.id);
 
   const TABS: { id: RoomTab; label: string; count?: number }[] = [
     { id: "tasks", label: "משימות", count: tasks.length },
@@ -290,7 +337,7 @@ function AgentRoom({ agent, tasks, exceptions, approvals, activity, onClose, onA
           <button onClick={onClose} className="text-white/40 hover:text-white/80 transition-colors p-1 mt-1 rounded">
             <CloseIcon />
           </button>
-          <div className="text-right">
+          <div className="text-right flex-1">
             <div className="flex items-center justify-end gap-2 mb-1">
               <span className="text-2xl">{agent.icon}</span>
               <h2 className="text-xl font-black text-white">{agent.name}</h2>
@@ -311,6 +358,43 @@ function AgentRoom({ agent, tasks, exceptions, approvals, activity, onClose, onA
             <p className="text-xs text-white/50 mt-2 leading-relaxed max-w-xs">{agent.description}</p>
           </div>
         </div>
+
+        {/* Scan row */}
+        {isScannable && (
+          <div className="px-5 py-3 flex items-center justify-between gap-3"
+            style={{ borderBottom: `1px solid rgba(255,255,255,0.06)`, backgroundColor: "rgba(255,255,255,0.02)" }}>
+            <div className="text-right flex-1">
+              {scanStatus === "success" && scanSummary && (
+                <span className="text-[11px] text-green-400">{scanSummary}</span>
+              )}
+              {scanStatus === "error" && (
+                <span className="text-[11px] text-red-400">שגיאה בסריקה — נסה שוב</span>
+              )}
+              {scanStatus === "running" && (
+                <span className="text-[11px] text-blue-300 animate-pulse">סורק נתונים...</span>
+              )}
+              {(!scanStatus || scanStatus === "idle") && agent.last_run_at && (
+                <span className="text-[11px] text-white/30">סריקה אחרונה: {relativeTime(agent.last_run_at)}</span>
+              )}
+              {(!scanStatus || scanStatus === "idle") && !agent.last_run_at && (
+                <span className="text-[11px] text-white/20">לא נסרק עדיין</span>
+              )}
+            </div>
+            <button
+              onClick={onScan}
+              disabled={scanRunning}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
+              style={{
+                backgroundColor: scanRunning ? "rgba(255,255,255,0.08)" : `${agent.color ?? EK_BLUE}25`,
+                color: scanRunning ? "rgba(255,255,255,0.4)" : (agent.color ?? EK_BLUE),
+                border: `1px solid ${agent.color ?? EK_BLUE}40`,
+              }}
+            >
+              {scanRunning ? <SpinnerIcon /> : <PlayIcon />}
+              הפעל סריקה
+            </button>
+          </div>
+        )}
 
         {/* Scopes */}
         <div className="px-5 py-3 flex gap-3 flex-wrap" style={{ borderBottom: `1px solid rgba(255,255,255,0.06)` }}>
@@ -531,8 +615,8 @@ function AgentRoom({ agent, tasks, exceptions, approvals, activity, onClose, onA
 
 function RoomEmptyState({ agent, type }: { agent: Agent; type: string }) {
   const messages: Record<string, { title: string; body: string }> = {
-    tasks:      { title: "אין משימות פתוחות", body: "הסוכן יצור משימות אוטומטיות בעת זיהוי בעיות תפעוליות — Phase 2" },
-    exceptions: { title: "אין חריגות פתוחות", body: "הסוכן יזהה חריגות עסקיות כגון מלאי חסר, יומנים לא מושלמים, ותקיעות בתהליך" },
+    tasks:      { title: "אין משימות פתוחות", body: "לחץ הפעל סריקה כדי שהסוכן יזהה משימות תפעוליות ממידע בזמן אמת" },
+    exceptions: { title: "אין חריגות פתוחות", body: "הסוכן יזהה חריגות עסקיות כגון יומנים לא מושלמים ותקיעות בתהליך" },
     approvals:  { title: "אין בקשות אישור ממתינות", body: "הסוכן יבקש אישור אנושי לפני ביצוע פעולות בעלות סיכון" },
     activity:   { title: "פעילות מינימלית", body: "כל פעולה, המלצה וזיהוי של הסוכן יופיעו כאן עם חתימת זמן" },
   };
@@ -556,7 +640,7 @@ function TasksPanel({ tasks, agents, onUpdate }: { tasks: AgentTask[]; agents: A
       <div className="text-center py-20 text-white/30">
         <div className="text-5xl mb-4">✅</div>
         <div className="text-sm font-semibold">אין משימות פתוחות</div>
-        <div className="text-xs mt-1">הסוכנים יצרו משימות כשיזהו בעיות — Phase 2</div>
+        <div className="text-xs mt-1">הפעל סריקה מחדר הסוכן כדי לאתר משימות חדשות</div>
       </div>
     );
   }
@@ -616,7 +700,7 @@ function ExceptionsPanel({ exceptions, agents, onDismiss, onAcknowledge }: {
       <div className="text-center py-20 text-white/30">
         <div className="text-5xl mb-4">🟢</div>
         <div className="text-sm font-semibold">אין חריגות פתוחות</div>
-        <div className="text-xs mt-1">הסוכנים יזהו חריגות עסקיות ויציגו אותן כאן</div>
+        <div className="text-xs mt-1">הפעל סריקה מחדר הסוכן כדי לאתר חריגות עסקיות</div>
       </div>
     );
   }
@@ -733,7 +817,7 @@ function ActivityPanel({ feed, agents }: { feed: AgentActivityFeedItem[]; agents
     return (
       <div className="text-center py-20 text-white/30">
         <div className="text-5xl mb-4">📋</div>
-        <div className="text-sm font-semibold">ציר הפעילות יתחיל לאחר Phase 2</div>
+        <div className="text-sm font-semibold">פיד הפעילות ריק</div>
         <div className="text-xs mt-1">כל זיהוי, המלצה ופעולה של הסוכנים יתועדו כאן</div>
       </div>
     );
@@ -785,12 +869,53 @@ export function AgentCommandCenter() {
   const [mainTab, setMainTab] = useState<MainTab>("overview");
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
 
+  // ── Scan state ─────────────────────────────────────────────────────────────
+  const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatus>>({});
+  const [scanSummaries, setScanSummaries] = useState<Record<string, string>>({});
+  const [allScansRunning, setAllScansRunning] = useState(false);
+
+  const runScan = useCallback(async (agentId: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setScanStatuses(prev => ({ ...prev, [agentId]: "running" }));
+    try {
+      const res = await fetch(`/api/agents/${agentId}/scan`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json() as ScanResult & { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "scan failed");
+
+      setScanStatuses(prev => ({ ...prev, [agentId]: "success" }));
+      setScanSummaries(prev => ({
+        ...prev,
+        [agentId]: `${json.exceptionsCreated} חריגות חדשות · ${json.tasksCreated} משימות · ${json.exceptionsResolved} נפתרו`,
+      }));
+      setTimeout(() => refresh(), 400);
+    } catch {
+      setScanStatuses(prev => ({ ...prev, [agentId]: "error" }));
+    }
+  }, [refresh]);
+
+  const runAllScans = useCallback(async () => {
+    setAllScansRunning(true);
+    for (const id of SCANNABLE_AGENTS) {
+      await runScan(id);
+    }
+    setAllScansRunning(false);
+  }, [runScan]);
+
   // ── Global counts ──────────────────────────────────────────────────────────
   const totalOpenTasks        = tasks.length;
   const totalCriticalExc      = exceptions.filter(e => e.severity === "critical" && e.status === "open").length;
   const totalOpenExc          = exceptions.filter(e => e.status === "open").length;
   const totalPendingApprovals = approvals.length;
   const activeAgents          = agents.filter(a => a.status === "active").length;
+  const scansRunning          = Object.values(scanStatuses).filter(s => s === "running").length;
 
   // ── Per-agent data for Room ────────────────────────────────────────────────
   const roomTasks       = selectedAgent ? tasks.filter(t => t.agent_id === selectedAgent.id) : [];
@@ -811,14 +936,33 @@ export function AgentCommandCenter() {
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="px-6 pt-6 pb-4" style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
         <div className="flex items-start justify-between mb-4">
-          <button
-            onClick={refresh}
-            disabled={loading}
-            className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors p-2 rounded-lg hover:bg-white/5 mt-1"
-          >
-            <RefreshIcon />
-            {loading ? "טוען..." : "רענן"}
-          </button>
+          {/* Left actions */}
+          <div className="flex items-center gap-2 mt-1">
+            <button
+              onClick={refresh}
+              disabled={loading}
+              className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors p-2 rounded-lg hover:bg-white/5"
+            >
+              <RefreshIcon />
+              {loading ? "טוען..." : "רענן"}
+            </button>
+            <button
+              onClick={runAllScans}
+              disabled={allScansRunning || scansRunning > 0}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all disabled:opacity-50"
+              style={{
+                backgroundColor: (allScansRunning || scansRunning > 0) ? "rgba(255,255,255,0.08)" : `${EK_GOLD}20`,
+                color: (allScansRunning || scansRunning > 0) ? "rgba(255,255,255,0.3)" : EK_GOLD,
+                border: `1px solid ${EK_GOLD}40`,
+              }}
+            >
+              {(allScansRunning || scansRunning > 0)
+                ? <><SpinnerIcon /> סורק ({scansRunning})...</>
+                : <><PlayIcon /> הפעל סריקה כללית</>
+              }
+            </button>
+          </div>
+
           <div className="text-right">
             <div className="flex items-center justify-end gap-3 mb-1">
               <div>
@@ -839,7 +983,7 @@ export function AgentCommandCenter() {
           <KpiCard
             value={agents.length}
             label="סוכנים מוגדרים"
-            sub={activeAgents > 0 ? `${activeAgents} פעילים` : "ממתינים ל-Phase 2"}
+            sub={`${SCANNABLE_AGENTS.size} עם סריקה פעילה`}
             accent="rgba(255,255,255,0.9)"
           />
           <KpiCard
@@ -873,19 +1017,19 @@ export function AgentCommandCenter() {
         </div>
       </div>
 
-      {/* ── Phase notice ────────────────────────────────────────────────────── */}
-      {activeAgents === 0 && (
-        <div className="mx-6 mt-4 rounded-xl border border-blue-500/20 px-4 py-3 flex items-start gap-3 text-right"
-          style={{ backgroundColor: "rgba(29,111,216,0.08)" }}>
-          <div className="mt-0.5 text-blue-400 shrink-0">
+      {/* ── Phase 2 active notice ────────────────────────────────────────────── */}
+      {activeAgents === 0 && totalOpenTasks === 0 && totalOpenExc === 0 && (
+        <div className="mx-6 mt-4 rounded-xl border border-green-500/20 px-4 py-3 flex items-start gap-3 text-right"
+          style={{ backgroundColor: "rgba(34,197,94,0.06)" }}>
+          <div className="mt-0.5 text-green-400 shrink-0">
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
           </div>
           <div>
-            <div className="text-sm font-semibold text-blue-300 mb-0.5">Phase 1 — תשתית מוכנה</div>
-            <div className="text-xs text-blue-400/70 leading-relaxed">
-              כל 8 הסוכנים הוגדרו ומוכנים. Phase 2 יפעיל סריקות אוטומטיות שיזהו בעיות, ייצרו משימות וחריגות, ויבקשו אישורים לפעולות בסיכון. עד אז — המבנה הארגוני, טבלאות הנתונים, ומרכז הפיקוד מוכנים.
+            <div className="text-sm font-semibold text-green-300 mb-0.5">Phase 2 פעיל — הפעל סריקה כדי לאתר ממצאים</div>
+            <div className="text-xs text-green-400/70 leading-relaxed">
+              4 סוכנים מוכנים לסריקה: מנהל תפעול, מנהל שטח, גביה וחשבונות, ומנהל כספים. לחץ &quot;הפעל סריקה כללית&quot; כדי לבצע סריקת מלאי של כל הנתונים.
             </div>
           </div>
         </div>
@@ -943,7 +1087,9 @@ export function AgentCommandCenter() {
 
             {/* Agent Cards */}
             <div className="xl:col-span-2">
-              <div className="text-xs font-bold text-white/50 uppercase tracking-widest mb-4">סוכנים</div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-xs font-bold text-white/50 uppercase tracking-widest">סוכנים</div>
+              </div>
               {loading
                 ? <div className="text-white/30 text-sm text-center py-10">טוען...</div>
                 : (
@@ -954,6 +1100,7 @@ export function AgentCommandCenter() {
                         agent={agent}
                         stats={agentStats[agent.id] ?? { openTasks: 0, inProgressTasks: 0, openExceptions: 0, criticalExceptions: 0, pendingApprovals: 0 }}
                         onSelect={() => setSelectedAgent(agent)}
+                        scanStatus={scanStatuses[agent.id]}
                       />
                     ))}
                   </div>
@@ -1004,6 +1151,10 @@ export function AgentCommandCenter() {
           onDismissException={dismissException}
           onAcknowledgeException={acknowledgeException}
           onTaskStatus={updateTaskStatus}
+          onScan={SCANNABLE_AGENTS.has(selectedAgent.id) ? () => runScan(selectedAgent.id) : undefined}
+          scanRunning={scanStatuses[selectedAgent.id] === "running"}
+          scanSummary={scanSummaries[selectedAgent.id]}
+          scanStatus={scanStatuses[selectedAgent.id]}
         />
       )}
     </div>
