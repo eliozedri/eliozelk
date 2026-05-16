@@ -39,6 +39,7 @@ function validate(order: ReturnType<typeof useOrderForm>["order"]): string | nul
   if (!order.date) return "נא להזין תאריך";
   if (!order.customer.trim()) return "נא להזין שם חברה";
   if (!order.city) return "נא לבחור עיר";
+  if (!order.jobName?.trim()) return "נא להזין שם עבודה / אתר עבודה";
 
   const hasSign = order.signRows.some((r) => r.signNumber.trim());
   const hasAccessory = (order.accessoryRows ?? []).some((r) => r.description.trim());
@@ -280,7 +281,7 @@ export function OrderForm() {
           <div className="grid grid-cols-2 gap-3 mt-1">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">
-                שם עבודה / תיאור
+                שם עבודה / אתר עבודה <span className="text-red-500">*</span>
                 {order.orderType === "field_work" && (
                   <span className="text-gray-400 font-normal mr-1">(לזיהוי בסידור השבועי)</span>
                 )}
