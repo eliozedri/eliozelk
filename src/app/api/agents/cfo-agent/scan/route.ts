@@ -395,9 +395,69 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Customer-level aggregation (Phase 4.6) ────────────────────────────────
+    // Build per-customer stats from the snapshots already loaded
+    type CustomerAgg = {
+      customer: string;
+      negativeCount: number;
+      belowTargetCount: number;
+      orderCount: number;
+    };
+    const customerAggMap = new Map<string, CustomerAgg>();
+    for (const order of (activeOrders ?? [])) {
+      const snap = snapMap.get(order.id as string);
+      if (!snap) continue;
+      const customerName = (order.customer as string | null)?.trim() || "לא ידוע";
+      const agg: CustomerAgg = customerAggMap.get(customerName) ?? {
+        customer: customerName, negativeCount: 0, belowTargetCount: 0, orderCount: 0,
+      };
+      agg.orderCount++;
+      if ((snap.gross_profit as number) < 0) agg.negativeCount++;
+      else if ((snap.gross_margin_percent as number) < rates.warningMarginPercentage) agg.belowTargetCount++;
+      customerAggMap.set(customerName, agg);
+    }
+
+    let repeatedNegativeCustomers = 0;
+    let repeatedBelowTargetCustomers = 0;
+
+    for (const agg of customerAggMap.values()) {
+      // Only flag customers with at least 2 orders to avoid single-job noise
+      if (agg.orderCount < 2) continue;
+
+      if (agg.negativeCount >= 2) {
+        repeatedNegativeCustomers++;
+        const k = dedupeKey("customer_repeated_negative", "customer", agg.customer);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "customer_repeated_negative",
+          entityType: "customer",
+          entityId: agg.customer,
+          severity: "warn",
+          title: `לקוח עם הפסדים חוזרים — ${agg.customer} (${agg.negativeCount}/${agg.orderCount} עבודות)`,
+          description: `${agg.negativeCount} מתוך ${agg.orderCount} הזמנות מסתיימות בהפסד — ייתכן שתמחור אינו מתאים לעבודות מסוג זה`,
+          detectedFromData: { customerName: agg.customer, negativeCount: agg.negativeCount, orderCount: agg.orderCount },
+          recommendedResolution: "סקור תמחור עבודות לקוח זה — שקול שיחת מחיר או עדכון תעריפים",
+        }, dedupeMap, result);
+      } else if (agg.belowTargetCount >= 2) {
+        repeatedBelowTargetCustomers++;
+        const k = dedupeKey("customer_repeated_below_target", "customer", agg.customer);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "customer_repeated_below_target",
+          entityType: "customer",
+          entityId: agg.customer,
+          severity: "info",
+          title: `לקוח עם מרווח נמוך חוזר — ${agg.customer} (${agg.belowTargetCount}/${agg.orderCount} עבודות)`,
+          description: `${agg.belowTargetCount} עבודות עם מרווח מתחת לסף האזהרה (${rates.warningMarginPercentage}%) — שקול עדכון תמחור`,
+          detectedFromData: { customerName: agg.customer, belowTargetCount: agg.belowTargetCount, orderCount: agg.orderCount, warningThreshold: rates.warningMarginPercentage },
+          recommendedResolution: "בדוק רווחיות לקוח בלשונית CFO ליי → שקול שיחת תמחור",
+        }, dedupeMap, result);
+      }
+    }
+
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 
-    const summary = `סריקה כספית: ${result.entitiesScanned} יומנים | ${totalLoss} הפסד | ${totalMarginal} שולי | ${totalMissingData} חסר נתונים | ${missingCostPriceCount} חסרי עלות | ${missingSnapshotCount} snapshot חסר | ${lowConfidenceCount} ביטחון נמוך | ${negativeMarginCount} הפסד בהזמנה | ${belowTargetCount} מתחת לסף | ${nearTargetCount} קרוב ליעד | ${result.exceptionsCreated} חריגות חדשות`;
+    const summary = `סריקה כספית: ${result.entitiesScanned} יומנים | ${totalLoss} הפסד | ${totalMarginal} שולי | ${totalMissingData} חסר נתונים | ${missingCostPriceCount} חסרי עלות | ${missingSnapshotCount} snapshot חסר | ${lowConfidenceCount} ביטחון נמוך | ${negativeMarginCount} הפסד בהזמנה | ${belowTargetCount} מתחת לסף | ${nearTargetCount} קרוב ליעד | ${repeatedNegativeCustomers} לקוחות הפסדיים | ${repeatedBelowTargetCustomers} לקוחות מרווח נמוך | ${result.exceptionsCreated} חריגות חדשות`;
     await writeAgentActivity(db, AGENT_ID, "detection", summary, {
       entitiesScanned: result.entitiesScanned,
       lossJobs: totalLoss,
@@ -409,6 +469,8 @@ export async function POST(req: NextRequest) {
       negativeMarginOrders: negativeMarginCount,
       belowTargetOrders: belowTargetCount,
       nearTargetOrders: nearTargetCount,
+      repeatedNegativeCustomers,
+      repeatedBelowTargetCustomers,
       exceptionsCreated: result.exceptionsCreated,
       exceptionsResolved: result.exceptionsResolved,
     });

@@ -741,6 +741,17 @@ interface CfoSnapshot {
   updated_at: string;
 }
 
+interface CustomerStat {
+  customer: string;
+  orderCount: number;
+  revenue: number;
+  totalCost: number;
+  grossProfit: number;
+  avgMargin: number;
+  negativeCount: number;
+  lowConfidenceCount: number;
+}
+
 function CfoTab() {
   const { orders: contextOrders, updateOrderFields, addOrderActivity } = useOrdersContext();
   const { profile } = useAuth();
@@ -870,6 +881,31 @@ function CfoTab() {
     ? snapshots.reduce((s, r) => s + r.gross_margin_percent, 0) / snapshots.length
     : 0;
   const losingCount = snapshots.filter(s => s.gross_profit < 0).length;
+
+  // ── Customer-level aggregation (Phase 4.6) ──
+  const customerStats = useMemo<CustomerStat[]>(() => {
+    const map = new Map<string, Omit<CustomerStat, "avgMargin"> & { marginSum: number }>();
+    for (const order of activeOrders) {
+      const snap = snapshotMap.get(order.id);
+      if (!snap) continue;
+      const name = order.customer?.trim() || "לא ידוע";
+      const existing = map.get(name) ?? {
+        customer: name, orderCount: 0, revenue: 0, totalCost: 0,
+        grossProfit: 0, marginSum: 0, negativeCount: 0, lowConfidenceCount: 0,
+      };
+      existing.orderCount++;
+      existing.revenue += snap.revenue;
+      existing.totalCost += snap.total_cost;
+      existing.grossProfit += snap.gross_profit;
+      existing.marginSum += snap.gross_margin_percent;
+      if (snap.gross_profit < 0) existing.negativeCount++;
+      if (snap.confidence_level === "low" || snap.confidence_level === "missing_data") existing.lowConfidenceCount++;
+      map.set(name, existing);
+    }
+    return Array.from(map.values())
+      .map(({ marginSum, ...c }) => ({ ...c, avgMargin: c.orderCount > 0 ? marginSum / c.orderCount : 0 }))
+      .sort((a, b) => b.grossProfit - a.grossProfit);
+  }, [snapshots, activeOrders, snapshotMap]);
 
   return (
     <div className="space-y-5" dir="rtl">
@@ -1076,6 +1112,76 @@ function CfoTab() {
           </div>
         )}
       </div>
+
+      {/* ── Customer profitability section (Phase 4.6) ── */}
+      {customerStats.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-gray-800">רווחיות לפי לקוח</h3>
+            <span className="text-xs text-gray-400">{customerStats.length} לקוחות עם נתונים</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs" dir="rtl">
+              <thead className="bg-gray-50 text-gray-500 text-right">
+                <tr>
+                  <th className="px-3 py-2 text-right font-medium">לקוח</th>
+                  <th className="px-3 py-2 text-right font-medium">עבודות</th>
+                  <th className="px-3 py-2 text-right font-medium">הכנסה</th>
+                  <th className="px-3 py-2 text-right font-medium">עלות כוללת</th>
+                  <th className="px-3 py-2 text-right font-medium">רווח גולמי</th>
+                  <th className="px-3 py-2 text-right font-medium">
+                    מרווח ממוצע
+                    <div className="text-[9px] text-gray-400 font-normal mt-0.5">יעד {rates.targetMarginPercentage}%</div>
+                  </th>
+                  <th className="px-3 py-2 text-right font-medium">הפסדיות</th>
+                  <th className="px-3 py-2 text-right font-medium">חסרי נתונים</th>
+                </tr>
+              </thead>
+              <tbody>
+                {customerStats.slice(0, 20).map(c => {
+                  const isProfit = c.grossProfit >= 0;
+                  let marginColor = "text-green-700";
+                  if (c.avgMargin < 0) marginColor = "text-red-600";
+                  else if (c.avgMargin < rates.warningMarginPercentage) marginColor = "text-orange-600";
+                  else if (c.avgMargin < rates.targetMarginPercentage) marginColor = "text-yellow-600";
+                  return (
+                    <tr key={c.customer} className="border-t border-gray-50 hover:bg-gray-50 transition-colors">
+                      <td className="px-3 py-2 font-medium text-gray-800 max-w-[140px] truncate">{c.customer}</td>
+                      <td className="px-3 py-2 text-gray-600 text-center">{c.orderCount}</td>
+                      <td className="px-3 py-2 text-gray-600">{fmt(c.revenue)}</td>
+                      <td className="px-3 py-2 text-gray-600">{fmt(c.totalCost)}</td>
+                      <td className={`px-3 py-2 font-semibold ${isProfit ? "text-green-700" : "text-red-600"}`}>
+                        {fmt(c.grossProfit)}
+                      </td>
+                      <td className={`px-3 py-2 font-bold ${marginColor}`}>
+                        {pct(c.avgMargin)}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {c.negativeCount > 0 ? (
+                          <span className="inline-flex items-center bg-red-100 text-red-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                            {c.negativeCount}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {c.lowConfidenceCount > 0 ? (
+                          <span className="inline-flex items-center bg-amber-100 text-amber-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                            {c.lowConfidenceCount}
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="text-xs text-gray-400 text-center">
         נתונים אנליטיים בלבד · אינם משפיעים על חיוב לקוח או מצב חשבונאי ·{" "}

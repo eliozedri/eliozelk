@@ -768,6 +768,10 @@ export async function runChatEngine(
       const wantsBelowTarget = lower.includes("מתחת ליעד") || lower.includes("פחות מיעד") || lower.includes("מתחת לסף") || (lower.includes("מתחת") && lower.includes("יעד"));
       const wantsNearTarget = lower.includes("קרוב ליעד") || lower.includes("קרובות ליעד");
       const wantsTargetInfo = lower.includes("מה יעד") || lower.includes("כמה יעד") || lower.includes("יעד הרווחיות") || (lower.includes("יעד") && lower.includes("מרווח"));
+      // Customer-level queries (Phase 4.6)
+      const wantsCustomerProfit = lower.includes("לפי לקוח") || lower.includes("רווחיות לקוח") || lower.includes("לקוחות רווחי") || lower.includes("הכי רווחי") || lower.includes("לקוח רווח");
+      const wantsUnprofitableCustomers = lower.includes("לקוחות פחות רווחי") || lower.includes("לקוחות הפסד") || lower.includes("לקוחות עם הפסד") || (lower.includes("לקוח") && lower.includes("הפסד")) || (lower.includes("לקוח") && lower.includes("הפסדי"));
+      const wantsCustomerMissingData = lower.includes("לקוחות חסרים") || (lower.includes("לקוח") && lower.includes("חסר") && lower.includes("נתון"));
 
       if (wantsRevenue) {
         const { data: orders } = await db
@@ -977,6 +981,77 @@ export async function runChatEngine(
           content: `🎯 **יעדי רווחיות מוגדרים:**\n\n· יעד מרווח: **${target}%** ✅\n· סף אזהרה: **${warning}%** 🟠\n· סף הפסד: **${loss}%** 🔴\n\nלשינוי: עמוד "הגדרות עלות" (/cost-settings).`,
           sourceRefs: [],
         };
+      }
+
+      // ── Customer aggregation helper (used by customer sub-routes) ──
+      async function buildCustomerStats() {
+        const { data: snaps } = await db
+          .from("profitability_snapshots")
+          .select("order_id,revenue,total_cost,gross_profit,gross_margin_percent,confidence_level,work_orders(customer)")
+          .is("work_diary_id", null)
+          .not("order_id", "is", null);
+        type CAgg = { customer: string; orderCount: number; revenue: number; totalCost: number; grossProfit: number; marginSum: number; negativeCount: number; lowConfCount: number };
+        const map = new Map<string, CAgg>();
+        for (const s of (snaps ?? [])) {
+          const woArr = s.work_orders as Array<{ customer: string | null }> | null;
+          const name = (Array.isArray(woArr) ? woArr[0]?.customer : null)?.trim() || "לא ידוע";
+          const ex = map.get(name) ?? { customer: name, orderCount: 0, revenue: 0, totalCost: 0, grossProfit: 0, marginSum: 0, negativeCount: 0, lowConfCount: 0 };
+          ex.orderCount++;
+          ex.revenue += s.revenue as number;
+          ex.totalCost += s.total_cost as number;
+          ex.grossProfit += s.gross_profit as number;
+          ex.marginSum += s.gross_margin_percent as number;
+          if ((s.gross_profit as number) < 0) ex.negativeCount++;
+          if (s.confidence_level === "low" || s.confidence_level === "missing_data") ex.lowConfCount++;
+          map.set(name, ex);
+        }
+        return Array.from(map.values()).map(c => ({ ...c, avgMargin: c.orderCount > 0 ? c.marginSum / c.orderCount : 0 }));
+      }
+
+      // ── Profitable customers ──
+      if (wantsCustomerProfit) {
+        const stats = (await buildCustomerStats()).sort((a, b) => b.grossProfit - a.grossProfit);
+        if (stats.length === 0) {
+          return { content: "אין נתוני רווחיות מחושבים עדיין — הרץ חישוב בלשונית CFO ליי.", sourceRefs: [] };
+        }
+        const lines: string[] = [`📊 **רווחיות לפי לקוח** (${stats.length} לקוחות):\n`];
+        for (const c of stats.slice(0, 10)) {
+          const icon = c.grossProfit >= 0 ? "🟢" : "🔴";
+          lines.push(`${icon} **${c.customer}** — ${c.orderCount} עבודות | רווח ₪${Math.round(c.grossProfit).toLocaleString()} | מרווח ממוצע ${c.avgMargin.toFixed(1)}%`);
+        }
+        return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      // ── Unprofitable / loss customers ──
+      if (wantsUnprofitableCustomers) {
+        const stats = (await buildCustomerStats())
+          .filter(c => c.negativeCount > 0 || c.grossProfit < 0)
+          .sort((a, b) => a.grossProfit - b.grossProfit);
+        if (stats.length === 0) {
+          return { content: "✅ אין לקוחות עם עבודות הפסדיות מחושבות כרגע.", sourceRefs: [] };
+        }
+        const lines: string[] = [`🔴 **לקוחות עם עבודות הפסדיות (${stats.length} לקוחות):**\n`];
+        for (const c of stats.slice(0, 10)) {
+          lines.push(`· **${c.customer}** — ${c.negativeCount} הפסדיות מתוך ${c.orderCount} | רווח כולל ₪${Math.round(c.grossProfit).toLocaleString()} | מרווח ממוצע ${c.avgMargin.toFixed(1)}%`);
+        }
+        lines.push(`\nבדוק תמחור לפי לקוח בלשונית CFO ליי.`);
+        return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      // ── Customers with missing data ──
+      if (wantsCustomerMissingData) {
+        const stats = (await buildCustomerStats())
+          .filter(c => c.lowConfCount > 0)
+          .sort((a, b) => b.lowConfCount - a.lowConfCount);
+        if (stats.length === 0) {
+          return { content: "✅ כל הלקוחות בעלי נתוני רווחיות עם ביטחון גבוה או בינוני.", sourceRefs: [] };
+        }
+        const lines: string[] = [`⚠️ **לקוחות עם נתוני רווחיות חסרים (${stats.length} לקוחות):**\n`];
+        for (const c of stats.slice(0, 10)) {
+          lines.push(`· **${c.customer}** — ${c.lowConfCount} עבודות חסרות נתונים מתוך ${c.orderCount}`);
+        }
+        lines.push(`\nלתיקון: CFO ליי → השלם נתוני הכנסה ויומני עבודה.`);
+        return { content: lines.join("\n"), sourceRefs: [] };
       }
 
       // ── Default: summary of snapshots ──
