@@ -589,6 +589,21 @@ export function useOrders() {
       extra.readyForExecutionAt = new Date().toISOString();
     }
     await _patchOrder(id, { status, ...extra });
+
+    // Refresh profitability snapshot when order is marked completed — best-effort, non-fatal
+    if (status === "completed") {
+      const db = getSupabase();
+      if (db) {
+        db.auth.getSession().then(({ data: { session } }) => {
+          if (!session?.access_token) return;
+          fetch("/api/profitability/snapshots/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ orderId: id }),
+          }).catch(err => console.warn("[orders] snapshot refresh failed (non-fatal):", err));
+        }).catch(() => {});
+      }
+    }
   }, [_patchOrder]);
 
   // ── updateOrderFields ──────────────────────────────────────────────────

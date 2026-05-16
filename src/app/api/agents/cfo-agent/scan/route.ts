@@ -264,15 +264,111 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Order-level: snapshot health scan ────────────────────────────────────
+    const { data: activeOrders } = await db
+      .from("work_orders")
+      .select("id,order_number,customer,status")
+      .not("status", "in", '("cancelled")');
+
+    const { data: existingSnaps } = await db
+      .from("profitability_snapshots")
+      .select("order_id,confidence_level,gross_profit,gross_margin_percent,updated_at")
+      .is("work_diary_id", null);
+
+    const snapMap = new Map((existingSnaps ?? []).map(s => [s.order_id as string, s]));
+
+    let missingSnapshotCount = 0;
+    let lowConfidenceCount = 0;
+    let negativeMarginCount = 0;
+
+    for (const order of (activeOrders ?? [])) {
+      const orderId = order.id as string;
+      const orderLabel = (order.order_number as string) || orderId.slice(0, 8);
+      const snap = snapMap.get(orderId);
+
+      // Completed/verified orders should have a snapshot
+      if ((order.status === "completed" || order.status === "ready_installation") && !snap) {
+        missingSnapshotCount++;
+        const k = dedupeKey("snapshot_missing", "work_order", orderId);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "snapshot_missing",
+          entityType: "work_order",
+          entityId: orderId,
+          severity: "warn",
+          title: `חסר חישוב רווחיות — הזמנה ${orderLabel}`,
+          description: `לקוח: ${order.customer as string} | סטטוס: ${order.status as string} | לא חושבה רווחיות`,
+          detectedFromData: { orderNumber: orderLabel, status: order.status },
+          recommendedResolution: "פתח CFO ליי ולחץ 'חשב' ליד ההזמנה, או הרץ 'חשב מחדש הכל'",
+        }, dedupeMap, result);
+      }
+
+      if (snap) {
+        const conf = snap.confidence_level as string;
+        const grossProfit = snap.gross_profit as number;
+
+        // Low / missing_data confidence
+        if (conf === "low" || conf === "missing_data") {
+          lowConfidenceCount++;
+          const k = dedupeKey("snapshot_low_confidence", "work_order", orderId);
+          activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "snapshot_low_confidence",
+            entityType: "work_order",
+            entityId: orderId,
+            severity: "info",
+            title: `רווחיות — ביטחון נמוך — הזמנה ${orderLabel}`,
+            description: `לקוח: ${order.customer as string} | רמת ביטחון: ${conf} | השלם נתונים חסרים לשיפור הדיוק`,
+            detectedFromData: { orderNumber: orderLabel, confidenceLevel: conf },
+            recommendedResolution: "עדכן נתוני צוות, הכנסה ומחירי עלות — ואז חשב מחדש",
+          }, dedupeMap, result);
+        }
+
+        // Negative gross profit
+        if (grossProfit < 0) {
+          negativeMarginCount++;
+          const margin = snap.gross_margin_percent as number;
+          const k = dedupeKey("snapshot_negative_margin", "work_order", orderId);
+          activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "snapshot_negative_margin",
+            entityType: "work_order",
+            entityId: orderId,
+            severity: "critical",
+            title: `הפסד בהזמנה — ${orderLabel} (${margin.toFixed(1)}%)`,
+            description: `לקוח: ${order.customer as string} | הפסד ₪${Math.round(Math.abs(grossProfit))} | מרווח: ${margin.toFixed(1)}%`,
+            detectedFromData: { orderNumber: orderLabel, grossProfit, margin },
+            recommendedResolution: "בדוק תמחור ועלויות — שקול העלאת מחיר לעבודות דומות",
+          }, dedupeMap, result);
+
+          // Create a task for negative-margin orders
+          const tk = dedupeKey("review_negative_margin", "work_order", orderId);
+          activeDedupeKeys.add(tk);
+          await upsertTask(db, AGENT_ID, {
+            category: "review_negative_margin",
+            entityType: "work_order",
+            entityId: orderId,
+            title: `סקור תמחור — הזמנה ${orderLabel} (הפסד)`,
+            description: `ההזמנה מפסידה ₪${Math.round(Math.abs(grossProfit))} לפי הנתונים הנוכחיים`,
+            priority: "high",
+            recommendedAction: "פתח CFO ליי → בדוק עלויות → שקול תיקון תמחור עתידי",
+          }, taskDedupeMap, result);
+        }
+      }
+    }
+
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 
-    const summary = `סריקה כספית: ${result.entitiesScanned} יומנים | ${totalLoss} הפסד | ${totalMarginal} שולי | ${totalMissingData} חסר נתונים | ${missingCostPriceCount} חסרי עלות | ${result.exceptionsCreated} חריגות חדשות`;
+    const summary = `סריקה כספית: ${result.entitiesScanned} יומנים | ${totalLoss} הפסד | ${totalMarginal} שולי | ${totalMissingData} חסר נתונים | ${missingCostPriceCount} חסרי עלות | ${missingSnapshotCount} snapshot חסר | ${lowConfidenceCount} ביטחון נמוך | ${negativeMarginCount} הפסד בהזמנה | ${result.exceptionsCreated} חריגות חדשות`;
     await writeAgentActivity(db, AGENT_ID, "detection", summary, {
       entitiesScanned: result.entitiesScanned,
       lossJobs: totalLoss,
       marginalJobs: totalMarginal,
       missingDataJobs: totalMissingData,
       missingCostPriceItems: missingCostPriceCount,
+      missingSnapshots: missingSnapshotCount,
+      lowConfidenceSnapshots: lowConfidenceCount,
+      negativeMarginOrders: negativeMarginCount,
       exceptionsCreated: result.exceptionsCreated,
       exceptionsResolved: result.exceptionsResolved,
     });

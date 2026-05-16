@@ -758,10 +758,13 @@ export async function runChatEngine(
     case "profitability": {
       const lower = message.toLowerCase();
 
-      // ── Missing revenue sub-query ──
+      // ── Sub-query routing ──
       const wantsRevenue = lower.includes("חסר") && (lower.includes("הכנסה") || lower.includes("סכום"));
       const wantsCostPrice = lower.includes("עלות") && (lower.includes("חסר") || lower.includes("פריט"));
       const wantsMissingData = lower.includes("missing") || (lower.includes("חסר") && lower.includes("נתון")) || lower.includes("להשלים") || lower.includes("מה צריך");
+      const wantsLowConf = lower.includes("ביטחון נמוך") || lower.includes("ודאות נמוכה") || (lower.includes("ביטחון") && lower.includes("נמוך")) || lower.includes("low confidence") || lower.includes("אמינות");
+      const wantsNegative = lower.includes("הפסדיות") || lower.includes("הזמנות מפסידות") || (lower.includes("הפסד") && (lower.includes("איזה") || lower.includes("אילו") || lower.includes("רשימ")));
+      const wantsStale = lower.includes("לא עודכנו") || lower.includes("לא עדכניות") || (lower.includes("מתי") && lower.includes("עודכן")) || lower.includes("ישנים");
 
       if (wantsRevenue) {
         const { data: orders } = await db
@@ -820,6 +823,72 @@ export async function runChatEngine(
         if (missingDataSnaps > 0) lines.push(`⚪ ${missingDataSnaps} חישובים במצב "נתונים חסרים"`);
         if (lowSnaps > 0) lines.push(`🟡 ${lowSnaps} חישובים עם ביטחון נמוך`);
         if (missingRev === 0 && missingCp === 0) lines.push(`✅ הנתונים הבסיסיים מלאים — לחץ "חשב מחדש הכל" בלשונית CFO ליי לעדכון`);
+        return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      // ── Low confidence snapshots ──
+      if (wantsLowConf) {
+        const { data: lowSnaps } = await db
+          .from("profitability_snapshots")
+          .select("order_id,confidence_level,missing_data,updated_at")
+          .is("work_diary_id", null)
+          .in("confidence_level", ["low", "missing_data"])
+          .order("updated_at", { ascending: true })
+          .limit(15);
+        const list = lowSnaps ?? [];
+        if (list.length === 0) {
+          return { content: "✅ כל הסנאפשוטים הקיימים מכילים רמת ביטחון בינונית או גבוהה.", sourceRefs: [] };
+        }
+        const lines: string[] = [`⚠️ **${list.length} הזמנות עם ביטחון נמוך / נתונים חסרים:**\n`];
+        for (const s of list.slice(0, 10)) {
+          const tags = (s.missing_data as string[] | null) ?? [];
+          lines.push(`· הזמנה ${(s.order_id as string).slice(0, 8)} — ${s.confidence_level as string}${tags.length > 0 ? ` | ${tags[0]}` : ""}`);
+        }
+        lines.push(`\nלתיקון: CFO ליי → השלם נתונים חסרים → לחץ "חשב"`);
+        return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      // ── Negative margin snapshots ──
+      if (wantsNegative) {
+        const { data: negSnaps } = await db
+          .from("profitability_snapshots")
+          .select("order_id,revenue,gross_profit,gross_margin_percent,updated_at")
+          .is("work_diary_id", null)
+          .lt("gross_profit", 0)
+          .order("gross_profit", { ascending: true })
+          .limit(15);
+        const list = negSnaps ?? [];
+        if (list.length === 0) {
+          return { content: "✅ אין הזמנות עם הפסד מחושב כרגע.", sourceRefs: [] };
+        }
+        const lines: string[] = [`🔴 **${list.length} הזמנות הפסדיות:**\n`];
+        for (const s of list.slice(0, 10)) {
+          const profit = Math.round(s.gross_profit as number);
+          const margin = (s.gross_margin_percent as number).toFixed(1);
+          lines.push(`· הזמנה ${(s.order_id as string).slice(0, 8)} — הפסד ₪${Math.abs(profit).toLocaleString()} | מרווח ${margin}%`);
+        }
+        lines.push(`\nבדוק תמחור ועלויות ב-CFO ליי.`);
+        return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      // ── Stale snapshots ──
+      if (wantsStale) {
+        const { data: staleSnaps } = await db
+          .from("profitability_snapshots")
+          .select("order_id,confidence_level,updated_at")
+          .is("work_diary_id", null)
+          .order("updated_at", { ascending: true })
+          .limit(10);
+        const list = staleSnaps ?? [];
+        if (list.length === 0) {
+          return { content: "אין חישובי רווחיות שמורים עדיין.", sourceRefs: [] };
+        }
+        const lines: string[] = [`🕐 **חישובים ישנים ביותר:**\n`];
+        for (const s of list.slice(0, 8)) {
+          const updatedAt = new Date(s.updated_at as string).toLocaleDateString("he-IL");
+          lines.push(`· הזמנה ${(s.order_id as string).slice(0, 8)} — עודכן ${updatedAt} | ביטחון: ${s.confidence_level as string}`);
+        }
+        lines.push(`\nלרענון: CFO ליי → "חשב מחדש הכל"`);
         return { content: lines.join("\n"), sourceRefs: [] };
       }
 

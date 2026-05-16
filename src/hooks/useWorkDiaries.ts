@@ -320,6 +320,15 @@ export function useWorkDiaries() {
                   const body = await res.json().catch(() => ({})) as { error?: string };
                   console.warn("[diaries] consumption sync warning:", body.error ?? res.status);
                 }
+                // Refresh profitability snapshot after diary approval — best-effort, non-fatal
+                fetch("/api/profitability/snapshots/generate", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${session.access_token}`,
+                  },
+                  body: JSON.stringify({ orderId: updated.orderId }),
+                }).catch(err => console.warn("[diaries] snapshot refresh failed (non-fatal):", err));
               }
             } catch (consumeErr) {
               console.warn("[diaries] consumption trigger failed (non-fatal):", consumeErr);

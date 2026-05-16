@@ -15,6 +15,7 @@ import {
   CONFIDENCE_LABELS,
   CONFIDENCE_COLORS,
   MISSING_DATA_LABELS,
+  MISSING_DATA_ACTIONS,
 } from "@/lib/profitability";
 import type { ProfitabilityStatus, ConfidenceLevel, MissingDataTag } from "@/lib/profitability";
 import type { CrewMetrics, OrderProfitabilitySummary, WeeklyBucket, CustomerMetrics } from "@/lib/operationalKPIs";
@@ -835,18 +836,19 @@ function CfoTab() {
     if (!db) { setGeneratingAll(false); return; }
     const { data: { session } } = await db.auth.getSession();
     if (!session?.access_token) { setGeneratingAll(false); return; }
-    const idsToGenerate = contextOrders
-      .filter(o => o.status !== "cancelled")
-      .map(o => o.id);
-    for (const id of idsToGenerate) {
-      await fetch("/api/profitability/snapshots/generate", {
+    try {
+      const res = await fetch("/api/profitability/snapshots/generate-batch", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ orderId: id }),
+        body: JSON.stringify({}),
       });
+      const json = await res.json() as { error?: string; generated?: number; failed?: number };
+      if (json.error) { setError(json.error); }
+      else if ((json.failed ?? 0) > 0) { setError(`חישוב נכשל ל-${json.failed} הזמנות`); }
+      await fetchSnapshots();
+    } finally {
+      setGeneratingAll(false);
     }
-    await fetchSnapshots();
-    setGeneratingAll(false);
   }
 
   const snapshotMap = useMemo(() => new Map(snapshots.map(s => [s.order_id, s])), [snapshots]);
@@ -1021,8 +1023,8 @@ function CfoTab() {
                               {CONFIDENCE_LABELS[snap.confidence_level]}
                             </span>
                             {snap.missing_data.length > 0 && (
-                              <div className="mt-0.5 text-[10px] text-gray-400 leading-tight">
-                                {snap.missing_data.slice(0, 2).map(tag => MISSING_DATA_LABELS[tag]).join(" · ")}
+                              <div className="mt-0.5 text-[10px] text-amber-600 leading-tight font-medium">
+                                → {MISSING_DATA_ACTIONS[snap.missing_data[0] as keyof typeof MISSING_DATA_ACTIONS] ?? MISSING_DATA_LABELS[snap.missing_data[0] as keyof typeof MISSING_DATA_LABELS]}
                               </div>
                             )}
                           </td>

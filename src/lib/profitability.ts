@@ -326,6 +326,16 @@ export const MISSING_DATA_LABELS: Record<MissingDataTag, string> = {
   no_approved_diary: "אין יומן עבודה מאושר",
 };
 
+export const MISSING_DATA_ACTIONS: Record<MissingDataTag, string> = {
+  no_revenue: "הזן סכום לחישוב רווחיות",
+  no_linked_diaries: "קשר יומן עבודה",
+  no_approved_diary: "אשר יומן עבודה",
+  missing_cost_price: "השלם מחיר עלות בקטלוג",
+  no_crew_data: "בדוק נתוני צוות",
+  no_material_cost: "עדכן פריטי חומר ביומן",
+  no_vehicle_data: "בדוק נתוני רכב",
+};
+
 export const CONFIDENCE_LABELS: Record<ConfidenceLevel, string> = {
   high: "גבוה",
   medium: "בינוני",
@@ -453,6 +463,9 @@ export function calculateOrderProfitability(
     confidenceLevel = "missing_data";
   } else if (missing.length === 0) {
     confidenceLevel = "high";
+  } else if (missing.includes("no_approved_diary")) {
+    // No approved diary is always serious regardless of other missing tags
+    confidenceLevel = "low";
   } else if (missing.length <= 2) {
     confidenceLevel = "medium";
   } else {
