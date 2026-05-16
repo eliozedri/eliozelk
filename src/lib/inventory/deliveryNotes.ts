@@ -174,6 +174,8 @@ export async function approveDeliveryNote(
       .eq("id", item.item_id);
     if (updateErr) {
       result.warnings.push(`qty update failed (item=${item.item_id}): ${updateErr.message}`);
+      result.itemsSkipped++;
+      continue;
     }
 
     // Mark item as approved (idempotency — unique index enforces this)

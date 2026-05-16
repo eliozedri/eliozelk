@@ -55,6 +55,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
+  // Guard: disallow status downgrade from 'approved'
+  if (body.status !== undefined) {
+    const { data: current } = await db.from("delivery_notes").select("status").eq("id", id).single();
+    if ((current as { status: string } | null)?.status === "approved" && body.status !== "approved") {
+      return NextResponse.json({ error: "cannot downgrade an approved delivery note" }, { status: 409 });
+    }
+  }
+
   // Update note-level fields
   const noteUpdate: Record<string, unknown> = { updated_at: now };
   if (body.status        !== undefined) noteUpdate.status          = body.status;

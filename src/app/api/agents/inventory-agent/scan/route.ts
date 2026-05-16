@@ -674,10 +674,6 @@ export async function POST(req: NextRequest) {
     // ── Delivery note helpers ─────────────────────────────────────────────
     const approvedDeliveryNoteIds = new Set(deliveryNotes.filter(n => n.status === "approved").map(n => n.id));
 
-    // Receive movements indexed by source_id (delivery_note_id)
-    const receiveMovsByNote = new Map<string, number>();
-    // We'll load this lazily from DB only if needed — skip for now (checked via item status).
-
     // ── 21. Consumption used proxy quantity — no actual diary qty available ───
     for (const c of activeConsumptions) {
       const quantitySource = c.metadata?.quantitySource;

@@ -453,6 +453,8 @@ interface ConsumptionRecord {
   order_item_key: string | null;
   status: string;
   work_diary_id: string | null;
+  quantity: number;
+  metadata: { quantitySource?: string } | null;
 }
 
 interface DiaryRecord {
@@ -784,7 +786,7 @@ export function Warehouse() {
     const db = getSupabase();
     if (!db) return;
     Promise.all([
-      db.from("inventory_consumptions").select("order_id,order_item_key,status,work_diary_id,metadata").in("status", ["consumed", "pending_review"]),
+      db.from("inventory_consumptions").select("order_id,order_item_key,status,work_diary_id,quantity,metadata").in("status", ["consumed", "pending_review"]),
       db.from("work_diaries").select("id,order_id,status,approval_status").eq("status", "submitted").eq("approval_status", "approved"),
     ]).then(([consRes, diaryRes]) => {
       if (!consRes.error && consRes.data) setConsumptions(consRes.data as ConsumptionRecord[]);
@@ -859,7 +861,7 @@ export function Warehouse() {
 
       // Refresh consumptions
       const { data: fresh } = await db.from("inventory_consumptions")
-        .select("order_id,order_item_key,status,work_diary_id")
+        .select("order_id,order_item_key,status,work_diary_id,quantity,metadata")
         .in("status", ["consumed", "pending_review"]);
       if (fresh) setConsumptions(fresh as ConsumptionRecord[]);
     } catch (err) {
@@ -886,8 +888,7 @@ export function Warehouse() {
   // Build return candidates: completed orders with proxy-consumed items
   const returnCandidates: ReturnRecord[] = [];
   for (const c of consumptions) {
-    const meta = c as unknown as { metadata?: { quantitySource?: string }; quantity?: number };
-    if ((meta.metadata?.quantitySource) !== "reservation_quantity") continue;
+    if (c.metadata?.quantitySource !== "reservation_quantity") continue;
     const order = orders.find(o => o.id === c.order_id);
     if (!order || order.status !== "completed") continue;
     if (!c.order_item_key) continue;
@@ -896,14 +897,13 @@ export function Warehouse() {
     if (!row?.catalogItemId) continue;
     const catItem = catalogMap.get(row.catalogItemId);
     if (!catItem) continue;
-    const qty = (c as unknown as { quantity?: number }).quantity ?? 0;
     returnCandidates.push({
       orderId: order.id,
       orderNumber: order.orderNumber,
       catalogItemId: row.catalogItemId,
       itemName: catItem.name,
       orderItemKey: c.order_item_key,
-      consumedQty: qty,
+      consumedQty: c.quantity,
     });
   }
 
