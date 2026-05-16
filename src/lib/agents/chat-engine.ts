@@ -24,7 +24,7 @@ export type ChatIntent =
 const INTENT_KEYWORDS: Record<Exclude<ChatIntent, "general">, string[]> = {
   urgent:     ["דחוף", "קריטי", "חירום", "מיידי", "ביותר"],
   approvals:  ["אישור", "לאשר", "ממתינ"],
-  billing:    ["חיוב", "חשבונית", "תשלום", "גבייה", "חוב", "billing"],
+  billing:    ["חיוב", "חשבונית", "תשלום", "גבייה", "חוב", "billing", "חסום", "חסומות", "חסומים", "חסומ.*מלאי", "מלאי.*חסום", "התאמת.*מלאי.*חיוב", "חיוב.*מלאי"],
   diaries:    ["יומן", "שטח", "ביצוע", "צוות", "נהג", "diary"],
   exceptions: ["חריג", "בעיה", "שגיאה", "אזהרה", "exception"],
   scan:       ["סריקה", "האחרונה", "מצאו", "ממצאים", "פעילות", "scan"],
@@ -158,6 +158,31 @@ export async function runChatEngine(
     }
 
     case "billing": {
+      const isInventoryBlockedQuery = /חסום|חסומות|חסומים|התאמת.*מלאי|מלאי.*חיוב|חיוב.*מלאי/.test(message);
+
+      if (isInventoryBlockedQuery) {
+        // Query specifically about orders blocked by inventory reconciliation
+        const invExcRes = await db.from("agent_exceptions")
+          .select("id,severity,title,related_entity_id,detected_from_data")
+          .in("status", ["open", "acknowledged"])
+          .eq("category", "inventory_reconciliation_missing")
+          .limit(20);
+        const blocked = invExcRes.data ?? [];
+        if (blocked.length === 0) {
+          return { content: "✅ אין הזמנות חסומות לחיוב בגלל חוסר התאמת מלאי.", sourceRefs: [] };
+        }
+        const lines = [`🔒 **${blocked.length} הזמנות חסומות לחיוב — נדרשת התאמת מלאי:**\n`];
+        blocked.forEach(e => {
+          const d = e.detected_from_data as Record<string, unknown> | null ?? {};
+          lines.push(`  🟡 ${e.title as string}${d.customer ? ` | לקוח: ${d.customer}` : ""}`);
+        });
+        lines.push("\nלפתרון: מחסן ← הזמנות → 'בצע התאמה' עבור כל הזמנה.");
+        return {
+          content: lines.join("\n"),
+          sourceRefs: blocked.slice(0, 3).map(e => ({ table: "agent_exceptions", id: e.id as string, label: e.title as string })),
+        };
+      }
+
       const [excRes, ordersRes] = await Promise.all([
         db.from("agent_exceptions")
           .select("id,severity,title,related_entity_id")

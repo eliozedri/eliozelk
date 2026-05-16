@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useOrdersContext } from "@/context/OrdersContext";
 import type { WorkOrder } from "@/types/workOrder";
 import { STATUS_LABELS, ACCOUNTING_STATUS_LABELS, ACCOUNTING_STATUS_COLORS } from "@/types/workOrder";
@@ -11,6 +11,7 @@ import { DIARY_STATUS_LABELS, DIARY_STATUS_COLORS } from "@/types/workDiary";
 import { exportWorkDiaryPDF, exportWorkDiaryCSV } from "@/lib/workDiaryExport";
 import { useAuth } from "@/context/AuthContext";
 import { useOperationalKPIs } from "@/hooks/useOperationalKPIs";
+import { getSupabase } from "@/lib/supabase/client";
 
 // ─── Cancel Order Modal ───────────────────────────────────────────────────────
 
@@ -540,6 +541,19 @@ export function AccountingPage() {
   const [cancelingDiaryId, setCancelingDiaryId] = useState<string | null>(null);
   const [restoringOrderId, setRestoringOrderId] = useState<string | null>(null);
   const [billingCustomerFilter, setBillingCustomerFilter] = useState("");
+  // Inventory reconciliation — orders that have a consumption record
+  const [reconciledOrderIds, setReconciledOrderIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const db = getSupabase();
+    if (!db) return;
+    db.from("inventory_consumptions")
+      .select("order_id")
+      .in("status", ["consumed", "pending_review"])
+      .then(({ data }) => {
+        if (data) setReconciledOrderIds(new Set((data as Array<{ order_id: string }>).map(c => c.order_id).filter(Boolean)));
+      });
+  }, []);
   const [verifyingOrder, setVerifyingOrder] = useState<WorkOrder | null>(null);
   const [approvingOrder, setApprovingOrder] = useState<WorkOrder | null>(null);
 
@@ -791,6 +805,26 @@ export function AccountingPage() {
   }
 
   // ── Billing workflow ───────────────────────────────────────────────────
+
+  // Returns inventory reconciliation status for a completed order.
+  // "not_required" = no catalog-linked rows and warehouse_required=false
+  // "reconciled"   = consumption record exists
+  // "unmapped"     = warehouse_required but no catalog item IDs set
+  // "pending"      = mapped items exist but no consumption yet
+  function getInventoryBillingStatus(order: WorkOrder): "not_required" | "reconciled" | "unmapped" | "pending" {
+    const rows = [...(order.accessoryRows ?? []), ...(order.miscRows ?? [])];
+    const hasMappedItems = rows.some(r => r.catalogItemId && (parseFloat(r.quantity) || 0) > 0);
+    const hasUnmappedItems = rows.some(r => !r.catalogItemId && (parseFloat(r.quantity) || 0) > 0);
+
+    const inventoryRequired = order.warehouseRequired || hasMappedItems || (hasUnmappedItems && rows.length > 0);
+    if (!inventoryRequired) return "not_required";
+
+    if (reconciledOrderIds.has(order.id)) return "reconciled";
+    if (!hasMappedItems && hasUnmappedItems) return "unmapped";
+    if (!hasMappedItems) return "not_required"; // warehouse_required but no rows configured
+    return "pending";
+  }
+
   function getBillingBlockers(order: WorkOrder): string[] {
     const blockers: string[] = [];
     if (!order.customer?.trim()) blockers.push("שם חברה / לקוח חסר");
@@ -803,6 +837,10 @@ export function AccountingPage() {
       if (!linkedDiary) blockers.push("אין יומן שטח מוגש המקושר להזמנה");
       else if (linkedDiary.approvalStatus !== "approved") blockers.push("יומן השטח טרם אושר");
     }
+    // Inventory reconciliation blocker
+    const invStatus = getInventoryBillingStatus(order);
+    if (invStatus === "pending") blockers.push("נדרשת התאמת מלאי לפני העברה לחיוב");
+    if (invStatus === "unmapped") blockers.push("נדרש מיפוי פריטי מלאי לפני חיוב");
     return blockers;
   }
 
@@ -1182,6 +1220,7 @@ export function AccountingPage() {
                                 <th className="px-4 py-2 text-xs font-medium text-gray-500 text-right">שם עבודה</th>
                                 <th className="px-4 py-2 text-xs font-medium text-gray-500 text-right">מיקום</th>
                                 <th className="px-4 py-2 text-xs font-medium text-gray-500 text-right w-20">המתנה</th>
+                                <th className="px-4 py-2 text-xs font-medium text-gray-500 text-right">מלאי</th>
                                 <th className="px-4 py-2 text-xs font-medium text-gray-500 text-right">הכנסה משוערת</th>
                                 <th className="px-4 py-2 text-xs font-medium text-gray-500 text-right">מס׳ חשבונית</th>
                                 <th className="px-4 py-2 text-xs font-medium text-gray-500 text-right">סכום ₪</th>
@@ -1192,6 +1231,7 @@ export function AccountingPage() {
                               {group.orders.map((order) => {
                                 const estRevenue = orderRevenueMap.get(order.id) ?? 0;
                                 const days = agingDays(order.updatedAt);
+                                const invStatus = getInventoryBillingStatus(order);
                                 return (
                                   <tr key={order.id} className="border-b border-gray-50 hover:bg-amber-50/10 transition-colors">
                                     <td className="px-4 py-2.5">
@@ -1207,6 +1247,17 @@ export function AccountingPage() {
                                       )}
                                     </td>
                                     <td className="px-4 py-2.5"><AgingBadge days={days} /></td>
+                                    <td className="px-4 py-2.5">
+                                      {invStatus === "reconciled" && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-50 text-green-700 border border-green-200">✓ מלאי</span>
+                                      )}
+                                      {invStatus === "pending" && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">! מלאי</span>
+                                      )}
+                                      {invStatus === "unmapped" && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">? מלאי</span>
+                                      )}
+                                    </td>
                                     <td className="px-4 py-2.5 text-xs font-medium text-gray-700">
                                       {estRevenue > 0
                                         ? "₪" + Math.round(estRevenue).toLocaleString()

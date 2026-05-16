@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     await updateAgentRunStatus(db, AGENT_ID, "active");
 
     // ── Load data ────────────────────────────────────────────────────────
-    const [ordersRes, problemsRes, diariesRes] = await Promise.all([
+    const [ordersRes, problemsRes, diariesRes, consumptionsRes] = await Promise.all([
       db.from("work_orders")
         .select("id,order_number,status,priority,customer,city,order_date,created_at,updated_at,graphics_sent_at,graphics_acknowledged_at,graphics_completed_at,fabrication_required,fabrication_status,accounting_status,invoiced_at,billed_amount,scheduled_date,ready_for_execution_at,order_type,customer_approval_status,warehouse_required,warehouse_status,data")
         .neq("status", "cancelled"),
@@ -71,6 +71,9 @@ export async function POST(req: NextRequest) {
         .not("status", "in", '("resolved","cancelled")'),
       db.from("work_diaries")
         .select("id,order_id,status,approval_status,submitted_at,execution_date"),
+      db.from("inventory_consumptions")
+        .select("order_id,status")
+        .in("status", ["consumed", "pending_review"]),
     ]);
 
     if (ordersRes.error) throw new Error(ordersRes.error.message);
@@ -93,6 +96,11 @@ export async function POST(req: NextRequest) {
         submittedDiaryByOrder.set(d.order_id as string, true);
       }
     }
+
+    // Build reconciled order set from inventory_consumptions
+    const reconciledOrderIds = new Set(
+      (consumptionsRes.data ?? []).map((c: { order_id: string }) => c.order_id).filter(Boolean)
+    );
 
     // ── Load existing exceptions ──────────────────────────────────────────
     const dedupeMap = await loadAgentExceptionDedupeMap(db, AGENT_ID);
@@ -253,6 +261,32 @@ export async function POST(req: NextRequest) {
             description: `לקוח: ${order.customer} | הושלמה לפני ${Math.round(hrs)} שעות ועדיין בסטטוס "ממתין לאימות"`,
             detectedFromData: { orderNumber: order.order_number, hoursCompleted: Math.round(hrs), accountingStatus: order.accounting_status ?? "pending" },
             recommendedResolution: "בצע אימות מוכנות לחיוב בהנהלת חשבונות — בדוק חסמים ואשר",
+          }, dedupeMap, result);
+        }
+      }
+
+      // ── Completed warehouse order missing inventory reconciliation ────────
+      // Ops nudge: warehouse orders with mapped items that have no consumption yet.
+      // Ownership: inventory-agent owns deeper reconciliation exceptions;
+      // ops-orchestrator only flags if the order is stuck before billing.
+      if (order.status === "completed" && !order.invoiced_at &&
+          !reconciledOrderIds.has(order.id)) {
+        const orderData = order.data as Record<string, unknown> | null ?? {};
+        const accessoryRows = (orderData.accessoryRows ?? []) as Array<{ catalogItemId?: string; quantity?: string }>;
+        const miscRows      = (orderData.miscRows ?? [])      as Array<{ catalogItemId?: string; quantity?: string }>;
+        const hasMappedItems = [...accessoryRows, ...miscRows].some(r => r.catalogItemId && (parseFloat(r.quantity ?? "0") || 0) > 0);
+        if ((order.warehouse_required || hasMappedItems) && hasMappedItems) {
+          const k = dedupeKey("missing_inventory_reconciliation", "work_order", order.id);
+          activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "missing_inventory_reconciliation",
+            entityType: "work_order",
+            entityId: order.id,
+            severity: "warn",
+            title: `הזמנה ${order.order_number} — פריטי מלאי ממופים ללא התאמה`,
+            description: `לקוח: ${order.customer} | נדרשת התאמת מלאי לפני אישור לחיוב`,
+            detectedFromData: { orderNumber: order.order_number, warehouseRequired: order.warehouse_required },
+            recommendedResolution: "מחסן ← הזמנות → 'בצע התאמה' לפני העברה לחיוב",
           }, dedupeMap, result);
         }
       }

@@ -37,14 +37,17 @@ export async function POST(req: NextRequest) {
   try {
     await updateAgentRunStatus(db, AGENT_ID, "active");
 
-    const [ordersRes, diariesRes] = await Promise.all([
+    const [ordersRes, diariesRes, consumptionsRes] = await Promise.all([
       db.from("work_orders")
-        .select("id,order_number,status,priority,customer,city,order_date,created_at,updated_at,accounting_status,invoiced_at,billed_amount,data")
+        .select("id,order_number,status,priority,customer,city,order_date,created_at,updated_at,accounting_status,invoiced_at,billed_amount,data,warehouse_required")
         .eq("status", "completed"),
       db.from("work_diaries")
         .select("id,diary_number,status,customer_name,site_name,execution_date,submitted_at,order_id,approval_status,approved_at,created_at,updated_at,data")
         .in("status", ["submitted"])
         .eq("approval_status", "approved"),
+      db.from("inventory_consumptions")
+        .select("order_id,status")
+        .in("status", ["consumed", "pending_review"]),
     ]);
 
     if (ordersRes.error) throw new Error(ordersRes.error.message);
@@ -53,6 +56,14 @@ export async function POST(req: NextRequest) {
     const orders   = (ordersRes.data ?? []) as DbOrderRow[];
     const diaries  = (diariesRes.data ?? []) as DbDiaryRow[];
     result.entitiesScanned = orders.length + diaries.length;
+
+    // Build sets for fast lookup
+    const reconciledOrderIds = new Set(
+      (consumptionsRes.data ?? []).map((c: { order_id: string }) => c.order_id).filter(Boolean)
+    );
+    const approvedDiaryOrderIds = new Set(
+      diaries.map(d => d.order_id).filter(Boolean)
+    );
 
     const dedupeMap = await loadAgentExceptionDedupeMap(db, AGENT_ID);
     const taskDedupeMap = await loadAgentTaskDedupeMap(db, AGENT_ID);
@@ -132,6 +143,43 @@ export async function POST(req: NextRequest) {
             recommendedResolution: `פתח הנה״ח ← ממתין לחיוב, מצא את ההזמנה בטבלה "מאומת ומוכן לחיוב" ולחץ "אשר לחיוב"`,
           }, dedupeMap, result);
         }
+      }
+
+      // ── Inventory reconciliation blocker ────────────────────────────────
+      // Flag warehouse/inventory orders that have an approved diary but no consumption record.
+      const orderData = order.data as Record<string, unknown> | null ?? {};
+      const accessoryRows = (orderData.accessoryRows ?? []) as Array<{ catalogItemId?: string; quantity?: string }>;
+      const miscRows      = (orderData.miscRows ?? [])      as Array<{ catalogItemId?: string; quantity?: string }>;
+      const allRows = [...accessoryRows, ...miscRows];
+      const hasMappedItems = allRows.some(r => r.catalogItemId && (parseFloat(r.quantity ?? "0") || 0) > 0);
+      const inventoryRequired = (order.warehouse_required as boolean | null) || hasMappedItems;
+
+      if (inventoryRequired && hasMappedItems && !reconciledOrderIds.has(order.id) && approvedDiaryOrderIds.has(order.id)) {
+        const category = "inventory_reconciliation_missing";
+        const k = dedupeKey(category, "work_order", order.id);
+        activeDedupeKeys.add(k);
+
+        await upsertException(db, AGENT_ID, {
+          category,
+          entityType: "work_order",
+          entityId: order.id,
+          severity: "warn",
+          title: `הזמנה ${order.order_number} — נדרשת התאמת מלאי לפני חיוב`,
+          description: `לקוח: ${order.customer} | יומן שטח מאושר, אך טרם בוצעה התאמת מלאי`,
+          detectedFromData: { orderNumber: order.order_number, customer: order.customer, accountingStatus: acctStatus },
+          recommendedResolution: "בצע התאמת מלאי בלשונית מחסן ← הזמנות → לחץ 'בצע התאמה'",
+        }, dedupeMap, result);
+
+        await upsertTask(db, AGENT_ID, {
+          category,
+          entityType: "work_order",
+          entityId: order.id,
+          title: `התאמת מלאי — הזמנה ${order.order_number}`,
+          description: `לקוח: ${order.customer} | נדרש לפני אישור חיוב`,
+          priority: "high",
+          recommendedAction: "מחסן ← הזמנות → 'בצע התאמה'",
+          requiresApproval: false,
+        }, taskDedupeMap, result);
       }
     }
 
