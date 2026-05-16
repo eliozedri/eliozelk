@@ -19,6 +19,7 @@ export type ChatIntent =
   | "orders"
   | "restored"
   | "inventory"
+  | "profitability"
   | "general";
 
 const INTENT_KEYWORDS: Record<Exclude<ChatIntent, "general">, string[]> = {
@@ -31,7 +32,8 @@ const INTENT_KEYWORDS: Record<Exclude<ChatIntent, "general">, string[]> = {
   summary:    ["סיכום", "מצב", "יום", "תעדכן", "תסכם", "קורה", "overview"],
   orders:     ["הזמנה", "פרויקט", "לקוח", "order"],
   restored:   ["שוחזר", "שחזור", "restore", "ביטול", "ארכיון"],
-  inventory:  ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער", "צריכה", "נצרך", "נצרכו", "התאמה", "יומן", "בוצע", "ניוצל", "consump", "החזר", "החזרה", "הוחזר", "תעודת", "תעודה", "קליטה", "נקלט", "נקלטה", "delivery", "return_from", "ספירה", "המלצ", "לרכוש", "לקנות", "לדרוג", "דחוף.*רכש", "purchase", "recommend"],
+  inventory:       ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער", "צריכה", "נצרך", "נצרכו", "התאמה", "יומן", "בוצע", "ניוצל", "consump", "החזר", "החזרה", "הוחזר", "תעודת", "תעודה", "קליטה", "נקלט", "נקלטה", "delivery", "return_from", "ספירה", "המלצ", "לרכוש", "לקנות", "לדרוג", "דחוף.*רכש", "purchase", "recommend"],
+  profitability:   ["רווח", "רווחיות", "הפסד", "שולי", "עלות", "מרווח", "cfo", "כספי", "כלכלי", "snapshot", "פרופיטביליט", "בוצע.*רווח", "רווח.*הזמנה"],
 };
 
 export function detectIntent(message: string): ChatIntent {
@@ -751,6 +753,39 @@ export async function runChatEngine(
         content: lines.join("\n"),
         sourceRefs: excs.slice(0, 3).map(e => ({ table: "agent_exceptions", id: e.id as string, label: e.title as string })),
       };
+    }
+
+    case "profitability": {
+      const { data: snapshots } = await db
+        .from("profitability_snapshots")
+        .select("order_id,revenue,total_cost,gross_profit,gross_margin_percent,confidence_level,missing_data,updated_at")
+        .is("work_diary_id", null)
+        .order("updated_at", { ascending: false })
+        .limit(20);
+
+      if (!snapshots || snapshots.length === 0) {
+        return {
+          content: "📊 **רווחיות הזמנות**\n\nאין תמונות מצב של רווחיות שנוצרו עדיין.\n\nכדי לחשב רווחיות, לחץ \"חשב רווחיות\" ליד הזמנה בדף הרווחיות.",
+          sourceRefs: [],
+        };
+      }
+
+      const profitable = snapshots.filter(s => (s.gross_profit as number) > 0);
+      const losing = snapshots.filter(s => (s.gross_profit as number) < 0);
+      const avgMargin = snapshots.reduce((sum, s) => sum + (s.gross_margin_percent as number), 0) / snapshots.length;
+
+      const lines: string[] = [
+        `📊 **רווחיות הזמנות** — ${snapshots.length} הזמנות עם נתונים\n`,
+        `✅ רווחיות: **${profitable.length}** | 🔴 הפסד: **${losing.length}** | ממוצע: **${avgMargin.toFixed(1)}%**\n`,
+      ];
+
+      for (const s of snapshots.slice(0, 8)) {
+        const icon = (s.gross_profit as number) >= 0 ? "🟢" : "🔴";
+        const conf = s.confidence_level === "high" ? "" : ` (ביטחון: ${s.confidence_level})`;
+        lines.push(`${icon} הזמנה ${(s.order_id as string).slice(0, 8)} — הכנסה ₪${Math.round(s.revenue as number).toLocaleString()} | רווח ₪${Math.round(s.gross_profit as number).toLocaleString()} | ${(s.gross_margin_percent as number).toFixed(1)}%${conf}`);
+      }
+
+      return { content: lines.join("\n"), sourceRefs: [] };
     }
 
     // "summary" + default + "general"
