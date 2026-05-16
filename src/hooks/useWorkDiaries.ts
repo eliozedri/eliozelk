@@ -26,6 +26,7 @@ function fromRow(r: Record<string, unknown>): WorkDiary {
     approvedBy: (r.approved_by as string | null | undefined) ?? data.approvedBy,
     approvedAt: (r.approved_at as string | null | undefined) ?? data.approvedAt,
     rejectionReason: (r.rejection_reason as string | null | undefined) ?? data.rejectionReason,
+    crewMembers: Array.isArray(data.crewMembers) ? data.crewMembers : [],
   } as WorkDiary;
 }
 

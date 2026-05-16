@@ -85,7 +85,7 @@ export function calculateProfitability(
   rates: CostRates
 ): ProfitabilityResult {
   // ── Workers ──
-  const crewCount = diary.crewMembers.filter((m) => m.trim()).length;
+  const crewCount = (diary.crewMembers ?? []).filter((m) => m.trim()).length;
   const hasLeader = diary.crewLeaderName?.trim() ? 1 : 0;
   const totalWorkers = crewCount + hasLeader;
 

@@ -136,6 +136,9 @@ function fromRow(r: Record<string, unknown>): WorkOrder {
     assignedCrewId:            (r.assigned_crew_id as string | null) ?? blob.assignedCrewId ?? null,
     scheduledDate:             (r.scheduled_date as string | null) ?? blob.scheduledDate ?? null,
     requiredWorkers:           r.required_workers != null ? Number(r.required_workers) : null,
+    // Content arrays — must default to [] if blob doesn't carry them (e.g. older orders or realtime payloads)
+    signRows:  Array.isArray(blob.signRows)  ? blob.signRows  : [],
+    miscRows:  Array.isArray(blob.miscRows)  ? blob.miscRows  : [],
     // Joined arrays (present in fetchAll response, empty in realtime payloads)
     problems:    ((r.order_problems as Record<string, unknown>[]) ?? []).map(fromProblemRow),
     activities:  [], // Loaded on demand from order_activities (not in main subscription)
