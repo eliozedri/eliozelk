@@ -401,8 +401,113 @@ function AgingBadge({ days }: { days: number }) {
   );
 }
 
+// ─── Approve to Billing Modal ─────────────────────────────────────────────────
+
+function ApproveToBillingModal({
+  order,
+  blockers,
+  onConfirm,
+  onClose,
+}: {
+  order: WorkOrder;
+  blockers: string[];
+  onConfirm: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function handleConfirm() {
+    setSaving(true);
+    setErr("");
+    try {
+      await onConfirm();
+    } catch (e) {
+      setSaving(false);
+      setErr(e instanceof Error ? e.message : "שגיאה לא ידועה");
+    }
+  }
+
+  const hasBlockers = blockers.length > 0;
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" onClick={saving ? undefined : onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" dir="rtl">
+          <div className="flex items-center gap-3 mb-4">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${hasBlockers ? "bg-amber-100" : "bg-teal-100"}`}>
+              {hasBlockers ? (
+                <svg className="w-5 h-5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              ) : (
+                <svg className="w-5 h-5 text-teal-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              )}
+            </div>
+            <div>
+              <p className="font-bold text-gray-900">אישור העברה לחיוב</p>
+              <p className="text-xs text-gray-500 mt-0.5">{order.orderNumber} · {order.customer}</p>
+            </div>
+          </div>
+
+          {hasBlockers ? (
+            <div className="mb-5 space-y-2">
+              <p className="text-sm font-semibold text-amber-700">לא ניתן לאשר — נדרשים תיקונים:</p>
+              <ul className="space-y-1">
+                {blockers.map((b, i) => (
+                  <li key={i} className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <svg className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    {b}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="mb-5 space-y-2 text-sm text-gray-600">
+              <p>אישור זה מאמת כי:</p>
+              <ul className="space-y-1 text-xs text-gray-500 pr-2">
+                <li>• העבודה בוצעה בפועל</li>
+                <li>• יומן השטח נבדק ומאושר</li>
+                <li>• כמויות סופיות אומתו</li>
+                <li>• אין חסמים לחיוב</li>
+              </ul>
+              <p className="text-xs text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 mt-2">
+                לא תונפק חשבונית אוטומטית — האישור מעביר את ההזמנה לתור ״מאושר לחיוב״.
+              </p>
+            </div>
+          )}
+
+          {err && (
+            <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              שגיאה: {err}
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            {!hasBlockers && (
+              <button
+                onClick={handleConfirm}
+                disabled={saving}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white transition-colors"
+              >
+                {saving ? "מאשר..." : "אשר העברה לחיוב"}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              disabled={saving}
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+            >
+              {hasBlockers ? "סגור" : "ביטול"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function AccountingPage() {
-  const { orders, updateOrderFields } = useOrdersContext();
+  const { orders, updateOrderFields, addOrderActivity } = useOrdersContext();
   const { diaries, cancelDiary } = useWorkDiaryContext();
   const { profile } = useAuth();
   const { billingLeakage, byOrder } = useOperationalKPIs();
@@ -429,6 +534,7 @@ export function AccountingPage() {
   const [cancelingDiaryId, setCancelingDiaryId] = useState<string | null>(null);
   const [restoringOrderId, setRestoringOrderId] = useState<string | null>(null);
   const [billingCustomerFilter, setBillingCustomerFilter] = useState("");
+  const [approvingOrder, setApprovingOrder] = useState<WorkOrder | null>(null);
 
   // Map orderId → diary revenue for billing queue enrichment
   const orderRevenueMap = useMemo(() => {
@@ -475,6 +581,15 @@ export function AccountingPage() {
              (!o.accountingStatus || o.accountingStatus === "pending") &&
              !o.invoicedAt
     ),
+    [orders]
+  );
+
+  const approvedBilling = useMemo(
+    () => orders.filter(
+      (o) => o.status === "completed" &&
+             o.accountingStatus === "approved" &&
+             !o.invoicedAt
+    ).sort((a, b) => new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime()),
     [orders]
   );
 
@@ -657,10 +772,42 @@ export function AccountingPage() {
     try { await exportAccountingExcel(buildReportData()); } finally { setExportingExcel(false); }
   }
 
+  // ── Approve to billing ────────────────────────────────────────────────
+  function getBillingBlockers(order: WorkOrder): string[] {
+    const blockers: string[] = [];
+    if (!order.customer?.trim()) blockers.push("שם חברה / לקוח חסר");
+    if (!order.jobName?.trim() && !order.location?.trim()) blockers.push("שם עבודה / מיקום חסר");
+    const linkedDiary = diaries.find(d =>
+      d.orderId === order.id && d.status === "submitted"
+    );
+    if (!linkedDiary) blockers.push("אין יומן שטח מוגש המקושר להזמנה");
+    else if (linkedDiary.approvalStatus !== "approved") blockers.push("יומן השטח טרם אושר");
+    return blockers;
+  }
+
+  async function handleConfirmApproval(order: WorkOrder) {
+    await updateOrderFields(order.id, { accountingStatus: "approved" });
+    addOrderActivity(
+      order.id,
+      "status_changed",
+      "הזמנה אושרה להעברה לחיוב — כמויות אומתו ויומן השטח מאושר",
+      { by: profile?.name ?? undefined }
+    );
+    setApprovingOrder(null);
+  }
+
   async function handleRestoreOrder(order: WorkOrder) {
     setRestoringOrderId(order.id);
     try {
-      await updateOrderFields(order.id, { status: "completed" });
+      // Restore to ready_installation — re-enters operational workflow for scheduling.
+      // Do not restore to "completed" to avoid billing the order without verification.
+      await updateOrderFields(order.id, { status: "ready_installation" });
+      addOrderActivity(
+        order.id,
+        "status_changed",
+        `הזמנה שוחזרה מארכיון לשלב "מוכן להתקנה" — נדרש תיאום ביצוע מחדש`,
+        { by: profile?.name ?? undefined }
+      );
     } finally {
       setRestoringOrderId(null);
     }
@@ -829,6 +976,66 @@ export function AccountingPage() {
               )}
             </div>
 
+            {/* Approved-for-billing section */}
+            {approvedBilling.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-2 h-2 rounded-full bg-teal-500 inline-block"></span>
+                  <span className="text-sm font-bold text-teal-700">מאושר לחיוב — ממתין להנפקת חשבונית</span>
+                  <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold bg-teal-100 text-teal-700">{approvedBilling.length}</span>
+                </div>
+                <div className="bg-white rounded-xl border border-teal-200 shadow-sm overflow-hidden">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-teal-50 border-b border-teal-100">
+                        <th className="px-4 py-2 text-xs font-medium text-teal-700 text-right">הזמנה</th>
+                        <th className="px-4 py-2 text-xs font-medium text-teal-700 text-right">לקוח</th>
+                        <th className="px-4 py-2 text-xs font-medium text-teal-700 text-right">שם עבודה</th>
+                        <th className="px-4 py-2 text-xs font-medium text-teal-700 text-right">מס׳ חשבונית</th>
+                        <th className="px-4 py-2 text-xs font-medium text-teal-700 text-right">סכום ₪</th>
+                        <th className="px-4 py-2 w-28"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {approvedBilling.map(order => {
+                        const estRevenue = orderRevenueMap.get(order.id) ?? 0;
+                        return (
+                          <tr key={order.id} className="border-b border-teal-50 hover:bg-teal-50/30 transition-colors">
+                            <td className="px-4 py-2.5 font-mono text-xs font-bold text-gray-900">{order.orderNumber}</td>
+                            <td className="px-4 py-2.5 text-sm text-gray-700">{order.customer}</td>
+                            <td className="px-4 py-2.5 text-xs text-gray-500">{(order as { jobName?: string | null }).jobName || order.location || "—"}</td>
+                            <td className="px-4 py-2.5">
+                              <input type="text" placeholder="אופציונלי"
+                                value={invoiceInputs[order.id] ?? ""}
+                                onChange={(e) => setInvoiceInputs((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                                className="w-20 px-2 py-1 rounded border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-teal-400 placeholder-gray-300"
+                                dir="ltr"
+                              />
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <input type="number" min={0} step={1}
+                                placeholder={estRevenue > 0 ? String(Math.round(estRevenue)) : "0"}
+                                value={billedAmountInputs[order.id] ?? ""}
+                                onChange={(e) => setBilledAmountInputs((prev) => ({ ...prev, [order.id]: e.target.value }))}
+                                className="w-24 px-2 py-1 rounded border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-teal-400 placeholder-gray-300"
+                                dir="ltr"
+                              />
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <button type="button" onClick={() => handleMarkInvoiced(order)} disabled={invoicingId === order.id}
+                                className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold transition-colors disabled:opacity-50 whitespace-nowrap">
+                                {invoicingId === order.id ? "שומר..." : "הנפק חשבונית"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Customer-grouped view */}
             {billingByCustomer.length === 0 ? (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm py-16 text-center">
@@ -946,7 +1153,11 @@ export function AccountingPage() {
                                       />
                                     </td>
                                     <td className="px-4 py-2.5">
-                                      <div className="flex items-center gap-1.5">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <button type="button" onClick={() => setApprovingOrder(order)}
+                                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium transition-colors whitespace-nowrap">
+                                          אשר לחיוב
+                                        </button>
                                         <button type="button" onClick={() => handleMarkInvoiced(order)} disabled={invoicingId === order.id}
                                           className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium transition-colors disabled:opacity-50 whitespace-nowrap">
                                           {invoicingId === order.id ? "שומר..." : "סמן כחויב"}
@@ -961,7 +1172,7 @@ export function AccountingPage() {
                                           onClick={() => setCancelingOrder(order)}
                                           className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors whitespace-nowrap">
                                           <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                                          הסר מחיוב
+                                          הסר
                                         </button>
                                       </div>
                                     </td>
@@ -1582,6 +1793,16 @@ export function AccountingPage() {
           order={editingOrder}
           onClose={() => setEditingOrder(null)}
           onSave={updateOrderFields}
+        />
+      )}
+
+      {/* Approve to Billing Modal */}
+      {approvingOrder && (
+        <ApproveToBillingModal
+          order={approvingOrder}
+          blockers={getBillingBlockers(approvingOrder)}
+          onConfirm={() => handleConfirmApproval(approvingOrder)}
+          onClose={() => setApprovingOrder(null)}
         />
       )}
 

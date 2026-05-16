@@ -45,6 +45,7 @@ function fromRow(r: Record<string, unknown>): Customer {
     paymentTerms: r.payment_terms as string | undefined,
     contactPerson: r.contact_person as string | undefined,
     contactEmail: r.contact_email as string | undefined,
+    contactPhone: r.contact_phone as string | undefined,
     createdAt: (r.created_at as string) ?? new Date().toISOString(),
     updatedAt: (r.updated_at as string) ?? new Date().toISOString(),
   };
@@ -61,6 +62,7 @@ function toRow(c: Customer) {
     payment_terms: c.paymentTerms ?? null,
     contact_person: c.contactPerson ?? null,
     contact_email: c.contactEmail ?? null,
+    contact_phone: c.contactPhone ?? null,
     created_at: c.createdAt,
     updated_at: c.updatedAt,
   };
@@ -198,6 +200,7 @@ export function CustomersProvider({ children }: { children: React.ReactNode }) {
       paymentTerms: form.paymentTerms,
       contactPerson: form.contactPerson,
       contactEmail: form.contactEmail,
+      contactPhone: form.contactPhone,
       createdAt: now,
       updatedAt: now,
     };

@@ -16,6 +16,7 @@ const emptyForm: CustomerFormState = {
   lastOrder: "",
   contactPerson: "",
   contactEmail: "",
+  contactPhone: "",
   paymentTerms: "",
 };
 
@@ -152,12 +153,25 @@ export function AddCustomerForm({ onAdd }: Props) {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">דוא״ל</label>
+          <label className="block text-xs font-medium text-gray-600 mb-1">דוא״ל איש קשר</label>
           <input
             type="email"
             value={form.contactEmail ?? ""}
             onChange={(e) => update("contactEmail", e.target.value)}
             placeholder="כתובת דוא״ל (אופציונלי)"
+            dir="ltr"
+            className={inputCls}
+            disabled={saving}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">טלפון איש קשר</label>
+          <input
+            type="tel"
+            value={form.contactPhone ?? ""}
+            onChange={(e) => update("contactPhone", e.target.value)}
+            placeholder="טלפון ישיר (אופציונלי)"
             dir="ltr"
             className={inputCls}
             disabled={saving}

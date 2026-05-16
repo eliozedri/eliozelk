@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import type { WorkDiary } from "@/types/workDiary";
 import { useOrdersContext } from "@/context/OrdersContext";
 import { useAuth } from "@/context/AuthContext";
+import { useCustomersContext } from "@/context/CustomersContext";
 
 const inputCls =
   "w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500";
@@ -37,6 +38,7 @@ function SectionCard({ title, children, accent = false }: { title: string; child
 
 export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
   const { orders } = useOrdersContext();
+  const { customers } = useCustomersContext();
   const { profile } = useAuth();
   const isWorker = profile?.role === "field_worker";
 
@@ -89,7 +91,17 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
       <SectionCard title="פרטי עבודה">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="שם חברה / לקוח *">
-            <input type="text" placeholder="שם הלקוח או החברה" {...inp("customerName")} />
+            <input
+              type="text"
+              list="diary-customers-list"
+              placeholder="שם הלקוח או החברה"
+              {...inp("customerName")}
+            />
+            <datalist id="diary-customers-list">
+              {customers.map(c => (
+                <option key={c.id} value={c.name} />
+              ))}
+            </datalist>
           </Field>
           <Field label="שם עבודה / אתר עבודה *">
             <input type="text" placeholder="שם הפרויקט / כתובת האתר" {...inp("siteName")} />
