@@ -462,10 +462,318 @@ interface DiaryRecord {
   approval_status: string;
 }
 
+interface DeliveryNoteRecord {
+  id: string;
+  supplier_name: string | null;
+  document_number: string | null;
+  received_date: string;
+  status: string;
+  notes: string;
+  created_by: string;
+  created_at: string;
+}
+
+interface ReturnRecord {
+  orderId: string;
+  orderNumber: string;
+  catalogItemId: string;
+  itemName: string;
+  orderItemKey: string;
+  consumedQty: number;
+}
+
+// ── Delivery Notes Panel ──────────────────────────────────────────────────────
+
+const DN_STATUS_LABELS: Record<string, string> = {
+  draft:    "טיוטה",
+  counted:  "נספר",
+  approved: "אושר",
+  cancelled:"בוטל",
+};
+
+const DN_STATUS_COLORS: Record<string, string> = {
+  draft:    "bg-gray-100 text-gray-600",
+  counted:  "bg-blue-100 text-blue-700",
+  approved: "bg-green-100 text-green-700",
+  cancelled:"bg-red-100 text-red-600",
+};
+
+function DeliveryNotesPanel() {
+  const [notes, setNotes] = useState<DeliveryNoteRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [approving, setApproving] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null);
+
+  // New note form state
+  const [formOpen, setFormOpen] = useState(false);
+  const [formSupplier, setFormSupplier] = useState("");
+  const [formDocNum, setFormDocNum] = useState("");
+  const [formDate, setFormDate] = useState(new Date().toISOString().slice(0, 10));
+  const [formNotes, setFormNotes] = useState("");
+
+  async function fetchNotes() {
+    const db = getSupabase();
+    if (!db) return;
+    const { data: { session } } = await db.auth.getSession();
+    if (!session?.access_token) return;
+    const res = await fetch("/api/inventory/delivery-notes", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+    if (res.ok) setNotes(await res.json() as DeliveryNoteRecord[]);
+    setLoading(false);
+  }
+
+  useEffect(() => { fetchNotes(); }, []);
+
+  async function handleCreate() {
+    if (!formDocNum && !formSupplier) { return; }
+    setCreating(true);
+    try {
+      const db = getSupabase();
+      if (!db) return;
+      const { data: { session } } = await db.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch("/api/inventory/delivery-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ supplierName: formSupplier, documentNumber: formDocNum, receivedDate: formDate, notes: formNotes }),
+      });
+      if (res.ok) {
+        setFormOpen(false); setFormSupplier(""); setFormDocNum(""); setFormNotes("");
+        await fetchNotes();
+      }
+    } finally { setCreating(false); }
+  }
+
+  async function handleApprove(noteId: string) {
+    setApproving(noteId); setMsg(null);
+    try {
+      const db = getSupabase();
+      if (!db) return;
+      const { data: { session } } = await db.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch(`/api/inventory/delivery-notes/${noteId}/approve`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const body = await res.json() as { itemsReceived?: number; error?: string };
+      if (res.ok) {
+        setMsg({ id: noteId, text: `קולטו ${body.itemsReceived ?? 0} פריטים`, ok: true });
+        await fetchNotes();
+      } else {
+        setMsg({ id: noteId, text: body.error ?? "שגיאה", ok: false });
+      }
+    } finally { setApproving(null); }
+  }
+
+  if (loading) return <div className="p-8 text-center text-gray-400 text-sm">טוען תעודות משלוח...</div>;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-black text-gray-900">תעודות משלוח</h2>
+        <button onClick={() => setFormOpen(v => !v)}
+          className="px-3 py-2 rounded-xl text-xs font-bold bg-teal-600 text-white hover:bg-teal-700 transition-colors">
+          + תעודה חדשה
+        </button>
+      </div>
+
+      {/* Create form */}
+      {formOpen && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3">
+          <p className="text-sm font-bold text-gray-700">תעודת משלוח חדשה</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">ספק</label>
+              <input value={formSupplier} onChange={e => setFormSupplier(e.target.value)} placeholder="שם ספק"
+                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal-400" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">מספר תעודה</label>
+              <input value={formDocNum} onChange={e => setFormDocNum(e.target.value)} placeholder="מספר תעודה"
+                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal-400" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">תאריך קבלה</label>
+              <input type="date" value={formDate} onChange={e => setFormDate(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal-400" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">הערות</label>
+              <input value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="הערות"
+                className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal-400" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleCreate} disabled={creating || (!formDocNum && !formSupplier)}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40 transition-colors">
+              {creating ? "יוצר..." : "צור תעודה"}
+            </button>
+            <button onClick={() => setFormOpen(false)} className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors">
+              ביטול
+            </button>
+          </div>
+        </div>
+      )}
+
+      {notes.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+          <p className="text-gray-400 text-sm">אין תעודות משלוח פעילות</p>
+          <p className="text-xs text-gray-400 mt-1">צור תעודת משלוח חדשה לתיעוד קבלת סחורה</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="w-full text-right text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                {["מספר תעודה", "ספק", "תאריך קבלה", "סטטוס", ""].map(h => (
+                  <th key={h} className="px-3 py-2.5 text-xs font-bold text-gray-500">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {notes.map(note => (
+                <tr key={note.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="px-3 py-2.5 font-semibold text-gray-900">{note.document_number ?? "—"}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{note.supplier_name ?? "—"}</td>
+                  <td className="px-3 py-2.5 text-gray-500">{note.received_date}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${DN_STATUS_COLORS[note.status] ?? "bg-gray-100 text-gray-500"}`}>
+                      {DN_STATUS_LABELS[note.status] ?? note.status}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-left">
+                    {(note.status === "draft" || note.status === "counted") && (
+                      <button onClick={() => handleApprove(note.id)} disabled={approving === note.id}
+                        className="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700 hover:bg-green-100 font-semibold transition-colors disabled:opacity-50">
+                        {approving === note.id ? "מאשר..." : "אשר קליטה"}
+                      </button>
+                    )}
+                    {msg?.id === note.id && (
+                      <span className={`mr-2 text-xs ${msg.ok ? "text-green-600" : "text-red-600"}`}>{msg.text}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Returns from Field Panel ──────────────────────────────────────────────────
+
+function ReturnFromFieldPanel({
+  returnCandidates,
+  catalogMap,
+}: {
+  returnCandidates: ReturnRecord[];
+  catalogMap: Map<string, CatalogItem>;
+}) {
+  const [returning, setReturning] = useState<string | null>(null);
+  const [returnQty, setReturnQty] = useState<Record<string, string>>({});
+  const [returnNotes, setReturnNotes] = useState<Record<string, string>>({});
+  const [msgs, setMsgs] = useState<Record<string, { text: string; ok: boolean }>>({});
+
+  async function handleReturn(r: ReturnRecord) {
+    const qty = parseFloat(returnQty[r.orderItemKey] ?? "");
+    if (!qty || qty <= 0) return;
+    const key = r.orderItemKey;
+    setReturning(key);
+    try {
+      const db = getSupabase();
+      if (!db) return;
+      const { data: { session } } = await db.auth.getSession();
+      if (!session?.access_token) return;
+      const res = await fetch("/api/inventory/return-from-field", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          orderId: r.orderId,
+          catalogItemId: r.catalogItemId,
+          orderItemKey: r.orderItemKey,
+          returnedQty: qty,
+          notes: returnNotes[key] ?? `החזרה מהשטח | הזמנה ${r.orderNumber}`,
+        }),
+      });
+      const body = await res.json() as { movementsWritten?: number; warnings?: string[]; error?: string };
+      if (res.ok) {
+        setMsgs(prev => ({ ...prev, [key]: { text: `הוחזרו ${qty} ${catalogMap.get(r.catalogItemId)?.unitOfMeasure ?? "יח׳"} למלאי`, ok: true } }));
+      } else {
+        setMsgs(prev => ({ ...prev, [key]: { text: body.error ?? "שגיאה", ok: false } }));
+      }
+    } finally { setReturning(null); }
+  }
+
+  if (returnCandidates.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+        <p className="text-gray-400 text-sm">אין החזרות מהשטח לאישור</p>
+        <p className="text-xs text-gray-400 mt-1">פריטים שנצרכו על בסיס שריון יופיעו כאן לדיווח החזרה</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h2 className="text-base font-black text-gray-900">החזרות מהשטח</h2>
+      <p className="text-xs text-gray-500">פריטים אלו נצרכו על בסיס כמות שריון. דווח כמות שהוחזרה לאישור המלאי.</p>
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <table className="w-full text-right text-sm">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              {["הזמנה", "פריט", "נצרך", "כמות שהוחזרה", "הערות", ""].map(h => (
+                <th key={h} className="px-3 py-2.5 text-xs font-bold text-gray-500">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {returnCandidates.map(r => {
+              const item = catalogMap.get(r.catalogItemId);
+              const key = r.orderItemKey;
+              const m = msgs[key];
+              return (
+                <tr key={key} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="px-3 py-2.5 font-semibold text-gray-900">{r.orderNumber}</td>
+                  <td className="px-3 py-2.5 text-gray-700">{r.itemName}</td>
+                  <td className="px-3 py-2.5 text-gray-500 font-mono">{r.consumedQty} {item?.unitOfMeasure ?? ""}</td>
+                  <td className="px-3 py-2.5">
+                    <input type="number" min="0.01" step="0.01" max={r.consumedQty}
+                      value={returnQty[key] ?? ""} onChange={e => setReturnQty(prev => ({ ...prev, [key]: e.target.value }))}
+                      placeholder="0" className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-400" />
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <input value={returnNotes[key] ?? ""} onChange={e => setReturnNotes(prev => ({ ...prev, [key]: e.target.value }))}
+                      placeholder="הערה"
+                      className="w-36 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-teal-400" />
+                  </td>
+                  <td className="px-3 py-2.5 text-left">
+                    {m ? (
+                      <span className={`text-xs ${m.ok ? "text-green-600" : "text-red-600"}`}>{m.text}</span>
+                    ) : (
+                      <button onClick={() => handleReturn(r)} disabled={returning === key || !returnQty[key]}
+                        className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold disabled:opacity-40 transition-colors">
+                        {returning === key ? "מדווח..." : "דווח החזרה"}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function Warehouse() {
   const { orders } = useOrdersContext();
   const { items: catalogItems } = useCatalogContext();
-  const [activeTab, setActiveTab] = useState<"orders" | "inventory">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "inventory" | "delivery" | "returns">("orders");
   const [consumptions, setConsumptions] = useState<ConsumptionRecord[]>([]);
   const [approvedDiaryOrderIds, setApprovedDiaryOrderIds] = useState<Set<string>>(new Set());
   const [reconciling, setReconciling] = useState<string | null>(null);
@@ -476,7 +784,7 @@ export function Warehouse() {
     const db = getSupabase();
     if (!db) return;
     Promise.all([
-      db.from("inventory_consumptions").select("order_id,order_item_key,status,work_diary_id").in("status", ["consumed", "pending_review"]),
+      db.from("inventory_consumptions").select("order_id,order_item_key,status,work_diary_id,metadata").in("status", ["consumed", "pending_review"]),
       db.from("work_diaries").select("id,order_id,status,approval_status").eq("status", "submitted").eq("approval_status", "approved"),
     ]).then(([consRes, diaryRes]) => {
       if (!consRes.error && consRes.data) setConsumptions(consRes.data as ConsumptionRecord[]);
@@ -575,6 +883,37 @@ export function Warehouse() {
     { key: "ready",      orders: warehouseOrders.filter(o => o.warehouseStatus === "ready") },
   ];
 
+  // Build return candidates: completed orders with proxy-consumed items
+  const returnCandidates: ReturnRecord[] = [];
+  for (const c of consumptions) {
+    const meta = c as unknown as { metadata?: { quantitySource?: string }; quantity?: number };
+    if ((meta.metadata?.quantitySource) !== "reservation_quantity") continue;
+    const order = orders.find(o => o.id === c.order_id);
+    if (!order || order.status !== "completed") continue;
+    if (!c.order_item_key) continue;
+    const allRows = [...(order.accessoryRows ?? []), ...(order.miscRows ?? [])];
+    const row = allRows.find(r => r.id === c.order_item_key);
+    if (!row?.catalogItemId) continue;
+    const catItem = catalogMap.get(row.catalogItemId);
+    if (!catItem) continue;
+    const qty = (c as unknown as { quantity?: number }).quantity ?? 0;
+    returnCandidates.push({
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      catalogItemId: row.catalogItemId,
+      itemName: catItem.name,
+      orderItemKey: c.order_item_key,
+      consumedQty: qty,
+    });
+  }
+
+  const TAB_CONFIG = [
+    { key: "orders" as const,    label: "הכנת הזמנות" },
+    { key: "inventory" as const, label: "מלאי פריטים" },
+    { key: "delivery" as const,  label: "קליטת סחורה" },
+    { key: "returns" as const,   label: `החזרות מהשטח${returnCandidates.length > 0 ? ` (${returnCandidates.length})` : ""}` },
+  ];
+
   return (
     <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
       <div className="max-w-6xl mx-auto">
@@ -588,7 +927,7 @@ export function Warehouse() {
           </div>
           <div>
             <h1 className="text-2xl font-black text-gray-900">מחלקת מחסן</h1>
-            <p className="text-sm text-gray-500">הכנת הזמנות וניהול מלאי</p>
+            <p className="text-sm text-gray-500">הכנת הזמנות, ניהול מלאי וקליטת סחורה</p>
           </div>
           {activeTab === "orders" && (
             <div className="mr-auto flex items-center gap-2">
@@ -599,11 +938,8 @@ export function Warehouse() {
         </div>
 
         {/* Tab bar */}
-        <div className="flex gap-1 mb-5 bg-white border border-gray-200 rounded-xl p-1 w-fit">
-          {([
-            { key: "orders",    label: "הכנת הזמנות" },
-            { key: "inventory", label: "מלאי פריטים" },
-          ] as const).map(t => (
+        <div className="flex flex-wrap gap-1 mb-5 bg-white border border-gray-200 rounded-xl p-1 w-fit">
+          {TAB_CONFIG.map(t => (
             <button key={t.key} onClick={() => setActiveTab(t.key)}
               className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
                 activeTab === t.key ? "bg-teal-600 text-white shadow" : "text-gray-600 hover:bg-gray-100"
@@ -668,6 +1004,14 @@ export function Warehouse() {
 
         {/* Inventory tab */}
         {activeTab === "inventory" && <InventoryPanel reservationsByItem={reservationsByItem} />}
+
+        {/* Delivery notes tab */}
+        {activeTab === "delivery" && <DeliveryNotesPanel />}
+
+        {/* Returns from field tab */}
+        {activeTab === "returns" && (
+          <ReturnFromFieldPanel returnCandidates={returnCandidates} catalogMap={catalogMap} />
+        )}
       </div>
     </div>
   );

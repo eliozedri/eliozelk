@@ -70,6 +70,7 @@ interface DbConsumptionRow {
   order_item_key: string | null;
   quantity: number;
   status: string;
+  metadata?: { quantitySource?: string; proxyNote?: string } | null;
 }
 
 interface DbDiaryRow {
@@ -77,6 +78,24 @@ interface DbDiaryRow {
   order_id: string | null;
   status: string;
   approval_status: string;
+}
+
+interface DbDeliveryNoteRow {
+  id: string;
+  status: string;
+  document_number: string | null;
+  received_date: string;
+  created_at: string;
+}
+
+interface DbDeliveryNoteItemRow {
+  id: string;
+  delivery_note_id: string;
+  item_id: string | null;
+  description: string;
+  delivered_quantity: number | null;
+  counted_quantity: number | null;
+  status: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -96,7 +115,7 @@ export async function POST(req: NextRequest) {
     await syncAllReservations(db);
 
     // ── Load data ──────────────────────────────────────────────────────────
-    const [itemsRes, ordersRes, reservationsRes, consumptionsRes, diariesRes] = await Promise.all([
+    const [itemsRes, ordersRes, reservationsRes, consumptionsRes, diariesRes, deliveryNotesRes, deliveryNoteItemsRes] = await Promise.all([
       db.from("catalog_items")
         .select("id,name,type,category,unit_of_measure,current_quantity,minimum_quantity,reserved_quantity,supplier_id,is_active")
         .eq("is_active", true),
@@ -106,10 +125,15 @@ export async function POST(req: NextRequest) {
       db.from("inventory_reservations")
         .select("id,item_id,order_id,order_item_key,quantity,status"),
       db.from("inventory_consumptions")
-        .select("id,item_id,order_id,work_diary_id,order_item_key,quantity,status"),
+        .select("id,item_id,order_id,work_diary_id,order_item_key,quantity,status,metadata"),
       db.from("work_diaries")
         .select("id,order_id,status,approval_status")
         .not("status", "in", '("cancelled")'),
+      db.from("delivery_notes")
+        .select("id,status,document_number,received_date,created_at")
+        .not("status", "eq", "cancelled"),
+      db.from("delivery_note_items")
+        .select("id,delivery_note_id,item_id,description,delivered_quantity,counted_quantity,status"),
     ]);
 
     if (itemsRes.error)        throw new Error(itemsRes.error.message);
@@ -117,14 +141,18 @@ export async function POST(req: NextRequest) {
     if (reservationsRes.error) throw new Error(reservationsRes.error.message);
     if (consumptionsRes.error) result.errors.push(`load consumptions: ${consumptionsRes.error.message}`);
     if (diariesRes.error)      result.errors.push(`load diaries: ${diariesRes.error.message}`);
+    if (deliveryNotesRes.error) result.errors.push(`load delivery_notes: ${deliveryNotesRes.error.message}`);
+    if (deliveryNoteItemsRes.error) result.errors.push(`load delivery_note_items: ${deliveryNoteItemsRes.error.message}`);
 
-    const items        = (itemsRes.data        ?? []) as DbCatalogItem[];
-    const allOrders    = (ordersRes.data        ?? []) as DbOrderRow[];
-    const orders       = allOrders.filter(o => o.status !== "completed");
-    const reservations = (reservationsRes.data  ?? []) as DbReservationRow[];
-    const consumptions = (consumptionsRes.data  ?? []) as DbConsumptionRow[];
-    const diaries      = (diariesRes.data       ?? []) as DbDiaryRow[];
-    result.entitiesScanned = items.length + allOrders.length + reservations.length + consumptions.length;
+    const items             = (itemsRes.data             ?? []) as DbCatalogItem[];
+    const allOrders         = (ordersRes.data             ?? []) as DbOrderRow[];
+    const orders            = allOrders.filter(o => o.status !== "completed");
+    const reservations      = (reservationsRes.data       ?? []) as DbReservationRow[];
+    const consumptions      = (consumptionsRes.data       ?? []) as DbConsumptionRow[];
+    const diaries           = (diariesRes.data            ?? []) as DbDiaryRow[];
+    const deliveryNotes     = (deliveryNotesRes.data      ?? []) as DbDeliveryNoteRow[];
+    const deliveryNoteItems = (deliveryNoteItemsRes.data  ?? []) as DbDeliveryNoteItemRow[];
+    result.entitiesScanned = items.length + allOrders.length + reservations.length + consumptions.length + deliveryNotes.length;
 
     const catalogItemIds = new Set(items.map(i => i.id));
     const activeOrderIds  = new Set(orders.map(o => o.id));
@@ -590,9 +618,9 @@ export async function POST(req: NextRequest) {
           entityId: order.id,
           severity: "warn",
           title: `הזמנה הושלמה ללא התאמת מלאי — ${order.order_number}`,
-          description: `הזמנה ${order.order_number} הסתיימה עם יומן מאושר אך אין רשומות צריכת מלאי`,
-          detectedFromData: { orderId: order.id, orderNumber: order.order_number },
-          recommendedResolution: "הפעל התאמת מלאי עבור הזמנה זו",
+          description: `הזמנה ${order.order_number} הסתיימה עם יומן מאושר אך אין רשומות צריכת מלאי. עלול לעכב אישור חיוב.`,
+          detectedFromData: { orderId: order.id, orderNumber: order.order_number, billingNote: "reconcile before verifying billing" },
+          recommendedResolution: "הפעל התאמת מלאי עבור הזמנה זו לפני אישור מוכנות לחיוב",
         }, dedupeMap, result);
       }
     }
@@ -641,8 +669,141 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── 20. manual correction mismatch risk ─────────────────────────────────
-    // (no additional check beyond existing negative_stock rule 1; rule 19 is consumption-specific)
+    // ── 20. (no additional check beyond negative_stock rule 1) ──────────────
+
+    // ── Delivery note helpers ─────────────────────────────────────────────
+    const approvedDeliveryNoteIds = new Set(deliveryNotes.filter(n => n.status === "approved").map(n => n.id));
+
+    // Receive movements indexed by source_id (delivery_note_id)
+    const receiveMovsByNote = new Map<string, number>();
+    // We'll load this lazily from DB only if needed — skip for now (checked via item status).
+
+    // ── 21. Consumption used proxy quantity — no actual diary qty available ───
+    for (const c of activeConsumptions) {
+      const quantitySource = c.metadata?.quantitySource;
+      if (quantitySource && quantitySource !== "actual_quantity") {
+        const k = dedupeKey("consumption_used_proxy_quantity", "inventory_consumptions", c.id);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "consumption_used_proxy_quantity",
+          entityType: "inventory_consumptions",
+          entityId: c.id,
+          severity: "warn",
+          title: `צריכה בוצעה על בסיס ${quantitySource === "reservation_quantity" ? "שריון" : "תכנון"} — לא כמות בפועל`,
+          description: `פריט ${c.item_id} | הזמנה ${c.order_id} | כמות שהוצאה: ${c.quantity} | מקור כמות: ${quantitySource}`,
+          detectedFromData: { consumptionId: c.id, itemId: c.item_id, orderId: c.order_id, quantitySource },
+          recommendedResolution: "בדוק כמות בפועל מהשטח ודווח החזרה אם יש עודף",
+        }, dedupeMap, result);
+      }
+    }
+
+    // ── 22. Partial consumption — active reservation remains after consumption ─
+    // (already covered by check 16 — stale_active_reservation_after_consumption)
+
+    // ── 23. Return from field pending confirmation ──────────────────────────
+    // Detect orders where consumption used proxy AND no return movement exists yet.
+    // This is a nudge to the warehouse manager to confirm actual returned qty.
+    const proxyConsumptionOrderIds = new Set(
+      activeConsumptions
+        .filter(c => c.metadata?.quantitySource === "reservation_quantity")
+        .map(c => c.order_id),
+    );
+    for (const orderId2 of proxyConsumptionOrderIds) {
+      const order = allOrders.find(o => o.id === orderId2);
+      if (!order || order.status !== "completed") continue;
+      const k = dedupeKey("return_from_field_pending", "work_order", orderId2);
+      activeDedupeKeys.add(k);
+      await upsertTask(db, AGENT_ID, {
+        category: "return_from_field_pending",
+        entityType: "work_order",
+        entityId: orderId2,
+        title: `דווח החזרת ציוד — הזמנה ${order.order_number}`,
+        description: `הזמנה ${order.order_number} הושלמה | הצריכה בוצעה על בסיס שריון | יש לאשר כמות שהוחזרה למחסן`,
+        priority: "normal",
+        recommendedAction: "בדוק עם הצוות ודווח כמות ציוד שהוחזרה",
+      }, taskDedupeMap, result);
+    }
+
+    // ── 24. Delivery note approved but receive movement count = 0 ────────────
+    for (const note of deliveryNotes.filter(n => n.status === "approved")) {
+      const noteItems = deliveryNoteItems.filter(i => i.delivery_note_id === note.id);
+      const approvedItems = noteItems.filter(i => i.status === "approved" && i.item_id);
+      if (noteItems.length > 0 && approvedItems.length === 0) {
+        const k = dedupeKey("delivery_note_approved_no_receive", "delivery_note", note.id);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "delivery_note_approved_no_receive",
+          entityType: "delivery_note",
+          entityId: note.id,
+          severity: "error",
+          title: `תעודת משלוח אושרה ללא קליטת מלאי — ${note.document_number ?? note.id}`,
+          description: `תעודה ${note.document_number ?? note.id} בסטטוס approved אך אין פריטים מאושרים עם מלאי — ייתכן תקלה בתהליך הקליטה`,
+          detectedFromData: { noteId: note.id, documentNumber: note.document_number, itemCount: noteItems.length },
+          recommendedResolution: "אשר מחדש את תעודת המשלוח או בדוק תנועות מלאי ידנית",
+        }, dedupeMap, result);
+      }
+    }
+
+    // ── 25. Delivery note item unmapped to catalog ───────────────────────────
+    for (const item of deliveryNoteItems.filter(i => !i.item_id && i.status !== "approved")) {
+      const note = deliveryNotes.find(n => n.id === item.delivery_note_id);
+      if (!note || note.status === "cancelled") continue;
+      const entityId = `${item.delivery_note_id}:${item.description}`;
+      const k = dedupeKey("delivery_note_item_unmapped", "delivery_note", entityId);
+      activeDedupeKeys.add(k);
+      await upsertTask(db, AGENT_ID, {
+        category: "delivery_note_item_unmapped",
+        entityType: "delivery_note",
+        entityId,
+        title: `מיפוי נדרש — "${item.description}"`,
+        description: `תעודת משלוח ${note.document_number ?? note.id} | פריט "${item.description}" לא מקושר לקטלוג — לא יעודכן מלאי עד למיפוי`,
+        priority: "normal",
+        recommendedAction: "קשר פריט זה לקטלוג לפני אישור הקליטה",
+      }, taskDedupeMap, result);
+    }
+
+    // ── 26. Delivery note counted ≠ delivered (mismatch) ────────────────────
+    for (const item of deliveryNoteItems) {
+      if (!item.counted_quantity || !item.delivered_quantity) continue;
+      if (Math.abs(item.counted_quantity - item.delivered_quantity) <= 0.0001) continue;
+      const note = deliveryNotes.find(n => n.id === item.delivery_note_id);
+      if (!note || note.status === "cancelled") continue;
+      const k = dedupeKey("delivery_note_count_mismatch", "delivery_note", item.id);
+      activeDedupeKeys.add(k);
+      await upsertException(db, AGENT_ID, {
+        category: "delivery_note_count_mismatch",
+        entityType: "delivery_note",
+        entityId: item.id,
+        severity: "warn",
+        title: `פער ספירה — "${item.description}" בתעודה ${note.document_number ?? note.id}`,
+        description: `נרשם: ${item.delivered_quantity} | נספר: ${item.counted_quantity} | פער: ${Math.abs(item.counted_quantity - item.delivered_quantity)}`,
+        detectedFromData: { noteId: note.id, itemId: item.id, delivered: item.delivered_quantity, counted: item.counted_quantity },
+        recommendedResolution: "בדוק ספירה מחדש ותקן לפני אישור",
+      }, dedupeMap, result);
+    }
+
+    // ── 27. Delivery note draft/counting stuck > 7 days ─────────────────────
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    for (const note of deliveryNotes.filter(n => (n.status === "draft" || n.status === "counted") && n.created_at < sevenDaysAgo)) {
+      const k = dedupeKey("delivery_note_stuck", "delivery_note", note.id);
+      activeDedupeKeys.add(k);
+      await upsertException(db, AGENT_ID, {
+        category: "delivery_note_stuck",
+        entityType: "delivery_note",
+        entityId: note.id,
+        severity: "warn",
+        title: `תעודת משלוח תקועה ב${note.status === "draft" ? "טיוטה" : "ספירה"} — ${note.document_number ?? note.id}`,
+        description: `תעודה ${note.document_number ?? note.id} ב${note.status === "draft" ? "טיוטה" : "ספירה"} מיום ${note.received_date} — מעל 7 ימים ללא התקדמות`,
+        detectedFromData: { noteId: note.id, status: note.status, createdAt: note.created_at },
+        recommendedResolution: note.status === "draft" ? "השלם ספירת פריטים ועבור לשלב אישור" : "אשר את תעודת המשלוח לקליטת מלאי",
+      }, dedupeMap, result);
+    }
+
+    // ── 28. Received stock resolves negative stock — auto-resolve negative_stock exception
+    // (handled by autoResolveStaleExceptions: once item.current_quantity >= 0, exception is stale)
+
+    // ── 29. Double receiving risk — approved delivery note items counted twice
+    // (prevented at DB by uq_delivery_note_item_approved index; no scan check needed)
 
     // ── Auto-resolve stale exceptions ──────────────────────────────────────
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);

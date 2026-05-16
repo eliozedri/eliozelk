@@ -31,7 +31,7 @@ const INTENT_KEYWORDS: Record<Exclude<ChatIntent, "general">, string[]> = {
   summary:    ["סיכום", "מצב", "יום", "תעדכן", "תסכם", "קורה", "overview"],
   orders:     ["הזמנה", "פרויקט", "לקוח", "order"],
   restored:   ["שוחזר", "שחזור", "restore", "ביטול", "ארכיון"],
-  inventory:  ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער", "צריכה", "נצרך", "נצרכו", "התאמה", "יומן", "בוצע", "ניוצל", "consump"],
+  inventory:  ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער", "צריכה", "נצרך", "נצרכו", "התאמה", "יומן", "בוצע", "ניוצל", "consump", "החזר", "החזרה", "הוחזר", "תעודת", "תעודה", "קליטה", "נקלט", "נקלטה", "delivery", "return_from", "ספירה"],
 };
 
 export function detectIntent(message: string): ChatIntent {
@@ -341,8 +341,10 @@ export async function runChatEngine(
     }
 
     case "inventory": {
-      const isReservationQuery = /שריון|שמור|שמורים|reserv|שוחרר|פער/.test(message);
-      const isConsumptionQuery = /צריכה|נצרך|נצרכו|התאמה|יומן.*מלאי|בוצע.*מלאי|ניוצל|consump|ממתין.*התאמ|פער.*מתוכנן|כפולה/.test(message);
+      const isReservationQuery  = /שריון|שמור|שמורים|reserv|שוחרר|פער/.test(message);
+      const isConsumptionQuery  = /צריכה|נצרך|נצרכו|התאמה|יומן.*מלאי|בוצע.*מלאי|ניוצל|consump|ממתין.*התאמ|פער.*מתוכנן|כפולה/.test(message);
+      const isDeliveryNoteQuery = /תעודת|תעודה|קליטה|נקלט|delivery|ספירה|סחורה.*הגיע|הגיע.*סחורה/.test(message);
+      const isReturnQuery       = /החזר|החזרה|הוחזר|return_from|חזר.*שטח|שטח.*חזר/.test(message);
 
       const [excRes, itemsRes, reservationsRes, consumptionsRes] = await Promise.all([
         db.from("agent_exceptions")
@@ -489,6 +491,103 @@ export async function runChatEngine(
           content: lines.join("\n"),
           sourceRefs: reservationExcs.slice(0, 3).map(e => ({ table: "agent_exceptions", id: e.id as string, label: e.title as string })),
         };
+      }
+
+      // ── Delivery note queries ───────────────────────────────────────────
+      if (isDeliveryNoteQuery) {
+        const [notesRes, noteItemsRes] = await Promise.all([
+          db.from("delivery_notes")
+            .select("id,supplier_name,document_number,received_date,status,created_at")
+            .not("status", "eq", "cancelled")
+            .order("received_date", { ascending: false })
+            .limit(50),
+          db.from("delivery_note_items")
+            .select("id,delivery_note_id,item_id,description,delivered_quantity,counted_quantity,status"),
+        ]);
+        const notes     = notesRes.data ?? [];
+        const noteItems = noteItemsRes.data ?? [];
+
+        const lines: string[] = [`📋 **תעודות משלוח — ${new Date().toLocaleDateString("he-IL")}**\n`];
+
+        if (notes.length === 0) {
+          lines.push("אין תעודות משלוח פעילות.\nצור תעודה חדשה מלשונית 'קליטת סחורה' במחלקת מחסן.");
+          return { content: lines.join("\n"), sourceRefs: [] };
+        }
+
+        const byStatus = { draft: 0, counted: 0, approved: 0 } as Record<string, number>;
+        for (const n of notes) byStatus[(n.status as string)] = (byStatus[(n.status as string)] ?? 0) + 1;
+
+        lines.push(`סה"כ תעודות פעילות: **${notes.length}** | טיוטות: **${byStatus.draft ?? 0}** | בספירה: **${byStatus.counted ?? 0}** | אושרו: **${byStatus.approved ?? 0}**\n`);
+
+        const pending = notes.filter(n => n.status === "draft" || n.status === "counted");
+        if (pending.length > 0) {
+          lines.push("**ממתינות לאישור:**");
+          pending.slice(0, 5).forEach(n => {
+            const itemCount = noteItems.filter(i => i.delivery_note_id === n.id).length;
+            lines.push(`  📦 תעודה ${n.document_number ?? n.id} | ${n.supplier_name ?? "ספק לא מוגדר"} | ${n.received_date} | ${itemCount} פריטים | סטטוס: ${n.status}`);
+          });
+        }
+
+        const mismatches = noteItems.filter(i => {
+          const delivQty = i.delivered_quantity as number | null;
+          const countQty = i.counted_quantity as number | null;
+          return delivQty !== null && countQty !== null && Math.abs(countQty - delivQty) > 0.0001;
+        });
+        if (mismatches.length > 0) {
+          lines.push(`\n⚠️ **פערי ספירה: ${mismatches.length}** — פריטים עם אי-התאמה בין תעודה לספירה`);
+        }
+
+        const unmapped = noteItems.filter(i => !i.item_id && i.status !== "approved");
+        if (unmapped.length > 0) {
+          lines.push(`🔗 **פריטים לא ממופים: ${unmapped.length}** — לא יעודכן מלאי עד למיפוי לקטלוג`);
+        }
+
+        return { content: lines.join("\n"), sourceRefs: [] };
+      }
+
+      // ── Return from field queries ────────────────────────────────────────
+      if (isReturnQuery) {
+        const returnsRes = await db.from("inventory_movements")
+          .select("id,item_id,quantity,notes,created_by,created_at,source_id")
+          .eq("movement_type", "return")
+          .eq("source_type", "return_from_field")
+          .order("created_at", { ascending: false })
+          .limit(50);
+
+        const returns = returnsRes.data ?? [];
+        const lines: string[] = [`↩️ **החזרות מהשטח — ${new Date().toLocaleDateString("he-IL")}**\n`];
+
+        if (returns.length === 0) {
+          lines.push("אין החזרות מהשטח רשומות.");
+          lines.push("החזרות מדווחות מלשונית 'החזרות מהשטח' במחלקת מחסן לאחר אישור יומן שטח.");
+          return { content: lines.join("\n"), sourceRefs: [] };
+        }
+
+        const totalQty   = returns.reduce((s, r) => s + (r.quantity as number), 0);
+        const byItem     = new Map<string, number>();
+        for (const r of returns) {
+          byItem.set(r.item_id as string, (byItem.get(r.item_id as string) ?? 0) + (r.quantity as number));
+        }
+
+        lines.push(`סה"כ החזרות: **${returns.length}** | כמות כוללת שהוחזרה: **${totalQty}** יח׳ | פריטים שונים: **${byItem.size}**\n`);
+
+        lines.push("**החזרות אחרונות:**");
+        returns.slice(0, 6).forEach(r => {
+          const item     = itemMap.get(r.item_id as string);
+          const itemName = item ? (item.name as string) : (r.item_id as string);
+          const unit     = item ? (item.unit_of_measure as string) : "יח׳";
+          const date     = fmtDate(r.created_at as string);
+          lines.push(`  ↩️ **${itemName}** — ${r.quantity} ${unit} | ${date} | ${r.created_by}`);
+        });
+
+        const returnExcs = excs.filter(e => e.category === "return_from_field_pending");
+        if (returnExcs.length > 0) {
+          lines.push(`\n⏳ **ממתינות לדיווח החזרה: ${returnExcs.length}** הזמנות שהושלמו עם ציוד לא מדווח`);
+        } else {
+          lines.push(`\n✅ אין הזמנות ממתינות לדיווח החזרת ציוד`);
+        }
+
+        return { content: lines.join("\n"), sourceRefs: [] };
       }
 
       // ── Standard stock summary ──────────────────────────────────────────

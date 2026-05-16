@@ -232,15 +232,16 @@ export async function syncConsumptionForOrder(
     return result;
   }
 
-  // Handle no mapped items
+  // Handle no mapped items — diary items (PaintingItem/PoleItem/SignItem) have no
+  // catalogItemId. Consumption is order-level only. Record this explicitly.
   if (items.length === 0) {
     await writeReconciliationTask(db, {
       orderId,
       orderNumber: order.order_number,
       diaryId,
       diaryNumber: diary.diary_number,
-      description: "אין פריטי קטלוג מקושרים בהזמנה",
-      reason: "לא ניתן לבצע צריכה אוטומטית — אין פריטים מקושרים לקטלוג",
+      description: "אין פריטי קטלוג מקושרים בהזמנה — פריטי יומן שטח (שלטים/עמודים/ציור) אינם מקושרים לקטלוג מלאי",
+      reason: "לא ניתן לבצע צריכה אוטומטית — קשר פריטי אביזרים להזמנה כדי לאפשר מעקב מלאי",
     }, result);
     result.durationMs = Date.now() - start;
     return result;
@@ -323,6 +324,12 @@ export async function syncConsumptionForOrder(
       result.warnings.push(`over-consumption warning: planned=${plannedQty} > reserved=${reservation.quantity} for item ${catalogItem.name}`);
     }
 
+    // Determine whether we used actual, reservation, or planned quantity as proxy.
+    // Diary items (PaintingItem, PoleItem, SignItem) have no catalogItemId, so there
+    // is no "actual qty from field" available at catalog level.
+    // We always consume reservation qty (if reserved) or planned qty (fallback).
+    const quantitySource = reservation ? "reservation_quantity" : "planned_quantity";
+
     // INSERT inventory_consumptions
     const { error: consInsertErr } = await db.from("inventory_consumptions").insert({
       item_id:         item.catalogItemId,
@@ -343,6 +350,8 @@ export async function syncConsumptionForOrder(
         orderNumber:  order.order_number,
         description:  item.description,
         reservedQty:  reservation?.quantity ?? null,
+        quantitySource,
+        proxyNote: "כמות בפועל מהשטח אינה זמינה — פריטי יומן אינם מקושרים לקטלוג. נעשה שימוש בכמות שריון/מתוכנן כנציג.",
       },
     });
 
