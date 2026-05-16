@@ -29,6 +29,8 @@ import {
   AGENT_ORG,
 } from "@/types/agent";
 
+import { ChatDrawer } from "@/components/AgentChat/ChatDrawer";
+
 // ── Colors ───────────────────────────────────────────────────────────────────
 const NAVY = "#0d1b2e";
 const NAVY_MID = "#1a2d4a";
@@ -295,13 +297,22 @@ function AgentCard({ agent, stats, onSelect, scanStatus }: {
 
 type RoomTab = "tasks" | "exceptions" | "approvals" | "activity";
 
-function AgentRoom({ agent, tasks, exceptions, approvals, activity, onClose, onApprove, onReject, onDismissException, onAcknowledgeException, onTaskStatus, onScan, scanRunning, scanSummary, scanStatus }: {
+function ChatIcon() {
+  return (
+    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+  );
+}
+
+function AgentRoom({ agent, tasks, exceptions, approvals, activity, onClose, onChat, onApprove, onReject, onDismissException, onAcknowledgeException, onTaskStatus, onScan, scanRunning, scanSummary, scanStatus }: {
   agent: Agent;
   tasks: AgentTask[];
   exceptions: AgentException[];
   approvals: AgentApproval[];
   activity: AgentActivityFeedItem[];
   onClose: () => void;
+  onChat?: () => void;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
   onDismissException: (id: string) => void;
@@ -334,9 +345,21 @@ function AgentRoom({ agent, tasks, exceptions, approvals, activity, onClose, onA
       >
         {/* Header */}
         <div className="flex items-start justify-between p-5" style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
-          <button onClick={onClose} className="text-white/40 hover:text-white/80 transition-colors p-1 mt-1 rounded">
-            <CloseIcon />
-          </button>
+          <div className="flex items-center gap-2 mt-1">
+            <button onClick={onClose} className="text-white/40 hover:text-white/80 transition-colors p-1 rounded">
+              <CloseIcon />
+            </button>
+            {onChat && (
+              <button
+                onClick={onChat}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                style={{ backgroundColor: `${EK_BLUE}25`, color: EK_BLUE, border: `1px solid ${EK_BLUE}50` }}
+              >
+                <ChatIcon />
+                שיחה עם הסוכן
+              </button>
+            )}
+          </div>
           <div className="text-right flex-1">
             <div className="flex items-center justify-end gap-2 mb-1">
               <span className="text-2xl">{agent.icon}</span>
@@ -868,6 +891,11 @@ export function AgentCommandCenter() {
 
   const [mainTab, setMainTab] = useState<MainTab>("overview");
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatAgentId, setChatAgentId] = useState<string | null>(null);
+
+  function openMasterChat() { setChatAgentId(null); setChatOpen(true); }
+  function openAgentChat(id: string) { setChatAgentId(id); setChatOpen(true); }
 
   // ── Scan state ─────────────────────────────────────────────────────────────
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatus>>({});
@@ -937,7 +965,7 @@ export function AgentCommandCenter() {
       <div className="px-6 pt-6 pb-4" style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
         <div className="flex items-start justify-between mb-4">
           {/* Left actions */}
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
             <button
               onClick={refresh}
               disabled={loading}
@@ -960,6 +988,14 @@ export function AgentCommandCenter() {
                 ? <><SpinnerIcon /> סורק ({scansRunning})...</>
                 : <><PlayIcon /> הפעל סריקה כללית</>
               }
+            </button>
+            <button
+              onClick={openMasterChat}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
+              style={{ backgroundColor: `${EK_BLUE}25`, color: EK_BLUE, border: `1px solid ${EK_BLUE}50` }}
+            >
+              <ChatIcon />
+              שיחה עם מרכז הפיקוד
             </button>
           </div>
 
@@ -1146,6 +1182,7 @@ export function AgentCommandCenter() {
           approvals={roomApprovals}
           activity={roomActivity}
           onClose={() => setSelectedAgent(null)}
+          onChat={() => openAgentChat(selectedAgent.id)}
           onApprove={id => updateApproval(id, "approved")}
           onReject={id => updateApproval(id, "rejected")}
           onDismissException={dismissException}
@@ -1155,6 +1192,25 @@ export function AgentCommandCenter() {
           scanRunning={scanStatuses[selectedAgent.id] === "running"}
           scanSummary={scanSummaries[selectedAgent.id]}
           scanStatus={scanStatuses[selectedAgent.id]}
+        />
+      )}
+
+      {/* ── Chat Drawer ────────────────────────────────────────────────────── */}
+      {chatOpen && (
+        <ChatDrawer
+          isOpen={chatOpen}
+          onClose={() => setChatOpen(false)}
+          agentId={chatAgentId}
+          agentName={
+            chatAgentId
+              ? agents.find(a => a.id === chatAgentId)?.name ?? "הסוכן"
+              : "מרכז הפיקוד"
+          }
+          agentIcon={
+            chatAgentId
+              ? agents.find(a => a.id === chatAgentId)?.icon ?? "🤖"
+              : "🤖"
+          }
         />
       )}
     </div>
