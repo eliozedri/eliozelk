@@ -312,7 +312,7 @@ INSERT INTO public.agents (
     'סוכן ניתוח תכניות הנדסה — מודול עתידי. יגיע ביכולת לנתח קבצי PDF הנדסיים ולחלץ כמויות מדידה עם ציון ביטחון וביאור ויזואלי. כרגע: ניתוח בלבד, לא פעיל.',
     0,
     ARRAY['work_orders'],
-    ARRAY[],
+    ARRAY[]::text[],
     ARRAY['quantity_approval','plan_analysis_save'],
     'idle', '📐', '#6366f1'
   )

@@ -30,6 +30,10 @@ import {
 } from "@/types/agent";
 
 import { ChatDrawer } from "@/components/AgentChat/ChatDrawer";
+import { DigitalHQ } from "@/components/AgentCommandCenter/DigitalHQ";
+import { NewMeetingModal } from "@/components/AgentCommandCenter/NewMeetingModal";
+import { useAgentMeetings } from "@/hooks/useAgentMeetings";
+import type { AgentMeeting } from "@/types/agentMeeting";
 
 // ── Colors ───────────────────────────────────────────────────────────────────
 const NAVY = "#0d1b2e";
@@ -880,7 +884,7 @@ function ActivityPanel({ feed, agents }: { feed: AgentActivityFeedItem[]; agents
 
 // ── Main Command Center ───────────────────────────────────────────────────────
 
-type MainTab = "overview" | "tasks" | "exceptions" | "approvals" | "activity";
+type MainTab = "overview" | "tasks" | "exceptions" | "approvals" | "activity" | "hq";
 
 export function AgentCommandCenter() {
   const {
@@ -893,9 +897,41 @@ export function AgentCommandCenter() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatAgentId, setChatAgentId] = useState<string | null>(null);
+  const [chatThreadId, setChatThreadId] = useState<string | null>(null);
+  const [chatTitle, setChatTitle] = useState<string | undefined>(undefined);
+  const [chatIcon, setChatIcon] = useState<string | undefined>(undefined);
+  const [activeMeeting, setActiveMeeting] = useState<AgentMeeting | null>(null);
+  const [showNewMeeting, setShowNewMeeting] = useState(false);
 
-  function openMasterChat() { setChatAgentId(null); setChatOpen(true); }
-  function openAgentChat(id: string) { setChatAgentId(id); setChatOpen(true); }
+  const { meetings, creating: meetingCreating, error: meetingError, loadMeetings, createMeeting, closeMeeting } = useAgentMeetings();
+
+  function openMasterChat() {
+    setChatAgentId(null); setChatThreadId(null);
+    setChatTitle("מרכז הפיקוד"); setChatIcon("🤖");
+    setChatOpen(true);
+  }
+  function openAgentChat(id: string) {
+    const agent = agents.find(a => a.id === id);
+    setChatAgentId(id); setChatThreadId(null);
+    setChatTitle(agent?.name); setChatIcon(agent?.icon);
+    setChatOpen(true);
+  }
+  function openMeetingChat(meeting: AgentMeeting) {
+    setActiveMeeting(meeting);
+    setChatAgentId(null);
+    setChatThreadId(meeting.thread_id ?? null);
+    setChatTitle(`פגישה: ${meeting.title}`);
+    setChatIcon("📅");
+    setChatOpen(true);
+  }
+
+  async function handleCreateMeeting(params: { title: string; topic?: string; participatingAgents: string[] }) {
+    const result = await createMeeting(params);
+    if (result) {
+      setShowNewMeeting(false);
+      openMeetingChat(result.meeting);
+    }
+  }
 
   // ── Scan state ─────────────────────────────────────────────────────────────
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatus>>({});
@@ -952,6 +988,7 @@ export function AgentCommandCenter() {
   const roomActivity    = selectedAgent ? activityFeed.filter(f => f.agent_id === selectedAgent.id) : [];
 
   const MAIN_TABS: { id: MainTab; label: string; count?: number }[] = [
+    { id: "hq",          label: "משרד דיגיטלי" },
     { id: "overview",    label: "סקירה" },
     { id: "tasks",       label: "משימות",   count: totalOpenTasks },
     { id: "exceptions",  label: "חריגות",   count: totalOpenExc },
@@ -1076,7 +1113,7 @@ export function AgentCommandCenter() {
         {MAIN_TABS.map(t => (
           <button
             key={t.id}
-            onClick={() => setMainTab(t.id)}
+            onClick={() => { setMainTab(t.id); if (t.id === "hq") void loadMeetings(); }}
             className="px-4 pb-3 text-sm font-semibold transition-all relative"
             style={{ color: mainTab === t.id ? "white" : "rgba(255,255,255,0.4)" }}
           >
@@ -1096,6 +1133,21 @@ export function AgentCommandCenter() {
 
       {/* ── Tab content ────────────────────────────────────────────────────── */}
       <div className="p-6">
+
+        {/* Digital HQ — 2D visual workspace */}
+        {mainTab === "hq" && (
+          <DigitalHQ
+            agents={agents}
+            stats={agentStats}
+            scanStatuses={scanStatuses}
+            meetings={meetings}
+            onAgentSelect={setSelectedAgent}
+            onAgentChat={openAgentChat}
+            onMasterChat={openMasterChat}
+            onMeetingOpen={openMeetingChat}
+            onNewMeeting={() => { void loadMeetings(); setShowNewMeeting(true); }}
+          />
+        )}
 
         {/* Overview: org chart + agent cards */}
         {mainTab === "overview" && (
@@ -1195,22 +1247,26 @@ export function AgentCommandCenter() {
         />
       )}
 
-      {/* ── Chat Drawer ────────────────────────────────────────────────────── */}
+      {/* ── Chat / Meeting Drawer ─────────────────────────────────────────── */}
       {chatOpen && (
         <ChatDrawer
           isOpen={chatOpen}
-          onClose={() => setChatOpen(false)}
+          onClose={() => { setChatOpen(false); setActiveMeeting(null); }}
           agentId={chatAgentId}
-          agentName={
-            chatAgentId
-              ? agents.find(a => a.id === chatAgentId)?.name ?? "הסוכן"
-              : "מרכז הפיקוד"
-          }
-          agentIcon={
-            chatAgentId
-              ? agents.find(a => a.id === chatAgentId)?.icon ?? "🤖"
-              : "🤖"
-          }
+          agentName={chatTitle ?? "מרכז הפיקוד"}
+          agentIcon={chatIcon ?? "🤖"}
+          threadId={chatThreadId}
+        />
+      )}
+
+      {/* ── New Meeting Modal ─────────────────────────────────────────────── */}
+      {showNewMeeting && (
+        <NewMeetingModal
+          agents={agents}
+          creating={meetingCreating}
+          error={meetingError}
+          onCreate={params => void handleCreateMeeting(params)}
+          onClose={() => setShowNewMeeting(false)}
         />
       )}
     </div>

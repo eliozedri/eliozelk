@@ -126,10 +126,11 @@ interface Props {
   agentId?: string | null;
   agentName?: string;
   agentIcon?: string;
+  threadId?: string | null; // for meeting threads — bypasses thread creation
 }
 
-export function ChatDrawer({ isOpen, onClose, agentId, agentName, agentIcon }: Props) {
-  const { messages, sending, loading, error, initialize, sendMessage } = useAgentChat(agentId);
+export function ChatDrawer({ isOpen, onClose, agentId, agentName, agentIcon, threadId }: Props) {
+  const { messages, sending, loading, error, initialize, sendMessage } = useAgentChat(agentId, threadId);
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);

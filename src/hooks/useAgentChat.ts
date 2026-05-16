@@ -11,7 +11,7 @@ async function getBearerToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-export function useAgentChat(agentId?: string | null) {
+export function useAgentChat(agentId?: string | null, existingThreadId?: string | null) {
   const [thread, setThread] = useState<CommThread | null>(null);
   const [messages, setMessages] = useState<CommMessage[]>([]);
   const [sending, setSending] = useState(false);
@@ -23,6 +23,13 @@ export function useAgentChat(agentId?: string | null) {
     if (thread) return thread;
     const token = await getBearerToken();
     if (!token) return null;
+
+    // Meeting mode: use the pre-created thread directly
+    if (existingThreadId) {
+      const stub = { id: existingThreadId, agent_id: agentId ?? null } as CommThread;
+      setThread(stub);
+      return stub;
+    }
 
     // Try to find existing active thread for this agent
     const listUrl = agentId
@@ -48,7 +55,7 @@ export function useAgentChat(agentId?: string | null) {
     const newThread = (await createRes.json()) as CommThread;
     setThread(newThread);
     return newThread;
-  }, [thread, agentId]);
+  }, [thread, agentId, existingThreadId]);
 
   const loadMessages = useCallback(async (t: CommThread) => {
     const token = await getBearerToken();
