@@ -759,7 +759,7 @@ export async function runChatEngine(
       const lower = message.toLowerCase();
 
       // ── Missing revenue sub-query ──
-      const wantsRevenue = lower.includes("חסר") && (lower.includes("הכנסה") || lower.includes("חיוב") || lower.includes("סכום"));
+      const wantsRevenue = lower.includes("חסר") && (lower.includes("הכנסה") || lower.includes("סכום"));
       const wantsCostPrice = lower.includes("עלות") && (lower.includes("חסר") || lower.includes("פריט"));
       const wantsMissingData = lower.includes("missing") || (lower.includes("חסר") && lower.includes("נתון")) || lower.includes("להשלים") || lower.includes("מה צריך");
 

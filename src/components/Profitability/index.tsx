@@ -810,6 +810,8 @@ function CfoTab() {
     if (value !== null && isNaN(value)) return;
     setSavingRevenue(orderId);
     try {
+      // billed_amount is read by both accounting workflow and profitability analytics;
+      // this write is analytics-only and does not advance accountingStatus
       await updateOrderFields(orderId, { billedAmount: value });
       addOrderActivity(
         orderId,
@@ -942,7 +944,12 @@ function CfoTab() {
                 <tr className="bg-gray-50 text-xs text-gray-500">
                   <th className="px-3 py-2 text-right">הזמנה</th>
                   <th className="px-3 py-2 text-right">לקוח</th>
-                  <th className="px-3 py-2 text-right w-40">סכום לחישוב רווחיות</th>
+                  <th className="px-3 py-2 text-right w-40">
+                    סכום לחישוב רווחיות
+                    <div className="text-[9px] text-amber-600 font-normal normal-case leading-tight mt-0.5">
+                      לחישוב פנימי בלבד · לא חשבונית
+                    </div>
+                  </th>
                   <th className="px-3 py-2 text-right">עלות</th>
                   <th className="px-3 py-2 text-right">רווח</th>
                   <th className="px-3 py-2 text-right">מרווח</th>
@@ -1118,7 +1125,7 @@ export function ProfitabilityPage() {
             label={criticalCount > 0 ? `${criticalCount} ממצאים קריטיים` : "איכות נתונים"}
             value={criticalCount > 0 ? String(criticalCount) : `${dataQuality.completenessScore}%`}
             accent={criticalCount > 0 ? "bg-red-500" : dataQuality.completenessScore >= 80 ? "bg-emerald-400" : dataQuality.completenessScore >= 60 ? "bg-amber-400" : "bg-red-400"}
-            sub={criticalCount > 0 ? "לחץ על ניהול לפרטים" : dataQuality.missingBilling > 0 ? `${dataQuality.missingBilling} חסרי חיוב` : undefined}
+            sub={criticalCount > 0 ? "לחץ על ניהול לפרטים" : dataQuality.missingBilling > 0 ? `${dataQuality.missingBilling} ללא סכום הכנסה` : undefined}
           />
         </div>
 
