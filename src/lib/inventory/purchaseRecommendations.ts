@@ -154,7 +154,7 @@ export async function upsertPurchaseRecommendation(
     created_by: params.createdBy ?? "system:inventory-scan",
     created_at: now,
   });
-  if (error) return { created: true, error: error.message };
+  if (error) return { created: false, error: error.message };
   return { created: true };
 }
 

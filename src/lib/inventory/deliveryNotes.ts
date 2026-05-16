@@ -187,9 +187,12 @@ export async function approveDeliveryNote(
   }
 
   // Mark the delivery note as approved
-  await db.from("delivery_notes")
+  const { error: noteUpdateErr } = await db.from("delivery_notes")
     .update({ status: "approved", updated_at: now })
     .eq("id", deliveryNoteId);
+  if (noteUpdateErr) {
+    result.warnings.push(`delivery note header status update failed: ${noteUpdateErr.message}`);
+  }
 
   result.durationMs = Date.now() - start;
   return result;

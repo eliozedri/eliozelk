@@ -836,6 +836,7 @@ const REC_TYPE_LABELS: Record<string, string> = {
 
 function PurchaseRecommendationsPanel({ catalogMap }: { catalogMap: Map<string, CatalogItem> }) {
   const [recs, setRecs] = useState<PurchaseRecommendationRecord[]>([]);
+  const [suppMap, setSuppMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Record<string, { text: string; ok: boolean }>>({});
@@ -846,10 +847,16 @@ function PurchaseRecommendationsPanel({ catalogMap }: { catalogMap: Map<string, 
     if (!db) return;
     const { data: { session } } = await db.auth.getSession();
     if (!session?.access_token) return;
-    const res = await fetch("/api/inventory/purchase-recommendations", {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
+    const [res, suppRes] = await Promise.all([
+      fetch("/api/inventory/purchase-recommendations", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      }),
+      db.from("suppliers").select("id,name").eq("is_active", true).limit(200),
+    ]);
     if (res.ok) setRecs(await res.json() as PurchaseRecommendationRecord[]);
+    if (!suppRes.error && suppRes.data) {
+      setSuppMap(new Map((suppRes.data as Array<{ id: string; name: string }>).map(s => [s.id, s.name])));
+    }
     setLoading(false);
   }
 
@@ -953,7 +960,7 @@ function PurchaseRecommendationsPanel({ catalogMap }: { catalogMap: Map<string, 
                     </span>
                   </td>
                   <td className="px-2 py-2.5 text-xs text-gray-500 max-w-[100px] truncate">
-                    {r.supplier_id ? (r.supplier_id.slice(0, 8) + "…") : "—"}
+                    {r.supplier_id ? (suppMap.get(r.supplier_id) ?? r.supplier_id.slice(0, 8) + "…") : "—"}
                   </td>
                   <td className="px-2 py-2.5 text-xs text-gray-500 max-w-[140px]">
                     <span className="line-clamp-2">{r.reason}</span>

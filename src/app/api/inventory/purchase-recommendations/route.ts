@@ -21,7 +21,6 @@ export async function GET(req: NextRequest) {
 
   let query = db.from("purchase_recommendations")
     .select("*")
-    .order("urgency", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(200);
 
