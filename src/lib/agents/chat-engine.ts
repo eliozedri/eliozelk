@@ -18,6 +18,7 @@ export type ChatIntent =
   | "summary"
   | "orders"
   | "restored"
+  | "inventory"
   | "general";
 
 const INTENT_KEYWORDS: Record<Exclude<ChatIntent, "general">, string[]> = {
@@ -30,6 +31,7 @@ const INTENT_KEYWORDS: Record<Exclude<ChatIntent, "general">, string[]> = {
   summary:    ["סיכום", "מצב", "יום", "תעדכן", "תסכם", "קורה", "overview"],
   orders:     ["הזמנה", "פרויקט", "לקוח", "order"],
   restored:   ["שוחזר", "שחזור", "restore", "ביטול", "ארכיון"],
+  inventory:  ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים"],
 };
 
 export function detectIntent(message: string): ChatIntent {
@@ -336,6 +338,73 @@ export async function runChatEngine(
       });
 
       return { content: lines.join("\n"), sourceRefs: [] };
+    }
+
+    case "inventory": {
+      const [excRes, itemsRes] = await Promise.all([
+        db.from("agent_exceptions")
+          .select("id,severity,title,category,related_entity_id")
+          .in("status", ["open", "acknowledged"])
+          .eq("agent_id", "inventory-agent")
+          .limit(20),
+        db.from("catalog_items")
+          .select("id,name,unit_of_measure,current_quantity,minimum_quantity,reserved_quantity,is_active")
+          .eq("is_active", true),
+      ]);
+
+      const excs  = excRes.data ?? [];
+      const items = itemsRes.data ?? [];
+
+      const negative  = items.filter(i => (i.current_quantity as number) < 0);
+      const outOfStock = items.filter(i => (i.current_quantity as number) === 0 && (i.minimum_quantity as number) > 0);
+      const lowStock  = items.filter(i => (i.minimum_quantity as number) > 0 && (i.current_quantity as number) > 0 && (i.current_quantity as number) < (i.minimum_quantity as number));
+      const tracked   = items.filter(i => (i.minimum_quantity as number) > 0);
+
+      if (items.length === 0) {
+        return { content: "📦 אין פריטי מלאי מוגדרים במערכת. הוסף פריטים בקטלוג ועדכן כמויות.", sourceRefs: [] };
+      }
+
+      const lines: string[] = [`📦 **מצב מחסן — ${new Date().toLocaleDateString("he-IL")}**\n`];
+      lines.push(`פריטים פעילים: **${items.length}** | מנוהלי מלאי: **${tracked.length}**`);
+
+      if (negative.length > 0)  lines.push(`🔴 מלאי שלילי: **${negative.length}** פריטים — דורש טיפול מיידי`);
+      if (outOfStock.length > 0) lines.push(`🟠 חסר (מלאי אפס): **${outOfStock.length}** פריטים`);
+      if (lowStock.length > 0)   lines.push(`🟡 מלאי נמוך: **${lowStock.length}** פריטים`);
+
+      if (negative.length === 0 && outOfStock.length === 0 && lowStock.length === 0 && tracked.length > 0) {
+        lines.push(`✅ כל הפריטים המנוהלים עומדים בסף המינימום`);
+      }
+
+      if (negative.length > 0) {
+        lines.push(`\n**פריטים עם מלאי שלילי:**`);
+        negative.slice(0, 5).forEach(i => {
+          lines.push(`  🔴 ${i.name as string} — ${i.current_quantity as number} ${i.unit_of_measure as string}`);
+        });
+      }
+
+      if (outOfStock.length > 0) {
+        lines.push(`\n**חסרים — דרושה הזמנת רכש:**`);
+        outOfStock.slice(0, 5).forEach(i => {
+          lines.push(`  🟠 ${i.name as string} — מינימום: ${i.minimum_quantity as number} ${i.unit_of_measure as string}`);
+        });
+      }
+
+      if (lowStock.length > 0) {
+        lines.push(`\n**מלאי נמוך:**`);
+        lowStock.slice(0, 5).forEach(i => {
+          const shortage = (i.minimum_quantity as number) - (i.current_quantity as number);
+          lines.push(`  🟡 ${i.name as string} — ${i.current_quantity as number}/${i.minimum_quantity as number} (קצר: ${shortage}) ${i.unit_of_measure as string}`);
+        });
+      }
+
+      if (excs.length > 0) {
+        lines.push(`\n**חריגות מחסן פתוחות: ${excs.length}** — בצע סריקה לעדכון`);
+      }
+
+      return {
+        content: lines.join("\n"),
+        sourceRefs: excs.slice(0, 3).map(e => ({ table: "agent_exceptions", id: e.id as string, label: e.title as string })),
+      };
     }
 
     // "summary" + default + "general"

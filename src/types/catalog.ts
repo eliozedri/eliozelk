@@ -26,6 +26,11 @@ export interface CatalogItem {
   isActive: boolean;
   hoursPerUnit?: number;
   linkedProducts?: LinkedProductEntry[];
+  // ── Inventory / stock tracking (Phase 3.0) ──
+  currentQuantity: number;    // units on hand
+  minimumQuantity: number;    // reorder threshold; 0 = not configured
+  reservedQuantity: number;   // units reserved by open orders
+  supplierId?: string;        // preferred supplier
   createdAt: string;
   updatedAt: string;
 }

@@ -21,6 +21,10 @@ function fromRow(r: Record<string, unknown>): CatalogItem {
     isActive: r.is_active as boolean,
     hoursPerUnit: r.hours_per_unit != null ? Number(r.hours_per_unit) : undefined,
     linkedProducts: Array.isArray(r.linked_products) ? (r.linked_products as LinkedProductEntry[]) : [],
+    currentQuantity: r.current_quantity != null ? Number(r.current_quantity) : 0,
+    minimumQuantity: r.minimum_quantity != null ? Number(r.minimum_quantity) : 0,
+    reservedQuantity: r.reserved_quantity != null ? Number(r.reserved_quantity) : 0,
+    supplierId: r.supplier_id as string | undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -40,6 +44,10 @@ function toRow(item: CatalogItem) {
     is_active: item.isActive,
     hours_per_unit: item.hoursPerUnit ?? null,
     linked_products: item.linkedProducts ?? [],
+    current_quantity: item.currentQuantity,
+    minimum_quantity: item.minimumQuantity,
+    reserved_quantity: item.reservedQuantity,
+    supplier_id: item.supplierId ?? null,
     created_at: item.createdAt,
     updated_at: item.updatedAt,
   };
@@ -155,6 +163,9 @@ export function useCatalog() {
       description: form.description.trim(),
       isActive: true,
       linkedProducts: linkedProducts ?? [],
+      currentQuantity: 0,
+      minimumQuantity: 0,
+      reservedQuantity: 0,
       createdAt: now,
       updatedAt: now,
     };
@@ -240,5 +251,76 @@ export function useCatalog() {
     }
   }, []);
 
-  return { items, addItem, updateItem, toggleActive, deleteItem };
+  // Adjust stock quantity and write an audited movement record.
+  // delta > 0 = stock added; delta < 0 = stock removed.
+  const adjustStock = useCallback(async (
+    itemId: string,
+    delta: number,
+    movementType: "receive" | "consume" | "adjustment" | "correction" | "return",
+    notes: string,
+    createdBy: string,
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const db = getSupabase();
+    if (!db) return { ok: false, error: "לא מחובר לבסיס הנתונים" };
+
+    const item = ref.current.find(i => i.id === itemId);
+    if (!item) return { ok: false, error: "פריט לא נמצא" };
+
+    const newQty = item.currentQuantity + delta;
+    const now = new Date().toISOString();
+
+    // Optimistic update
+    setItems(prev => prev.map(i =>
+      i.id === itemId ? { ...i, currentQuantity: newQty, updatedAt: now } : i
+    ));
+
+    const [moveRes, updateRes] = await Promise.all([
+      db.from("inventory_movements").insert({
+        item_id: itemId,
+        movement_type: movementType,
+        quantity: delta,
+        source_type: movementType === "correction" ? "correction" : "manual_count",
+        notes,
+        created_by: createdBy,
+        created_at: now,
+      }),
+      db.from("catalog_items").update({ current_quantity: newQty, updated_at: now }).eq("id", itemId),
+    ]);
+
+    if (moveRes.error || updateRes.error) {
+      // Rollback
+      setItems(prev => prev.map(i => i.id === itemId ? item : i));
+      return { ok: false, error: moveRes.error?.message ?? updateRes.error?.message };
+    }
+    return { ok: true };
+  }, []);
+
+  // Update stock thresholds (minimum_quantity) without recording a movement.
+  const updateStockConfig = useCallback((
+    itemId: string,
+    minimumQuantity: number,
+    supplierId?: string | null,
+  ) => {
+    const now = new Date().toISOString();
+    const original = ref.current.find(i => i.id === itemId);
+    if (!original) return;
+
+    const updated = { ...original, minimumQuantity, supplierId: supplierId ?? undefined, updatedAt: now };
+    setItems(prev => prev.map(i => i.id === itemId ? updated : i));
+
+    const db = getSupabase();
+    if (db) {
+      db.from("catalog_items")
+        .update({ minimum_quantity: minimumQuantity, supplier_id: supplierId ?? null, updated_at: now })
+        .eq("id", itemId)
+        .then(({ error }) => {
+          if (error) {
+            console.error("[catalog] updateStockConfig failed:", error.message);
+            setItems(prev => prev.map(i => i.id === itemId ? original : i));
+          }
+        });
+    }
+  }, []);
+
+  return { items, addItem, updateItem, toggleActive, deleteItem, adjustStock, updateStockConfig };
 }
