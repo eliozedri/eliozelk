@@ -49,3 +49,6 @@ next-env.d.ts
 # misc local dirs
 .superpowers/
 catalog/
+
+# Claude Code project-local skills (third-party, not vendored)
+.claude/skills/
