@@ -1,23 +1,21 @@
 "use client";
 
-export type DiaryTab = "header" | "painting" | "poles" | "docs" | "analysis";
+export type DiaryTab = "header" | "painting" | "poles" | "docs";
 
 const ALL_TABS: { id: DiaryTab; label: string }[] = [
   { id: "header", label: "פרטי עבודה" },
   { id: "painting", label: "צביעה" },
   { id: "poles", label: "עמודים ותמרורים" },
   { id: "docs", label: "תיעוד" },
-  { id: "analysis", label: "ניתוח רווחיות" },
 ];
 
 interface Props {
   active: DiaryTab;
   onChange: (tab: DiaryTab) => void;
-  workerMode?: boolean;
 }
 
-export function TabBar({ active, onChange, workerMode = false }: Props) {
-  const tabs = workerMode ? ALL_TABS.filter((t) => t.id !== "analysis") : ALL_TABS;
+export function TabBar({ active, onChange }: Props) {
+  const tabs = ALL_TABS;
   return (
     <div className="flex border-b border-gray-200 bg-white overflow-x-auto">
       {tabs.map((tab) => (

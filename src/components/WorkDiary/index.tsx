@@ -13,7 +13,6 @@ import { PaintingTab } from "./PaintingTab";
 import { PolesSignsTab } from "./PolesSignsTab";
 import { DocumentTab } from "./DocumentTab";
 import { DiaryActions } from "./DiaryActions";
-import { ProfitabilityPanel } from "./ProfitabilityPanel";
 import { exportWorkDiaryPDF, openEmailDraft } from "@/lib/workDiaryExport";
 
 function DiaryIcon({ className }: { className?: string }) {
@@ -190,7 +189,6 @@ export function WorkDiaryForm() {
   const { createDiary, saveDiary, submitDiary, approveDiary, rejectDiary } = useWorkDiaryContext();
   const { profile } = useAuth();
   const canApprove = profile?.role === "master" || profile?.role === "office_manager";
-  const isWorker = profile?.role === "field_worker";
   const [diary, setDiary] = useState<WorkDiary | null>(null);
   const [activeTab, setActiveTab] = useState<DiaryTab>("header");
   const [saving, setSaving] = useState(false);
@@ -309,7 +307,7 @@ export function WorkDiaryForm() {
 
       {/* Tabs */}
       <div className="max-w-5xl mx-auto">
-        <TabBar active={activeTab} onChange={setActiveTab} workerMode={isWorker} />
+        <TabBar active={activeTab} onChange={setActiveTab} />
 
         <div className="p-4">
           {activeTab === "header" && (
@@ -340,9 +338,7 @@ export function WorkDiaryForm() {
               onSignatureChange={() => setSignatureError(false)}
             />
           )}
-          {activeTab === "analysis" && (
-            <ProfitabilityPanel diary={diary} />
-          )}
+
         </div>
       </div>
 
