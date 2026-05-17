@@ -18,6 +18,13 @@ const ACTIVE_AGENT_IDS = [
 // CORS header — permits the local brainstorm preview (any localhost port) to fetch live stats.
 const CORS = { "Access-Control-Allow-Origin": "http://localhost:58394" };
 
+// Speaking indicator: agent is considered "speaking" if it has a recent activity_feed entry
+// of a communication type within the last 60 seconds.
+const COMM_TYPES = ["collaboration", "recommendation", "action_taken", "detection"] as const;
+const SPEAKING_WINDOW_MS = 60_000;
+
+type StatsLive = AgentStats & { speaking: boolean };
+
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
@@ -32,8 +39,9 @@ export async function OPTIONS() {
 export async function GET() {
   try {
     const db = getServiceSupabase();
+    const since = new Date(Date.now() - SPEAKING_WINDOW_MS).toISOString();
 
-    const [taskRes, excRes, apprRes] = await Promise.all([
+    const [taskRes, excRes, apprRes, commRes] = await Promise.all([
       db
         .from("agent_tasks")
         .select("agent_id, status")
@@ -49,6 +57,12 @@ export async function GET() {
         .select("agent_id")
         .eq("approval_status", "pending")
         .in("agent_id", [...ACTIVE_AGENT_IDS]),
+      db
+        .from("agent_activity_feed")
+        .select("agent_id")
+        .in("agent_id", [...ACTIVE_AGENT_IDS])
+        .in("message_type", [...COMM_TYPES])
+        .gte("created_at", since),
     ]);
 
     if (taskRes.error ?? excRes.error ?? apprRes.error) {
@@ -56,11 +70,13 @@ export async function GET() {
       return NextResponse.json({ error: msg }, { status: 500, headers: CORS });
     }
 
-    const tasks    = taskRes.data  ?? [];
-    const exc      = excRes.data   ?? [];
-    const approvals = apprRes.data ?? [];
+    const tasks      = taskRes.data  ?? [];
+    const exc        = excRes.data   ?? [];
+    const approvals  = apprRes.data  ?? [];
+    // commRes failure is non-fatal — speaking defaults to false
+    const recentComm = commRes.error ? [] : (commRes.data ?? []);
 
-    const stats: Record<string, AgentStats> = {};
+    const stats: Record<string, StatsLive> = {};
     for (const id of ACTIVE_AGENT_IDS) {
       const agTasks = tasks.filter(t => t.agent_id === id);
       const agExc   = exc.filter(e => e.agent_id === id);
@@ -71,6 +87,7 @@ export async function GET() {
         openExceptions:     agExc.filter(e => e.status === "open").length,
         criticalExceptions: agExc.filter(e => e.status === "open" && e.severity === "critical").length,
         pendingApprovals:   agAppr.length,
+        speaking:           recentComm.some(c => c.agent_id === id),
       };
     }
 
