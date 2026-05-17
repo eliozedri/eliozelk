@@ -31,6 +31,7 @@ import {
 
 import { useGlobalChat } from "@/context/GlobalFloatingChatContext";
 import { DigitalHQ } from "@/components/AgentCommandCenter/DigitalHQ";
+import { NeuralOperationsCore } from "@/components/AgentCommandCenter/NeuralOperationsCore";
 import { NewMeetingModal } from "@/components/AgentCommandCenter/NewMeetingModal";
 import { useAgentMeetings } from "@/hooks/useAgentMeetings";
 import type { AgentMeeting } from "@/types/agentMeeting";
@@ -884,7 +885,7 @@ function ActivityPanel({ feed, agents }: { feed: AgentActivityFeedItem[]; agents
 
 // ── Main Command Center ───────────────────────────────────────────────────────
 
-type MainTab = "overview" | "tasks" | "exceptions" | "approvals" | "activity" | "hq";
+type MainTab = "overview" | "tasks" | "exceptions" | "approvals" | "activity" | "hq" | "neural";
 
 export function AgentCommandCenter() {
   const {
@@ -977,6 +978,7 @@ export function AgentCommandCenter() {
 
   const MAIN_TABS: { id: MainTab; label: string; count?: number }[] = [
     { id: "hq",          label: "משרד דיגיטלי" },
+    { id: "neural",      label: "Neural Core" },
     { id: "overview",    label: "סקירה" },
     { id: "tasks",       label: "משימות",   count: totalOpenTasks },
     { id: "exceptions",  label: "חריגות",   count: totalOpenExc },
@@ -1135,6 +1137,9 @@ export function AgentCommandCenter() {
             onNewMeeting={() => { void loadMeetings(); setShowNewMeeting(true); }}
           />
         )}
+
+        {/* Neural Operations Core — JARVIS image overlay with live agent stats */}
+        {mainTab === "neural" && <NeuralOperationsCore />}
 
         {/* Overview: org chart + agent cards */}
         {mainTab === "overview" && (
