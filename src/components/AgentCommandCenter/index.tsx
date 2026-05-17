@@ -29,7 +29,7 @@ import {
   AGENT_ORG,
 } from "@/types/agent";
 
-import { ChatDrawer } from "@/components/AgentChat/ChatDrawer";
+import { useGlobalChat } from "@/context/GlobalFloatingChatContext";
 import { DigitalHQ } from "@/components/AgentCommandCenter/DigitalHQ";
 import { NewMeetingModal } from "@/components/AgentCommandCenter/NewMeetingModal";
 import { useAgentMeetings } from "@/hooks/useAgentMeetings";
@@ -190,7 +190,7 @@ function OrgChart({ agents, onSelect }: { agents: Agent[]; onSelect: (a: Agent) 
                 {DEPARTMENT_LABELS[agent.department]}
               </div>
               {agent.autonomy_level === 0 && (
-                <div className="text-[9px] text-white/30 mt-1">לא פעיל</div>
+                <div className="text-[9px] text-white/30 mt-1">ניתוח בלבד</div>
               )}
             </button>
           );
@@ -893,36 +893,24 @@ export function AgentCommandCenter() {
     updateApproval, dismissException, acknowledgeException, updateTaskStatus,
   } = useAgentContext();
 
+  const { openChat } = useGlobalChat();
   const [mainTab, setMainTab] = useState<MainTab>("overview");
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatAgentId, setChatAgentId] = useState<string | null>(null);
-  const [chatThreadId, setChatThreadId] = useState<string | null>(null);
-  const [chatTitle, setChatTitle] = useState<string | undefined>(undefined);
-  const [chatIcon, setChatIcon] = useState<string | undefined>(undefined);
-  const [activeMeeting, setActiveMeeting] = useState<AgentMeeting | null>(null);
   const [showNewMeeting, setShowNewMeeting] = useState(false);
 
   const { meetings, creating: meetingCreating, error: meetingError, loadMeetings, createMeeting, closeMeeting } = useAgentMeetings();
 
-  function openMasterChat() {
-    setChatAgentId(null); setChatThreadId(null);
-    setChatTitle("מרכז הפיקוד"); setChatIcon("🤖");
-    setChatOpen(true);
-  }
   function openAgentChat(id: string) {
     const agent = agents.find(a => a.id === id);
-    setChatAgentId(id); setChatThreadId(null);
-    setChatTitle(agent?.name); setChatIcon(agent?.icon);
-    setChatOpen(true);
+    openChat({ agentId: id, agentName: agent?.name, agentIcon: agent?.icon });
   }
   function openMeetingChat(meeting: AgentMeeting) {
-    setActiveMeeting(meeting);
-    setChatAgentId(null);
-    setChatThreadId(meeting.thread_id ?? null);
-    setChatTitle(`פגישה: ${meeting.title}`);
-    setChatIcon("📅");
-    setChatOpen(true);
+    openChat({
+      agentId: null,
+      threadId: meeting.thread_id ?? null,
+      agentName: `פגישה: ${meeting.title}`,
+      agentIcon: "📅",
+    });
   }
 
   async function handleCreateMeeting(params: { title: string; topic?: string; participatingAgents: string[] }) {
@@ -1027,7 +1015,7 @@ export function AgentCommandCenter() {
               }
             </button>
             <button
-              onClick={openMasterChat}
+              onClick={() => openChat({ agentId: null, agentName: "מרכז הפיקוד", agentIcon: "🤖" })}
               className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
               style={{ backgroundColor: `${EK_BLUE}25`, color: EK_BLUE, border: `1px solid ${EK_BLUE}50` }}
             >
@@ -1100,9 +1088,9 @@ export function AgentCommandCenter() {
             </svg>
           </div>
           <div>
-            <div className="text-sm font-semibold text-green-300 mb-0.5">Phase 2 פעיל — הפעל סריקה כדי לאתר ממצאים</div>
+            <div className="text-sm font-semibold text-green-300 mb-0.5">מערכת הסוכנים פעילה — הפעל סריקה כדי לאתר ממצאים</div>
             <div className="text-xs text-green-400/70 leading-relaxed">
-              4 סוכנים מוכנים לסריקה: מנהל תפעול, מנהל שטח, גביה וחשבונות, ומנהל כספים. לחץ &quot;הפעל סריקה כללית&quot; כדי לבצע סריקת מלאי של כל הנתונים.
+              {agents.length} סוכנים מוגדרים · {SCANNABLE_AGENTS.size} עם סריקה אוטומטית פעילה. לחץ &quot;הפעל סריקה כללית&quot; כדי לסרוק את כל הנתונים.
             </div>
           </div>
         </div>
@@ -1143,7 +1131,6 @@ export function AgentCommandCenter() {
             meetings={meetings}
             onAgentSelect={setSelectedAgent}
             onAgentChat={openAgentChat}
-            onMasterChat={openMasterChat}
             onMeetingOpen={openMeetingChat}
             onNewMeeting={() => { void loadMeetings(); setShowNewMeeting(true); }}
           />
@@ -1234,7 +1221,7 @@ export function AgentCommandCenter() {
           approvals={roomApprovals}
           activity={roomActivity}
           onClose={() => setSelectedAgent(null)}
-          onChat={() => openAgentChat(selectedAgent.id)}
+          onChat={() => { openChat({ agentId: selectedAgent.id, agentName: selectedAgent.name, agentIcon: selectedAgent.icon }); }}
           onApprove={id => updateApproval(id, "approved")}
           onReject={id => updateApproval(id, "rejected")}
           onDismissException={dismissException}
@@ -1244,18 +1231,6 @@ export function AgentCommandCenter() {
           scanRunning={scanStatuses[selectedAgent.id] === "running"}
           scanSummary={scanSummaries[selectedAgent.id]}
           scanStatus={scanStatuses[selectedAgent.id]}
-        />
-      )}
-
-      {/* ── Chat / Meeting Drawer ─────────────────────────────────────────── */}
-      {chatOpen && (
-        <ChatDrawer
-          isOpen={chatOpen}
-          onClose={() => { setChatOpen(false); setActiveMeeting(null); }}
-          agentId={chatAgentId}
-          agentName={chatTitle ?? "מרכז הפיקוד"}
-          agentIcon={chatIcon ?? "🤖"}
-          threadId={chatThreadId}
         />
       )}
 

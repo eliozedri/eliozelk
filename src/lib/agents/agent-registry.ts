@@ -1,8 +1,14 @@
 // Agent Registry — single source of truth for agent identity and operational meaning.
 //
-// To add a new agent:
-//   1. Add one entry here in AGENT_REGISTRY
-//   2. Add that agent's id to the relevant room's agentIds in room-config.ts
+// To add a new CORE agent, check ALL of the following layers:
+//   1. Add one entry here in AGENT_REGISTRY (label, icon, responsibilities)
+//   2. Add agent id to the relevant room in room-config.ts (visual position)
+//   3. Add agent id to AGENT_ORG in types/agent.ts (org hierarchy)
+//   4. Add AgentType literal to types/agent.ts (TypeScript union)
+//   5. Add a Supabase migration seeding the agent row in the agents table
+//   6. Add a NeuralHotspot in neural-core-hotspots.ts if it appears in the JARVIS HQ image
+//   7. Add to SCANNABLE_AGENTS in AgentCommandCenter/index.tsx ONLY if a real scan route exists
+//   8. Verify chat/addressability: the openAgentChat(id) path works for any agent in the DB
 //
 // room-config.ts owns visual layout (grid position, room title, span).
 // This file owns agent identity (label, icon, role, responsibilities).
@@ -139,7 +145,7 @@ export const AGENT_REGISTRY: Record<string, AgentConfig> = {
 
   "coordination-qa-agent": {
     id: "coordination-qa-agent",
-    label: "מחלקת תיאומים ו-QA",
+    label: "מנהלת תיאומים ו-QA",
     icon: "🔍",
     shortDesc: "תיאום עבודות · בקרת מוכנות · בדיקת סתירות",
     department: "operations",

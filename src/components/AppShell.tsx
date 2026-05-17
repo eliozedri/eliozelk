@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { AuthProvider } from "@/context/AuthContext";
+import { GlobalFloatingChatProvider, GlobalChatMount } from "@/context/GlobalFloatingChatContext";
 
 const AUTH_PATHS = ["/login", "/setup"];
 
@@ -33,39 +34,44 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthProvider>
-      {/* Mobile hamburger button — visible only on small screens */}
-      <button
-        onClick={() => setSidebarOpen(true)}
-        className="fixed top-3 right-3 z-30 flex items-center justify-center w-10 h-10 rounded-xl shadow-md md:hidden no-print"
-        style={{ backgroundColor: NAVY }}
-        aria-label="פתח תפריט"
-      >
-        <HamburgerIcon />
-      </button>
-
-      {/* Mobile backdrop */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <div className="flex min-h-screen">
-        {/* Sidebar: fixed overlay on mobile, static on desktop */}
-        <div
-          className={`
-            fixed inset-y-0 right-0 z-50
-            transition-transform duration-300 ease-in-out
-            md:relative md:inset-auto md:z-auto md:translate-x-0
-            ${sidebarOpen ? "translate-x-0" : "translate-x-full"}
-          `}
+      <GlobalFloatingChatProvider>
+        {/* Mobile hamburger button — visible only on small screens */}
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="fixed top-3 right-3 z-30 flex items-center justify-center w-10 h-10 rounded-xl shadow-md md:hidden no-print"
+          style={{ backgroundColor: NAVY }}
+          aria-label="פתח תפריט"
         >
-          <Sidebar onClose={() => setSidebarOpen(false)} />
+          <HamburgerIcon />
+        </button>
+
+        {/* Mobile backdrop */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        <div className="flex min-h-screen">
+          {/* Sidebar: fixed overlay on mobile, static on desktop */}
+          <div
+            className={`
+              fixed inset-y-0 right-0 z-50
+              transition-transform duration-300 ease-in-out
+              md:relative md:inset-auto md:z-auto md:translate-x-0
+              ${sidebarOpen ? "translate-x-0" : "translate-x-full"}
+            `}
+          >
+            <Sidebar onClose={() => setSidebarOpen(false)} />
+          </div>
+
+          <main className="flex-1 min-w-0">{children}</main>
         </div>
 
-        <main className="flex-1 min-w-0">{children}</main>
-      </div>
+        {/* Global floating chat — persists across all routes */}
+        <GlobalChatMount />
+      </GlobalFloatingChatProvider>
     </AuthProvider>
   );
 }

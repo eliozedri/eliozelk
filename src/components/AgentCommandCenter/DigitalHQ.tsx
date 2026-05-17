@@ -4,6 +4,7 @@ import { ROOMS, MEETING_ROOM, type RoomConfig } from "@/lib/agents/room-config";
 import { AGENT_REGISTRY } from "@/lib/agents/agent-registry";
 import type { Agent, AgentStats } from "@/types/agent";
 import type { AgentMeeting } from "@/types/agentMeeting";
+import { useGlobalChat } from "@/context/GlobalFloatingChatContext";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -302,15 +303,15 @@ interface Props {
   meetings: AgentMeeting[];
   onAgentSelect: (agent: Agent) => void;
   onAgentChat: (agentId: string) => void;
-  onMasterChat: () => void;
   onMeetingOpen: (m: AgentMeeting) => void;
   onNewMeeting: () => void;
 }
 
 export function DigitalHQ({
   agents, stats, scanStatuses, meetings,
-  onAgentSelect, onAgentChat, onMasterChat, onMeetingOpen, onNewMeeting,
+  onAgentSelect, onAgentChat, onMeetingOpen, onNewMeeting,
 }: Props) {
+  const { openChat } = useGlobalChat();
   const agentMap = new Map(agents.map(a => [a.id, a]));
   const showMeetingRoom = true; // always show meeting room so new meetings can be created
 
@@ -318,13 +319,24 @@ export function DigitalHQ({
     <div dir="rtl">
       {/* HQ Header */}
       <div className="flex items-center justify-between mb-5">
-        <button
-          onClick={onMasterChat}
-          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
-          style={{ backgroundColor: `${EK_BLUE}20`, color: EK_BLUE, border: `1px solid ${EK_BLUE}40` }}
-        >
-          💬 שיחה עם מרכז הפיקוד
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => openChat({ agentId: null, agentName: "מרכז הפיקוד", agentIcon: "🤖" })}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
+            style={{ backgroundColor: `${EK_BLUE}20`, color: EK_BLUE, border: `1px solid ${EK_BLUE}40` }}
+            title="שיחה עם מרכז הפיקוד — כלל הנתונים, כל הסוכנים"
+          >
+            💬 שיחה עם מרכז הפיקוד
+          </button>
+          <button
+            onClick={() => openChat({ agentId: "ops-orchestrator", agentName: "מנהל התפעול", agentIcon: "📋" })}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
+            style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.65)", border: "1px solid rgba(255,255,255,0.15)" }}
+            title="פנייה למנהל התפעול — סוכן תיאום כלל-ארגוני"
+          >
+            📋 פנייה למנהל התפעול
+          </button>
+        </div>
         <div className="text-right">
           <h2 className="text-base font-black text-white">משרד דיגיטלי</h2>
           <p className="text-[10px]" style={{ color: EK_GOLD }}>Elkayam Digital HQ</p>
