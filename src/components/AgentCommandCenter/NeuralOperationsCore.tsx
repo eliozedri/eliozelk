@@ -300,6 +300,36 @@ export function NeuralOperationsCore({ activityFeed = [], agents = [] }: Props) 
             })}
           </svg>
 
+          {/* z5: Baked-label patch — covers "PROCUREMENT / מחלקת רכש" in reference.png */}
+          {/* coordination_qa hub is at (17.4%, 73.2%); baked label is just below at ~78–88% */}
+          <div
+            style={{
+              position:       "absolute",
+              left:           "8.5%",
+              top:            "77.8%",
+              width:          "18%",
+              height:         "10%",
+              zIndex:         5,
+              background:     "rgba(2,6,18,0.97)",
+              borderRadius:   "4px",
+              display:        "flex",
+              flexDirection:  "column",
+              alignItems:     "center",
+              justifyContent: "center",
+              gap:            "2px",
+              pointerEvents:  "none",
+              textAlign:      "center",
+              direction:      "rtl",
+            }}
+          >
+            <span style={{ fontSize: "clamp(7px,0.85vw,10px)", fontWeight: 700, color: "rgba(6,182,212,0.92)", letterSpacing: ".02em", lineHeight: 1.25 }}>
+              מחלקת תיאומים ו-QA
+            </span>
+            <span style={{ fontSize: "clamp(5px,0.62vw,8px)", fontWeight: 500, color: "rgba(6,182,212,0.50)", letterSpacing: ".10em", textTransform: "uppercase", direction: "ltr" }}>
+              COORDINATION / QA
+            </span>
+          </div>
+
           {/* z20: Hotspot interaction divs */}
           {NEURAL_HOTSPOTS.map(hs => {
             const color      = HOTSPOT_COLORS[hs.id] ?? "rgba(255,255,255,0.4)";
