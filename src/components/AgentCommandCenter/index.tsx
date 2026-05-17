@@ -32,6 +32,9 @@ import {
 import { useGlobalChat } from "@/context/GlobalFloatingChatContext";
 import { DigitalHQ } from "@/components/AgentCommandCenter/DigitalHQ";
 import { NeuralOperationsCore } from "@/components/AgentCommandCenter/NeuralOperationsCore";
+import { NeuralCoreScene } from "@/components/AgentCommandCenter/NeuralCoreScene/NeuralCoreScene";
+
+const NEURAL_SCENE_ENABLED = false;
 import { NewMeetingModal } from "@/components/AgentCommandCenter/NewMeetingModal";
 import { useAgentMeetings } from "@/hooks/useAgentMeetings";
 import type { AgentMeeting } from "@/types/agentMeeting";
@@ -1146,9 +1149,11 @@ export function AgentCommandCenter() {
           />
         )}
 
-        {/* Neural Operations Core — JARVIS image overlay with live agent stats */}
+        {/* Neural Operations Core — feature flag gates new Scene Engine vs legacy overlay */}
         {mainTab === "neural" && (
-          <NeuralOperationsCore activityFeed={activityFeed} agents={agents} />
+          NEURAL_SCENE_ENABLED
+            ? <NeuralCoreScene activityFeed={activityFeed} agents={agents} />
+            : <NeuralOperationsCore activityFeed={activityFeed} agents={agents} />
         )}
 
         {/* Overview: org chart + agent cards */}
