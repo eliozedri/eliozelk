@@ -910,21 +910,21 @@ export function DashboardPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <Link
                 href="/new-order"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-ek-blue hover:bg-ek-blue-600 text-white text-sm font-semibold transition-colors shadow-lg shadow-ek-blue/20"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-ek-blue hover:bg-ek-blue-600 text-white text-sm font-bold transition-colors shadow-lg shadow-ek-blue/20"
               >
                 <PlusIcon />
                 הזמנה חדשה
               </Link>
               <Link
                 href="/work-diary"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-ek-blue hover:bg-ek-blue-600 text-white text-sm font-semibold transition-colors shadow-lg shadow-ek-blue/20"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-sm font-semibold transition-colors border border-ek-gold/50 hover:border-ek-gold hover:bg-ek-gold/10"
               >
                 <PlusIcon />
                 יומן חדש
               </Link>
               <Link
                 href="/orders"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-sm font-medium transition-colors border border-white/15 hover:bg-white/8"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white/70 text-sm font-medium transition-colors border border-white/15 hover:bg-white/8 hover:text-white"
               >
                 כל ההזמנות
               </Link>

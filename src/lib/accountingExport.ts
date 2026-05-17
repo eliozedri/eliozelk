@@ -78,6 +78,17 @@ export async function exportCustomerBillingExcel(customerName: string, orders: W
   }));
 
   const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [
+    { wch: 14 }, // מספר הזמנה
+    { wch: 32 }, // שם עבודה
+    { wch: 28 }, // מיקום
+    { wch: 12 }, // תאריך
+    { wch: 10 }, // שלטים
+    { wch: 10 }, // שונות
+    { wch: 14 }, // סטטוס
+    { wch: 14 }, // סכום לחיוב
+    { wch: 36 }, // הערת מנהל
+  ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "חיוב");
   XLSX.writeFile(wb, `חיוב_${customerName}_${generatedDate.replace(/\//g, "-")}.xlsx`);
@@ -145,6 +156,19 @@ export async function exportAccountingExcel(data: AccountingReportData): Promise
   }
 
   const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [
+    { wch: 14 }, // מספר הזמנה
+    { wch: 26 }, // לקוח
+    { wch: 28 }, // מיקום
+    { wch: 12 }, // תאריך
+    { wch: 16 }, // סטטוס
+    { wch: 36 }, // הערת מנהל
+    { wch: 8  }, // סוג
+    { wch: 28 }, // פריט
+    { wch: 8  }, // כמות
+    { wch: 10 }, // יחידה
+    { wch: 30 }, // הערות
+  ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "עבודות");
   const d = formatDate(data.generatedAt.split("T")[0]).replace(/\//g, "-");

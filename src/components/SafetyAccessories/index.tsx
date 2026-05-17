@@ -376,7 +376,7 @@ export function SafetyAccessoriesPage() {
   const hasFilters = search || filterSub !== "all" || filterStatus !== "all" || filterPower !== "all";
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] py-6 px-4" dir="rtl">
+    <div className="min-h-screen bg-surface py-6 px-4" dir="rtl">
       <div className="max-w-7xl mx-auto">
 
         {/* ── Header ── */}

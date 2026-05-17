@@ -178,7 +178,7 @@ export function WorkMap() {
   );
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] py-6 px-4 flex flex-col gap-4">
+    <div className="min-h-screen bg-surface py-6 px-4 flex flex-col gap-4">
       <div className="max-w-[1400px] mx-auto w-full space-y-4">
 
         {/* Header */}

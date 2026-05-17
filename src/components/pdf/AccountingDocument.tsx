@@ -7,6 +7,14 @@ import {
   View,
 } from "@react-pdf/renderer";
 import type { WorkOrder } from "@/types/workOrder";
+import {
+  DOC_PRIMARY,
+  DOC_LIGHT,
+  DOC_BORDER,
+  DOC_GRAY,
+  DOC_DARK,
+  DOC_LIGHT_TEXT,
+} from "@/lib/pdfBrand";
 
 Font.register({
   family: "Heebo",
@@ -16,11 +24,11 @@ Font.register({
   ],
 });
 
-const PRIMARY = "#1e3a8a";
-const LIGHT   = "#eff6ff";
-const BORDER  = "#bfdbfe";
-const GRAY    = "#6b7280";
-const DARK    = "#111827";
+const PRIMARY = DOC_PRIMARY;
+const LIGHT   = DOC_LIGHT;
+const BORDER  = DOC_BORDER;
+const GRAY    = DOC_GRAY;
+const DARK    = DOC_DARK;
 
 const s = StyleSheet.create({
   page: {
@@ -42,14 +50,14 @@ const s = StyleSheet.create({
   },
   companyBlock: { alignItems: "flex-end" },
   companyName: { fontSize: 14, fontWeight: 700, color: "#ffffff" },
-  companyTagline: { fontSize: 7, color: "#93c5fd", marginTop: 2 },
+  companyTagline: { fontSize: 7, color: DOC_LIGHT_TEXT, marginTop: 2 },
   docBlock: { alignItems: "flex-start" },
   docTitle: { fontSize: 13, fontWeight: 700, color: "#ffffff" },
-  docSub: { fontSize: 7, color: "#93c5fd", marginTop: 2 },
+  docSub: { fontSize: 7, color: DOC_LIGHT_TEXT, marginTop: 2 },
 
   /* ── Filter strip ── */
   filterStrip: {
-    backgroundColor: "#1e40af",
+    backgroundColor: "#243f7a",
     paddingVertical: 5,
     paddingHorizontal: 28,
     flexDirection: "row-reverse",
@@ -57,7 +65,7 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   filterChip: { flexDirection: "row-reverse", gap: 4, alignItems: "center" },
-  filterLabel: { fontSize: 7, color: "#93c5fd" },
+  filterLabel: { fontSize: 7, color: DOC_LIGHT_TEXT },
   filterValue: { fontSize: 7, fontWeight: 700, color: "#e0f2fe" },
 
   body: { paddingHorizontal: 28, paddingTop: 14 },

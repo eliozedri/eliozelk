@@ -590,7 +590,7 @@ export function CatalogPage() {
   const { importing, result: importResult, importSafetyAccessories } = useSafetyImport(existingNames, handleAdd);
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
+    <div className="min-h-screen bg-surface py-6 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center gap-2 mb-2">
           <h1 className="text-2xl font-bold text-gray-900">מוצרים ושירותים</h1>

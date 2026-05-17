@@ -892,7 +892,7 @@ export function AccountingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
+    <div className="min-h-screen bg-surface py-6 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-2 mb-2">

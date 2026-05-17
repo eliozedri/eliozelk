@@ -55,7 +55,7 @@ function DiaryIcon() {
   return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>;
 }
 function ProfitabilityIcon() {
-  return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>;
+  return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17" /><polyline points="16 7 22 7 22 13" /></svg>;
 }
 function AgentsIcon() {
   return <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/><path d="M2 14h2m16 0h2"/><path d="M4.93 6.93l1.41 1.41M17.66 8.34l1.41-1.41"/></svg>;
@@ -154,8 +154,8 @@ function SidebarLink({ href, label, active, icon, onClick, badge, badgeVariant, 
   return (
     <Link href={href} onClick={onClick} title={title}
       style={active
-        ? { backgroundColor: "rgba(255,255,255,0.10)", color: "#ffffff", fontWeight: 600, borderLeftColor: EK_GOLD, borderLeftWidth: 2, borderLeftStyle: "solid" }
-        : { color: "rgba(255,255,255,0.55)", borderLeftColor: "transparent", borderLeftWidth: 2, borderLeftStyle: "solid" }}
+        ? { backgroundColor: "rgba(255,255,255,0.10)", color: "#ffffff", fontWeight: 600, borderRightColor: EK_GOLD, borderRightWidth: 3, borderRightStyle: "solid" }
+        : { color: "rgba(255,255,255,0.55)", borderRightColor: "transparent", borderRightWidth: 3, borderRightStyle: "solid" }}
       className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all group hover:bg-white/10 hover:!text-white">
       <span style={{ color: active ? EK_GOLD : "rgba(255,255,255,0.35)" }} className="shrink-0 group-hover:!text-white/70 transition-colors">{icon}</span>
       <span className="truncate flex-1">{label}</span>

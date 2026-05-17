@@ -1222,7 +1222,7 @@ export function OrdersTable() {
   );
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
+    <div className="min-h-screen bg-surface py-6 px-4">
       <div className="max-w-7xl mx-auto space-y-5">
 
         {/* ── Page Header ── */}

@@ -8,6 +8,15 @@ import {
   View,
 } from "@react-pdf/renderer";
 import type { WorkDiary } from "@/types/workDiary";
+import {
+  DOC_PRIMARY,
+  DOC_LIGHT,
+  DOC_BORDER,
+  DOC_GRAY,
+  DOC_DARK,
+  DOC_LIGHT_TEXT,
+  DOC_GOLD,
+} from "@/lib/pdfBrand";
 
 Font.register({
   family: "Heebo",
@@ -17,10 +26,10 @@ Font.register({
   ],
 });
 
-const PRIMARY = "#1e40af";
-const LIGHT = "#eff6ff";
-const BORDER = "#bfdbfe";
-const GRAY = "#6b7280";
+const PRIMARY = DOC_PRIMARY;
+const LIGHT = DOC_LIGHT;
+const BORDER = DOC_BORDER;
+const GRAY = DOC_GRAY;
 
 const s = StyleSheet.create({
   page: {
@@ -42,11 +51,11 @@ const s = StyleSheet.create({
   },
   companyBlock: { alignItems: "flex-end" },
   companyName: { fontSize: 13, fontWeight: 700, color: "#ffffff" },
-  companyTagline: { fontSize: 7, color: "#93c5fd", marginTop: 2 },
+  companyTagline: { fontSize: 7, color: DOC_LIGHT_TEXT, marginTop: 2 },
   diaryBlock: { alignItems: "flex-start" },
   docTitle: { fontSize: 12, fontWeight: 700, color: "#ffffff" },
-  diaryNumLabel: { fontSize: 7, color: "#93c5fd", marginTop: 2 },
-  diaryNum: { fontSize: 10, fontWeight: 700, color: "#fde68a" },
+  diaryNumLabel: { fontSize: 7, color: DOC_LIGHT_TEXT, marginTop: 2 },
+  diaryNum: { fontSize: 10, fontWeight: 700, color: DOC_GOLD },
 
   body: { paddingHorizontal: 24, paddingTop: 14 },
 
@@ -165,18 +174,59 @@ const s = StyleSheet.create({
   sigBlock: {
     flexDirection: "row-reverse",
     gap: 14,
-    marginTop: 12,
+    marginTop: 14,
   },
   sigBox: {
     flex: 1,
     borderTop: `2 solid ${PRIMARY}`,
-    paddingTop: 6,
+    paddingTop: 8,
   },
   sigLabel: { fontSize: 7, color: GRAY, marginBottom: 4 },
-  sigName: { fontSize: 8, fontWeight: 700, color: "#111827" },
+  sigName: { fontSize: 8, fontWeight: 700, color: DOC_DARK },
   sigMeta: { fontSize: 6, color: "#9ca3af", marginTop: 2 },
-  sigImageWrap: { height: 48, justifyContent: "center" },
-  sigBlankLine: { height: 44, borderBottom: `1 dashed #d1d5db` },
+  sigImageWrap: {
+    height: 64,
+    justifyContent: "center",
+    backgroundColor: "#f8fafc",
+    borderRadius: 4,
+    padding: 4,
+    marginBottom: 4,
+  },
+  sigBlankLine: { height: 60, borderBottom: `1 dashed #d1d5db` },
+
+  /* ── Landscape page (signs table) ── */
+  landscapePage: {
+    fontFamily: "Heebo",
+    fontSize: 8,
+    direction: "rtl",
+    backgroundColor: "#ffffff",
+    paddingBottom: 36,
+  },
+  landscapeHeaderBand: {
+    backgroundColor: PRIMARY,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  landscapeCompanyName: { fontSize: 11, fontWeight: 700, color: "#ffffff" },
+  landscapeDocInfo: { alignItems: "flex-start" },
+  landscapeDocTitle: { fontSize: 10, fontWeight: 700, color: "#ffffff" },
+  landscapeDiaryNum: { fontSize: 9, fontWeight: 700, color: DOC_GOLD },
+  landscapeBody: { paddingHorizontal: 20, paddingTop: 12 },
+  landscapeFooter: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    left: 0,
+    backgroundColor: "#f8fafc",
+    borderTop: `1 solid ${BORDER}`,
+    paddingVertical: 4,
+    paddingHorizontal: 20,
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+  },
 
   /* ── Photos ── */
   photoGrid: {
@@ -378,34 +428,6 @@ export function WorkDiaryDocument({ diary }: { diary: WorkDiary }) {
             </View>
           )}
 
-          {/* Signs */}
-          {hasSigns && (
-            <View style={s.section}>
-              <View style={s.sectionHead}>
-                <View style={s.sectionAccent} />
-                <Text style={s.sectionTitle}>תמרורים</Text>
-              </View>
-              <View style={s.table}>
-                <View style={s.tableHeaderRow}>
-                  {["עירוני", "ב״ע", "רגיל", "ר״ע", "יהלום", "יצא", "אספקה", "התקנה", "פירוק", "העתקה", "זווית", "מסגרת", "פרופיל", "גודל", "סולרי", "חזר"].map((h) => (
-                    <View key={h} style={s.thCell}><Text>{h}</Text></View>
-                  ))}
-                </View>
-                {diary.signItems
-                  .filter((i) => i.urban || i.basic || i.regular || i.reinforced || i.diamond || i.supply || i.install)
-                  .map((item, idx) => (
-                    <View key={item.id} style={idx % 2 === 0 ? s.tableRow : s.tableRowAlt}>
-                      {(["urban", "basic", "regular", "reinforced", "diamond", "out", "supply", "install", "dismantle", "move", "angle", "frame", "profile", "signSize"] as const).map((c) => (
-                        <View key={c} style={s.tdCell}><Text>{item[c]}</Text></View>
-                      ))}
-                      <View style={s.tdCell}><Text>{item.solar ? "✓" : ""}</Text></View>
-                      <View style={s.tdCell}><Text>{item.returned}</Text></View>
-                    </View>
-                  ))}
-              </View>
-            </View>
-          )}
-
           {/* General notes */}
           {diary.generalNotes ? (
             <View style={s.section}>
@@ -431,7 +453,7 @@ export function WorkDiaryDocument({ diary }: { diary: WorkDiary }) {
                   {sig?.dataUrl ? (
                     <Image
                       src={sig.dataUrl}
-                      style={{ width: 150, height: 44, objectFit: "contain" }}
+                      style={{ width: 200, height: 56, objectFit: "contain" }}
                     />
                   ) : (
                     <View style={s.sigBlankLine} />
@@ -473,6 +495,55 @@ export function WorkDiaryDocument({ diary }: { diary: WorkDiary }) {
         </View>
 
       </Page>
+
+      {/* ── Page 2: Signs table on landscape for full readability ── */}
+      {hasSigns && (
+        <Page size="A4" orientation="landscape" style={s.landscapePage}>
+
+          {/* Compact header */}
+          <View style={s.landscapeHeaderBand}>
+            <Text style={s.landscapeCompanyName}>אלקיים סימון כבישים בע״מ</Text>
+            <View style={s.landscapeDocInfo}>
+              <Text style={s.landscapeDocTitle}>יומן עבודה — נספח תמרורים</Text>
+              <Text style={s.landscapeDiaryNum}>מס׳ {diary.diaryNumber || "—"} · {fmt(diary.executionDate)}</Text>
+            </View>
+          </View>
+
+          <View style={s.landscapeBody}>
+            <View style={s.section}>
+              <View style={s.sectionHead}>
+                <View style={s.sectionAccent} />
+                <Text style={s.sectionTitle}>תמרורים</Text>
+              </View>
+              <View style={s.table}>
+                <View style={s.tableHeaderRow}>
+                  {["עירוני", "ב״ע", "רגיל", "ר״ע", "יהלום", "יצא", "אספקה", "התקנה", "פירוק", "העתקה", "זווית", "מסגרת", "פרופיל", "גודל", "סולרי", "חזר"].map((h) => (
+                    <View key={h} style={s.thCell}><Text>{h}</Text></View>
+                  ))}
+                </View>
+                {diary.signItems
+                  .filter((i) => i.urban || i.basic || i.regular || i.reinforced || i.diamond || i.supply || i.install)
+                  .map((item, idx) => (
+                    <View key={item.id} style={idx % 2 === 0 ? s.tableRow : s.tableRowAlt}>
+                      {(["urban", "basic", "regular", "reinforced", "diamond", "out", "supply", "install", "dismantle", "move", "angle", "frame", "profile", "signSize"] as const).map((c) => (
+                        <View key={c} style={s.tdCell}><Text>{item[c]}</Text></View>
+                      ))}
+                      <View style={s.tdCell}><Text>{item.solar ? "✓" : ""}</Text></View>
+                      <View style={s.tdCell}><Text>{item.returned}</Text></View>
+                    </View>
+                  ))}
+              </View>
+            </View>
+          </View>
+
+          <View style={s.landscapeFooter} fixed>
+            <Text style={s.footerText}>אלקיים סימון כבישים בע״מ · נספח תמרורים · יומן {diary.diaryNumber}</Text>
+            <Text style={s.footerText}>הופק: {generatedAt}</Text>
+          </View>
+
+        </Page>
+      )}
+
     </Document>
   );
 }

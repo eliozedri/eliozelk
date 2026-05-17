@@ -318,7 +318,7 @@ export function Crews() {
   const inactiveCrews = crews.filter((c) => !c.active);
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
+    <div className="min-h-screen bg-surface py-6 px-4">
       <div className="max-w-5xl mx-auto space-y-5">
 
         <div className="flex items-center justify-between gap-4">

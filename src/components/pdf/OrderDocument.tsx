@@ -8,6 +8,15 @@ import {
   View,
 } from "@react-pdf/renderer";
 import type { OrderSnapshot } from "@/types/order";
+import {
+  DOC_PRIMARY,
+  DOC_GOLD,
+  DOC_LIGHT,
+  DOC_BORDER,
+  DOC_GRAY,
+  DOC_DARK,
+  DOC_LIGHT_TEXT,
+} from "@/lib/pdfBrand";
 
 Font.register({
   family: "Heebo",
@@ -17,11 +26,11 @@ Font.register({
   ],
 });
 
-const PRIMARY = "#1d4ed8";
-const LIGHT_BG = "#eff6ff";
-const BORDER = "#dbeafe";
-const GRAY = "#6b7280";
-const DARK = "#111827";
+const PRIMARY = DOC_PRIMARY;
+const LIGHT_BG = DOC_LIGHT;
+const BORDER = DOC_BORDER;
+const GRAY = DOC_GRAY;
+const DARK = DOC_DARK;
 
 const s = StyleSheet.create({
   page: {
@@ -42,11 +51,11 @@ const s = StyleSheet.create({
   },
   headerLeft: { alignItems: "flex-end" },
   companyName: { fontSize: 15, fontWeight: 700, color: "#ffffff" },
-  companyTagline: { fontSize: 8, color: "#bfdbfe", marginTop: 2 },
+  companyTagline: { fontSize: 8, color: DOC_LIGHT_TEXT, marginTop: 2 },
   headerRight: { alignItems: "flex-start" },
   docTitle: { fontSize: 13, fontWeight: 700, color: "#ffffff" },
-  orderNumberLabel: { fontSize: 7, color: "#bfdbfe", marginTop: 3 },
-  orderNumberValue: { fontSize: 11, fontWeight: 700, color: "#facc15" },
+  orderNumberLabel: { fontSize: 7, color: DOC_LIGHT_TEXT, marginTop: 3 },
+  orderNumberValue: { fontSize: 11, fontWeight: 700, color: DOC_GOLD },
 
   /* ── Body padding ── */
   body: { paddingHorizontal: 28, paddingTop: 16, paddingBottom: 50 },
@@ -332,7 +341,7 @@ export function OrderDocument({ order }: Props) {
 
         {/* Footer */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>אלקיים סימון כבישים בע״מ · מסמך פנימי בלבד</Text>
+          <Text style={s.footerText}>אלקיים סימון כבישים בע״מ · Road Marking &amp; Signage Solutions</Text>
           <Text style={s.footerText}>הופק: {generatedAt}</Text>
         </View>
 

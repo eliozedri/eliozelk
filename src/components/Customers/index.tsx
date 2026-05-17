@@ -22,7 +22,7 @@ export function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
+    <div className="min-h-screen bg-surface py-6 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-2 mb-2">
           <h1 className="text-2xl font-bold text-gray-900">לקוחות</h1>

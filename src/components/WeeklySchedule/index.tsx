@@ -500,7 +500,7 @@ export function WeeklySchedule() {
   const todayStr = toISODate(new Date());
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
+    <div className="min-h-screen bg-surface py-6 px-4">
       <div className="max-w-[1400px] mx-auto space-y-4">
 
         {/* Header */}

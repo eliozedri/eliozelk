@@ -197,7 +197,7 @@ export function CustomerDetailPage() {
 
   if (!customer) {
     return (
-      <div className="min-h-screen bg-[#f0f2f5] py-12 px-4 flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-surface py-12 px-4 flex flex-col items-center justify-center gap-4">
         <p className="text-gray-500">לקוח לא נמצא</p>
         <Link href="/customers" className="text-blue-600 text-sm hover:underline flex items-center gap-1">
           <BackIcon /> חזור ללקוחות
@@ -214,7 +214,7 @@ export function CustomerDetailPage() {
   const risk = customerMetrics ? RISK_CONFIG[customerMetrics.riskLevel] : null;
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] py-6 px-4">
+    <div className="min-h-screen bg-surface py-6 px-4">
       <div className="max-w-5xl mx-auto space-y-5">
 
         {/* Back */}

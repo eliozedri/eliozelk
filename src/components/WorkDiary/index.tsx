@@ -121,7 +121,7 @@ function DiaryListView({ onNew, onOpen }: { onNew: () => void; onOpen: (d: WorkD
     }), [rows]);
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] pb-10">
+    <div className="min-h-screen bg-surface pb-10">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
@@ -262,7 +262,7 @@ export function WorkDiaryForm() {
   // Loading state while the first diary is being created
   if (!diary) {
     return (
-      <div className="min-h-screen bg-[#f0f2f5] flex items-center justify-center">
+      <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="text-center">
           <DiaryIcon className="w-10 h-10 text-blue-300 mx-auto mb-3 animate-pulse" />
           <p className="text-sm text-gray-400">פותח יומן עבודה...</p>
@@ -274,7 +274,7 @@ export function WorkDiaryForm() {
   const disabled = diary.status === "submitted";
 
   return (
-    <div className="min-h-screen bg-[#f0f2f5] pb-24">
+    <div className="min-h-screen bg-surface pb-24">
       {/* Page header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4 no-print">
         <div className="max-w-5xl mx-auto flex items-center gap-3 flex-wrap">

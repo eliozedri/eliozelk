@@ -7,6 +7,18 @@ import {
   View,
 } from "@react-pdf/renderer";
 import type { WorkOrder } from "@/types/workOrder";
+import {
+  DOC_PRIMARY,
+  DOC_SUBHEADER,
+  DOC_GOLD,
+  DOC_GOLD_BG,
+  DOC_GOLD_BORDER,
+  DOC_LIGHT,
+  DOC_BORDER,
+  DOC_GRAY,
+  DOC_DARK,
+  DOC_LIGHT_TEXT,
+} from "@/lib/pdfBrand";
 
 Font.register({
   family: "Heebo",
@@ -16,14 +28,14 @@ Font.register({
   ],
 });
 
-const PRIMARY   = "#1d4ed8";
-const LIGHT     = "#eff6ff";
-const BORDER    = "#bfdbfe";
-const GRAY      = "#6b7280";
-const DARK      = "#111827";
-const GOLD      = "#d97706";
-const GOLD_BG   = "#fffbeb";
-const GOLD_BORDER = "#fde68a";
+const PRIMARY     = DOC_PRIMARY;
+const LIGHT       = DOC_LIGHT;
+const BORDER      = DOC_BORDER;
+const GRAY        = DOC_GRAY;
+const DARK        = DOC_DARK;
+const GOLD        = DOC_GOLD;
+const GOLD_BG     = DOC_GOLD_BG;
+const GOLD_BORDER = DOC_GOLD_BORDER;
 
 const s = StyleSheet.create({
   page: {
@@ -49,16 +61,16 @@ const s = StyleSheet.create({
   },
   companyBlock: { alignItems: "flex-end" },
   companyName: { fontSize: 15, fontWeight: 700, color: "#ffffff" },
-  companyTagline: { fontSize: 7, color: "#93c5fd", marginTop: 2 },
-  companyContact: { fontSize: 7, color: "#bfdbfe", marginTop: 3 },
+  companyTagline: { fontSize: 7, color: DOC_LIGHT_TEXT, marginTop: 2 },
+  companyContact: { fontSize: 7, color: DOC_LIGHT_TEXT, marginTop: 3 },
 
   docBlock: { alignItems: "flex-start" },
   docTitle: { fontSize: 13, fontWeight: 700, color: "#ffffff" },
-  docSubtitle: { fontSize: 8, color: "#93c5fd", marginTop: 2 },
+  docSubtitle: { fontSize: 8, color: DOC_LIGHT_TEXT, marginTop: 2 },
 
   /* ── Customer banner ── */
   customerBanner: {
-    backgroundColor: "#1e40af",
+    backgroundColor: DOC_SUBHEADER,
     borderRadius: 4,
     paddingVertical: 6,
     paddingHorizontal: 10,
@@ -66,9 +78,9 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  customerLabel: { fontSize: 7, color: "#93c5fd" },
+  customerLabel: { fontSize: 7, color: DOC_LIGHT_TEXT },
   customerName: { fontSize: 11, fontWeight: 700, color: "#ffffff" },
-  periodLabel: { fontSize: 7, color: "#bfdbfe" },
+  periodLabel: { fontSize: 7, color: DOC_LIGHT_TEXT },
   periodValue: { fontSize: 9, color: "#e0f2fe" },
 
   body: { paddingHorizontal: 28, paddingTop: 14 },
@@ -419,8 +431,8 @@ export function CustomerBillingDocument({ data }: { data: CustomerBillingData })
 
         {/* Footer */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>אלקיים סימון כבישים בע״מ · דוח חיוב ל{customerName} · {periodLabel}</Text>
-          <Text style={s.footerText}>הופק: {generatedDate} · סודי — לשימוש פנימי בלבד</Text>
+          <Text style={s.footerText}>אלקיים סימון כבישים בע״מ · דוח חיוב עבור: {customerName} · {periodLabel}</Text>
+          <Text style={s.footerText}>הופק: {generatedDate} · Road Marking &amp; Signage Solutions</Text>
         </View>
 
       </Page>
