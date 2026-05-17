@@ -9,7 +9,8 @@ export type AgentType =
   | "catalog_pricing"
   | "cfo"
   | "billing_collections"
-  | "engineering_analysis";
+  | "engineering_analysis"
+  | "coordination_qa";
 
 export type AgentStatus = "active" | "idle" | "paused" | "error";
 
@@ -266,6 +267,7 @@ export const AGENT_ORG: OrgNode[] = [
   {
     agentId: "ops-orchestrator",
     children: [
+      "coordination-qa-agent",
       "inventory-agent",
       "field-ops-agent",
       "graphics-production-agent",

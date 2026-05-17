@@ -20,7 +20,7 @@ export const NEURAL_HOTSPOTS: NeuralHotspot[] = [
   { id: 'data_core',    labelHe: 'שיבר מרכזי',         labelEn: 'DATA CORE',              x: 48.3, y: 42.1, w: 11.3, h: 16.8, shape: 'ellipse' },
   { id: 'cfo',          labelHe: 'מנהל כספים',          labelEn: 'CFO / FINANCE',          x: 23.6, y: 30.7, w: 18.4, h: 10.5, shape: 'ellipse' },
   { id: 'warehouse',    labelHe: 'מחסן',               labelEn: 'WAREHOUSE',              x: 21.5, y: 51.4, w: 18.6, h: 10.7, shape: 'ellipse' },
-  { id: 'procurement',  labelHe: 'מחלקת רכש',          labelEn: 'PROCUREMENT',            x: 17.4, y: 73.2, w: 13.2, h:  9.3, shape: 'ellipse' },
+  { id: 'coordination-qa', labelHe: 'תיאומים ו-QA',    labelEn: 'COORDINATION & QA',      x: 17.4, y: 73.2, w: 13.2, h:  9.3, shape: 'ellipse' },
   { id: 'graphics',     labelHe: 'מחלקת גרפיקה',       labelEn: 'GRAPHICS DEPT.',         x: 72.9, y: 30.3, w: 20.6, h: 11.5, shape: 'ellipse' },
   { id: 'accounting',   labelHe: 'הנהלת חשבונות',      labelEn: 'ACCOUNTING DEPT.',       x: 74.2, y: 50.8, w: 19.8, h: 10.9, shape: 'ellipse' },
   { id: 'catalog',      labelHe: 'קטלוג מוצרים',       labelEn: 'CATALOG / PRODUCTS',     x: 78.4, y: 72.1, w: 13.8, h:  9.3, shape: 'ellipse' },
