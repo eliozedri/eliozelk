@@ -141,6 +141,7 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
   const messagesEndRef        = useRef<HTMLDivElement>(null);
   const inputRef              = useRef<HTMLTextAreaElement>(null);
   const hasInitialized        = useRef(false);
+  const prevOpenRef           = useRef(false);
 
   // Initialize default position on first open (bottom-left with margin)
   useEffect(() => {
@@ -155,6 +156,13 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
       void initialize();
     }
   }, [isOpen, initialize]);
+
+  // Reset minimized whenever the chat transitions from closed → open,
+  // so a fresh open always shows the full panel regardless of prior minimize state.
+  useEffect(() => {
+    if (isOpen && !prevOpenRef.current) setMinimized(false);
+    prevOpenRef.current = isOpen;
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && !minimized) {
@@ -173,7 +181,8 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
     dragging.current = true;
     const rect = panelRef.current.getBoundingClientRect();
     dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    e.preventDefault();
+    // select-none on the panel already prevents text selection — no preventDefault needed here,
+    // and calling it on pointerdown can suppress click events on child buttons in some browsers.
   }
 
   useEffect(() => {
