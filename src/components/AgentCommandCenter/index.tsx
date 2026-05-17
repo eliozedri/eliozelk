@@ -1146,7 +1146,9 @@ export function AgentCommandCenter() {
         )}
 
         {/* Neural Operations Core — JARVIS image overlay with live agent stats */}
-        {mainTab === "neural" && <NeuralOperationsCore />}
+        {mainTab === "neural" && (
+          <NeuralOperationsCore activityFeed={activityFeed} agents={agents} />
+        )}
 
         {/* Overview: org chart + agent cards */}
         {mainTab === "overview" && (
