@@ -52,3 +52,5 @@ catalog/
 
 # Claude Code project-local skills (third-party, not vendored)
 .claude/skills/
+# Claude Code local session metadata
+.claude/skills-installed.local.md
