@@ -217,7 +217,9 @@ export function createDefaultSignItems(): SignItem[] {
 }
 
 export function createEmptyDiary(diaryNumber: string): WorkDiary {
-  const today = new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const today = now.toISOString().split("T")[0];
+  const startTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return {
     id: nanoid(),
     diaryNumber,
@@ -227,7 +229,7 @@ export function createEmptyDiary(diaryNumber: string): WorkDiary {
     contactName: "",
     contactPhone: "",
     executionDate: today,
-    startTime: "",
+    startTime,
     endTime: "",
     vehicleNumber: "",
     trailerNumber: "",

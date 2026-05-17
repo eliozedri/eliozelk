@@ -196,6 +196,7 @@ export function WorkDiaryForm() {
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [signatureError, setSignatureError] = useState(false);
 
   // Auto-open a blank diary on mount — this page is a form, not a list
   useEffect(() => {
@@ -231,6 +232,12 @@ export function WorkDiaryForm() {
       setActiveTab("header");
       return;
     }
+    if (!diary.customerSignature?.dataUrl) {
+      setSignatureError(true);
+      setActiveTab("docs");
+      return;
+    }
+    setSignatureError(false);
     saveDiary(diary);
     submitDiary(diary.id);
     const submitted = { ...diary, status: "submitted" as const, submittedAt: new Date().toISOString() };
@@ -325,7 +332,13 @@ export function WorkDiaryForm() {
             />
           )}
           {activeTab === "docs" && (
-            <DocumentTab diary={diary} onChange={handleChange} disabled={disabled} />
+            <DocumentTab
+              diary={diary}
+              onChange={handleChange}
+              disabled={disabled}
+              signatureError={signatureError}
+              onSignatureChange={() => setSignatureError(false)}
+            />
           )}
           {activeTab === "analysis" && (
             <ProfitabilityPanel diary={diary} />

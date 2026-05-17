@@ -13,9 +13,10 @@ interface SignatureBlockProps {
   sig: DiarySignature | null;
   onChange: (sig: DiarySignature) => void;
   disabled: boolean;
+  hasError?: boolean;
 }
 
-function SignatureBlock({ title, sig, onChange, disabled }: SignatureBlockProps) {
+function SignatureBlock({ title, sig, onChange, disabled, hasError = false }: SignatureBlockProps) {
   const current: DiarySignature = sig ?? {
     signerName: "",
     signerRole: "",
@@ -122,6 +123,7 @@ function SignatureBlock({ title, sig, onChange, disabled }: SignatureBlockProps)
           value={current.dataUrl}
           onChange={(dataUrl) => upd({ dataUrl })}
           disabled={disabled}
+          hasError={hasError && !current.dataUrl}
         />
         {current.signedAt && (
           <p className="text-xs text-gray-400 mt-1.5">
@@ -138,9 +140,11 @@ interface Props {
   diary: WorkDiary;
   onChange: (partial: Partial<WorkDiary>) => void;
   disabled?: boolean;
+  signatureError?: boolean;
+  onSignatureChange?: () => void;
 }
 
-export function DocumentTab({ diary, onChange, disabled = false }: Props) {
+export function DocumentTab({ diary, onChange, disabled = false, signatureError = false, onSignatureChange }: Props) {
   const handlePhotos = useCallback(
     (photos: DiaryPhoto[]) => onChange({ photos }),
     [onChange]
@@ -175,8 +179,9 @@ export function DocumentTab({ diary, onChange, disabled = false }: Props) {
       <SignatureBlock
         title="חתימת קבלן / מפקח"
         sig={diary.customerSignature}
-        onChange={(sig) => onChange({ customerSignature: sig })}
+        onChange={(sig) => { onChange({ customerSignature: sig }); if (sig.dataUrl) onSignatureChange?.(); }}
         disabled={disabled}
+        hasError={signatureError}
       />
       <SignatureBlock
         title="חתימת ראש צוות"

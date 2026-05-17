@@ -20,6 +20,8 @@ import { getStageSlaColor, hoursInCurrentStage, canMarkReadyForInstallation, can
 import { useOrderRiskScores } from "@/hooks/useOrderRiskScores";
 import type { OrderRiskScore } from "@/hooks/useOrderRiskScores";
 import { openWorkOrderPDF, exportWorkOrderCSV } from "@/lib/pdfExport";
+import { CancelOrderModal } from "@/components/Accounting";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -348,6 +350,14 @@ const RISK_BADGE: Record<
   critical: { label: "סיכון קריטי",   cls: "bg-red-100 text-red-700"       },
 };
 
+interface PendingStatusChange {
+  order: WorkOrder;
+  nextStatus: WorkOrderStatus | null;
+  action: "approveCustomer" | "updateStatus";
+  title: string;
+  body: string;
+}
+
 interface OrderRowProps {
   order: WorkOrder;
   index: number;
@@ -357,9 +367,11 @@ interface OrderRowProps {
   onApproveCustomer: (id: string) => Promise<void>;
   onSelect: (order: WorkOrder) => void;
   onStartComplete: (order: WorkOrder) => void;
+  onRequestCancel: (order: WorkOrder) => void;
+  onRequestStatusChange: (change: PendingStatusChange) => void;
 }
 
-function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApproveCustomer, onSelect, onStartComplete }: OrderRowProps) {
+function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApproveCustomer, onSelect, onStartComplete, onRequestCancel, onRequestStatusChange }: OrderRowProps) {
   const phone = phoneMap.get(order.customer.trim().toLowerCase());
   const lastUpdated = getLastUpdated(order);
   const relative = relativeTime(lastUpdated);
@@ -528,7 +540,11 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
         <div className="flex items-center gap-1.5">
           {order.status === "graphics_done" && (order.fabricationRequired || order.warehouseRequired) && (
             <button
-              onClick={() => onUpdateStatus(order.id, "production")}
+              onClick={() => onRequestStatusChange({
+                order, nextStatus: "production", action: "updateStatus",
+                title: "העברה לשלב ייצור",
+                body: `הזמנה #${order.orderNumber} · ${order.customer} תועבר לשלב ייצור. הפעולה ניתנת לביטול בשלב זה.`,
+              })}
               className="px-2 py-1 rounded-lg text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors whitespace-nowrap"
             >
               שלח לייצור
@@ -536,7 +552,11 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
           )}
           {order.status === "graphics_done" && !order.fabricationRequired && !order.warehouseRequired && (
             <button
-              onClick={() => onUpdateStatus(order.id, "ready_installation")}
+              onClick={() => onRequestStatusChange({
+                order, nextStatus: "ready_installation", action: "updateStatus",
+                title: "סימון כמוכן להתקנה",
+                body: `הזמנה #${order.orderNumber} · ${order.customer} תסומן כמוכנה להתקנה וניתן יהיה לסגור אותה תפעולית.`,
+              })}
               className="px-2 py-1 rounded-lg text-xs font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors whitespace-nowrap"
             >
               מוכן להתקנה
@@ -544,7 +564,13 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
           )}
           {order.status === "production" && (
             <button
-              onClick={() => { if (fabCheck.ok) onUpdateStatus(order.id, "ready_installation"); }}
+              onClick={() => {
+                if (fabCheck.ok) onRequestStatusChange({
+                  order, nextStatus: "ready_installation", action: "updateStatus",
+                  title: "סימון כמוכן להתקנה",
+                  body: `הזמנה #${order.orderNumber} · ${order.customer} תסומן כמוכנה להתקנה וניתן יהיה לסגור אותה תפעולית.`,
+                });
+              }}
               disabled={!fabCheck.ok}
               title={!fabCheck.ok ? fabCheck.reason : undefined}
               className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-colors whitespace-nowrap ${
@@ -558,7 +584,11 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
           )}
           {order.orderType === "field_work" && order.customerApprovalStatus === "pending" && (
             <button
-              onClick={() => onApproveCustomer(order.id)}
+              onClick={() => onRequestStatusChange({
+                order, nextStatus: null, action: "approveCustomer",
+                title: "אישור קבלת אישור לקוח",
+                body: `הזמנה #${order.orderNumber} · ${order.customer} — מאשר שאישור לקוח התקבל. פעולה זו מסירה את דגל 'ממתין לאישור לקוח'.`,
+              })}
               className="px-2 py-1 rounded-lg text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors whitespace-nowrap"
             >
               ✓ אישור לקוח התקבל
@@ -580,7 +610,7 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
           )}
           {!isTerminal && (
             <button
-              onClick={() => onUpdateStatus(order.id, "cancelled")}
+              onClick={() => onRequestCancel(order)}
               title="ביטול הזמנה"
               className="p-1 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
             >
@@ -1120,6 +1150,8 @@ export function OrdersTable() {
     [orders, selectedOrderId],
   );
   const [completingOrder, setCompletingOrder] = useState<WorkOrder | null>(null);
+  const [cancelingOrder, setCancelingOrder] = useState<WorkOrder | null>(null);
+  const [pendingStatusChange, setPendingStatusChange] = useState<PendingStatusChange | null>(null);
 
   // Build phone lookup map from customers
   const phoneMap = useMemo(() => {
@@ -1370,6 +1402,8 @@ export function OrdersTable() {
                         onApproveCustomer={approveCustomerOrder}
                         onSelect={(o) => setSelectedOrderId(o.id)}
                         onStartComplete={setCompletingOrder}
+                        onRequestCancel={setCancelingOrder}
+                        onRequestStatusChange={setPendingStatusChange}
                       />
                     ))}
                   </tbody>
@@ -1443,6 +1477,35 @@ export function OrdersTable() {
           order={completingOrder}
           onConfirm={() => handleUpdateStatus(completingOrder.id, "completed")}
           onCancel={() => setCompletingOrder(null)}
+        />
+      )}
+
+      {/* Cancel Order Modal */}
+      {cancelingOrder && (
+        <CancelOrderModal
+          order={cancelingOrder}
+          onConfirm={() => updateOrderStatus(cancelingOrder.id, "cancelled")}
+          onClose={() => setCancelingOrder(null)}
+        />
+      )}
+
+      {/* Status transition confirmation */}
+      {pendingStatusChange && (
+        <ConfirmDialog
+          title={pendingStatusChange.title}
+          body={<p className="text-sm text-gray-600">{pendingStatusChange.body}</p>}
+          confirmLabel="אשר"
+          variant="warning"
+          onConfirm={async () => {
+            const { order, action, nextStatus } = pendingStatusChange;
+            if (action === "approveCustomer") {
+              await approveCustomerOrder(order.id);
+            } else if (nextStatus) {
+              await handleUpdateStatus(order.id, nextStatus);
+            }
+            setPendingStatusChange(null);
+          }}
+          onClose={() => setPendingStatusChange(null)}
         />
       )}
     </div>

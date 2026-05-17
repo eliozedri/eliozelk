@@ -16,6 +16,7 @@ interface OrdersContextValue {
   addOrderActivity: (id: string, type: OrderActivityType, description: string, opts?: { by?: string; department?: string; meta?: Record<string, string> }) => void;
   addOrderProblem: (id: string, problem: { department: "graphics" | "fabrication" | "office"; category: OrderProblemCategory; description: string; reportedBy?: string }) => void;
   resolveOrderProblem: (orderId: string, problemId: string, opts?: { resolvedBy?: string; resolutionNotes?: string; newStatus?: OrderProblemStatus }) => void;
+  deleteOrder: (id: string) => Promise<void>;
 }
 
 const OrdersContext = createContext<OrdersContextValue | null>(null);

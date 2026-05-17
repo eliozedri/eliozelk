@@ -118,9 +118,6 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
           <Field label="איש קשר">
             <input type="text" placeholder="שם איש הקשר" {...inp("contactName")} />
           </Field>
-          <Field label="טלפון">
-            <input type="tel" placeholder="050-0000000" dir="ltr" {...inp("contactPhone")} />
-          </Field>
 
           {/* קישור להזמנה — hidden from field workers */}
           {!isWorker && (
@@ -156,8 +153,8 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
         </div>
       </SectionCard>
 
-      {/* פרטי ביצוע — vehicles + time breakdown */}
-      <SectionCard title="פרטי ביצוע">
+      {/* פרטי ביצוע — hidden from field workers */}
+      {!isWorker && <SectionCard title="פרטי ביצוע">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label="רכב מס׳">
             <input type="text" placeholder="מספר הרכב" {...inp("vehicleNumber")} />
@@ -187,7 +184,7 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
             </Field>
           </div>
         </div>
-      </SectionCard>
+      </SectionCard>}
 
       {/* Crew — dynamic count */}
       <SectionCard title="צוות">

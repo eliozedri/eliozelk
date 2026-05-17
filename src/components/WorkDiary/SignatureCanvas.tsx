@@ -6,9 +6,10 @@ interface Props {
   value: string;
   onChange: (dataUrl: string) => void;
   disabled?: boolean;
+  hasError?: boolean;
 }
 
-export function SignatureCanvas({ value, onChange, disabled = false }: Props) {
+export function SignatureCanvas({ value, onChange, disabled = false, hasError = false }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
@@ -87,7 +88,7 @@ export function SignatureCanvas({ value, onChange, disabled = false }: Props) {
       <div
         className={`border rounded-lg overflow-hidden bg-white ${
           disabled ? "opacity-60" : "cursor-crosshair"
-        } border-gray-300`}
+        } ${hasError ? "border-red-400 ring-1 ring-red-400" : "border-gray-300"}`}
       >
         <canvas
           ref={canvasRef}
@@ -109,7 +110,10 @@ export function SignatureCanvas({ value, onChange, disabled = false }: Props) {
           נקה חתימה
         </button>
       )}
-      {!value && !disabled && (
+      {hasError && !value && (
+        <p className="text-xs text-red-500 font-medium">נדרשת חתימה לפני השליחה</p>
+      )}
+      {!hasError && !value && !disabled && (
         <p className="text-xs text-gray-400">חתום כאן באצבע או בעכבר</p>
       )}
     </div>

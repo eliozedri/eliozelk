@@ -12,10 +12,11 @@ import { exportWorkDiaryPDF, exportWorkDiaryCSV } from "@/lib/workDiaryExport";
 import { useAuth } from "@/context/AuthContext";
 import { useOperationalKPIs } from "@/hooks/useOperationalKPIs";
 import { getSupabase } from "@/lib/supabase/client";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 // ─── Cancel Order Modal ───────────────────────────────────────────────────────
 
-function CancelOrderModal({
+export function CancelOrderModal({
   order,
   onConfirm,
   onClose,
@@ -514,7 +515,7 @@ function ApproveToBillingModal({
 }
 
 export function AccountingPage() {
-  const { orders, updateOrderFields, addOrderActivity } = useOrdersContext();
+  const { orders, updateOrderFields, addOrderActivity, deleteOrder } = useOrdersContext();
   const { diaries, cancelDiary } = useWorkDiaryContext();
   const { profile } = useAuth();
   const { billingLeakage, byOrder } = useOperationalKPIs();
@@ -540,6 +541,11 @@ export function AccountingPage() {
   const [cancelingOrder, setCancelingOrder] = useState<WorkOrder | null>(null);
   const [cancelingDiaryId, setCancelingDiaryId] = useState<string | null>(null);
   const [restoringOrderId, setRestoringOrderId] = useState<string | null>(null);
+  const [confirmingRestoreOrder, setConfirmingRestoreOrder] = useState<WorkOrder | null>(null);
+  const [confirmingInvoiceOrder, setConfirmingInvoiceOrder] = useState<WorkOrder | null>(null);
+  const [permanentDeleteTarget, setPermanentDeleteTarget] = useState<WorkOrder | null>(null);
+  const [permanentDeleteStep, setPermanentDeleteStep] = useState<1 | 2>(1);
+  const [permanentDeleteChecked, setPermanentDeleteChecked] = useState(false);
   const [billingCustomerFilter, setBillingCustomerFilter] = useState("");
   // Inventory reconciliation — orders that have a consumption record
   const [reconciledOrderIds, setReconciledOrderIds] = useState<Set<string>>(new Set());
@@ -1137,7 +1143,7 @@ export function AccountingPage() {
                               />
                             </td>
                             <td className="px-4 py-2.5">
-                              <button type="button" onClick={() => handleMarkInvoiced(order)} disabled={invoicingId === order.id}
+                              <button type="button" onClick={() => setConfirmingInvoiceOrder(order)} disabled={invoicingId === order.id}
                                 className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-bold transition-colors disabled:opacity-50 whitespace-nowrap">
                                 {invoicingId === order.id ? "שומר..." : "הנפק חשבונית"}
                               </button>
@@ -1286,7 +1292,7 @@ export function AccountingPage() {
                                           className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-colors whitespace-nowrap">
                                           בדוק מוכנות לחיוב
                                         </button>
-                                        <button type="button" onClick={() => handleMarkInvoiced(order)} disabled={invoicingId === order.id}
+                                        <button type="button" onClick={() => setConfirmingInvoiceOrder(order)} disabled={invoicingId === order.id}
                                           className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-medium transition-colors disabled:opacity-50 whitespace-nowrap">
                                           {invoicingId === order.id ? "שומר..." : "סמן כחויב"}
                                         </button>
@@ -1493,6 +1499,7 @@ export function AccountingPage() {
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">סכום שחויב</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">תאריך חיוב</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">בוצע ע״י</th>
+                        <th className="px-4 py-2.5 w-16"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1519,6 +1526,15 @@ export function AccountingPage() {
                             {order.invoicedAt ? formatDate(order.invoicedAt.slice(0, 10)) : "—"}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-500">{order.invoicedBy || "—"}</td>
+                          <td className="px-4 py-3">
+                            <button
+                              type="button"
+                              onClick={() => { setPermanentDeleteTarget(order); setPermanentDeleteStep(1); setPermanentDeleteChecked(false); }}
+                              className="px-2 py-1 rounded-lg text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors whitespace-nowrap"
+                            >
+                              מחק
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1578,7 +1594,7 @@ export function AccountingPage() {
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">תאריך ביטול</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-16">שלטים</th>
                         <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-16">שונות</th>
-                        <th className="px-4 py-2.5 w-24"></th>
+                        <th className="px-4 py-2.5 w-40"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1600,14 +1616,23 @@ export function AccountingPage() {
                               <td className="px-4 py-3 text-center text-gray-400 text-sm">{countSignQty(order) || "—"}</td>
                               <td className="px-4 py-3 text-center text-gray-400 text-sm">{countMiscQty(order) || "—"}</td>
                               <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRestoreOrder(order)}
-                                  disabled={restoringOrderId === order.id}
-                                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors whitespace-nowrap disabled:opacity-50"
-                                >
-                                  {restoringOrderId === order.id ? "משחזר..." : "שחזר הזמנה"}
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmingRestoreOrder(order)}
+                                    disabled={restoringOrderId === order.id}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 transition-colors whitespace-nowrap disabled:opacity-50"
+                                  >
+                                    {restoringOrderId === order.id ? "משחזר..." : "שחזר הזמנה"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { setPermanentDeleteTarget(order); setPermanentDeleteStep(1); setPermanentDeleteChecked(false); }}
+                                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors whitespace-nowrap"
+                                  >
+                                    מחק
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                             {isExpanded && <ExpandedRow key={`${order.id}-expanded`} order={order} />}
@@ -1956,6 +1981,133 @@ export function AccountingPage() {
           onConfirm={() => updateOrderFields(cancelingOrder.id, { status: "cancelled" })}
           onClose={() => setCancelingOrder(null)}
         />
+      )}
+
+      {/* Restore from archive confirmation */}
+      {confirmingRestoreOrder && (
+        <ConfirmDialog
+          title="שחזור הזמנה מהארכיון"
+          body={
+            <p className="text-sm text-gray-600">
+              הזמנה #{confirmingRestoreOrder.orderNumber} · {confirmingRestoreOrder.customer} תשוחזר לסטטוס &apos;מוכן להתקנה&apos; ותחזור לטבלת ההזמנות הפעילות. סטטוס החיוב יאופס לפניית אימות מחדש.
+            </p>
+          }
+          confirmLabel="שחזר הזמנה"
+          variant="warning"
+          onConfirm={() => handleRestoreOrder(confirmingRestoreOrder)}
+          onClose={() => setConfirmingRestoreOrder(null)}
+        />
+      )}
+
+      {/* Invoice issuing confirmation */}
+      {confirmingInvoiceOrder && (
+        <ConfirmDialog
+          title="הנפקת חשבונית"
+          body={
+            <div className="text-sm text-gray-600 space-y-1">
+              <p className="font-semibold text-gray-800">#{confirmingInvoiceOrder.orderNumber} · {confirmingInvoiceOrder.customer}</p>
+              <p>סכום לחיוב: {confirmingInvoiceOrder.billedAmount ? `₪${Math.round(confirmingInvoiceOrder.billedAmount).toLocaleString()}` : (billedAmountInputs[confirmingInvoiceOrder.id] ? `₪${billedAmountInputs[confirmingInvoiceOrder.id]}` : "לא הוזן")}</p>
+              <p>מס׳ חשבונית: {invoiceInputs[confirmingInvoiceOrder.id]?.trim() || confirmingInvoiceOrder.invoiceNumber || "לא הוזן"}</p>
+              <p className="text-xs text-gray-500">הפעולה תסמן את ההזמנה כחויבה ותעביר אותה להיסטוריית חיוב.</p>
+            </div>
+          }
+          confirmLabel="אשר הנפקה"
+          variant="info"
+          onConfirm={() => { handleMarkInvoiced(confirmingInvoiceOrder); setConfirmingInvoiceOrder(null); }}
+          onClose={() => setConfirmingInvoiceOrder(null)}
+        />
+      )}
+
+      {/* Permanent delete — two-step modal */}
+      {permanentDeleteTarget && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" onClick={() => setPermanentDeleteTarget(null)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" dir="rtl">
+              {permanentDeleteStep === 1 ? (
+                <>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                      <svg className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                      </svg>
+                    </div>
+                    <p className="font-bold text-gray-900">מחיקה לצמיתות</p>
+                  </div>
+                  <div className="text-sm text-gray-600 space-y-2 mb-5">
+                    <p className="font-semibold text-gray-800">#{permanentDeleteTarget.orderNumber} · {permanentDeleteTarget.customer}</p>
+                    <p>הזמנה זו תימחק לצמיתות מהמערכת. פעולה זו אינה ניתנת לביטול ולא ניתן לשחזר את הנתונים.</p>
+                    <ul className="text-xs text-gray-500 space-y-0.5 pr-2 pt-1">
+                      <li>• פעילויות ובעיות הזמנה יימחקו אוטומטית</li>
+                      <li>• יומני שטח מקושרים לא יימחקו אך הקישור ינותק</li>
+                    </ul>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPermanentDeleteStep(2)}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-red-600 hover:bg-red-700 text-white transition-colors"
+                    >
+                      המשך למחיקה
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPermanentDeleteTarget(null)}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                    >
+                      ביטול
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                      <svg className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                      </svg>
+                    </div>
+                    <p className="font-bold text-gray-900">אישור סופי למחיקה</p>
+                  </div>
+                  <div className="mb-5">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={permanentDeleteChecked}
+                        onChange={(e) => setPermanentDeleteChecked(e.target.checked)}
+                        className="mt-0.5 shrink-0 w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-400"
+                      />
+                      <span className="text-sm text-gray-700">
+                        קראתי ואני מאשר/ת שהמחיקה היא לצמיתות ולא ניתנת לשחזור
+                      </span>
+                    </label>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={!permanentDeleteChecked}
+                      onClick={async () => {
+                        const id = permanentDeleteTarget.id;
+                        setPermanentDeleteTarget(null);
+                        await deleteOrder(id);
+                      }}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      מחק לצמיתות
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPermanentDeleteStep(1)}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                    >
+                      חזרה
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {/* Cancel Diary Modal */}

@@ -744,6 +744,20 @@ export function useOrders() {
     }
   }, [fetchAll]);
 
+  // ── deleteOrder ────────────────────────────────────────────────────────
+  const deleteOrder = useCallback(async (id: string): Promise<void> => {
+    const original = ref.current.find(o => o.id === id);
+    setOrders(prev => prev.filter(o => o.id !== id));
+    const db = getSupabase();
+    if (db) {
+      const { error } = await db.from("work_orders").delete().eq("id", id);
+      if (error) {
+        if (original) setOrders(prev => [original, ...prev]);
+        throw error;
+      }
+    }
+  }, []);
+
   // ── addOrderActivity ───────────────────────────────────────────────────
   const addOrderActivity = useCallback((
     id: string, type: OrderActivityType, description: string,
@@ -763,5 +777,6 @@ export function useOrders() {
     approveCustomerOrder,
     updateOrderStatus, updateOrderFields, addOrderActivity,
     addOrderProblem, resolveOrderProblem,
+    deleteOrder,
   };
 }

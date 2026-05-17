@@ -135,32 +135,52 @@ function GraphicsOrderCard({ order, onAcknowledge, onComplete }: {
   const [showConfirm, setShowConfirm] = useState(false);
 
   async function handleAction() {
-    if (isPending) {
-      setActionState("saving");
-      try {
-        await onAcknowledge?.();
-      } catch {
-        setActionState("error");
-        setTimeout(() => setActionState("idle"), 3000);
-      }
-    } else {
-      setShowConfirm(true);
-    }
+    setShowConfirm(true);
   }
 
   return (
     <div className={`rounded-xl border ${cfg.border} ${cfg.bg} p-4 flex flex-col gap-3`}>
       {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" dir="rtl">
           <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 flex flex-col gap-4">
-            <p className="text-sm font-medium text-gray-800 text-center">האם ההזמנה מוכנה ולאישור להתקנה?</p>
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isPending ? "bg-blue-100" : "bg-green-100"}`}>
+                {isPending ? (
+                  <svg className="w-4.5 h-4.5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                ) : (
+                  <svg className="w-4.5 h-4.5 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                )}
+              </div>
+              <p className="font-bold text-gray-900 text-sm">
+                {isPending ? "אישור קבלת הזמנה לטיפול" : "סיום עבודת גרפיקה"}
+              </p>
+            </div>
+            <div className="text-sm text-gray-600 space-y-1">
+              <p className="font-semibold text-gray-800">#{order.orderNumber} · {order.customer}</p>
+              <p className="text-xs text-gray-500">
+                {isPending
+                  ? "הזמנה זו תועבר לסטטוס 'בטיפול גרפיקה'. האישור מסמן שהגרפיקאי קיבל את ההזמנה לידיו."
+                  : "הזמנה זו תסומן כהושלמה גרפית ותועבר לשלב הבא (ייצור / מוכן להתקנה)."}
+              </p>
+            </div>
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={async () => { await onComplete?.(); setShowConfirm(false); }}
-                className="flex-1 py-2.5 rounded-lg text-sm font-bold text-white bg-green-600 hover:bg-green-700 transition-colors"
+                onClick={async () => {
+                  setShowConfirm(false);
+                  setActionState("saving");
+                  try {
+                    if (isPending) { await onAcknowledge?.(); }
+                    else { await onComplete?.(); }
+                    setActionState("idle");
+                  } catch {
+                    setActionState("error");
+                    setTimeout(() => setActionState("idle"), 3000);
+                  }
+                }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-bold text-white transition-colors ${isPending ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"}`}
               >
-                כן, מוכן
+                {isPending ? "אשר קבלה" : "סמן כהושלם"}
               </button>
               <button
                 type="button"
