@@ -6,8 +6,7 @@
 //   3. Add agent id to AGENT_ORG in types/agent.ts (org hierarchy)
 //   4. Add AgentType literal to types/agent.ts (TypeScript union)
 //   5. Add a Supabase migration seeding the agent row in the agents table
-//   6. Add a NeuralHotspot in neural-core-hotspots.ts if it appears in the JARVIS HQ image
-//   7. Add to SCANNABLE_AGENTS in AgentCommandCenter/index.tsx ONLY if a real scan route exists
+//   6. Add to SCANNABLE_AGENTS in AgentCommandCenter/index.tsx ONLY if a real scan route exists
 //   8. Verify chat/addressability: the openAgentChat(id) path works for any agent in the DB
 //
 // room-config.ts owns visual layout (grid position, room title, span).

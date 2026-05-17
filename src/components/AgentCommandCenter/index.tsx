@@ -31,13 +31,9 @@ import {
 
 import { useGlobalChat } from "@/context/GlobalFloatingChatContext";
 import { DigitalHQ } from "@/components/AgentCommandCenter/DigitalHQ";
-import { NeuralOperationsCore } from "@/components/AgentCommandCenter/NeuralOperationsCore";
-import { NeuralCoreScene } from "@/components/AgentCommandCenter/NeuralCoreScene/NeuralCoreScene";
 import { NewMeetingModal } from "@/components/AgentCommandCenter/NewMeetingModal";
 import { useAgentMeetings } from "@/hooks/useAgentMeetings";
 import type { AgentMeeting } from "@/types/agentMeeting";
-
-const NEURAL_SCENE_ENABLED = true;
 
 // ── Colors ───────────────────────────────────────────────────────────────────
 const NAVY = "#0d1b2e";
@@ -890,7 +886,7 @@ function ActivityPanel({ feed, agents }: { feed: AgentActivityFeedItem[]; agents
 
 // ── Main Command Center ───────────────────────────────────────────────────────
 
-type MainTab = "overview" | "tasks" | "exceptions" | "approvals" | "activity" | "hq" | "neural";
+type MainTab = "overview" | "tasks" | "exceptions" | "approvals" | "activity" | "hq";
 
 export function AgentCommandCenter() {
   const {
@@ -983,7 +979,6 @@ export function AgentCommandCenter() {
 
   const MAIN_TABS: { id: MainTab; label: string; count?: number }[] = [
     { id: "hq",          label: "משרד דיגיטלי" },
-    { id: "neural",      label: "Neural Core" },
     { id: "overview",    label: "סקירה" },
     { id: "tasks",       label: "משימות",   count: totalOpenTasks },
     { id: "exceptions",  label: "חריגות",   count: totalOpenExc },
@@ -1148,13 +1143,6 @@ export function AgentCommandCenter() {
             onMeetingOpen={openMeetingChat}
             onNewMeeting={() => { void loadMeetings(); setShowNewMeeting(true); }}
           />
-        )}
-
-        {/* Neural Operations Core — feature flag gates new Scene Engine vs legacy overlay */}
-        {mainTab === "neural" && (
-          NEURAL_SCENE_ENABLED
-            ? <NeuralCoreScene activityFeed={activityFeed} agents={agents} />
-            : <NeuralOperationsCore activityFeed={activityFeed} agents={agents} />
         )}
 
         {/* Overview: org chart + agent cards */}
