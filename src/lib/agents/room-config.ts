@@ -97,9 +97,20 @@ export const ROOMS: RoomConfig[] = [
     agentIds: ["engineering-plan-agent"],
     gridCol: 1, gridRow: 3,
   },
+  {
+    id: "coordination-qa",
+    name: "תיאומים ו-QA",
+    nameEn: "Coordination & QA",
+    department: "operations",
+    icon: "🔍",
+    description: "בקרת מוכנות, תיאום לקוחות וזיהוי סתירות תפעוליות",
+    agentIds: ["coordination-qa-agent"],
+    gridCol: 2, gridRow: 3,
+  },
 ];
 
-// Meeting room — rendered only when active meetings exist
+// Meeting room — rendered only when active meetings exist.
+// Sits at cols 3–4 of row 3 (span 2) to make room for Coordination & QA at col 2.
 export const MEETING_ROOM: RoomConfig = {
   id: "meetings",
   name: "חדר ישיבות",
@@ -108,5 +119,5 @@ export const MEETING_ROOM: RoomConfig = {
   icon: "📅",
   description: "פגישות סוכנים פעילות",
   agentIds: [],
-  gridCol: 2, gridRow: 3, gridColSpan: 3,
+  gridCol: 3, gridRow: 3, gridColSpan: 2,
 };

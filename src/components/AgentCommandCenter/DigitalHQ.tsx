@@ -1,6 +1,7 @@
 "use client";
 
 import { ROOMS, MEETING_ROOM, type RoomConfig } from "@/lib/agents/room-config";
+import { AGENT_REGISTRY } from "@/lib/agents/agent-registry";
 import type { Agent, AgentStats } from "@/types/agent";
 import type { AgentMeeting } from "@/types/agentMeeting";
 
@@ -140,12 +141,7 @@ function AgentNode({
 // ── Ghost node (agent not in DB yet) ─────────────────────────────────────────
 
 function GhostNode({ agentId }: { agentId: string }) {
-  const LABELS: Record<string, string> = {
-    "inventory-agent": "מנהל מחסן",
-    "graphics-production-agent": "מנהל גרפיקה",
-    "catalog-pricing-agent": "מנהל קטלוג",
-    "engineering-plan-agent": "מנהל הנדסה",
-  };
+  const meta = AGENT_REGISTRY[agentId];
   return (
     <div
       className="rounded-xl p-3 opacity-35"
@@ -153,11 +149,11 @@ function GhostNode({ agentId }: { agentId: string }) {
     >
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base bg-white/5 shrink-0">
-          🤖
+          {meta?.icon ?? "🤖"}
         </div>
         <div className="text-right flex-1">
-          <p className="text-xs text-white/40">{LABELS[agentId] ?? agentId}</p>
-          <p className="text-[10px] text-white/20">טרם הופעל</p>
+          <p className="text-xs text-white/40">{meta?.label ?? agentId}</p>
+          <p className="text-[10px] text-white/20">{meta?.shortDesc ?? "טרם הופעל"}</p>
         </div>
       </div>
     </div>
