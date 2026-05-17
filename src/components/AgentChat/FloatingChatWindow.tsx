@@ -166,27 +166,35 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
     if (isOpen && !minimized) setTimeout(() => inputRef.current?.focus(), 100);
   }, [isOpen, minimized]);
 
-  // ── Drag handlers (pointer events — works on touch + desktop) ────────────
+  // ── Drag — document-level pointer listeners (reliable release on any target) ──
 
-  function onPointerDown(e: React.PointerEvent) {
+  function onHeaderPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (!panelRef.current) return;
     dragging.current = true;
-    panelRef.current.setPointerCapture(e.pointerId);
     const rect = panelRef.current.getBoundingClientRect();
     dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     e.preventDefault();
   }
 
-  function onPointerMove(e: React.PointerEvent) {
-    if (!dragging.current || !panelRef.current) return;
-    const panelW = panelRef.current.offsetWidth;
-    const panelH = panelRef.current.offsetHeight;
-    const newX = Math.max(0, Math.min(e.clientX - dragOffset.current.x, window.innerWidth - panelW));
-    const newY = Math.max(0, Math.min(e.clientY - dragOffset.current.y, window.innerHeight - panelH));
-    setPos({ x: newX, y: newY });
-  }
-
-  function onPointerUp() { dragging.current = false; }
+  useEffect(() => {
+    function onMove(e: PointerEvent) {
+      if (!dragging.current || !panelRef.current) return;
+      const panelW = panelRef.current.offsetWidth;
+      const panelH = panelRef.current.offsetHeight;
+      const newX = Math.max(0, Math.min(e.clientX - dragOffset.current.x, window.innerWidth - panelW));
+      const newY = Math.max(0, Math.min(e.clientY - dragOffset.current.y, window.innerHeight - panelH));
+      setPos({ x: newX, y: newY });
+    }
+    function onUp() { dragging.current = false; }
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onUp);
+    return () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onUp);
+    };
+  }, []);
 
   // ── Send ───────────────────────────────────────────────────────────────────
 
@@ -234,21 +242,19 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
       <div
         className="flex items-center justify-between px-4 py-3 shrink-0 cursor-grab active:cursor-grabbing"
         style={{ borderBottom: minimized ? "none" : `1px solid rgba(255,255,255,0.08)`, backgroundColor: NAVY_MID }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
+        onPointerDown={onHeaderPointerDown}
       >
         <div className="flex items-center gap-2">
           <button
             onClick={onClose}
-            onMouseDown={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
             className="text-white/40 hover:text-white/80 transition-colors p-1 rounded"
           >
             <CloseIcon />
           </button>
           <button
             onClick={() => setMinimized(m => !m)}
-            onMouseDown={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
             className="text-white/40 hover:text-white/80 transition-colors p-1 rounded"
           >
             <MinimizeIcon />

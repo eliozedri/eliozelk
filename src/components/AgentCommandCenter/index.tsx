@@ -1024,6 +1024,13 @@ export function AgentCommandCenter() {
               <ChatIcon />
               שיחה עם מרכז הפיקוד
             </button>
+            <button
+              onClick={() => openChat({ agentId: "ops-orchestrator", agentName: "מנהל התפעול", agentIcon: "📋" })}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
+              style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.65)", border: "1px solid rgba(255,255,255,0.15)" }}
+            >
+              📋 פנייה למנהל התפעול
+            </button>
           </div>
 
           <div className="text-right">
