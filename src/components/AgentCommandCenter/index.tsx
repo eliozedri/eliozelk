@@ -33,11 +33,11 @@ import { useGlobalChat } from "@/context/GlobalFloatingChatContext";
 import { DigitalHQ } from "@/components/AgentCommandCenter/DigitalHQ";
 import { NeuralOperationsCore } from "@/components/AgentCommandCenter/NeuralOperationsCore";
 import { NeuralCoreScene } from "@/components/AgentCommandCenter/NeuralCoreScene/NeuralCoreScene";
-
-const NEURAL_SCENE_ENABLED = false;
 import { NewMeetingModal } from "@/components/AgentCommandCenter/NewMeetingModal";
 import { useAgentMeetings } from "@/hooks/useAgentMeetings";
 import type { AgentMeeting } from "@/types/agentMeeting";
+
+const NEURAL_SCENE_ENABLED = true;
 
 // ── Colors ───────────────────────────────────────────────────────────────────
 const NAVY = "#0d1b2e";
@@ -52,6 +52,7 @@ const SCANNABLE_AGENTS = new Set([
   "field-ops-agent",
   "billing-collections-agent",
   "cfo-agent",
+  "catalog-pricing-agent",
 ]);
 
 type ScanStatus = "idle" | "running" | "success" | "error";
