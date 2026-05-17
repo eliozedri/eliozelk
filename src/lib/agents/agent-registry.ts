@@ -123,33 +123,54 @@ export const AGENT_REGISTRY: Record<string, AgentConfig> = {
 
   "engineering-plan-agent": {
     id: "engineering-plan-agent",
-    label: "מנהל הנדסה",
-    icon: "🔧",
-    shortDesc: "ניתוח תוכניות הנדסיות",
+    label: "ניתוח תכניות הנדסה",
+    icon: "📐",
+    shortDesc: "מודול עתידי — ניתוח PDF הנדסי, חישובים וכמויות מדידה",
     department: "engineering",
     responsibilities: [
-      "ניתוח תוכניות קונסטרוקציה",
-      "בדיקת היתכנות הנדסית",
+      "ניתוח תכניות קונסטרוקציה ו-PDF הנדסי",
+      "חילוץ כמויות מדידה עם ציון ביטחון",
+      "תמיכה בחישובים הנדסיים לצורכי שילוט",
       "אישור מפרטים טכניים",
     ],
     workflowRole: "engineering-review",
+    // out-of-core: future specialized analysis agent — not part of active 9-agent Neural Core
   },
 
   "coordination-qa-agent": {
     id: "coordination-qa-agent",
-    label: "מנהלת תיאומים ו-QA",
+    label: "מחלקת תיאומים ו-QA",
     icon: "🔍",
     shortDesc: "תיאום עבודות · בקרת מוכנות · בדיקת סתירות",
     department: "operations",
     responsibilities: [
       "תיאום עם לקוח, מזמין ואיש קשר באתר",
-      "אימות מוכנות לפני תזמון ביצוע",
+      "תיאום לוחות זמנים ואישור תזמון ביצוע",
+      "תיאום פנימי בין מחלקות: משרד, גרפיקה, מחסן, מסגרייה, שטח והנה״ח",
+      "אימות מוכנות לפני שליחת צוותים לשטח",
       "בדיקת שערי מחסן, גרפיקה, ייצור ומסגרייה",
       "זיהוי סתירות בין סטטוס, התקדמות ותורי מחלקות",
       "חשיפת מצבי workflow בלתי אפשריים למנהל הפעילות",
       "מניעת תזמון עבודות לפני סגירת שערים תפעוליים",
     ],
     workflowRole: "workflow-integrity",
+    connectedWorkflows: ["production", "ready_installation"],
+  },
+
+  "fabrication-agent": {
+    id: "fabrication-agent",
+    label: "מחלקת מסגרייה",
+    icon: "⚙️",
+    shortDesc: "מסגרייה, ייצור מתכת ומוכנות ייצור",
+    department: "fabrication",
+    responsibilities: [
+      "מעקב סטטוס עבודות מסגרייה וריתוך",
+      "ניהול מוכנות ייצור לפני שליחת צוותים לשטח",
+      "תיאום עם מחלקת תיאומים ו-QA ועבודות שטח",
+      "מעקב עיבוד מתכת ומוכנות חומרים",
+      "תיעוד השלמת שלבי ייצור",
+    ],
+    workflowRole: "fabrication-production",
     connectedWorkflows: ["production", "ready_installation"],
   },
 };

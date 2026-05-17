@@ -10,7 +10,8 @@ export type AgentType =
   | "cfo"
   | "billing_collections"
   | "engineering_analysis"
-  | "coordination_qa";
+  | "coordination_qa"
+  | "fabrication";
 
 export type AgentStatus = "active" | "idle" | "paused" | "error";
 
@@ -22,7 +23,8 @@ export type AgentDepartment =
   | "catalog"
   | "finance"
   | "accounting"
-  | "engineering";
+  | "engineering"
+  | "fabrication";
 
 export interface Agent {
   id: string;
@@ -232,6 +234,7 @@ export const DEPARTMENT_LABELS: Record<AgentDepartment, string> = {
   finance:     "כספים",
   accounting:  'הנה״ח',
   engineering: "הנדסה",
+  fabrication: "מסגרייה",
 };
 
 export const ACTIVITY_TYPE_LABELS: Record<ActivityMessageType, string> = {
@@ -274,7 +277,7 @@ export const AGENT_ORG: OrgNode[] = [
       "catalog-pricing-agent",
       "cfo-agent",
       "billing-collections-agent",
-      "engineering-plan-agent",
+      "fabrication-agent",
     ],
   },
 ];
