@@ -4,7 +4,6 @@ import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { useOrdersContext } from "@/context/OrdersContext";
 import { useCustomersContext } from "@/context/CustomersContext";
-import { useCatalogContext } from "@/context/CatalogContext";
 import { STATUS_LABELS } from "@/types/workOrder";
 import type { WorkOrder, WorkOrderStatus } from "@/types/workOrder";
 import { ProjectMap } from "./ProjectMap";
@@ -66,13 +65,6 @@ function AlertIcon() {
   );
 }
 
-function ChevronLeftIcon() {
-  return (
-    <svg className="w-3.5 h-3.5 text-white/20 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="15 18 9 12 15 6" />
-    </svg>
-  );
-}
 
 function ExternalLinkIcon() {
   return (
@@ -91,38 +83,7 @@ function CloseIcon() {
   );
 }
 
-// ─── Metric Card ───────────────────────────────────────────────────────────
-
-interface MetricCardProps {
-  value: number;
-  label: string;
-  sub?: string;
-  topColor: string;
-  href?: string;
-  alert?: boolean;
-}
-
-function MetricCard({ value, label, sub, topColor, href, alert }: MetricCardProps) {
-  const content = (
-    <div className={`bg-white rounded-xl border ${alert && value > 0 ? "border-amber-200" : "border-gray-100"} shadow-sm overflow-hidden flex flex-col h-full transition-all hover:shadow-md`}>
-      <div className={`h-1 w-full ${topColor}`} />
-      <div className="px-4 py-4 flex flex-col gap-1">
-        <span className={`text-3xl font-black leading-none ${alert && value > 0 ? "text-amber-500" : "text-navy-900"}`}>
-          {value}
-        </span>
-        <span className="text-xs font-medium text-gray-600 leading-tight">{label}</span>
-        {sub && <span className="text-[10px] text-gray-400">{sub}</span>}
-      </div>
-    </div>
-  );
-
-  if (href) {
-    return <Link href={href} className="block h-full">{content}</Link>;
-  }
-  return content;
-}
-
-// ─── Pipeline Section ──────────────────────────────────────────────────────
+// ─── Pipeline Stage Type ───────────────────────────────────────────────────
 
 interface PipelineStage {
   label: string;
@@ -131,92 +92,6 @@ interface PipelineStage {
   textColor: string;
   href: string;
   status: string;
-}
-
-function PipelineSection({
-  stages,
-  onStageClick,
-}: {
-  stages: PipelineStage[];
-  onStageClick: (label: string, status: string) => void;
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
-        <h2 className="text-sm font-bold text-navy-900">צנרת הזמנות</h2>
-        <Link href="/orders" className="text-xs text-ek-blue hover:underline flex items-center gap-1">
-          כל ההזמנות <ExternalLinkIcon />
-        </Link>
-      </div>
-      <div className="px-4 py-4">
-        <div className="flex items-center gap-0 overflow-x-auto pb-1">
-          {stages.map((stage, i) => (
-            <div key={stage.label} className="flex items-center shrink-0">
-              <button
-                onClick={() => onStageClick(stage.label, stage.status)}
-                className={`flex flex-col items-center px-4 py-3 rounded-xl border ${stage.color} min-w-[88px] hover:opacity-90 transition-opacity cursor-pointer`}
-              >
-                <span className={`text-2xl font-black leading-none ${stage.textColor}`}>{stage.count}</span>
-                <span className={`text-[10px] font-medium mt-1 text-center leading-tight ${stage.textColor} opacity-80`}>
-                  {stage.label}
-                </span>
-              </button>
-              {i < stages.length - 1 && (
-                <div className="mx-1 shrink-0">
-                  <ChevronLeftIcon />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Department Card ───────────────────────────────────────────────────────
-
-interface DeptCardProps {
-  label: string;
-  count: number;
-  sub: string;
-  href?: string;
-  onClick?: () => void;
-  icon: React.ReactNode;
-  accent: string;
-  accentText: string;
-}
-
-function DeptCard({ label, count, sub, href, onClick, icon, accent, accentText }: DeptCardProps) {
-  const inner = (
-    <>
-      <div className={`w-10 h-10 rounded-xl ${accent} flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform`}>
-        <span className={accentText}>{icon}</span>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold text-navy-900 truncate">{label}</div>
-        <div className="text-xs text-gray-400 truncate">{sub}</div>
-      </div>
-      <div className="text-2xl font-black text-navy-900 shrink-0">{count}</div>
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button
-        onClick={onClick}
-        className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:shadow-md transition-all group cursor-pointer w-full text-right"
-      >
-        {inner}
-      </button>
-    );
-  }
-
-  return (
-    <Link href={href ?? "#"} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:shadow-md transition-all group">
-      {inner}
-    </Link>
-  );
 }
 
 // ─── Alerts Section ────────────────────────────────────────────────────────
@@ -916,7 +791,6 @@ function ForecastPanel() {
 export function DashboardPage() {
   const { orders, updateOrderFields } = useOrdersContext();
   const { customers } = useCustomersContext();
-  const { items: catalogItems } = useCatalogContext();
 
   const [drill, setDrill] = useState<DrillState | null>(null);
 
@@ -933,10 +807,9 @@ export function DashboardPage() {
       completedMonth: completedMonth.length,
       urgentOpen: orders.filter((o) => o.priority === "urgent" && o.status !== "completed" && o.status !== "cancelled").length,
       totalCustomers: customers.length,
-      catalogActive: catalogItems.filter((i) => i.isActive).length,
       totalOrders: orders.length,
     };
-  }, [orders, customers, catalogItems]);
+  }, [orders, customers]);
 
   const alerts = useWorkflowAlerts();
   const { criticalAlerts, stuckOrders } = useNotifications();
@@ -1100,143 +973,41 @@ export function DashboardPage() {
       {/* ─── Main Content ──────────────────────────────────────── */}
       <div className="px-6 py-6 max-w-7xl mx-auto space-y-5">
 
-        {/* Pipeline */}
-        <PipelineSection stages={pipelineStages} onStageClick={handleStageClick} />
-
-        {/* Departments + Alerts/Activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-
-          {/* Department Cards */}
-          <div className="lg:col-span-3">
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-3.5 border-b border-gray-100">
-                <h2 className="text-sm font-bold text-navy-900">מחלקות ותפעול</h2>
-              </div>
-              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <DeptCard
-                  label="מחלקת גרפיקה"
-                  count={metrics.pendingGraphics + metrics.activeGraphics}
-                  sub={`${metrics.pendingGraphics} ממתינות · ${metrics.activeGraphics} בטיפול`}
-                  href="/graphics"
-                  onClick={() =>
-                    setDrill({
-                      title: "מחלקת גרפיקה",
-                      description: "הזמנות ממתינות ובטיפול גרפיקה",
-                      getOrders: (all) => all.filter((o) => o.status === "graphics_pending" || o.status === "graphics_active"),
-                    })
-                  }
-                  accent="bg-amber-50"
-                  accentText="text-amber-600"
-                  icon={
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
-                      <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
-                      <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
-                      <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
-                      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
-                    </svg>
-                  }
-                />
-                <DeptCard
-                  label="ייצור"
-                  count={metrics.inProduction + metrics.readyInstall}
-                  sub={`${metrics.inProduction} בייצור · ${metrics.readyInstall} מוכן`}
-                  href="/orders"
-                  onClick={() =>
-                    setDrill({
-                      title: "ייצור",
-                      description: "הזמנות בייצור ומוכנות להתקנה",
-                      getOrders: (all) => all.filter((o) => o.status === "production" || o.status === "ready_installation"),
-                    })
-                  }
-                  accent="bg-purple-50"
-                  accentText="text-purple-600"
-                  icon={
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M2 20h.01" /><path d="M7 20v-4" /><path d="M12 20v-8" /><path d="M17 20V8" /><path d="M22 4v16" />
-                    </svg>
-                  }
-                />
-                <DeptCard
-                  label="לקוחות"
-                  count={metrics.totalCustomers}
-                  sub="לקוחות רשומים ↗ מודול לקוחות"
-                  href="/customers"
-                  accent="bg-blue-50"
-                  accentText="text-blue-600"
-                  icon={
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                      <circle cx="9" cy="7" r="4" />
-                      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                    </svg>
-                  }
-                />
-                <DeptCard
-                  label="מוצרים ושירותים"
-                  count={metrics.catalogActive}
-                  sub="פריטים פעילים ↗ עריכת קטלוג"
-                  href="/catalog"
-                  accent="bg-teal-50"
-                  accentText="text-teal-600"
-                  icon={
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <ellipse cx="12" cy="5" rx="9" ry="3" />
-                      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-                      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-                    </svg>
-                  }
-                />
-                <DeptCard
-                  label="הנהלת חשבונות"
-                  count={metrics.completedMonth}
-                  sub="הזמנות שהושלמו החודש"
-                  href="/accounting"
-                  onClick={() =>
-                    setDrill({
-                      title: "הנהלת חשבונות",
-                      description: "הזמנות שהושלמו החודש",
-                      getOrders: (all) => all.filter((o) => o.status === "completed" && isSameMonth(o.updatedAt ?? o.createdAt)),
-                    })
-                  }
-                  accent="bg-green-50"
-                  accentText="text-green-600"
-                  icon={
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" y1="1" x2="12" y2="23" />
-                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                    </svg>
-                  }
-                />
-                <DeptCard
-                  label="כל ההזמנות"
-                  count={metrics.totalOrders}
-                  sub={`${metrics.openOrders} פתוחות · ${metrics.urgentOpen} דחופות`}
-                  href="/orders"
-                  onClick={() =>
-                    setDrill({
-                      title: "כל ההזמנות",
-                      description: `${metrics.openOrders} פתוחות · ${metrics.urgentOpen} דחופות`,
-                      getOrders: (all) => all.filter((o) => o.status !== "completed" && o.status !== "cancelled"),
-                    })
-                  }
-                  accent="bg-navy-800/10"
-                  accentText="text-navy-700"
-                  icon={
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <path d="M3 9h18" /><path d="M3 15h18" /><path d="M9 3v18" />
-                    </svg>
-                  }
-                />
-              </div>
+        {/* ─── Unified Status Section ─────────────────────────── */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-navy-900">סטטוס תפעולי</h2>
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                {metrics.openOrders} פתוחות{metrics.urgentOpen > 0 ? ` · ${metrics.urgentOpen} דחופות` : ""}
+              </p>
             </div>
+            <Link href="/orders" className="text-xs text-ek-blue hover:underline flex items-center gap-1">
+              כל ההזמנות <ExternalLinkIcon />
+            </Link>
           </div>
+          <div className="p-4 grid grid-cols-3 sm:grid-cols-6 gap-3">
+            {pipelineStages.map((stage) => (
+              <button
+                key={stage.label}
+                onClick={() => handleStageClick(stage.label, stage.status)}
+                className={`flex flex-col items-center px-3 py-3 rounded-xl border ${stage.color} hover:opacity-90 transition-opacity cursor-pointer`}
+              >
+                <span className={`text-2xl font-black leading-none ${stage.textColor}`}>{stage.count}</span>
+                <span className={`text-[10px] font-medium mt-1.5 text-center leading-tight ${stage.textColor} opacity-80`}>
+                  {stage.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-          {/* Alerts + Activity */}
-          <div className="lg:col-span-2 flex flex-col gap-4">
+        {/* ─── Alerts + Activity ──────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+          <div className="lg:col-span-3">
             <AlertsSection alerts={alerts} onAlertClick={handleAlertClick} />
+          </div>
+          <div className="lg:col-span-2">
             <ActivitySection orders={recentActivity} />
           </div>
         </div>
