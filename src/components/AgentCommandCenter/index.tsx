@@ -45,6 +45,7 @@ const EK_GOLD = "#f59e0b";
 // ── Scannable agents ─────────────────────────────────────────────────────────
 const SCANNABLE_AGENTS = new Set([
   "ops-orchestrator",
+  "inventory-agent",
   "field-ops-agent",
   "billing-collections-agent",
   "cfo-agent",
