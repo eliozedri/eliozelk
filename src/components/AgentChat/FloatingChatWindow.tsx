@@ -129,9 +129,11 @@ interface Props {
 // ── FloatingChatWindow ────────────────────────────────────────────────────────
 
 export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentIcon, threadId }: Props) {
-  const { messages, sending, loading, error, initialize, sendMessage } = useAgentChat(agentId, threadId);
-  const [input, setInput]         = useState("");
-  const [minimized, setMinimized] = useState(false);
+  const { messages, sending, loading, error, initialize, sendMessage, deleteChat } = useAgentChat(agentId, threadId);
+  const [input, setInput]           = useState("");
+  const [minimized, setMinimized]   = useState(false);
+  const [confirmingEnd, setConfirmingEnd] = useState(false);
+  const [deleting, setDeleting]     = useState(false);
 
   // ── Drag state ─────────────────────────────────────────────────────────────
   const [pos, setPos]         = useState<{ x: number; y: number } | null>(null);
@@ -223,6 +225,13 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
     await sendMessage(chip);
   }
 
+  async function handleConfirmEnd() {
+    setDeleting(true);
+    const ok = await deleteChat();
+    setDeleting(false);
+    if (ok) setConfirmingEnd(false);
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const chips       = agentId ? AGENT_CHIPS : MASTER_CHIPS;
@@ -234,7 +243,7 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
   return (
     <div
       ref={panelRef}
-      className="fixed z-50 flex flex-col rounded-2xl shadow-2xl overflow-hidden select-none"
+      className="fixed z-50 flex flex-col rounded-2xl shadow-2xl overflow-hidden select-none relative"
       style={{
         left:      pos.x,
         top:       pos.y,
@@ -253,7 +262,7 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
         style={{ borderBottom: minimized ? "none" : `1px solid rgba(255,255,255,0.08)`, backgroundColor: NAVY_MID }}
         onPointerDown={onHeaderPointerDown}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={onClose}
             onPointerDown={e => e.stopPropagation()}
@@ -268,6 +277,18 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
           >
             <MinimizeIcon />
           </button>
+          {messages.length > 0 && (
+            <>
+              <span className="text-white/15 text-xs select-none px-0.5">|</span>
+              <button
+                onClick={() => setConfirmingEnd(true)}
+                onPointerDown={e => e.stopPropagation()}
+                className="text-[10px] font-semibold px-2 py-0.5 rounded transition-colors text-red-400/70 hover:text-red-400 hover:bg-red-500/10"
+              >
+                סיים שיחה
+              </button>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-2 flex-1 justify-end">
@@ -297,6 +318,38 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
       {/* ── Messages area ────────────────────────────────────────────────── */}
       {!minimized && (
         <>
+          {/* ── End-chat confirmation overlay ───────────────────────────── */}
+          {confirmingEnd && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center p-4"
+              style={{ backgroundColor: "rgba(13,27,46,0.92)", backdropFilter: "blur(2px)" }}>
+              <div className="rounded-2xl p-5 w-full max-w-[300px] text-right"
+                style={{ backgroundColor: NAVY_MID, border: "1px solid rgba(239,68,68,0.3)" }}>
+                <p className="text-sm font-bold text-white mb-2">סיים שיחה?</p>
+                <p className="text-xs text-white/55 leading-relaxed mb-4">
+                  האם אתה בטוח שברצונך לסיים את השיחה? השיחה הנוכחית תימחק ולא תישמר. אם רצית רק להסתיר אותה, אפשר להשתמש במזעור או בסגירה.
+                </p>
+                <div className="flex gap-2 justify-start">
+                  <button
+                    onClick={handleConfirmEnd}
+                    disabled={deleting}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                    style={{ backgroundColor: "rgba(239,68,68,0.2)", color: "#f87171", border: "1px solid rgba(239,68,68,0.35)" }}
+                  >
+                    {deleting ? "מוחק..." : "כן, מחק וסיים שיחה"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmingEnd(false)}
+                    disabled={deleting}
+                    className="text-xs px-3 py-1.5 rounded-lg transition-all text-white/50 hover:text-white/80 disabled:opacity-50"
+                    style={{ backgroundColor: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}
+                  >
+                    ביטול
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5" style={{ minHeight: 0 }}>
             {loading && messages.length === 0 && (
               <div className="flex items-center justify-center py-6 gap-2 text-white/30 text-sm">

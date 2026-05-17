@@ -29,6 +29,31 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data ?? []);
 }
 
+export async function DELETE(req: NextRequest) {
+  const db = getServiceSupabase();
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  const userId = await verifyMasterAuth(db, token);
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { threadId } = await req.json() as { threadId?: string };
+  if (!threadId) return NextResponse.json({ error: "threadId required" }, { status: 400 });
+
+  // Verify ownership before deleting
+  const { data: thread } = await db.from("communication_threads")
+    .select("id, user_id")
+    .eq("id", threadId)
+    .single();
+  if (!thread || (thread.user_id as string) !== userId) {
+    return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+  }
+
+  // Hard delete — messages + suggested_actions cascade automatically
+  const { error } = await db.from("communication_threads").delete().eq("id", threadId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return new NextResponse(null, { status: 204 });
+}
+
 export async function POST(req: NextRequest) {
   const db = getServiceSupabase();
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");

@@ -80,6 +80,22 @@ export function useAgentChat(agentId?: string | null, existingThreadId?: string 
     if (t) await loadMessages(t);
   }, [ensureThread, loadMessages]);
 
+  const deleteChat = useCallback(async (): Promise<boolean> => {
+    if (!thread) return true; // nothing to delete
+    const token = await getBearerToken();
+    if (!token) return false;
+    const res = await fetch("/api/agents/chat/threads", {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId: thread.id }),
+    });
+    if (!res.ok) return false;
+    setThread(null);
+    setMessages([]);
+    initialized.current = false;
+    return true;
+  }, [thread]);
+
   const sendMessage = useCallback(async (content: string): Promise<void> => {
     const token = await getBearerToken();
     if (!token || !content.trim()) return;
@@ -115,5 +131,5 @@ export function useAgentChat(agentId?: string | null, existingThreadId?: string 
     }
   }, [thread, ensureThread]);
 
-  return { thread, messages, sending, loading, error, initialize, sendMessage };
+  return { thread, messages, sending, loading, error, initialize, sendMessage, deleteChat };
 }
