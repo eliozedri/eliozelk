@@ -29,19 +29,30 @@ export function canTransition(from: WorkOrderStatus, to: WorkOrderStatus): boole
   return (VALID_TRANSITIONS[from] ?? []).includes(to);
 }
 
-// Business rule: production → ready_installation requires fabrication complete.
+// Business rule: production → ready_installation requires ALL active department gates closed.
+// "ready" is an internal department state; only "completed" closes the workflow gate.
+// This is the single source of truth for BOTH manual and auto transitions.
 export function canMarkReadyForInstallation(
   order: WorkOrder
 ): { ok: boolean; reason?: string } {
-  if (!order.fabricationRequired) return { ok: true };
-  if (order.fabricationStatus === "completed") return { ok: true };
-  const label =
-    order.fabricationStatus === "issue"        ? "בעיה בייצור" :
-    order.fabricationStatus === "in_progress"  ? "בייצור עדיין פעיל" :
-    order.fabricationStatus === "ready"        ? "מוכן — ממתין לאישור הושלמה" :
-    order.fabricationStatus === "acknowledged" ? "אישור קבלה — טרם הושלם" :
-                                                 "טרם הושלם";
-  return { ok: false, reason: `ייצור מסגרייה: ${label}` };
+  // Fabrication gate: "completed" required — "ready" is internal, gate stays open
+  if (order.fabricationRequired && order.fabricationStatus !== "completed") {
+    const label =
+      order.fabricationStatus === "issue"        ? "בעיה בייצור" :
+      order.fabricationStatus === "in_progress"  ? "בייצור עדיין פעיל" :
+      order.fabricationStatus === "ready"        ? "מוכן — ממתין לסגירת שער (הושלמה)" :
+      order.fabricationStatus === "acknowledged" ? "אישור קבלה — טרם הושלם" :
+                                                   "טרם הושלם";
+    return { ok: false, reason: `ייצור מסגרייה: ${label}` };
+  }
+  // Warehouse gate: "ready" closes the warehouse gate
+  if (order.warehouseRequired && order.warehouseStatus !== "ready") {
+    const label =
+      order.warehouseStatus === "processing" ? "בהכנה — טרם מוכן" :
+                                               "טרם הותחל";
+    return { ok: false, reason: `מחסן: ${label}` };
+  }
+  return { ok: true };
 }
 
 // Business rule: ready_installation → completed requires all active departments to be done.

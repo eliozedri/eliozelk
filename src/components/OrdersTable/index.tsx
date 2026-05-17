@@ -248,6 +248,52 @@ function StatusBadge({ status }: { status: WorkOrderStatus }) {
   );
 }
 
+// ─── Stage icons for the progress bar ─────────────────────────────────────
+
+function StageIcon({ stageKey, active, done }: { stageKey: string; active: boolean; done: boolean }) {
+  const cls = `w-2.5 h-2.5 flex-shrink-0 ${active ? "text-blue-600" : done ? "text-blue-400" : "text-gray-300"}`;
+  switch (stageKey) {
+    case "created":
+      return (
+        <svg className={cls} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="1.5" y="0.5" width="7" height="9" rx="1"/>
+          <line x1="3" y1="3.5" x2="7" y2="3.5"/>
+          <line x1="3" y1="5.5" x2="6" y2="5.5"/>
+        </svg>
+      );
+    case "graphics":
+      return (
+        <svg className={cls} viewBox="0 0 10 10" fill="currentColor">
+          <path d="M7 1.5 9 3.5 4.5 8H2.5V6L7 1.5z"/>
+        </svg>
+      );
+    case "production":
+      return (
+        <svg className={cls} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+          <circle cx="5" cy="5" r="1.8"/>
+          <line x1="5" y1="0.5" x2="5" y2="2.2"/>
+          <line x1="5" y1="7.8" x2="5" y2="9.5"/>
+          <line x1="0.5" y1="5" x2="2.2" y2="5"/>
+          <line x1="7.8" y1="5" x2="9.5" y2="5"/>
+        </svg>
+      );
+    case "installation":
+      return (
+        <svg className={cls} viewBox="0 0 10 10" fill="currentColor">
+          <path d="M5 0.5a3 3 0 0 1 3 3c0 2.2-3 6-3 6S2 5.7 2 3.5a3 3 0 0 1 3-3zm0 1.7a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6z"/>
+        </svg>
+      );
+    case "completed":
+      return (
+        <svg className={cls} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="1.5,5.5 4,8 8.5,2.5"/>
+        </svg>
+      );
+    default:
+      return <span className="w-2.5 h-2.5 flex-shrink-0"/>;
+  }
+}
+
 function ProgressTracker({ order }: { order: WorkOrder }) {
   const { status } = order;
   const { completedSteps, activeStep, isPending } = getProgressState(status);
@@ -287,52 +333,61 @@ function ProgressTracker({ order }: { order: WorkOrder }) {
           );
         })}
       </div>
-      {/* Stage labels */}
+      {/* Stage icons */}
       <div className="flex items-center gap-0">
         {LIFECYCLE_STAGES.map((stage, i) => {
           const isActive = i === activeStep;
           const isDone = i < completedSteps;
           return (
             <div key={stage.key} className="flex items-center">
-              <span
-                className={`text-[9px] leading-none w-2.5 text-center overflow-hidden whitespace-nowrap ${
-                  isActive ? "text-blue-600 font-semibold" : isDone ? "text-blue-400" : "text-gray-300"
-                }`}
-                style={{ fontSize: "8px" }}
-              >
-                {stage.label[0]}
-              </span>
+              <StageIcon stageKey={stage.key} active={isActive} done={isDone} />
               {i < LIFECYCLE_STAGES.length - 1 && <div className="w-5" />}
             </div>
           );
         })}
       </div>
-      {/* Department sub-indicators */}
+      {/* Department sub-indicators — icon + color, tooltip for detail */}
       {(showWarehouse || showFab) && (
-        <div className="flex items-center gap-1.5 mt-0.5">
+        <div className="flex items-center gap-1 mt-0.5">
           {showWarehouse && (
             <span
-              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${
                 warehouseStatus === "ready"      ? "bg-green-100 text-green-700" :
                 warehouseStatus === "processing" ? "bg-blue-100 text-blue-700" :
                                                    "bg-gray-100 text-gray-500"
               }`}
-              title="מחסן"
+              title={`מחסן: ${warehouseStatus === "ready" ? "מוכן" : warehouseStatus === "processing" ? "בהכנה" : "ממתין"}`}
             >
-              {warehouseStatus === "ready" ? "✓ מחסן" : warehouseStatus === "processing" ? "מחסן" : "מחסן ⏳"}
+              {/* box / warehouse icon */}
+              <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 4L5 2l4 2v4.5H1V4z"/>
+                <path d="M1 4l4 2 4-2"/>
+                <line x1="5" y1="6" x2="5" y2="8.5"/>
+              </svg>
             </span>
           )}
           {showFab && (
             <span
-              className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
-                fabStatus === "completed" || fabStatus === "ready" ? "bg-green-100 text-green-700" :
-                fabStatus === "in_progress"                        ? "bg-purple-100 text-purple-700" :
-                fabStatus === "acknowledged"                       ? "bg-blue-100 text-blue-700" :
-                                                                     "bg-gray-100 text-gray-500"
+              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${
+                fabStatus === "completed"    ? "bg-green-100 text-green-700" :
+                fabStatus === "ready"        ? "bg-teal-100 text-teal-700" :
+                fabStatus === "in_progress"  ? "bg-purple-100 text-purple-700" :
+                fabStatus === "acknowledged" ? "bg-blue-100 text-blue-700" :
+                fabStatus === "issue"        ? "bg-red-100 text-red-700" :
+                                               "bg-gray-100 text-gray-500"
               }`}
-              title="מסגרייה"
+              title={`מסגרייה: ${
+                fabStatus === "completed"    ? "הושלם" :
+                fabStatus === "ready"        ? "מוכן (ממתין לסגירה)" :
+                fabStatus === "in_progress"  ? "בביצוע" :
+                fabStatus === "acknowledged" ? "התקבל" :
+                fabStatus === "issue"        ? "בעיה" : "ממתין"
+              }`}
             >
-              {fabStatus === "completed" || fabStatus === "ready" ? "✓ מסגר" : fabStatus === "in_progress" ? "מסגר" : "מסגר ⏳"}
+              {/* wrench / fabrication icon */}
+              <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 10 10" fill="currentColor">
+                <path d="M8 1.3a2.2 2.2 0 0 0-2.8 2.8L2 7.2a.8.8 0 1 0 1.1 1.1L6.3 5a2.2 2.2 0 0 0 2.8-2.8L7.5 3.7 6.5 2.8 8 1.3z"/>
+              </svg>
             </span>
           )}
         </div>
@@ -486,6 +541,11 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
         </div>
       </td>
 
+      {/* Progress */}
+      <td className="px-3 py-3.5">
+        <ProgressTracker order={order} />
+      </td>
+
       {/* Status */}
       <td className="px-3 py-3.5">
         <div className="flex flex-col gap-1">
@@ -520,11 +580,6 @@ function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApprove
             </div>
           )}
         </div>
-      </td>
-
-      {/* Progress */}
-      <td className="px-3 py-3.5">
-        <ProgressTracker order={order} />
       </td>
 
       {/* Last update */}
@@ -1384,8 +1439,8 @@ export function OrdersTable() {
                       <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">לקוח</th>
                       <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">מיקום</th>
                       <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">תאריך יצירה</th>
-                      <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">סטטוס</th>
                       <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">התקדמות</th>
+                      <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">סטטוס</th>
                       <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">עדכון אחרון</th>
                       <th className="px-3 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap">פעולות</th>
                     </tr>

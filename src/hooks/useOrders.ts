@@ -620,12 +620,10 @@ export function useOrders() {
     const merged: WorkOrder = { ...current, ...fields };
     const extra: Partial<WorkOrder> = {};
 
-    // Auto-advance: production → ready_installation when all required departments are done
+    // Auto-advance: production → ready_installation when all required departments are done.
+    // Uses canMarkReadyForInstallation as the single source of truth (same rule as manual transition).
     if (("warehouseStatus" in fields || "fabricationStatus" in fields) && merged.status === "production") {
-      const warehouseOk = !merged.warehouseRequired || merged.warehouseStatus === "ready";
-      const fabricationOk = !merged.fabricationRequired ||
-        merged.fabricationStatus === "completed" || merged.fabricationStatus === "ready";
-      if (warehouseOk && fabricationOk) {
+      if (canMarkReadyForInstallation(merged).ok) {
         extra.status = "ready_installation";
         if (!merged.readyForExecutionAt) extra.readyForExecutionAt = new Date().toISOString();
       }
