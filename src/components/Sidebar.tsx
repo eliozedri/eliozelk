@@ -80,7 +80,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "catalog", href: "/catalog", label: "עריכת מוצרים ופריטים", icon: <Database className={ICON_CLS} />, matchFn: (p) => p.startsWith("/catalog") },
       { tabId: "safety", href: "/safety", label: "קטלוג מוצרים", icon: <ShieldCheck className={ICON_CLS} />, matchFn: (p) => p.startsWith("/safety") },
-      { tabId: "integrations", href: "/integrations", label: "אינטגרציות ERP", icon: <Cable className={ICON_CLS} />, matchFn: (p) => p.startsWith("/integrations"), noBadge: true },
     ],
   },
   {
@@ -198,11 +197,14 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           );
         })}
 
+        {(canManageAccess || canSeeTab("integrations")) && (
+          <SectionLabel label="מערכת" />
+        )}
         {canManageAccess && (
-          <>
-            <SectionLabel label="מערכת" />
-            <SidebarLink href="/access" label="הרשאות גישה" active={pathname.startsWith("/access")} icon={<ShieldPlus className={ICON_CLS} />} onClick={handleNavClick} />
-          </>
+          <SidebarLink href="/access" label="הרשאות גישה" active={pathname.startsWith("/access")} icon={<ShieldPlus className={ICON_CLS} />} onClick={handleNavClick} />
+        )}
+        {canSeeTab("integrations") && (
+          <SidebarLink href="/integrations" label="אינטגרציות" active={pathname.startsWith("/integrations")} icon={<Cable className={ICON_CLS} />} onClick={handleNavClick} />
         )}
       </nav>
 
