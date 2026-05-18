@@ -54,3 +54,4 @@ catalog/
 .claude/skills/
 # Claude Code local session metadata
 .claude/skills-installed.local.md
+.backups/
