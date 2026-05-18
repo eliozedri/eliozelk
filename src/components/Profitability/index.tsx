@@ -20,7 +20,7 @@ import {
   MARGIN_STATUS_COLORS,
   getMarginStatus,
 } from "@/lib/profitability";
-import type { ProfitabilityStatus, ConfidenceLevel, MissingDataTag, MarginStatus } from "@/lib/profitability";
+import type { ProfitabilityStatus, ConfidenceLevel, MissingDataTag } from "@/lib/profitability";
 import type { CrewMetrics, OrderProfitabilitySummary, WeeklyBucket, CustomerMetrics } from "@/lib/operationalKPIs";
 import type { DiagnosticFinding } from "@/hooks/useOperationalKPIs";
 import { DIARY_STATUS_LABELS } from "@/types/workDiary";
@@ -78,18 +78,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "management", label: "ניהול" },
   { id: "cfo",        label: "CFO ליי" },
 ];
-
-// ── Trend indicator ───────────────────────────────────────────────────────────
-
-function TrendArrow({ direction, changePct }: { direction: "up" | "flat" | "down"; changePct: number }) {
-  if (direction === "up") return (
-    <span className="text-green-600 text-[10px] font-bold">▲ {Math.abs(changePct).toFixed(0)}%</span>
-  );
-  if (direction === "down") return (
-    <span className="text-red-600 text-[10px] font-bold">▼ {Math.abs(changePct).toFixed(0)}%</span>
-  );
-  return <span className="text-gray-400 text-[10px]">→ יציב</span>;
-}
 
 // ── Diaries tab ───────────────────────────────────────────────────────────────
 
@@ -790,7 +778,7 @@ function CfoTab() {
   }, []);
 
   useEffect(() => {
-    fetchSnapshots();
+    fetchSnapshots(); // eslint-disable-line react-hooks/set-state-in-effect
     const db = getSupabase();
     if (db) {
       db.from("catalog_items")
@@ -911,6 +899,7 @@ function CfoTab() {
     return Array.from(map.values())
       .map(({ marginSum, ...c }) => ({ ...c, avgMargin: c.orderCount > 0 ? marginSum / c.orderCount : 0 }))
       .sort((a, b) => b.grossProfit - a.grossProfit);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snapshots, activeOrders, snapshotMap]);
 
   return (

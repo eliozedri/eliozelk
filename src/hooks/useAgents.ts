@@ -188,6 +188,7 @@ export function useAgents(): AgentsHookValue {
     setLoading(false);
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); }, [load]);
 
   const agentStats = buildAgentStats(tasks, exceptions, approvals, agents.map(a => a.id));

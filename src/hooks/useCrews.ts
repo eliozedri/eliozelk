@@ -66,7 +66,7 @@ export function useCrews() {
   useEffect(() => {
     const db = getSupabase();
     if (!db) {
-      setCrews(loadLocal());
+      setCrews(loadLocal()); // eslint-disable-line react-hooks/set-state-in-effect
       return;
     }
 

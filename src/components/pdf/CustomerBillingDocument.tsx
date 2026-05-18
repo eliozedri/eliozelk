@@ -243,16 +243,6 @@ function countMiscQty(order: WorkOrder): number {
   return order.miscRows.reduce((sum, r) => sum + (parseInt(r.quantity) || 0), 0);
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  graphics_pending:   "ממתין לגרפיקה",
-  graphics_active:    "גרפיקה",
-  graphics_done:      "גרפיקה הושלמה",
-  production:         "בייצור",
-  ready_installation: "מוכן לביצוע",
-  completed:          "הושלם",
-  cancelled:          "בוטל",
-};
-
 export interface CustomerBillingData {
   customerName: string;
   orders: WorkOrder[];

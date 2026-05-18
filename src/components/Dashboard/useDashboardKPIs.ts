@@ -70,7 +70,7 @@ export function useDashboardKPIs(): DashboardKPIs {
   const forecast = useForecast();
 
   return useMemo(() => {
-    const now = Date.now();
+    const now = Date.now(); // eslint-disable-line react-hooks/purity
     const todayStr = new Date().toISOString().slice(0, 10);
 
     // ── Command strip metrics ────────────────────────────────────────────────

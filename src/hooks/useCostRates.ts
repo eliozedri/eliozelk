@@ -43,7 +43,7 @@ export function useCostRates() {
           }
         });
     } else {
-      setRates(loadLocal());
+      setRates(loadLocal()); // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, []);
 

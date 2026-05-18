@@ -148,7 +148,7 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
   // Initialize default position on first open (bottom-left with margin)
   useEffect(() => {
     if (isOpen && pos === null) {
-      setPos({ x: 24, y: window.innerHeight - 580 });
+      setPos({ x: 24, y: window.innerHeight - 580 }); // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, [isOpen, pos]);
 

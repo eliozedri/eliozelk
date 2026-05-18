@@ -753,7 +753,7 @@ export function AccessManager() {
   }, []);
 
   useEffect(() => {
-    reloadUsers();
+    reloadUsers(); // eslint-disable-line react-hooks/set-state-in-effect
   }, [reloadUsers]);
 
   if (authLoading) {

@@ -678,6 +678,7 @@ export async function POST(req: NextRequest) {
     // ── 20. (no additional check beyond negative_stock rule 1) ──────────────
 
     // ── Delivery note helpers ─────────────────────────────────────────────
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const approvedDeliveryNoteIds = new Set(deliveryNotes.filter(n => n.status === "approved").map(n => n.id));
 
     // ── 21. Consumption used proxy quantity — no actual diary qty available ───

@@ -53,7 +53,7 @@ export function CostSettingsPage() {
   function handleReset() {
     if (!confirm("לאפס את כל התעריפים לברירת המחדל?")) return;
     resetRates();
-    const { updatedAt: _, ...defaults } = DEFAULT_COST_RATES;
+    const { updatedAt: _updatedAt, ...defaults } = DEFAULT_COST_RATES; // eslint-disable-line @typescript-eslint/no-unused-vars
     setDraft(defaults);
     setSaved(false);
   }

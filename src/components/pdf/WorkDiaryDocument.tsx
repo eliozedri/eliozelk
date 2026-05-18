@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/alt-text -- react-pdf Image component does not support alt; accessibility rules do not apply to PDF output */
 import {
   Document,
   Font,

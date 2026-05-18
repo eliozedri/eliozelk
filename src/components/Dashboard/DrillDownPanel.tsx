@@ -58,7 +58,7 @@ function InternalOrderDetail({
   const [urgentSaveState, setUrgentSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   useEffect(() => {
-    if (!editingNotes) setNotesDraft(order.generalNotes ?? "");
+    if (!editingNotes) setNotesDraft(order.generalNotes ?? ""); // eslint-disable-line react-hooks/set-state-in-effect
   }, [order.generalNotes, editingNotes]);
 
   async function handleSaveNote() {

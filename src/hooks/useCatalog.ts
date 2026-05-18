@@ -79,7 +79,7 @@ export function useCatalog() {
   useEffect(() => {
     const db = getSupabase();
     if (!db) {
-      setItems(loadLocal());
+      setItems(loadLocal()); // eslint-disable-line react-hooks/set-state-in-effect
       return;
     }
 

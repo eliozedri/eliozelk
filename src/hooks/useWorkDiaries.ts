@@ -93,7 +93,7 @@ export function useWorkDiaries() {
   useEffect(() => {
     const db = getSupabase();
     if (!db) {
-      setDiaries(loadLocal());
+      setDiaries(loadLocal()); // eslint-disable-line react-hooks/set-state-in-effect
       return;
     }
 

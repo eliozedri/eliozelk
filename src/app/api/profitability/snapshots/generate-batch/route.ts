@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   if (ordersErr) return NextResponse.json({ error: ordersErr.message }, { status: 500 });
 
   let generated = 0;
-  let skipped = 0;
+  const skipped = 0;
   let failed = 0;
   const now = new Date().toISOString();
 

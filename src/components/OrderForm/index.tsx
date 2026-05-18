@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- attachment thumbnails use base64 dataURLs, incompatible with next/image */
 
 import { useState, useRef } from "react";
 import { nanoid } from "nanoid";

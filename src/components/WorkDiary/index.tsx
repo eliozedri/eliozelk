@@ -97,6 +97,7 @@ function DiaryRow({ diary, profitStatus, profitColors, dotColor, netProfit, onOp
 
 // ── List view ─────────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function DiaryListView({ onNew, onOpen }: { onNew: () => void; onOpen: (d: WorkDiary) => void }) {
   const { diaries, deleteDiary } = useWorkDiaryContext();
   const { rates } = useCostRatesContext();

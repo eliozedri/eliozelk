@@ -59,7 +59,7 @@ export function computeDiagnostics(
   rates: CostRates
 ): DiagnosticFinding[] {
   const findings: DiagnosticFinding[] = [];
-  const { global, labor, executionVariance, dataQuality, billingLeakage, trendSummary, byCrew, byCustomer } = kpis;
+  const { global, labor, executionVariance, dataQuality, billingLeakage, trendSummary, byCustomer } = kpis;
 
   // ── 1. Billing leakage ───────────────────────────────────────────────────
   if (billingLeakage.uninvoicedCompletedOrders > 0) {

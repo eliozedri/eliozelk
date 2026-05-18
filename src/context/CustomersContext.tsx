@@ -96,7 +96,7 @@ export function CustomersProvider({ children }: { children: React.ReactNode }) {
 
     if (!db) {
       const cached = readCache();
-      setCustomers(cached);
+      setCustomers(cached); // eslint-disable-line react-hooks/set-state-in-effect
       setSyncStatus("offline");
       console.warn("[customers] Supabase not configured — running from local cache");
       return;

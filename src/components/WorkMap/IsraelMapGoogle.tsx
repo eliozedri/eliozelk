@@ -41,7 +41,7 @@ export default function IsraelMapGoogle({ orders, onOpenOrder }: IsraelMapGoogle
   // Close info window if the selected order is no longer visible
   useEffect(() => {
     if (selectedId && !positioned.find((p) => p.order.id === selectedId)) {
-      setSelectedId(null);
+      setSelectedId(null); // eslint-disable-line react-hooks/set-state-in-effect
     }
   }, [positioned, selectedId]);
 

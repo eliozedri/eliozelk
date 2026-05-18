@@ -228,7 +228,7 @@ function DetailPanel({ item, onClose }: { item: SafetyAccessoryItem; onClose: ()
         <div className="pt-1 border-t border-gray-100">
           <dt className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">מקור</dt>
           <dd className="text-xs text-gray-500">
-            קטלוג אלקיים סימון כבישים — עמ' {item.catalogPage} · מזהה: {item.id}
+            קטלוג אלקיים סימון כבישים — עמ&apos; {item.catalogPage} · מזהה: {item.id}
           </dd>
           <dd className="text-xs text-gray-400 mt-0.5">
             רמת ביטחון: {item.confidence === "high" ? "גבוהה" : item.confidence === "medium" ? "בינונית" : "נמוכה"}
@@ -288,7 +288,7 @@ function ProductCard({
               {STATUS_LABELS[item.status]}
             </span>
           </div>
-          <p className="text-[10px] text-gray-400 mt-0.5">עמ' קטלוג {item.catalogPage}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">עמ&apos; קטלוג {item.catalogPage}</p>
         </div>
       </div>
 
@@ -385,7 +385,7 @@ export function SafetyAccessoriesPage() {
           <ShieldIcon className="w-6 h-6 text-blue-600 shrink-0" />
         </div>
         <p className="text-sm text-gray-500 mb-5">
-          קטלוג מוצרים מקטלוג אלקיים סימון כבישים — אביזרי בטיחות לכבישים וחניונים (עמ' 7–20)
+          קטלוג מוצרים מקטלוג אלקיים סימון כבישים — אביזרי בטיחות לכבישים וחניונים (עמ&apos; 7–20)
         </p>
 
         {/* ── KPI Chips ── */}
@@ -526,7 +526,7 @@ export function SafetyAccessoriesPage() {
 
         {/* ── Source note ── */}
         <p className="text-center text-xs text-gray-300 mt-6">
-          מקור: קטלוג אלקיים סימון כבישים בע"מ · יובא 12.05.2026 · {SAFETY_ACCESSORIES.length} מוצרים
+          מקור: קטלוג אלקיים סימון כבישים בע&quot;מ · יובא 12.05.2026 · {SAFETY_ACCESSORIES.length} מוצרים
         </p>
       </div>
     </div>

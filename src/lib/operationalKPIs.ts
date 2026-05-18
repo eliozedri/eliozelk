@@ -257,7 +257,7 @@ export function computeOperationalKPIs(
   const crewBuckets = new Map<string, Array<{ diary: WorkDiary; result: ProfitabilityResult }>>();
 
   for (const r of results) {
-    const { crewId, crewName, leaderName } = matchCrew(r.diary, orderMap, crewMap, crewByLeader);
+    const { crewId, leaderName } = matchCrew(r.diary, orderMap, crewMap, crewByLeader);
     const key = crewId ?? `__leader__${leaderName}`;
     if (!crewBuckets.has(key)) crewBuckets.set(key, []);
     crewBuckets.get(key)!.push(r);

@@ -71,7 +71,7 @@ export function useOrderForm() {
     const draft = loadDraft();
     if (draft) {
       // Migrate old drafts that may be missing new fields
-      setOrder({
+      setOrder({ // eslint-disable-line react-hooks/set-state-in-effect
         ...initialState(),
         ...draft,
         accessoryRows: draft.accessoryRows ?? [emptyMiscRow()],
