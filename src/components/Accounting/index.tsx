@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { useOrdersContext } from "@/context/OrdersContext";
 import type { WorkOrder } from "@/types/workOrder";
-import { STATUS_LABELS, ACCOUNTING_STATUS_LABELS, ACCOUNTING_STATUS_COLORS } from "@/types/workOrder";
-import { exportAccountingCSV, exportAccountingExcel, exportAccountingPDF, exportCustomerBillingCSV, exportCustomerBillingPDF, exportCustomerBillingExcel } from "@/lib/accountingExport";
+import { STATUS_LABELS } from "@/types/workOrder";
+import { exportAccountingCSV, exportAccountingExcel, exportAccountingPDF, exportCustomerBillingPDF, exportCustomerBillingExcel } from "@/lib/accountingExport";
 import type { AccountingReportData } from "@/components/pdf/AccountingDocument";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { DIARY_STATUS_LABELS, DIARY_STATUS_COLORS } from "@/types/workDiary";
@@ -27,6 +28,8 @@ export function CancelOrderModal({
 }) {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+
+  useEscapeKey(onClose, saveState !== "saving");
 
   async function handleConfirm() {
     setSaveState("saving");
@@ -110,6 +113,8 @@ function AccountingOrderEditPanel({
   const [notes, setNotes] = useState(order.generalNotes ?? "");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+
+  useEscapeKey(onClose, saveState !== "saving");
 
   async function handleSave() {
     setSaveState("saving");
@@ -424,6 +429,8 @@ function ApproveToBillingModal({
 }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+
+  useEscapeKey(onClose, !saving);
 
   async function handleConfirm() {
     setSaving(true);

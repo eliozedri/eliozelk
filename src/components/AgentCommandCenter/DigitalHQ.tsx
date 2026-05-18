@@ -26,7 +26,6 @@ import {
 // ── Brand constants ───────────────────────────────────────────────────────────
 
 const NAVY     = "#0d1b2e";
-const NAVY_MID = "#152438";
 const EK_BLUE  = "#1d6fd8";
 const EK_GOLD  = "#f59e0b";
 const TEAL     = "#2dd4bf";
@@ -119,7 +118,7 @@ function AgentAvatarChip({
   const activity = presence?.currentActivity ?? "ממתין";
   const isGhost = variant === "ghost";
 
-  const style: React.CSSProperties = isGhost
+  const style = isGhost
     ? {
         background: "rgba(255,255,255,0.02)",
         border: "1px dashed rgba(255,255,255,0.12)",
@@ -452,11 +451,10 @@ function ExecutiveControlCard({
 // ── Meeting Room Strip ────────────────────────────────────────────────────────
 
 function MeetingRoomStrip({
-  meetings, agentMap, presenceMap, onMeetingOpen, onNewMeeting,
+  meetings, agentMap, onMeetingOpen, onNewMeeting,
 }: {
   meetings: AgentMeeting[];
   agentMap: Map<string, Agent>;
-  presenceMap: Map<string, AgentPresence>;
   onMeetingOpen: (m: AgentMeeting) => void;
   onNewMeeting: () => void;
 }) {
@@ -630,11 +628,10 @@ function DepartmentRoomCard({
 // ── Active Agents Presence Bar ────────────────────────────────────────────────
 
 function ActiveAgentsPresenceBar({
-  agents, presenceMap, agentMap: _agentMap, onAgentSelect,
+  agents, presenceMap, onAgentSelect,
 }: {
   agents: Agent[];
   presenceMap: Map<string, AgentPresence>;
-  agentMap: Map<string, Agent>;
   onAgentSelect: (a: Agent) => void;
 }) {
   const MAX_VISIBLE = 12;
@@ -643,8 +640,7 @@ function ActiveAgentsPresenceBar({
 
   return (
     <div
-      className="flex items-center gap-2 overflow-x-auto py-2 px-1"
-      style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
+      className="flex items-center gap-2 overflow-x-auto py-1 px-1"
     >
       <span className="text-[9px] font-bold uppercase tracking-widest flex-shrink-0"
         style={{ color: "rgba(255,255,255,0.2)" }}>
@@ -883,6 +879,16 @@ export function DigitalHQ({
   // ── Main render ──────────────────────────────────────────────────────────
   return (
     <div dir="rtl" className="flex flex-col gap-0">
+
+      {/* Presence bar — full width, above hierarchy */}
+      <div className="px-4 pt-3 pb-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <ActiveAgentsPresenceBar
+          agents={agents}
+          presenceMap={presenceMap}
+          onAgentSelect={onAgentSelect}
+        />
+      </div>
+
       {/* 3-column layout */}
       <div className="grid gap-0" style={{
         gridTemplateColumns: "minmax(180px, 210px) 1fr minmax(220px, 250px)",
@@ -915,7 +921,6 @@ export function DigitalHQ({
           <MeetingRoomStrip
             meetings={meetings}
             agentMap={agentMap}
-            presenceMap={presenceMap}
             onMeetingOpen={onMeetingOpen}
             onNewMeeting={onNewMeeting}
           />
@@ -951,27 +956,10 @@ export function DigitalHQ({
                     />
                   );
                 })}
-                {/* Fill empty grid cells in row 3 */}
-                {rowRooms.length < 3 && row === 3 && (
-                  <div className="rounded-xl border border-dashed flex items-center justify-center text-center p-4"
-                    style={{ borderColor: "rgba(255,255,255,0.06)", opacity: 0.4 }}>
-                    <div>
-                      <div className="text-xl mb-1">📐</div>
-                      <div className="text-[9px]" style={{ color: "rgba(255,255,255,0.3)" }}>הנדסה (עתידי)</div>
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}
 
-          {/* 5. Presence bar */}
-          <ActiveAgentsPresenceBar
-            agents={agents}
-            presenceMap={presenceMap}
-            agentMap={agentMap}
-            onAgentSelect={onAgentSelect}
-          />
         </div>
 
         {/* RIGHT: Activity Feed */}

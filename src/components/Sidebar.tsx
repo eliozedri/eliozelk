@@ -92,6 +92,8 @@ function NavBadge({ count, variant = "amber" }: { count: number; variant?: "ambe
 interface NavItem { tabId: TabId; href: string; label: string; icon: React.ReactNode; matchFn: (p: string) => boolean; noBadge?: boolean; title?: string; }
 interface NavSection { label: string; items: NavItem[]; }
 
+const AGENTS_NAV_ITEM: NavItem = { tabId: "agents", href: "/agents", label: "מרכז הפיקוד הדיגיטלי", icon: <AgentsIcon />, matchFn: (p) => p.startsWith("/agents"), noBadge: true };
+
 const NAV_SECTIONS: NavSection[] = [
   {
     label: "מרכז שליטה",
@@ -99,7 +101,6 @@ const NAV_SECTIONS: NavSection[] = [
       { tabId: "dashboard", href: "/", label: "מרכז שליטה", icon: <ControlCenterIcon />, matchFn: (p) => p === "/", title: "בעיות פתוחות בהזמנות" },
       { tabId: "orders", href: "/orders", label: "טבלת הזמנות", icon: <TableIcon />, matchFn: (p) => p.startsWith("/orders") },
       { tabId: "schedule", href: "/schedule", label: "סידור שבועי", icon: <CalendarIcon />, matchFn: (p) => p.startsWith("/schedule") },
-      { tabId: "agents", href: "/agents", label: "מרכז פיקוד דיגיטלי", icon: <AgentsIcon />, matchFn: (p) => p.startsWith("/agents"), noBadge: true },
     ],
   },
   {
@@ -112,7 +113,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "ניהול",
     items: [
-      { tabId: "dashboard", href: "/new-order", label: "הזמנה חדשה", icon: <OrderIcon />, matchFn: (p) => p === "/new-order", noBadge: true },
+      { tabId: "orders", href: "/new-order", label: "הזמנה חדשה", icon: <OrderIcon />, matchFn: (p) => p === "/new-order", noBadge: true },
       { tabId: "work-diary", href: "/work-diary", label: "יומן עבודה חדש", icon: <DiaryIcon />, matchFn: (p) => p.startsWith("/work-diary") },
     ],
   },
@@ -216,6 +217,19 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
 
       {/* Navigation */}
       <nav className="flex flex-col p-2.5 flex-1 overflow-y-auto">
+        {/* Primary entry point — standalone top-level, visually separated from sections */}
+        {canSeeTab(AGENTS_NAV_ITEM.tabId) && (
+          <div className="pb-2 mb-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+            <SidebarLink
+              href={AGENTS_NAV_ITEM.href}
+              label={AGENTS_NAV_ITEM.label}
+              active={AGENTS_NAV_ITEM.matchFn(pathname)}
+              icon={AGENTS_NAV_ITEM.icon}
+              onClick={handleNavClick}
+            />
+          </div>
+        )}
+
         {NAV_SECTIONS.map((section) => {
           const visibleItems = section.items.filter((item) => canSeeTab(item.tabId));
           if (visibleItems.length === 0) return null;

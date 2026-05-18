@@ -104,6 +104,16 @@ export const DEPT_ROOMS: DeptRoomConfig[] = [
     gridRow: 3,
     gridCol: 2,
   },
+  {
+    id: "engineering",
+    titleHe: "הנדסה ותכנון",
+    titleEn: "Engineering & Planning",
+    icon: "📐",
+    accentColor: "#6366f1",
+    agentIds: ["engineering-plan-agent"],
+    gridRow: 3,
+    gridCol: 3,
+  },
 ];
 
 export const EXECUTIVE_ROOM_ID = "management";
@@ -149,6 +159,7 @@ const AGENT_ACTIVITY_LABELS: Record<string, string> = {
   "cfo-agent":                  "ניתוח פיננסי",
   "catalog-pricing-agent":      "עדכון קטלוג",
   "fabrication-agent":          "ניהול ייצור",
+  "engineering-plan-agent":     "ניתוח תכניות",
 };
 
 export function computeAgentPresence(

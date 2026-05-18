@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     const [ordersRes, diariesRes, consumptionsRes] = await Promise.all([
       db.from("work_orders")
-        .select("id,order_number,status,priority,customer,city,order_date,created_at,updated_at,accounting_status,invoiced_at,billed_amount,data,warehouse_required")
+        .select("id,order_number,status,priority,customer,city,order_date,created_at,updated_at,accounting_status,invoiced_at,billed_amount,data,warehouse_required,billing_ready_at,billing_approved_at")
         .eq("status", "completed"),
       db.from("work_diaries")
         .select("id,diary_number,status,customer_name,site_name,execution_date,submitted_at,order_id,approval_status,approved_at,created_at,updated_at,data")

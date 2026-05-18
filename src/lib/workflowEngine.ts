@@ -16,6 +16,7 @@ export function isSchedulingCandidate(order: WorkOrder): boolean {
 // graphics_done → ready_installation is allowed for orders without fabrication
 // (skip the production stage when no manufacturing work is needed).
 export const VALID_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
+  draft:              ["graphics_pending", "cancelled"],
   graphics_pending:   ["graphics_active", "cancelled"],
   graphics_active:    ["graphics_done",   "cancelled"],
   graphics_done:      ["production", "ready_installation", "cancelled"],
@@ -85,6 +86,7 @@ export function canMarkOperationallyComplete(
 // which the DB trigger sets on every status change.
 export function stageEntryTime(order: WorkOrder): string {
   switch (order.status) {
+    case "draft":              return order.createdAt;
     case "graphics_pending":   return order.graphicsSentAt ?? order.createdAt;
     case "graphics_active":    return order.graphicsAcknowledgedAt ?? order.updatedAt;
     case "graphics_done":      return order.graphicsCompletedAt ?? order.updatedAt;

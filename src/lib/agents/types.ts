@@ -97,6 +97,13 @@ export interface DbOrderRow {
   warehouse_required: boolean;
   warehouse_status: string | null;
   data: Record<string, unknown>;
+  // Group 2 additions
+  design_approval_status: string | null;
+  design_sent_at: string | null;
+  design_approved_at: string | null;
+  billing_ready_at: string | null;
+  billing_approved_at: string | null;
+  required_date: string | null;
 }
 
 export interface DbDiaryRow {

@@ -83,14 +83,14 @@ function OrderCard({
   reconciliationStatus: ReconciliationStatus;
   onReconcile: (order: WorkOrder) => void;
 }) {
-  const { updateOrderFields } = useOrdersContext();
+  const { updateOrderFields, releaseWarehouseOrder } = useOrdersContext();
   const warehouseStatus = order.warehouseStatus ?? "pending";
   const cfg = STATUS_CONFIG[warehouseStatus] ?? STATUS_CONFIG.pending;
   const accessoryItems = (order.accessoryRows ?? []).filter(r => r.description?.trim());
 
   function advance() {
-    if (warehouseStatus === "pending")    updateOrderFields(order.id, { warehouseStatus: "processing" });
-    if (warehouseStatus === "processing") updateOrderFields(order.id, { warehouseStatus: "ready" });
+    if (warehouseStatus === "pending")    void updateOrderFields(order.id, { warehouseStatus: "processing" });
+    if (warehouseStatus === "processing") void updateOrderFields(order.id, { warehouseStatus: "ready" });
   }
 
   return (
@@ -132,6 +132,17 @@ function OrderCard({
             warehouseStatus === "pending" ? "bg-blue-600 hover:bg-blue-700" : "bg-green-600 hover:bg-green-700"
           }`}>
           {warehouseStatus === "pending" ? "אשר קבלה — התחל הכנה" : "סמן כמוכן"}
+        </button>
+      )}
+
+      {warehouseStatus === "ready" && (
+        <button
+          type="button"
+          onClick={() => void releaseWarehouseOrder(order.id)}
+          className="w-full py-2 rounded-lg text-xs font-bold text-white transition-colors bg-teal-600 hover:bg-teal-700 flex items-center justify-center gap-1.5"
+        >
+          <span>🚛</span>
+          <span>שחרר לביצוע שטח</span>
         </button>
       )}
 
@@ -526,7 +537,8 @@ function DeliveryNotesPanel() {
     setLoading(false);
   }
 
-  useEffect(() => { fetchNotes(); }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void fetchNotes(); }, []);
 
   async function handleCreate() {
     if (!formDocNum && !formSupplier) { return; }
@@ -860,7 +872,27 @@ function PurchaseRecommendationsPanel({ catalogMap }: { catalogMap: Map<string, 
     setLoading(false);
   }
 
-  useEffect(() => { fetchRecs(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    const db = getSupabase();
+    if (!db) { setLoading(false); return; } // eslint-disable-line react-hooks/set-state-in-effect
+    db.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.access_token || controller.signal.aborted) { setLoading(false); return; }
+      const [res, suppRes] = await Promise.all([
+        fetch("/api/inventory/purchase-recommendations", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          signal: controller.signal,
+        }).catch(() => null),
+        db.from("suppliers").select("id,name").eq("is_active", true).limit(200),
+      ]);
+      if (controller.signal.aborted) return;
+      if (res?.ok) setRecs(await res.json() as PurchaseRecommendationRecord[]);
+      if (!suppRes.error && suppRes.data)
+        setSuppMap(new Map((suppRes.data as Array<{ id: string; name: string }>).map(s => [s.id, s.name])));
+      setLoading(false);
+    });
+    return () => controller.abort();
+  }, []);
 
   async function sendAction(id: string, action: "approve_internal" | "dismiss" | "update_quantity", extra?: Record<string, unknown>) {
     setActing(id); setMsgs(prev => ({ ...prev, [id]: { text: "", ok: true } }));
@@ -1100,7 +1132,15 @@ export function Warehouse() {
   }
 
   const warehouseOrders = orders
-    .filter(o => o.warehouseRequired && o.status !== "completed" && o.status !== "cancelled")
+    .filter(o =>
+      o.warehouseRequired &&
+      o.status !== "completed" &&
+      o.status !== "cancelled" &&
+      // Exclude orders that warehouse has released: ready_installation means all departments
+      // are done; production+ready means warehouse released while fabrication is still in progress.
+      o.status !== "ready_installation" &&
+      !(o.status === "production" && o.warehouseStatus === "ready"),
+    )
     .sort((a, b) => {
       const p = (o: WorkOrder) => (o.priority === "urgent" ? 0 : 1);
       if (p(a) !== p(b)) return p(a) - p(b);

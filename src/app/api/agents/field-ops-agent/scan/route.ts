@@ -18,7 +18,7 @@ import { extractDiaryData } from "@/lib/agents/types";
 import type { DbDiaryRow } from "@/lib/agents/types";
 
 const AGENT_ID   = "field-ops-agent";
-const AGENT_NAME = "מנהל שטח";
+const AGENT_NAME = "מנהל ביצוע שטח";
 
 export async function POST(req: NextRequest) {
   const db = getServiceSupabase();

@@ -15,7 +15,7 @@ import { emptyScanResult } from "@/lib/agents/types";
 import type { DbOrderRow } from "@/lib/agents/types";
 
 const AGENT_ID   = "ops-orchestrator";
-const AGENT_NAME = "מנהל תפעול";
+const AGENT_NAME = "מנהל פעילות";
 
 // ── SLA thresholds (hours) — mirrors useWorkflowAlerts ───────────────────────
 
@@ -62,40 +62,18 @@ export async function POST(req: NextRequest) {
     await updateAgentRunStatus(db, AGENT_ID, "active");
 
     // ── Load data ────────────────────────────────────────────────────────
-    const [ordersRes, problemsRes, diariesRes, consumptionsRes] = await Promise.all([
+    const [ordersRes, consumptionsRes] = await Promise.all([
       db.from("work_orders")
         .select("id,order_number,status,priority,customer,city,order_date,created_at,updated_at,graphics_sent_at,graphics_acknowledged_at,graphics_completed_at,fabrication_required,fabrication_status,accounting_status,invoiced_at,billed_amount,scheduled_date,ready_for_execution_at,order_type,customer_approval_status,warehouse_required,warehouse_status,data")
         .neq("status", "cancelled"),
-      db.from("order_problems")
-        .select("id,order_id,status,category,department")
-        .not("status", "in", '("resolved","cancelled")'),
-      db.from("work_diaries")
-        .select("id,order_id,status,approval_status,submitted_at,execution_date"),
       db.from("inventory_consumptions")
         .select("order_id,status")
         .in("status", ["consumed", "pending_review"]),
     ]);
 
     if (ordersRes.error) throw new Error(ordersRes.error.message);
-    const orders      = (ordersRes.data ?? []) as DbOrderRow[];
-    const problems    = problemsRes.data ?? [];
-    const diaries     = diariesRes.data ?? [];
+    const orders = (ordersRes.data ?? []) as DbOrderRow[];
     result.entitiesScanned = orders.length;
-
-    // Build open-problems per order
-    const openProbsByOrder = new Map<string, number>();
-    for (const p of problems) {
-      const oid = p.order_id as string;
-      openProbsByOrder.set(oid, (openProbsByOrder.get(oid) ?? 0) + 1);
-    }
-
-    // Build submitted diary set per order
-    const submittedDiaryByOrder = new Map<string, boolean>();
-    for (const d of diaries) {
-      if (d.order_id && d.status === "submitted") {
-        submittedDiaryByOrder.set(d.order_id as string, true);
-      }
-    }
 
     // Build reconciled order set from inventory_consumptions
     const reconciledOrderIds = new Set(
@@ -105,7 +83,6 @@ export async function POST(req: NextRequest) {
     // ── Load existing exceptions ──────────────────────────────────────────
     const dedupeMap = await loadAgentExceptionDedupeMap(db, AGENT_ID);
     const nowMs = Date.now();
-    const todayStr = new Date().toISOString().slice(0, 10);
     const activeDedupeKeys = new Set<string>();
 
     // ── Scan each active order ────────────────────────────────────────────
@@ -164,44 +141,6 @@ export async function POST(req: NextRequest) {
         }, dedupeMap, result);
       }
 
-      // ── Unscheduled ready for installation ────────────────────────────
-      if (order.status === "ready_installation" && !order.scheduled_date) {
-        const hrs = hoursSince(order.ready_for_execution_at ?? order.updated_at, nowMs);
-        if (hrs >= 24) {
-          const severity = hrs >= 72 ? "critical" : "warn";
-          const k = dedupeKey("unscheduled_ready", "work_order", order.id);
-          activeDedupeKeys.add(k);
-          await upsertException(db, AGENT_ID, {
-            category: "unscheduled_ready",
-            entityType: "work_order",
-            entityId: order.id,
-            severity,
-            title: `הזמנה ${order.order_number} מוכנה להתקנה ללא תיאום`,
-            description: `${Math.round(hrs)} שעות בלי תאריך שיבוץ. לקוח: ${order.customer}`,
-            detectedFromData: { orderNumber: order.order_number, hoursWaiting: Math.round(hrs) },
-            recommendedResolution: "שבץ תאריך ביצוע בסידור השבועי",
-          }, dedupeMap, result);
-        }
-      }
-
-      // ── Missing diary after scheduled date ───────────────────────────
-      if (order.status === "ready_installation" &&
-          order.scheduled_date && order.scheduled_date < todayStr &&
-          !submittedDiaryByOrder.get(order.id)) {
-        const k = dedupeKey("missing_diary", "work_order", order.id);
-        activeDedupeKeys.add(k);
-        await upsertException(db, AGENT_ID, {
-          category: "missing_diary",
-          entityType: "work_order",
-          entityId: order.id,
-          severity: "error",
-          title: `הזמנה ${order.order_number} בוצעה — יומן שטח חסר`,
-          description: `תאריך שיבוץ: ${order.scheduled_date} | לקוח: ${order.customer}`,
-          detectedFromData: { orderNumber: order.order_number, scheduledDate: order.scheduled_date },
-          recommendedResolution: "דרוש מהצוות הגשת יומן שטח עבור יום הביצוע",
-        }, dedupeMap, result);
-      }
-
       // ── Urgent order stuck > 24h ──────────────────────────────────────
       if (order.priority === "urgent" &&
           order.status !== "completed" &&
@@ -221,23 +160,6 @@ export async function POST(req: NextRequest) {
             recommendedResolution: "טפל בהזמנה הדחופה מיידית ועדכן את הסטטוס",
           }, dedupeMap, result);
         }
-      }
-
-      // ── Open problems on active order ─────────────────────────────────
-      const probCount = openProbsByOrder.get(order.id) ?? 0;
-      if (probCount > 0 && order.status !== "completed") {
-        const k = dedupeKey("open_problems", "work_order", order.id);
-        activeDedupeKeys.add(k);
-        await upsertException(db, AGENT_ID, {
-          category: "open_problems",
-          entityType: "work_order",
-          entityId: order.id,
-          severity: probCount >= 3 ? "error" : "warn",
-          title: `${probCount} בעיות פתוחות — הזמנה ${order.order_number}`,
-          description: `לקוח: ${order.customer} | שלב: ${order.status}`,
-          detectedFromData: { orderNumber: order.order_number, openProblemsCount: probCount },
-          recommendedResolution: "בדוק ופתור את הבעיות הפתוחות עבור ההזמנה",
-        }, dedupeMap, result);
       }
 
       // ── Operationally complete but not yet entered billing verification ─

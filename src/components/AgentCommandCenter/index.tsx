@@ -1,6 +1,7 @@
 "use client";
+// @refresh reset
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAgentContext } from "@/context/AgentContext";
 import { getSupabase } from "@/lib/supabase/client";
 import type { ScanResult } from "@/lib/agents/types";
@@ -901,11 +902,13 @@ export function AgentCommandCenter() {
   } = useAgentContext();
 
   const { openChat } = useGlobalChat();
-  const [mainTab, setMainTab] = useState<MainTab>("overview");
+  const [mainTab, setMainTab] = useState<MainTab>("hq");
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showNewMeeting, setShowNewMeeting] = useState(false);
 
-  const { meetings, creating: meetingCreating, error: meetingError, loadMeetings, createMeeting, closeMeeting } = useAgentMeetings();
+  const { meetings, creating: meetingCreating, error: meetingError, loadMeetings, createMeeting } = useAgentMeetings();
+
+  useEffect(() => { void loadMeetings(); }, [loadMeetings]);
 
   function openAgentChat(id: string) {
     const agent = agents.find(a => a.id === id);

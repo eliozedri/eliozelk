@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import Link from "next/link";
 import { useOrdersContext } from "@/context/OrdersContext";
 import { useCustomersContext } from "@/context/CustomersContext";
@@ -426,7 +427,7 @@ interface OrderRowProps {
   onRequestStatusChange: (change: PendingStatusChange) => void;
 }
 
-function OrderRow({ order, index, phoneMap, riskScore, onUpdateStatus, onApproveCustomer, onSelect, onStartComplete, onRequestCancel, onRequestStatusChange }: OrderRowProps) {
+function OrderRow({ order, index, phoneMap, riskScore, onSelect, onStartComplete, onRequestCancel, onRequestStatusChange }: OrderRowProps) {
   const phone = phoneMap.get(order.customer.trim().toLowerCase());
   const lastUpdated = getLastUpdated(order);
   const relative = relativeTime(lastUpdated);
@@ -703,6 +704,8 @@ function CompleteOrderModal({ order, onConfirm, onCancel }: {
   const [saveState, setSaveState] = useState<"idle" | "saving" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
+  useEscapeKey(onCancel, saveState !== "saving");
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir="rtl">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onCancel} />
@@ -834,9 +837,14 @@ function OrderDetailPanel({
   const [notesDraft, setNotesDraft] = useState(order.generalNotes ?? order.notes ?? "");
   const [notesSaveState, setNotesSaveState] = useState<"idle" | "saved" | "error">("idle");
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (!editingLocation) setLocationDraft(order.location ?? ""); }, [order.location, editingLocation]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (!editingJobName) setJobNameDraft(order.jobName ?? ""); }, [order.jobName, editingJobName]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (!editingNotes) setNotesDraft(order.generalNotes ?? order.notes ?? ""); }, [order.generalNotes, order.notes, editingNotes]);
+
+  useEscapeKey(onClose);
 
   const signCount = (order.signRows ?? []).filter(r => r.signNumber).length;
   const miscCount = (order.miscRows ?? []).filter(r => r.description).length;

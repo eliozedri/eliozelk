@@ -13,6 +13,7 @@ interface OrdersContextValue {
   approveCustomerOrder: (id: string) => Promise<void>;
   updateOrderStatus: (id: string, status: WorkOrderStatus) => Promise<void>;
   updateOrderFields: (id: string, fields: Partial<WorkOrder>) => Promise<void>;
+  releaseWarehouseOrder: (id: string) => Promise<void>;
   addOrderActivity: (id: string, type: OrderActivityType, description: string, opts?: { by?: string; department?: string; meta?: Record<string, string> }) => void;
   addOrderProblem: (id: string, problem: { department: "graphics" | "fabrication" | "office"; category: OrderProblemCategory; description: string; reportedBy?: string }) => void;
   resolveOrderProblem: (orderId: string, problemId: string, opts?: { resolvedBy?: string; resolutionNotes?: string; newStatus?: OrderProblemStatus }) => void;

@@ -11,7 +11,9 @@ export type AgentType =
   | "billing_collections"
   | "engineering_analysis"
   | "coordination_qa"
-  | "fabrication";
+  | "fabrication"
+  | "orders"
+  | "equipment_fleet";
 
 export type AgentStatus = "active" | "idle" | "paused" | "error";
 
@@ -24,7 +26,8 @@ export type AgentDepartment =
   | "finance"
   | "accounting"
   | "engineering"
-  | "fabrication";
+  | "fabrication"
+  | "fleet";
 
 export interface Agent {
   id: string;
@@ -235,6 +238,7 @@ export const DEPARTMENT_LABELS: Record<AgentDepartment, string> = {
   accounting:  'הנה״ח',
   engineering: "הנדסה",
   fabrication: "מסגרייה",
+  fleet:       "ציוד ורכבים",
 };
 
 export const ACTIVITY_TYPE_LABELS: Record<ActivityMessageType, string> = {
@@ -270,6 +274,7 @@ export const AGENT_ORG: OrgNode[] = [
   {
     agentId: "ops-orchestrator",
     children: [
+      "orders-agent",
       "coordination-qa-agent",
       "inventory-agent",
       "field-ops-agent",
@@ -278,6 +283,8 @@ export const AGENT_ORG: OrgNode[] = [
       "cfo-agent",
       "billing-collections-agent",
       "fabrication-agent",
+      "equipment-fleet-agent",
+      "engineering-plan-agent",
     ],
   },
 ];
