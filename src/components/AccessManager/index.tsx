@@ -784,8 +784,8 @@ export function AccessManager() {
   };
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="px-6 pb-6 pt-16 md:pt-6 max-w-5xl mx-auto">
+      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <div>
           <h1 className="text-2xl font-black" style={{ color: NAVY }}>הרשאות גישה</h1>
           <p className="text-sm text-gray-500 mt-0.5">ניהול משתמשים, תפקידים ורמות גישה</p>
@@ -813,7 +813,7 @@ export function AccessManager() {
         ))}
       </div>
 
-      <div className="bg-white rounded-xl border overflow-hidden">
+      <div className="bg-white rounded-xl border overflow-x-auto">
         {loading ? (
           <div className="p-8 text-center text-gray-400 text-sm">טוען משתמשים...</div>
         ) : users.length === 0 ? (

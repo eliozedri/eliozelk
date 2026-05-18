@@ -997,63 +997,64 @@ export function AgentCommandCenter() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: NAVY }} dir="rtl">
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div className="px-6 pt-6 pb-4" style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
-        <div className="flex items-start justify-between mb-4">
-          {/* Left actions */}
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <button
-              onClick={refresh}
-              disabled={loading}
-              className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors p-2 rounded-lg hover:bg-white/5"
-            >
-              <RefreshIcon />
-              {loading ? "טוען..." : "רענן"}
-            </button>
-            <button
-              onClick={runAllScans}
-              disabled={allScansRunning || scansRunning > 0}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all disabled:opacity-50"
-              style={{
-                backgroundColor: (allScansRunning || scansRunning > 0) ? "rgba(255,255,255,0.08)" : `${EK_GOLD}20`,
-                color: (allScansRunning || scansRunning > 0) ? "rgba(255,255,255,0.3)" : EK_GOLD,
-                border: `1px solid ${EK_GOLD}40`,
-              }}
-            >
-              {(allScansRunning || scansRunning > 0)
-                ? <><SpinnerIcon /> סורק ({scansRunning})...</>
-                : <><PlayIcon /> הפעל סריקה כללית</>
-              }
-            </button>
-            <button
-              onClick={() => openChat({ agentId: null, agentName: "מרכז הפיקוד", agentIcon: "🤖" })}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
-              style={{ backgroundColor: `${EK_BLUE}25`, color: EK_BLUE, border: `1px solid ${EK_BLUE}50` }}
-            >
-              <ChatIcon />
-              שיחה עם מרכז הפיקוד
-            </button>
-            <button
-              onClick={() => openChat({ agentId: "ops-orchestrator", agentName: "מנהל התפעול", agentIcon: "📋" })}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
-              style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.65)", border: "1px solid rgba(255,255,255,0.15)" }}
-            >
-              📋 פנייה למנהל התפעול
-            </button>
-          </div>
-
-          <div className="text-right">
+      <div className="px-6 pt-14 pb-4 md:pt-6" style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
+        {/* Title row — stacks on mobile */}
+        <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+          <div className="text-right flex-1 min-w-0">
             <div className="flex items-center justify-end gap-3 mb-1">
-              <div>
-                <h1 className="text-2xl font-black text-white tracking-tight">מרכז פיקוד דיגיטלי</h1>
+              <div className="min-w-0">
+                <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">מרכז פיקוד דיגיטלי</h1>
                 <p className="text-xs font-medium" style={{ color: EK_GOLD }}>Digital Operations Command Center</p>
               </div>
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-lg"
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl flex items-center justify-center text-xl md:text-2xl shadow-lg shrink-0"
                 style={{ backgroundColor: `${EK_BLUE}33`, border: `1px solid ${EK_BLUE}50` }}>
                 🤖
               </div>
             </div>
             <p className="text-xs text-white/40">מערכת בינה מלאכותית עסקית · אלקיים סימון כבישים בע״מ</p>
           </div>
+        </div>
+
+        {/* Action buttons row — wraps on mobile */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors p-2 rounded-lg hover:bg-white/5"
+          >
+            <RefreshIcon />
+            {loading ? "טוען..." : "רענן"}
+          </button>
+          <button
+            onClick={runAllScans}
+            disabled={allScansRunning || scansRunning > 0}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all disabled:opacity-50"
+            style={{
+              backgroundColor: (allScansRunning || scansRunning > 0) ? "rgba(255,255,255,0.08)" : `${EK_GOLD}20`,
+              color: (allScansRunning || scansRunning > 0) ? "rgba(255,255,255,0.3)" : EK_GOLD,
+              border: `1px solid ${EK_GOLD}40`,
+            }}
+          >
+            {(allScansRunning || scansRunning > 0)
+              ? <><SpinnerIcon /> סורק ({scansRunning})...</>
+              : <><PlayIcon /> הפעל סריקה כללית</>
+            }
+          </button>
+          <button
+            onClick={() => openChat({ agentId: null, agentName: "מרכז הפיקוד", agentIcon: "🤖" })}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
+            style={{ backgroundColor: `${EK_BLUE}25`, color: EK_BLUE, border: `1px solid ${EK_BLUE}50` }}
+          >
+            <ChatIcon />
+            שיחה עם מרכז הפיקוד
+          </button>
+          <button
+            onClick={() => openChat({ agentId: "ops-orchestrator", agentName: "מנהל התפעול", agentIcon: "📋" })}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
+            style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.65)", border: "1px solid rgba(255,255,255,0.15)" }}
+          >
+            📋 פנייה למנהל התפעול
+          </button>
         </div>
 
         {/* KPI Row */}
@@ -1114,7 +1115,7 @@ export function AgentCommandCenter() {
       )}
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-      <div className="flex gap-1 px-6 pt-4 pb-0" style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
+      <div className="flex gap-1 px-6 pt-4 pb-0 overflow-x-auto" style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
         {MAIN_TABS.map(t => (
           <button
             key={t.id}

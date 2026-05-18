@@ -553,10 +553,10 @@ export function WeeklySchedule() {
           )}
         </div>
 
-        <div className="flex gap-4 items-start">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start">
 
-          {/* Left panel: unscheduled jobs */}
-          <div className="w-64 shrink-0 flex flex-col gap-3">
+          {/* Unscheduled jobs — full width on mobile, fixed sidebar on desktop */}
+          <div className="w-full md:w-64 md:shrink-0 flex flex-col gap-3">
             <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
               <h2 className="text-sm font-bold text-gray-700">ממתינות לשיבוץ</h2>
@@ -579,8 +579,8 @@ export function WeeklySchedule() {
             )}
           </div>
 
-          {/* Right panel: week board */}
-          <div className="flex-1 min-w-0">
+          {/* Week board — horizontally scrollable on mobile */}
+          <div className="flex-1 min-w-0 overflow-x-auto">
             {activeCrews.length === 0 ? (
               <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-400 text-sm">
                 <div className="text-3xl mb-2">👷</div>

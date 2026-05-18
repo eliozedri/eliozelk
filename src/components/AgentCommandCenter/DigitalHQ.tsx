@@ -889,13 +889,17 @@ export function DigitalHQ({
         />
       </div>
 
-      {/* 3-column layout */}
-      <div className="grid gap-0" style={{
-        gridTemplateColumns: "minmax(180px, 210px) 1fr minmax(220px, 250px)",
-      }}>
+      {/* Responsive layout: single column on mobile, 3-column on large screens */}
+      <div
+        className="flex flex-col lg:grid lg:gap-0"
+        style={{ gridTemplateColumns: "minmax(180px, 210px) 1fr minmax(220px, 250px)" }}
+      >
 
-        {/* LEFT: System Health */}
-        <div className="p-4" style={{ borderLeft: "1px solid rgba(255,255,255,0.07)" }}>
+        {/* System Health — top on mobile, left column on desktop */}
+        <div
+          className="p-4 border-b border-white/[0.07] lg:border-b-0"
+          style={{ borderLeft: "1px solid rgba(255,255,255,0.07)" }}
+        >
           <SystemHealthSidebar
             summary={systemHealth}
             rooms={DEPT_ROOMS}
@@ -905,7 +909,7 @@ export function DigitalHQ({
           />
         </div>
 
-        {/* CENTER: Hierarchy */}
+        {/* CENTER: Hierarchy — middle on mobile, center column on desktop */}
         <div className="p-4 flex flex-col gap-3 min-w-0">
 
           {/* 1. Executive card */}
@@ -933,11 +937,11 @@ export function DigitalHQ({
             <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.06)" }} />
           </div>
 
-          {/* 4. Department grid — 3 rows × 3 cols */}
+          {/* 4. Department grid — 2 cols on mobile, 3 cols on sm+ */}
           {([1, 2, 3] as const).map(row => {
             const rowRooms = DEPT_ROOMS.filter(r => r.gridRow === row);
             return (
-              <div key={row} className="grid grid-cols-3 gap-2.5">
+              <div key={row} className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 {rowRooms.map(room => {
                   const status = deriveRoomStatus(room.agentIds, stats, presenceMap, scanStatuses);
                   const aggregate = aggregateRoomStats(room.agentIds, stats);
@@ -962,8 +966,11 @@ export function DigitalHQ({
 
         </div>
 
-        {/* RIGHT: Activity Feed */}
-        <div className="p-4 border-r border-white/[0.07]">
+        {/* Activity Feed — bottom on mobile, right column on desktop */}
+        <div
+          className="p-4 border-t border-white/[0.07] lg:border-t-0"
+          style={{ borderRight: "1px solid rgba(255,255,255,0.07)" }}
+        >
           <ActivityFeedSidebar events={feedEvents} loading={loading} />
         </div>
       </div>

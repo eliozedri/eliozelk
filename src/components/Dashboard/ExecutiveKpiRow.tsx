@@ -35,7 +35,7 @@ function KpiCard({
       onClick={onClick}
       disabled={!onClick}
       className={`
-        flex-1 min-w-0 rounded-xl px-4 py-4 text-right
+        w-full min-w-0 rounded-xl px-4 py-4 text-right
         border border-gray-100 shadow-sm
         flex flex-col gap-1.5
         ${onClick
@@ -104,7 +104,7 @@ export function ExecutiveKpiRow({
   onDiariesClick,
 }: Props) {
   return (
-    <div className="px-6 pt-4 pb-2 flex gap-3 flex-wrap sm:flex-nowrap">
+    <div className="px-6 pt-4 pb-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       <KpiCard
         label="הזמנות פעילות"
         value={openOrders}

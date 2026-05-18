@@ -19,7 +19,7 @@ function todayLabel(): string {
 export function DashboardHero() {
   return (
     <div style={{ background: "linear-gradient(135deg, #05111f 0%, #0d1b2e 55%, #1a2d4a 100%)" }}>
-      <div className="px-6 py-6">
+      <div className="px-6 pt-14 pb-6 md:pt-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <p className="text-ek-gold text-[9px] font-bold uppercase tracking-[0.25em] mb-2 opacity-80">
