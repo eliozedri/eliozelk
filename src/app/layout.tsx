@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Heebo } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 import { CustomersProvider } from "@/context/CustomersContext";
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </CatalogProvider>
           </WorkDiaryProvider>
         </CostRatesProvider>
+        <Toaster position="bottom-left" dir="rtl" richColors />
       </body>
     </html>
   );

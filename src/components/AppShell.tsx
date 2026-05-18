@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { Menu } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { AuthProvider } from "@/context/AuthContext";
 import { GlobalFloatingChatProvider, GlobalChatMount } from "@/context/GlobalFloatingChatContext";
@@ -10,16 +11,6 @@ import { GlobalChatLauncher } from "@/components/AgentChat/GlobalChatLauncher";
 const AUTH_PATHS = ["/login", "/setup"];
 
 const NAVY = "#0d1b2e";
-
-function HamburgerIcon() {
-  return (
-    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  );
-}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -44,7 +35,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           style={{ backgroundColor: NAVY }}
           aria-label="פתח תפריט"
         >
-          <HamburgerIcon />
+          <Menu className="w-5 h-5 text-white" />
         </button>
 
         {/* Mobile backdrop */}

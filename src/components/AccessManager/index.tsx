@@ -13,6 +13,7 @@ import {
   canPerformAction,
 } from "@/types/auth";
 import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
 import {
   loadUsers,
   createUser,
@@ -226,7 +227,9 @@ function PasswordManagerSection({ userId, userEmail }: PasswordManagerSectionPro
   };
 
   const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text).catch(() => undefined);
+    navigator.clipboard.writeText(text)
+      .then(() => toast.success("הועתק ללוח"))
+      .catch(() => toast.error("לא ניתן להעתיק"));
   };
 
   const tabDef: { id: PwdTab; label: string }[] = [
