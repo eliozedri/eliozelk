@@ -55,3 +55,7 @@ catalog/
 # Claude Code local session metadata
 .claude/skills-installed.local.md
 .backups/
+
+# Local-only artifacts (not for deployment)
+neural_core_asset_extract_v1/
+.claude/scheduled_tasks.lock
