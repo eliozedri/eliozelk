@@ -280,7 +280,7 @@ export function OrderForm() {
 
         {/* שם עבודה + מועד ספקה + מקום עבודה — available for all order types */}
         {order.orderType && (
-          <div className="grid grid-cols-3 gap-3 mt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-1">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">
                 שם עבודה / אתר עבודה <span className="text-red-500">*</span>
