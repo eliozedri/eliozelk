@@ -69,6 +69,7 @@ export function DocumentReview({
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [showPostingPreview, setShowPostingPreview] = useState(false);
+  const [showRawText, setShowRawText] = useState(false);
 
   // Editable header fields
   const [editedDocType, setEditedDocType] = useState<SupplierDocumentType>("unknown");
@@ -247,6 +248,19 @@ export function DocumentReview({
         </button>
       </div>
 
+      {/* OCR low-confidence warning */}
+      {doc.extractionConfidence != null && doc.extractionConfidence < 0.5 && (
+        <div className="mx-5 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm font-semibold text-amber-800">
+            תוצאות OCR בלתי ודאיות — יש לאמת נתונים
+          </p>
+          <p className="text-xs text-amber-700 mt-0.5">
+            ביטחון חילוץ: {Math.round((doc.extractionConfidence ?? 0) * 100)}%
+            {doc.extractionNotes ? ` · ${doc.extractionNotes}` : ""}
+          </p>
+        </div>
+      )}
+
       <div className="flex gap-0 h-full overflow-hidden" style={{ maxHeight: "calc(90vh - 80px)" }}>
         {/* Left: file preview */}
         <div className="w-72 shrink-0 border-l border-gray-100 bg-gray-50 p-4 overflow-y-auto">
@@ -322,6 +336,26 @@ export function DocumentReview({
                    "ספק + תאריך + סכום"} · ציון: {Math.round(dc.match_score * 100)}%
                 </p>
               ))}
+            </div>
+          )}
+
+          {/* Collapsible raw OCR text */}
+          {doc.rawText && (
+            <div className="mt-4">
+              <button
+                onClick={() => setShowRawText(p => !p)}
+                className="text-xs text-gray-500 hover:text-gray-800 font-medium flex items-center gap-1"
+              >
+                <svg className={`w-3 h-3 transition-transform ${showRawText ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+                טקסט גולמי מ-OCR
+              </button>
+              {showRawText && (
+                <pre className="mt-2 p-3 bg-gray-100 border border-gray-200 rounded-lg text-xs text-gray-700 whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-mono leading-relaxed" dir="ltr">
+                  {doc.rawText}
+                </pre>
+              )}
             </div>
           )}
         </div>

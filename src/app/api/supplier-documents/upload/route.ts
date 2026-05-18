@@ -17,6 +17,8 @@ const ALLOWED_TYPES = new Set([
   "image/png",
   "image/webp",
   "image/tiff",
+  "image/heic",
+  "image/heif",
 ]);
 
 async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest) {
   }
   if (!ALLOWED_TYPES.has(file.type)) {
     return NextResponse.json(
-      { error: `סוג קובץ לא נתמך: ${file.type}. נתמך: PDF, JPEG, PNG, WEBP, TIFF` },
+      { error: `סוג קובץ לא נתמך: ${file.type}. נתמך: PDF, JPEG, PNG, WEBP, TIFF, HEIC` },
       { status: 400 }
     );
   }
@@ -139,10 +141,10 @@ export async function POST(req: NextRequest) {
 
   const now = new Date().toISOString();
 
-  // Create document record
+  // Create document record — starts in "extracting" while OCR runs
   const { error: insertErr } = await db.from("supplier_documents").insert({
     id:            docId,
-    status:        "draft_ready",
+    status:        "extracting",
     document_type: classification.type,
     supplier_name_raw: "",
     supplier_vat_raw:  "",
@@ -156,16 +158,61 @@ export async function POST(req: NextRequest) {
     file_type:     file.type,
     file_hash:     fileHash,
     extraction_confidence: classification.confidence,
-    extraction_notes: "הועלה — ממתין להזנה ידנית",
+    extraction_notes: "מעבד מסמך — OCR בביצוע",
     created_by:    createdBy,
     created_at:    now,
     updated_at:    now,
   });
 
   if (insertErr) {
-    // Best-effort cleanup of uploaded file
     await db.storage.from(BUCKET).remove([storagePath]);
     return NextResponse.json({ error: insertErr.message }, { status: 500 });
+  }
+
+  // Run OCR pipeline synchronously (15–30 s acceptable for internal tool)
+  try {
+    const { extractDocument } = await import("@/lib/supplierDocuments/ocrAdapter");
+    const extraction = await extractDocument({
+      fileBuffer: buffer,
+      fileName: file.name,
+      fileType: file.type,
+    });
+
+    const ocrUpdate: Record<string, unknown> = {
+      status: "draft_ready",
+      updated_at: new Date().toISOString(),
+    };
+
+    if (extraction.available && extraction.header) {
+      const h = extraction.header;
+      ocrUpdate.document_type        = h.documentType;
+      ocrUpdate.supplier_name_raw    = h.supplierName ?? "";
+      ocrUpdate.supplier_vat_raw     = h.supplierVat ?? "";
+      ocrUpdate.document_number      = h.documentNumber ?? "";
+      if (h.documentDate)            ocrUpdate.document_date = h.documentDate;
+      ocrUpdate.currency             = h.currency;
+      if (h.subtotalBeforeVat != null) ocrUpdate.subtotal_before_vat = h.subtotalBeforeVat;
+      if (h.vatAmount != null)         ocrUpdate.vat_amount = h.vatAmount;
+      if (h.totalAfterVat != null)     ocrUpdate.total_after_vat = h.totalAfterVat;
+      ocrUpdate.extraction_confidence = h.confidence;
+      ocrUpdate.extraction_notes      = h.notes ?? "OCR הושלם";
+      ocrUpdate.parsed_json           = h as unknown as Record<string, unknown>;
+    } else {
+      ocrUpdate.extraction_confidence = 0;
+      ocrUpdate.extraction_notes      = extraction.error ?? "OCR נכשל — יש להזין נתונים ידנית";
+    }
+
+    if (extraction.rawText) ocrUpdate.raw_text = extraction.rawText;
+
+    await db.from("supplier_documents").update(ocrUpdate).eq("id", docId);
+  } catch (err) {
+    // Unexpected OCR crash — still open the review screen so user can fill manually
+    await db.from("supplier_documents").update({
+      status: "draft_ready",
+      extraction_confidence: 0,
+      extraction_notes: `שגיאה ב-OCR: ${err instanceof Error ? err.message : String(err)}`,
+      updated_at: new Date().toISOString(),
+    }).eq("id", docId);
   }
 
   return NextResponse.json({ id: docId, fileUrl }, { status: 201 });

@@ -1,5 +1,5 @@
 // OCR / extraction adapter — provider-agnostic interface.
-// MVP: manual-only mode. OCR integration is a future plug-in.
+// tesseract.js WASM provider: Hebrew + English, server-side only, no external APIs.
 
 import type { SupplierDocumentType } from "@/types/supplierDocument";
 import { classifyDocumentType } from "./classification";
@@ -51,20 +51,12 @@ export interface ExtractionResult {
 
 type ExtractionProvider = (input: ExtractionInput) => Promise<ExtractionResult>;
 
-// ── Provider: manual mode (no OCR) ───────────────────────────────────────────
-
-const manualProvider: ExtractionProvider = async () => ({
-  available: false,
-  error: "OCR לא מוגדר — יש להזין נתונים ידנית",
-});
-
-// ── Provider: raw text classification only ────────────────────────────────────
-// If raw_text is provided (e.g. from future AI extraction), classify it and
-// return minimal structured data.
+// ── Provider: fallback for raw-text-only input ────────────────────────────────
 
 const rawTextProvider: ExtractionProvider = async (input) => {
-  if (!input.rawText) return manualProvider(input);
-
+  if (!input.rawText) {
+    return { available: false, error: "אין קובץ או טקסט גולמי — יש להזין נתונים ידנית" };
+  }
   const classification = classifyDocumentType(input.rawText);
   return {
     available: true,
@@ -82,21 +74,68 @@ const rawTextProvider: ExtractionProvider = async (input) => {
   };
 };
 
+// ── Provider: tesseract.js WASM (images) + pdf-parse (digital PDFs) ───────────
+
+const tesseractProvider: ExtractionProvider = async (input) => {
+  if (!input.fileBuffer) return rawTextProvider(input);
+
+  const fileType = input.fileType ?? "";
+  const fileName = input.fileName?.toLowerCase() ?? "";
+  const isPdf = fileType === "application/pdf" || fileName.endsWith(".pdf");
+
+  let rawText: string;
+
+  if (isPdf) {
+    const { extractPdfText } = await import("./pdfExtractor");
+    const result = await extractPdfText(input.fileBuffer);
+    rawText = result.text;
+  } else {
+    const { preprocessImage } = await import("./imagePreprocessor");
+    const { createWorker } = await import("tesseract.js");
+
+    const preprocessed = await preprocessImage(input.fileBuffer, fileType);
+    const worker = await createWorker(["heb", "eng"], 1, { langPath: "/tmp" });
+    try {
+      const { data } = await worker.recognize(preprocessed.buffer);
+      rawText = data.text;
+    } finally {
+      await worker.terminate();
+    }
+  }
+
+  if (!rawText.trim()) {
+    return {
+      available: true,
+      rawText: "",
+      header: {
+        documentType: "unknown",
+        supplierName: "",
+        supplierVat: "",
+        documentNumber: "",
+        currency: "ILS",
+        confidence: 0.1,
+        notes: "OCR לא הצליח לחלץ טקסט — יש להזין נתונים ידנית",
+      },
+      lines: [],
+    };
+  }
+
+  const { parseOcrText } = await import("./parser");
+  const parsed = parseOcrText(rawText);
+  return { available: true, rawText, header: parsed.header, lines: parsed.lines };
+};
+
 // ── Provider registry ─────────────────────────────────────────────────────────
 
 function resolveProvider(): ExtractionProvider {
-  // Future: check for API keys (OPENAI_API_KEY, GOOGLE_VISION_KEY, etc.)
-  // and return the appropriate provider.
-  // For now, use rawText if provided, otherwise manual.
-  return rawTextProvider;
+  return tesseractProvider;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function extractDocument(input: ExtractionInput): Promise<ExtractionResult> {
-  const provider = resolveProvider();
   try {
-    return await provider(input);
+    return await resolveProvider()(input);
   } catch (err) {
     return {
       available: false,
@@ -106,11 +145,9 @@ export async function extractDocument(input: ExtractionInput): Promise<Extractio
 }
 
 export function isOcrAvailable(): boolean {
-  // Future: check env vars for OCR provider credentials
-  return false;
+  return true;
 }
 
 export function getOcrStatusMessage(): string {
-  if (isOcrAvailable()) return "OCR זמין";
-  return "OCR אינו מוגדר — מצב הזנה ידנית פעיל";
+  return "OCR פעיל — tesseract.js (עברית + אנגלית)";
 }

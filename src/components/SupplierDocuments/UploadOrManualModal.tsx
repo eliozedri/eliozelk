@@ -57,8 +57,9 @@ export function UploadOrManualModal({
   onCreated: (id: string) => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const [mode, setMode] = useState<"choose" | "upload" | "manual">("choose");
+  const [mode, setMode] = useState<"choose" | "upload" | "manual" | "camera">("choose");
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -80,6 +81,31 @@ export function UploadOrManualModal({
   const [totalAfterVat, setTotalAfterVat] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<LineInput[]>([BLANK_LINE()]);
+
+  async function handleCameraCapture(file: File) {
+    setMode("camera");
+    setError("");
+    try {
+      const tok = await getToken();
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/supplier-documents/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok}` },
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "שגיאה בעיבוד המסמך");
+        setMode("choose");
+        return;
+      }
+      onCreated(data.id);
+    } catch {
+      setError("שגיאת רשת — נסה שוב");
+      setMode("choose");
+    }
+  }
 
   async function handleUpload() {
     if (!selectedFile) { setError("יש לבחור קובץ"); return; }
@@ -175,6 +201,31 @@ export function UploadOrManualModal({
     setLines(prev => prev.filter((_, i) => i !== idx));
   }
 
+  // ── Camera processing screen ──────────────────────────────────────────────
+  if (mode === "camera") {
+    return (
+      <ModalShell onClose={onClose} title="מעבד מסמך">
+        <div className="flex flex-col items-center justify-center py-10 gap-4">
+          <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+          <p className="text-sm font-semibold text-gray-800">מעבד מסמך...</p>
+          <p className="text-xs text-gray-500 text-center leading-relaxed">
+            מזהה טקסט ומכין טיוטה לבדיקה.<br />
+            אנא המתן — תהליך זה עשוי לקחת עד 30 שניות.
+          </p>
+          {error && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 text-center">
+              {error}
+              <br />
+              <button onClick={() => { setError(""); setMode("choose"); }} className="text-blue-600 underline mt-1">
+                חזור
+              </button>
+            </div>
+          )}
+        </div>
+      </ModalShell>
+    );
+  }
+
   // ── Mode chooser ──────────────────────────────────────────────────────────
   if (mode === "choose") {
     return (
@@ -192,7 +243,22 @@ export function UploadOrManualModal({
             </div>
             <div>
               <p className="font-semibold text-gray-900">העלאת קובץ</p>
-              <p className="text-xs text-gray-500">PDF, JPEG, PNG — עד 20MB</p>
+              <p className="text-xs text-gray-500">PDF, JPEG, PNG, HEIC — עד 20MB</p>
+            </div>
+          </button>
+          <button
+            onClick={() => cameraInputRef.current?.click()}
+            className="w-full flex items-center gap-4 p-4 border-2 border-dashed border-green-300 rounded-xl hover:border-green-500 hover:bg-green-50 transition-colors text-right"
+          >
+            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900">צלם מסמך</p>
+              <p className="text-xs text-gray-500">iPhone / Android — זיהוי טקסט אוטומטי</p>
             </div>
           </button>
           <button
@@ -210,6 +276,19 @@ export function UploadOrManualModal({
             </div>
           </button>
         </div>
+        {error && <p className="text-xs text-red-600 mt-3 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={e => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) handleCameraCapture(f);
+          }}
+        />
       </ModalShell>
     );
   }
@@ -236,13 +315,13 @@ export function UploadOrManualModal({
           ) : (
             <>
               <p className="text-sm text-gray-600">גרור קובץ לכאן או לחץ לבחירה</p>
-              <p className="text-xs text-gray-400 mt-1">PDF, JPEG, PNG, WEBP — עד 20MB</p>
+              <p className="text-xs text-gray-400 mt-1">PDF, JPEG, PNG, WEBP, HEIC — עד 20MB</p>
             </>
           )}
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.webp,.tiff"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.tiff,.heic,.heif"
             className="hidden"
             onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
           />
@@ -254,7 +333,7 @@ export function UploadOrManualModal({
             disabled={uploading || !selectedFile}
             className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white transition-colors"
           >
-            {uploading ? "מעלה..." : "העלה מסמך"}
+            {uploading ? "מעבד מסמך..." : "העלה מסמך"}
           </button>
           <button onClick={onClose} disabled={uploading} className="px-4 py-2.5 rounded-xl text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">ביטול</button>
         </div>

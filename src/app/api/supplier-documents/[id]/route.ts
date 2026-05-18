@@ -2,6 +2,77 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { SupplierDocumentType, PaymentStatus, InventoryLineAction } from "@/types/supplierDocument";
 
+// ── camelCase mappers (Supabase returns snake_case) ───────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapDocumentToCamelCase(doc: Record<string, any>) {
+  return {
+    id: doc.id,
+    status: doc.status,
+    documentType: doc.document_type,
+    supplierId: doc.supplier_id,
+    supplierNameRaw: doc.supplier_name_raw,
+    supplierVatRaw: doc.supplier_vat_raw,
+    documentNumber: doc.document_number,
+    documentDate: doc.document_date,
+    dueDate: doc.due_date,
+    currency: doc.currency,
+    subtotalBeforeVat: doc.subtotal_before_vat,
+    vatAmount: doc.vat_amount,
+    vatRate: doc.vat_rate,
+    totalAfterVat: doc.total_after_vat,
+    paymentStatus: doc.payment_status,
+    linkedOrderRef: doc.linked_order_ref,
+    linkedDeliveryNoteId: doc.linked_delivery_note_id,
+    rawText: doc.raw_text,
+    parsedJson: doc.parsed_json,
+    extractionConfidence: doc.extraction_confidence,
+    extractionNotes: doc.extraction_notes,
+    fileUrl: doc.file_url,
+    fileName: doc.file_name,
+    fileType: doc.file_type,
+    fileHash: doc.file_hash,
+    notes: doc.notes,
+    rejectionReason: doc.rejection_reason,
+    expenseRecordId: doc.expense_record_id,
+    createdBy: doc.created_by,
+    reviewedBy: doc.reviewed_by,
+    approvedBy: doc.approved_by,
+    approvedAt: doc.approved_at,
+    postedAt: doc.posted_at,
+    createdAt: doc.created_at,
+    updatedAt: doc.updated_at,
+    suppliers: doc.suppliers, // kept snake_case — DocumentReview reads sub-fields directly
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapLineToCamelCase(line: Record<string, any>) {
+  return {
+    id: line.id,
+    documentId: line.document_id,
+    lineNumber: line.line_number,
+    originalDescription: line.original_description,
+    normalizedDescription: line.normalized_description,
+    supplierSku: line.supplier_sku,
+    quantity: line.quantity,
+    unitOfMeasure: line.unit_of_measure,
+    unitPrice: line.unit_price,
+    discountPercent: line.discount_percent,
+    lineSubtotal: line.line_subtotal,
+    lineTotal: line.line_total,
+    category: line.category,
+    catalogItemId: line.catalog_item_id,
+    inventoryAction: line.inventory_action,
+    status: line.status,
+    confidenceScore: line.confidence_score,
+    warningFlags: line.warning_flags ?? [],
+    createdAt: line.created_at,
+    updatedAt: line.updated_at,
+    catalog_items: line.catalog_items, // kept snake_case — DocumentReview reads sub-fields directly
+  };
+}
+
 async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   if (!token) return null;
@@ -58,8 +129,8 @@ export async function GET(
     .order("match_score", { ascending: false });
 
   return NextResponse.json({
-    ...doc,
-    lines: lines ?? [],
+    ...mapDocumentToCamelCase(doc as Record<string, unknown>),
+    lines: (lines ?? []).map(l => mapLineToCamelCase(l as Record<string, unknown>)),
     reviewEvents: events ?? [],
     duplicateChecks: dupChecks ?? [],
   });
