@@ -5,8 +5,6 @@ import { nanoid } from "nanoid";
 import type { CatalogItem, CatalogFormState, LinkedProductEntry } from "@/types/catalog";
 import { getSupabase } from "@/lib/supabase/client";
 
-const STORAGE_KEY = "elkayam_catalog";
-
 function fromRow(r: Record<string, unknown>): CatalogItem {
   return {
     id: r.id as string,
@@ -55,15 +53,6 @@ function toRow(item: CatalogItem) {
   };
 }
 
-function loadLocal(): CatalogItem[] {
-  if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]"); } catch { return []; }
-}
-
-function saveLocal(items: CatalogItem[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch { /* ignore */ }
-}
-
 function isNewerOrRecent(existing: string, incoming: string, toleranceMs = 5000): boolean {
   try {
     return new Date(incoming).getTime() > new Date(existing).getTime() - toleranceMs;
@@ -77,33 +66,19 @@ export function useCatalog() {
   useEffect(() => { ref.current = items; }, [items]);
 
   useEffect(() => {
+    // ARCHITECTURE: Supabase is the sole source of truth for operational business data.
+    // localStorage is not used — no seeding, no fallback, no caching.
     const db = getSupabase();
-    if (!db) {
-      setItems(loadLocal()); // eslint-disable-line react-hooks/set-state-in-effect
-      return;
-    }
+    if (!db) { return; } // eslint-disable-line react-hooks/set-state-in-effect
 
     const fetchAll = () =>
       db.from("catalog_items").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
           if (!error && data) {
             const mapped = data.map(r => fromRow(r as Record<string, unknown>));
-            if (mapped.length > 0) {
-              setItems(mapped);
-              saveLocal(mapped);
-            } else {
-              const local = loadLocal();
-              if (local.length > 0) {
-                console.log("[catalog] migrating local cache to Supabase:", local.length, "rows");
-                setItems(local);
-                db.from("catalog_items").upsert(local.map(toRow), { onConflict: "id" }).then(({ error: migErr }) => {
-                  if (migErr) console.error("[catalog] migration failed:", migErr.message);
-                  else saveLocal(local);
-                });
-              }
-            }
+            setItems(mapped);
           } else {
-            setItems(loadLocal());
+            setItems([]);
           }
         });
 
@@ -242,7 +217,6 @@ export function useCatalog() {
     const original = ref.current.find(i => i.id === id);
     const remaining = ref.current.filter(i => i.id !== id);
     setItems(remaining);
-    saveLocal(remaining);
     const db = getSupabase();
     if (db) {
       db.from("catalog_items").delete().eq("id", id).then(({ error }) => {

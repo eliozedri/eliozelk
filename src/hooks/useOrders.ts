@@ -12,8 +12,6 @@ import type {
 import { getSupabase } from "@/lib/supabase/client";
 import { canTransition, canMarkReadyForInstallation } from "@/lib/workflowEngine";
 
-const STORAGE_KEY = "elkayam_orders";
-
 // ── Column map: TypeScript field → SQL column name ───────────────────
 // These are the promoted first-class columns. Every write touches only
 // the relevant domain's columns — no cross-domain JSONB blob clobber.
@@ -217,20 +215,6 @@ function toRow(o: WorkOrder) {
   };
 }
 
-// ── Local storage fallback ─────────────────────────────────────────────
-
-function loadLocal(): WorkOrder[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function saveLocal(orders: WorkOrder[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(orders)); } catch { /* ignore */ }
-}
-
 function generateOrderNumberLocal(orders: WorkOrder[]): string {
   const year = new Date().getFullYear();
   const prefix = `ORD-${year}-`;
@@ -278,11 +262,9 @@ function insertActivity(
 
 // ═══════════════════════════════════════════════════════════════════════
 export function useOrders() {
-  // Lazy init: if Supabase isn't configured (local-only mode), seed from localStorage
-  // immediately so the first render already has data (avoids a synchronous setState in the effect).
-  const [orders, setOrders] = useState<WorkOrder[]>(() =>
-    typeof window !== "undefined" && !getSupabase() ? loadLocal() : [],
-  );
+  // ARCHITECTURE: Supabase is the sole source of truth for operational business data.
+  // localStorage is not used — no seeding, no fallback, no caching.
+  const [orders, setOrders] = useState<WorkOrder[]>([]);
   const ref = useRef<WorkOrder[]>([]);
 
   useEffect(() => { ref.current = orders; }, [orders]);
@@ -290,31 +272,16 @@ export function useOrders() {
   // ── Full refresh (initial load + visibility-change fallback) ─────────
   const fetchAll = useCallback(() => {
     const db = getSupabase();
-    if (!db) { setOrders(loadLocal()); return; }
+    if (!db) { return; }
     db.from("work_orders")
       .select("*, order_problems(*)")
       .order("created_at", { ascending: false })
       .then(({ data, error }) => {
         if (!error && data) {
           const mapped = data.map(r => fromRow(r as Record<string, unknown>));
-          if (mapped.length > 0) {
-            setOrders(mapped);
-            saveLocal(mapped);
-          } else {
-            const local = loadLocal();
-            if (local.length > 0) {
-              console.log("[orders] migrating local cache to Supabase:", local.length, "rows");
-              setOrders(local);
-              db.from("work_orders")
-                .upsert(local.map(toRow), { onConflict: "id", ignoreDuplicates: true })
-                .then(({ error: migErr }) => {
-                  if (migErr) console.error("[orders] migration failed:", migErr.message);
-                  else saveLocal(local);
-                });
-            }
-          }
+          setOrders(mapped);
         } else {
-          setOrders(loadLocal());
+          setOrders([]);
         }
       });
   }, []);
@@ -322,7 +289,7 @@ export function useOrders() {
   // ── Realtime subscriptions ────────────────────────────────────────────
   useEffect(() => {
     const db = getSupabase();
-    if (!db) return; // Already seeded from localStorage by useState lazy initializer
+    if (!db) return;
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll();

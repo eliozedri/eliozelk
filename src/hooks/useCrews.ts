@@ -6,8 +6,6 @@ import { nanoid } from "nanoid";
 import type { Crew } from "@/types/crew";
 import { getSupabase } from "@/lib/supabase/client";
 
-const STORAGE_KEY = "elkayam_crews";
-
 function fromRow(r: Record<string, unknown>): Crew {
   return {
     id: r.id as string,
@@ -42,15 +40,6 @@ function toRow(c: Crew) {
   };
 }
 
-function loadLocal(): Crew[] {
-  if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]"); } catch { return []; }
-}
-
-function saveLocal(crews: Crew[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(crews)); } catch { /* ignore */ }
-}
-
 function isNewerOrRecent(existing: string, incoming: string, toleranceMs = 5000): boolean {
   try {
     return new Date(incoming).getTime() > new Date(existing).getTime() - toleranceMs;
@@ -64,33 +53,19 @@ export function useCrews() {
   useEffect(() => { ref.current = crews; }, [crews]);
 
   useEffect(() => {
+    // ARCHITECTURE: Supabase is the sole source of truth for operational business data.
+    // localStorage is not used — no seeding, no fallback, no caching.
     const db = getSupabase();
-    if (!db) {
-      setCrews(loadLocal()); // eslint-disable-line react-hooks/set-state-in-effect
-      return;
-    }
+    if (!db) { return; } // eslint-disable-line react-hooks/set-state-in-effect
 
     const fetchAll = () =>
       db.from("crews").select("*").order("created_at", { ascending: true })
         .then(({ data, error }) => {
           if (!error && data) {
             const mapped = data.map(r => fromRow(r as Record<string, unknown>));
-            if (mapped.length > 0) {
-              setCrews(mapped);
-              saveLocal(mapped);
-            } else {
-              const local = loadLocal();
-              if (local.length > 0) {
-                console.log("[crews] migrating local cache to Supabase:", local.length, "rows");
-                setCrews(local);
-                db.from("crews").upsert(local.map(toRow), { onConflict: "id" }).then(({ error: migErr }) => {
-                  if (migErr) console.error("[crews] migration failed:", migErr.message);
-                  else saveLocal(local);
-                });
-              }
-            }
+            setCrews(mapped);
           } else {
-            setCrews(loadLocal());
+            setCrews([]);
           }
         });
 
@@ -179,7 +154,6 @@ export function useCrews() {
     const original = ref.current.find(c => c.id === id);
     const remaining = ref.current.filter(c => c.id !== id);
     setCrews(remaining);
-    saveLocal(remaining);
     const db = getSupabase();
     if (db) {
       db.from("crews").delete().eq("id", id).then(({ error }) => {

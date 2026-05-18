@@ -5,8 +5,6 @@ import type { WorkDiary, WorkDiaryStatus, DiaryApprovalStatus } from "@/types/wo
 import { createEmptyDiary } from "@/types/workDiary";
 import { getSupabase } from "@/lib/supabase/client";
 
-const STORAGE_KEY = "elkayam_work_diaries";
-
 function fromRow(r: Record<string, unknown>): WorkDiary {
   const data = (r.data ?? {}) as Partial<WorkDiary>;
   return {
@@ -50,20 +48,6 @@ function toRow(d: WorkDiary) {
   };
 }
 
-function loadLocal(): WorkDiary[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLocal(diaries: WorkDiary[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(diaries)); } catch { /* ignore */ }
-}
-
 // Apply incoming update if it's newer than or within clock-skew tolerance of existing.
 // Strictly greater-than would silently drop legitimate remote updates when the local
 // optimistic timestamp (client clock) is slightly ahead of the server clock.
@@ -91,33 +75,19 @@ export function useWorkDiaries() {
   useEffect(() => { ref.current = diaries; }, [diaries]);
 
   useEffect(() => {
+    // ARCHITECTURE: Supabase is the sole source of truth for operational business data.
+    // localStorage is not used — no seeding, no fallback, no caching.
     const db = getSupabase();
-    if (!db) {
-      setDiaries(loadLocal()); // eslint-disable-line react-hooks/set-state-in-effect
-      return;
-    }
+    if (!db) { return; } // eslint-disable-line react-hooks/set-state-in-effect
 
     const fetchAll = () =>
       db.from("work_diaries").select("*").order("created_at", { ascending: false })
         .then(({ data, error }) => {
           if (!error && data) {
             const mapped = data.map(r => fromRow(r as Record<string, unknown>));
-            if (mapped.length > 0) {
-              setDiaries(mapped);
-              saveLocal(mapped);
-            } else {
-              const local = loadLocal();
-              if (local.length > 0) {
-                console.log("[work_diaries] migrating local cache to Supabase:", local.length, "rows");
-                setDiaries(local);
-                db.from("work_diaries").upsert(local.map(toRow), { onConflict: "id" }).then(({ error: migErr }) => {
-                  if (migErr) console.error("[work_diaries] migration failed:", migErr.message);
-                  else saveLocal(local);
-                });
-              }
-            }
+            setDiaries(mapped);
           } else {
-            setDiaries(loadLocal());
+            setDiaries([]);
           }
         });
 
@@ -239,7 +209,6 @@ export function useWorkDiaries() {
     const original = ref.current.find(d => d.id === id);
     const remaining = ref.current.filter(d => d.id !== id);
     setDiaries(remaining);
-    saveLocal(remaining);
     const db = getSupabase();
     if (db) {
       db.from("work_diaries").delete().eq("id", id).then(({ error }) => {
@@ -258,7 +227,6 @@ export function useWorkDiaries() {
     const updated: WorkDiary = { ...original, status: "cancelled", cancelledAt: now, updatedAt: now };
     const next = ref.current.map(d => d.id === id ? updated : d);
     setDiaries(next);
-    saveLocal(next);
     const db = getSupabase();
     if (db) {
       db.from("work_diaries")

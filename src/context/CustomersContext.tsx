@@ -19,19 +19,6 @@ interface CustomersContextValue {
 
 const CustomersContext = createContext<CustomersContextValue | null>(null);
 
-// ─── Local cache (read-only boot cache — written once after successful fetch) ─
-
-const STORAGE_KEY = "elkayam_customers";
-
-function readCache(): Customer[] {
-  if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]"); } catch { return []; }
-}
-
-function warmCache(items: Customer[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch { /* ignore */ }
-}
-
 // ─── Row mapping ──────────────────────────────────────────────────────────────
 
 function fromRow(r: Record<string, unknown>): Customer {
@@ -94,17 +81,13 @@ export function CustomersProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const db = getSupabase();
 
+    // ARCHITECTURE: Supabase is the sole source of truth for operational business data.
+    // localStorage is not used — no seeding, no fallback, no caching.
     if (!db) {
-      const cached = readCache();
-      setCustomers(cached); // eslint-disable-line react-hooks/set-state-in-effect
-      setSyncStatus("offline");
-      console.warn("[customers] Supabase not configured — running from local cache");
+      setSyncStatus("offline"); // eslint-disable-line react-hooks/set-state-in-effect
+      console.warn("[customers] Supabase not configured");
       return;
     }
-
-    // Show boot cache immediately to avoid empty flash while fetching
-    const cached = readCache();
-    if (cached.length > 0) setCustomers(cached);
 
     // Initial fetch — Supabase is authoritative
     db.from("customers")
@@ -114,26 +97,10 @@ export function CustomersProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           console.error("[customers] initial fetch failed:", error.message);
           setSyncStatus("error");
-          // Keep showing boot cache — do NOT treat as authoritative
           return;
         }
         const mapped = (data ?? []).map(r => fromRow(r as Record<string, unknown>));
-        if (mapped.length > 0) {
-          // Supabase has data — it's authoritative
-          setCustomers(mapped);
-          warmCache(mapped);
-        } else {
-          // Supabase is empty — one-time migration from localStorage boot cache
-          const local = readCache();
-          if (local.length > 0) {
-            console.log("[customers] migrating local cache to Supabase:", local.length, "rows");
-            setCustomers(local);
-            db.from("customers").upsert(local.map(toRow), { onConflict: "id" }).then(({ error: migErr }) => {
-              if (migErr) console.error("[customers] migration failed:", migErr.message);
-            });
-          }
-          // else: genuinely empty — no-op, don't overwrite cache with []
-        }
+        setCustomers(mapped);
         setSyncStatus("connected");
       });
 
