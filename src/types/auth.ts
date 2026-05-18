@@ -51,7 +51,8 @@ export type TabId =
   | "profitability"
   | "cost-settings"
   | "agents"
-  | "access";
+  | "access"
+  | "integrations";
 
 export const ALL_TABS: { id: TabId; label: string; path: string; section: string }[] = [
   { id: "dashboard", label: "לוח בקרה", path: "/", section: "ניהול" },
@@ -72,6 +73,7 @@ export const ALL_TABS: { id: TabId; label: string; path: string; section: string
   { id: "cost-settings", label: "תעריפי עלות", path: "/cost-settings", section: "ניתוח" },
   { id: "agents", label: "מרכז פיקוד דיגיטלי", path: "/agents", section: "בינה מלאכותית" },
   { id: "access", label: "הרשאות גישה", path: "/access", section: "מערכת" },
+  { id: "integrations", label: "אינטגרציות", path: "/integrations", section: "מערכת" },
 ];
 
 export type ActionPermission =
@@ -138,7 +140,7 @@ export const ROLE_DEFAULTS: Record<Role, { tabs: TabId[] | ["*"]; actions: Actio
     actions: ["create_order", "view_accounting"],
   },
   finance_manager: {
-    tabs: ["dashboard", "accounting", "supplier-documents", "profitability", "cost-settings", "agents"],
+    tabs: ["dashboard", "accounting", "supplier-documents", "profitability", "cost-settings", "agents", "integrations"],
     actions: ["view_accounting", "export_accounting", "review_supplier_document", "post_supplier_document"],
   },
   fleet_manager: {
