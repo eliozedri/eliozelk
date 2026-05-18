@@ -6,7 +6,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { nanoid } from "nanoid";
 import { createHash } from "crypto";
-import { classifyDocumentType } from "@/lib/supplierDocuments/classification";
+import {
+  classifyDocumentType,
+  suggestCategory,
+  suggestInventoryAction,
+} from "@/lib/supplierDocuments/classification";
 
 const BUCKET = "supplier-documents";
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
@@ -205,6 +209,35 @@ export async function POST(req: NextRequest) {
     if (extraction.rawText) ocrUpdate.raw_text = extraction.rawText;
 
     await db.from("supplier_documents").update(ocrUpdate).eq("id", docId);
+
+    // Insert extracted line items if parser found any
+    if (extraction.lines && extraction.lines.length > 0) {
+      const lineNow = new Date().toISOString();
+      const lineRows = extraction.lines.map(l => {
+        const cat    = suggestCategory(l.originalDescription);
+        const action = suggestInventoryAction(l.originalDescription, cat.category);
+        return {
+          id:                   nanoid(),
+          document_id:          docId,
+          line_number:          l.lineNumber,
+          original_description: l.originalDescription,
+          normalized_description: l.originalDescription,
+          supplier_sku:         l.supplierSku || "",
+          quantity:             l.quantity ?? null,
+          unit_of_measure:      l.unitOfMeasure,
+          unit_price:           l.unitPrice ?? null,
+          line_total:           l.lineTotal ?? null,
+          category:             cat.category,
+          inventory_action:     action.action,
+          status:               "extracted",
+          confidence_score:     l.confidence,
+          warning_flags:        l.warnings ?? [],
+          created_at:           lineNow,
+          updated_at:           lineNow,
+        };
+      });
+      await db.from("supplier_document_lines").insert(lineRows);
+    }
   } catch (err) {
     // Unexpected OCR crash — still open the review screen so user can fill manually
     await db.from("supplier_documents").update({

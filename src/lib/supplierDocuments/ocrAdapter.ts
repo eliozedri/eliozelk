@@ -37,6 +37,7 @@ export interface ExtractedLine {
   discountPercent?: number;
   lineTotal?: number;
   confidence: number;
+  warnings?: string[];
 }
 
 export interface ExtractionResult {
