@@ -9,12 +9,7 @@ import { getSupabase } from "@/lib/supabase/client";
 import type { WorkOrder } from "@/types/workOrder";
 import type { CatalogItem } from "@/types/catalog";
 import type { MiscRow } from "@/types/order";
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
+import { formatDate } from "@/lib/dateFormatting";
 
 function UrgentBadge() {
   return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">דחוף</span>;

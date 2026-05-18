@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   }
 
   const { data, error } = await db.from("communication_messages")
-    .select("*")
+    .select("id,thread_id,sender_type,sender_user_id,agent_id,channel,content,source_references,created_at")
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true })
     .limit(100);

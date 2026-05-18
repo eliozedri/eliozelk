@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { useOrdersContext } from "@/context/OrdersContext";
 import type { WorkOrder } from "@/types/workOrder";
-import { STATUS_LABELS } from "@/types/workOrder";
+import { STATUS_LABELS, STATUS_COLORS } from "@/types/workOrder";
 import { exportAccountingCSV, exportAccountingExcel, exportAccountingPDF, exportCustomerBillingPDF, exportCustomerBillingExcel } from "@/lib/accountingExport";
 import type { AccountingReportData } from "@/components/pdf/AccountingDocument";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
@@ -381,16 +381,6 @@ const ALL_STATUSES = [
   { value: "ready_installation", label: STATUS_LABELS.ready_installation },
   { value: "completed", label: STATUS_LABELS.completed },
 ];
-
-const STATUS_COLORS: Record<string, string> = {
-  graphics_pending: "bg-amber-100 text-amber-700",
-  graphics_active: "bg-blue-100 text-blue-700",
-  graphics_done: "bg-green-100 text-green-700",
-  production: "bg-purple-100 text-purple-700",
-  ready_installation: "bg-teal-100 text-teal-700",
-  completed: "bg-gray-100 text-gray-600",
-  cancelled: "bg-red-100 text-red-600",
-};
 
 function agingDays(isoDate: string): number {
   return Math.round((Date.now() - new Date(isoDate).getTime()) / 86_400_000);

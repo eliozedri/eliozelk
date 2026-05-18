@@ -15,6 +15,7 @@ import {
   ORDER_TYPE_LABELS,
   ORDER_TYPE_COLORS,
   FULFILLMENT_LABELS,
+  FABRICATION_STATUS_LABELS,
 } from "@/types/workOrder";
 import type { WorkOrder, WorkOrderStatus } from "@/types/workOrder";
 import { getStageSlaColor, hoursInCurrentStage, canMarkReadyForInstallation, canMarkOperationallyComplete } from "@/lib/workflowEngine";
@@ -23,6 +24,7 @@ import type { OrderRiskScore } from "@/hooks/useOrderRiskScores";
 import { openWorkOrderPDF, exportWorkOrderCSV } from "@/lib/pdfExport";
 import { CancelOrderModal } from "@/components/Accounting";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { formatDate } from "@/lib/dateFormatting";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -51,11 +53,6 @@ const OPERATIONAL_STATUSES = new Set<WorkOrderStatus>([
 
 function getLastUpdated(order: WorkOrder): string {
   return order.updatedAt ?? order.graphicsCompletedAt ?? order.graphicsAcknowledgedAt ?? order.createdAt;
-}
-
-function formatDate(iso: string): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 function formatTime(iso: string): string {
@@ -807,15 +804,6 @@ function CompleteOrderModal({ order, onConfirm, onCancel }: {
 }
 
 // ─── Order Detail Slide-Over ───────────────────────────────────────────────
-
-const FABRICATION_STATUS_LABELS: Record<string, string> = {
-  pending: "ממתין",
-  acknowledged: "אושר קבלה",
-  in_progress: "בביצוע",
-  ready: "מוכן",
-  completed: "הושלם",
-  issue: "בעיה",
-};
 
 function OrderDetailPanel({
   order,
