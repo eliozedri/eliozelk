@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import { getSupabase } from "@/lib/supabase/client";
 import type { CommThread, CommMessage } from "@/types/agentChat";
+export type { PageContext } from "@/lib/agents/chat-engine";
 
 async function getBearerToken(): Promise<string | null> {
   const db = getSupabase();
@@ -96,7 +97,7 @@ export function useAgentChat(agentId?: string | null, existingThreadId?: string 
     return true;
   }, [thread]);
 
-  const sendMessage = useCallback(async (content: string): Promise<void> => {
+  const sendMessage = useCallback(async (content: string, pageContext?: { pathname: string } | null): Promise<void> => {
     const token = await getBearerToken();
     if (!token || !content.trim()) return;
 
@@ -111,7 +112,7 @@ export function useAgentChat(agentId?: string | null, existingThreadId?: string 
       const res = await fetch("/api/agents/chat/messages", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: t.id, content: content.trim() }),
+        body: JSON.stringify({ threadId: t.id, content: content.trim(), pageContext: pageContext ?? null }),
       });
 
       if (!res.ok) {

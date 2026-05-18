@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useAgentChat } from "@/hooks/useAgentChat";
 import type { CommMessage } from "@/types/agentChat";
 
@@ -130,6 +131,7 @@ interface Props {
 
 export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentIcon, threadId }: Props) {
   const { messages, sending, loading, error, initialize, sendMessage, deleteChat } = useAgentChat(agentId, threadId);
+  const pathname                    = usePathname();
   const [input, setInput]           = useState("");
   const [minimized, setMinimized]   = useState(false);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
@@ -216,7 +218,7 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
     const text = input.trim();
     if (!text || sending) return;
     setInput("");
-    await sendMessage(text);
+    await sendMessage(text, { pathname });
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -225,7 +227,7 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
 
   async function handleChip(chip: string) {
     if (sending) return;
-    await sendMessage(chip);
+    await sendMessage(chip, { pathname });
   }
 
   async function handleConfirmEnd() {

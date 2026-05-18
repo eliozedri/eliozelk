@@ -20,30 +20,84 @@ export type ChatIntent =
   | "restored"
   | "inventory"
   | "profitability"
+  | "needs_attention"
+  | "department_status"
+  | "qa_pilot"
+  | "agent_status"
+  | "navigation"
+  | "supplier_documents"
+  | "expenses"
   | "general";
 
+export interface PageContext {
+  pathname: string;
+}
+
+export interface HistoryTurn {
+  role: "user" | "agent";
+  content: string;
+}
+
 const INTENT_KEYWORDS: Record<Exclude<ChatIntent, "general">, string[]> = {
-  urgent:        ["דחוף", "קריטי", "חירום", "מיידי", "ביותר"],
-  approvals:     ["אישור", "לאשר", "ממתינ"],
-  billing:       ["חיוב", "חשבונית", "תשלום", "גבייה", "חוב", "billing", "חסום", "חסומות", "חסומים", "חסומ.*מלאי", "מלאי.*חסום", "התאמת.*מלאי.*חיוב", "חיוב.*מלאי"],
-  diaries:       ["יומן", "שטח", "ביצוע", "צוות", "נהג", "diary"],
-  exceptions:    ["חריג", "בעיה", "שגיאה", "אזהרה", "exception"],
-  scan:          ["סריקה", "האחרונה", "מצאו", "ממצאים", "פעילות", "scan"],
-  summary:       ["סיכום", "מצב", "יום", "תעדכן", "תסכם", "קורה", "overview"],
-  // profitability before orders: "לקוח" is in orders keywords; profitability-customer
-  // queries must be detected first to reach their sub-routes.
-  profitability: ["רווח", "רווחיות", "הפסד", "שולי", "מרווח", "cfo", "כספי", "כלכלי", "snapshot", "פרופיטביליט", "להשלים", "missing_data", "חסרות הזמנות", "חסרים פריטים", "למה הרווחיות", "מה צריך", "פירוט עבודות", "למה לקוח"],
-  orders:        ["הזמנה", "פרויקט", "לקוח", "order"],
-  restored:      ["שוחזר", "שחזור", "restore", "ביטול", "ארכיון"],
-  inventory:     ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער", "צריכה", "נצרך", "נצרכו", "התאמה", "יומן", "בוצע", "ניוצל", "consump", "החזר", "החזרה", "הוחזר", "תעודת", "תעודה", "קליטה", "נקלט", "נקלטה", "delivery", "return_from", "ספירה", "המלצ", "לרכוש", "לקנות", "לדרוג", "דחוף.*רכש", "purchase", "recommend"],
+  // pilot check first — "פיילוט" must win over needs_attention "מה נשאר"
+  qa_pilot:          ["פיילוט", "מוכנות", "להתחיל פיילוט", "לפני פיילוט", "מצב פיילוט", "מוכן להתחיל", "שער מוכנות"],
+  // billing before approvals: "מה ממתין לחיוב?" has "חיוב"; must not hit approvals first
+  billing:           ["חיוב", "חשבונית", "תשלום", "גבייה", "חוב", "billing", "חסום", "חסומות", "חסומים", "חסומ.*מלאי", "מלאי.*חסום", "התאמת.*מלאי.*חיוב", "חיוב.*מלאי"],
+  approvals:         ["אישור", "לאשר", "לאישורי"],
+  needs_attention:   ["דורש טיפול", "לטפל", "לטיפול", "צריך טיפול", "מה מחכה", "מה נשאר", "מה פתוח", "מה ממתין"],
+  agent_status:      ["מצב הסוכנים", "מצב הסוכן", "איזה סוכנים", "כמה סוכנים", "סוכנים פעילים", "איזה סוכן פעיל"],
+  navigation:        ["איפה אני רואה", "איך מגיע", "לאיפה", "איזה דף", "איך נכנס", "היכן אני"],
+  // department keywords not in other intents (מחסן stays in inventory)
+  department_status: ["מצב הגרפיקה", "מצב המסגרייה", "מצב תיאומים", "מה קורה בגרפיקה", "מה קורה במסגרייה", "גרפיקה", "מסגרייה", "QA", "תיאומים", "קואורדינציה"],
+  urgent:            ["דחוף", "קריטי", "חירום", "מיידי", "ביותר", "הדחוף ביותר", "הכי דחוף", "הכי קריטי"],
+  diaries:           ["יומן", "שטח", "ביצוע", "צוות", "נהג", "diary"],
+  // plural forms added: שגיאות, חריגות, אזהרות
+  exceptions:        ["חריג", "בעיה", "שגיאה", "שגיאות", "חריגות", "אזהרה", "אזהרות", "exception", "כמה שגיאות", "כמה חריגות"],
+  scan:              ["סריקה", "האחרונה", "מצאו", "ממצאים", "פעילות", "scan"],
+  // supplier documents before inventory so "חשבונית ספק" hits supplier_documents not inventory
+  supplier_documents: ["חשבונית ספק", "מסמך ספק", "מסמכי ספקים", "ממתין לבדיקה", "קליטת מסמך", "תעודת משלוח ממתינה", "חשד לכפילות מסמך", "כמה מסמכים", "אילו מסמכים", "מסמכים תקועים"],
+  expenses:          ["הוצאה", "הוצאות", "כמה קנינו", "כמה הוצאנו", "הוצאות החודש", "ממה קנינו", "אצל איזה ספק", "הוצאה לפי קטגוריה", "expense"],
+  // inventory before summary so "מה מצב המחסן?" hits inventory not summary
+  inventory:         ["מלאי", "מחסן", "פריט", "חסר", "מינימום", "רכש", "ספק", "להזמין", "inventory", "מיפוי", "פריטים", "שריון", "שמור", "שמורים", "reserv", "שוחרר", "פער", "צריכה", "נצרך", "נצרכו", "התאמה", "יומן", "בוצע", "ניוצל", "consump", "החזר", "החזרה", "הוחזר", "תעודת", "תעודה", "קליטה", "נקלט", "נקלטה", "delivery", "return_from", "ספירה", "המלצ", "לרכוש", "לקנות", "לדרוג", "דחוף.*רכש", "purchase", "recommend"],
+  // profitability before orders: "לקוח" is in orders keywords; profitability-customer queries must be detected first
+  profitability:     ["רווח", "רווחיות", "הפסד", "שולי", "מרווח", "cfo", "כספי", "כלכלי", "snapshot", "פרופיטביליט", "להשלים", "missing_data", "חסרות הזמנות", "חסרים פריטים", "למה הרווחיות", "מה צריך", "פירוט עבודות", "למה לקוח"],
+  orders:            ["הזמנה", "פרויקט", "לקוח", "order"],
+  restored:          ["שוחזר", "שחזור", "restore", "ביטול", "ארכיון"],
+  summary:           ["סיכום", "מצב", "יום", "תעדכן", "תסכם", "קורה", "overview"],
 };
 
-export function detectIntent(message: string): ChatIntent {
-  const lower = message.toLowerCase();
+export function detectIntent(
+  message: string,
+  pageContext?: PageContext | null,
+  history?: HistoryTurn[] | null,
+): ChatIntent {
+  const lower = message.trim().toLowerCase();
+
+  // Follow-up: very short or continuation word → re-run on last user message
+  const CONTINUATION = ["תפרט", "ומה עוד", "הצג הכל", "המשך", "ולמה", "אז מה"];
+  if ((lower.length < 8 || CONTINUATION.some(w => lower.startsWith(w))) && history?.length) {
+    const lastUser = [...history].reverse().find(h => h.role === "user");
+    if (lastUser) return detectIntent(lastUser.content, pageContext, null);
+  }
+
   for (const [intent, keywords] of Object.entries(INTENT_KEYWORDS) as [Exclude<ChatIntent, "general">, string[]][]) {
     if (keywords.some(k => lower.includes(k.toLowerCase()))) return intent;
   }
-  return "summary";
+
+  // Page context auto-routing when no keyword matched
+  if (pageContext) {
+    const PATHNAME_INTENT: Partial<Record<string, ChatIntent>> = {
+      "/warehouse":   "inventory",
+      "/accounting":  "billing",
+      "/orders":      "orders",
+      "/fabrication": "department_status",
+      "/graphics":    "department_status",
+    };
+    const routed = PATHNAME_INTENT[pageContext.pathname];
+    if (routed) return routed;
+  }
+
+  return "general";
 }
 
 // ── Formatting helpers ────────────────────────────────────────────────────────
@@ -69,10 +123,12 @@ export interface ChatEngineResult {
 export async function runChatEngine(
   db: SupabaseClient,
   ctx: { agentId: string | null; userId: string },
-  message: string
+  message: string,
+  options?: { pageContext?: PageContext | null; history?: HistoryTurn[] | null },
 ): Promise<ChatEngineResult> {
-  const intent = detectIntent(message);
+  const intent      = detectIntent(message, options?.pageContext, options?.history);
   const agentFilter = ctx.agentId;
+  const pageContext = options?.pageContext ?? null;
 
   // Scoped exception query builder
   function excBase() {
@@ -270,11 +326,33 @@ export async function runChatEngine(
     }
 
     case "exceptions": {
-      const { data } = await excBase();
-      const excs = data ?? [];
+      // Number detection: user may reference a count visible in the UI (e.g. "מה אלו 49 השגיאות?")
+      const numMatch = message.match(/(\d+)/);
+      const mentionedNumber = numMatch ? parseInt(numMatch[1], 10) : null;
+
+      let excQ = db.from("agent_exceptions")
+        .select("id,agent_id,severity,category,title,status")
+        .in("status", ["open", "acknowledged"])
+        .order("severity", { ascending: false })
+        .limit(mentionedNumber !== null ? 200 : 20);
+      if (agentFilter) excQ = excQ.eq("agent_id", agentFilter);
+      const { data: excData } = await excQ;
+      const excs = excData ?? [];
 
       if (excs.length === 0) {
         return { content: "✅ אין חריגות פתוחות כרגע — המערכת תקינה.", sourceRefs: [] };
+      }
+
+      const lines: string[] = [];
+      if (mentionedNumber !== null) {
+        const diff = Math.abs(excs.length - mentionedNumber);
+        if (diff <= Math.max(5, Math.round(mentionedNumber * 0.1))) {
+          lines.push(`⚠️ **${excs.length} חריגות פתוחות — פירוט לפי חומרה וסוכן:**`);
+        } else {
+          lines.push(`⚠️ **${excs.length} חריגות פתוחות כרגע** (שאלת על ${mentionedNumber} — ייתכן שהמספר השתנה). פירוט:`);
+        }
+      } else {
+        lines.push(`⚠️ **${excs.length} חריגות פתוחות:**`);
       }
 
       const bySev: Record<string, typeof excs> = {};
@@ -284,12 +362,28 @@ export async function runChatEngine(
         bySev[s].push(e);
       });
 
-      const lines = [`⚠️ **${excs.length} חריגות פתוחות:**`];
       for (const sev of ["critical", "error", "warn", "info"]) {
         const group = bySev[sev] ?? [];
         if (group.length === 0) continue;
         lines.push(`\n${SEV_ICON[sev]} **${SEV_HE[sev]} (${group.length}):**`);
-        group.slice(0, 5).forEach(e => lines.push(`  • ${e.title as string}`));
+        if (mentionedNumber !== null) {
+          // Detailed: group by agent
+          const byAgent: Record<string, typeof excs> = {};
+          group.forEach(e => {
+            const a = (e.agent_id as string | null) ?? "unknown";
+            if (!byAgent[a]) byAgent[a] = [];
+            byAgent[a].push(e);
+          });
+          for (const [aId, aExcs] of Object.entries(byAgent)) {
+            const agentLabel = aId.replace(/-agent$/, "").replace(/-/g, " ");
+            lines.push(`  📌 ${agentLabel} (${aExcs.length}):`);
+            (aExcs as typeof excs).slice(0, 3).forEach(e => lines.push(`    • ${e.title as string}`));
+            if (aExcs.length > 3) lines.push(`    ... ועוד ${aExcs.length - 3}`);
+          }
+        } else {
+          group.slice(0, 5).forEach(e => lines.push(`  • ${e.title as string}`));
+          if (group.length > 5) lines.push(`  ... ועוד ${group.length - 5}`);
+        }
       }
 
       return {
@@ -1171,8 +1265,382 @@ export async function runChatEngine(
       return { content: lines.join("\n"), sourceRefs: [] };
     }
 
-    // "summary" + default + "general"
+    case "needs_attention": {
+      const [naExcRes, naTaskRes, naApprRes, naDiaryRes, naOrderRes] = await Promise.all([
+        excBase().in("severity", ["critical", "error"]).limit(10),
+        taskBase().in("priority", ["critical", "high"]).limit(10),
+        (agentFilter
+          ? db.from("agent_approvals").select("id,agent_id,title,risk_level").eq("agent_id", agentFilter)
+          : db.from("agent_approvals").select("id,agent_id,title,risk_level")
+        ).eq("status", "pending").limit(10),
+        db.from("work_diaries").select("id,customer_name").not("approval_status", "in", '("approved","rejected")').limit(5),
+        db.from("work_orders").select("id,order_number,customer").eq("status", "completed").in("accounting_status", ["pending", "verified"]).limit(5),
+      ]);
+
+      const naExcs   = naExcRes.data ?? [];
+      const naTasks  = naTaskRes.data ?? [];
+      const naApprs  = naApprRes.data ?? [];
+      const naDiary  = naDiaryRes.data ?? [];
+      const naOrders = naOrderRes.data ?? [];
+
+      if (naExcs.length === 0 && naTasks.length === 0 && naApprs.length === 0) {
+        return { content: "✅ אין פריטים קריטיים הדורשים טיפול מיידי כרגע.", sourceRefs: [] };
+      }
+
+      const naLines: string[] = [`⚡ **מה דורש טיפול כרגע — ${new Date().toLocaleDateString("he-IL")}**\n`];
+      if (naExcs.length > 0) {
+        naLines.push(`🔴 **${naExcs.length} חריגות קריטיות/שגיאות:**`);
+        naExcs.slice(0, 6).forEach(e => naLines.push(`  ${SEV_ICON[e.severity as string] ?? "🔴"} ${e.title as string}`));
+      }
+      if (naTasks.length > 0) {
+        naLines.push(`\n⚡ **${naTasks.length} משימות בעדיפות גבוהה:**`);
+        naTasks.slice(0, 5).forEach(t => naLines.push(`  • ${t.title as string} — ${PRI_HE[t.priority as string] ?? t.priority}`));
+      }
+      if (naApprs.length > 0) {
+        naLines.push(`\n📋 **${naApprs.length} אישורים ממתינים:**`);
+        naApprs.slice(0, 4).forEach(a => naLines.push(`  • ${a.title as string}`));
+      }
+      if (naDiary.length > 0)  naLines.push(`\n📝 ${naDiary.length} יומנים ממתינים לאישור`);
+      if (naOrders.length > 0) naLines.push(`💰 ${naOrders.length} הזמנות מושלמות ממתינות לחיוב`);
+
+      return {
+        content: naLines.join("\n"),
+        sourceRefs: naExcs.slice(0, 3).map(e => ({ table: "agent_exceptions", id: e.id as string, label: e.title as string })),
+      };
+    }
+
+    case "department_status": {
+      const DEPT_MAP: { pattern: RegExp; agentId: string; labelHe: string }[] = [
+        { pattern: /גרפיקה|ייצור גרפי/,     agentId: "graphics-production-agent", labelHe: "גרפיקה וייצור" },
+        { pattern: /מסגרייה/,                agentId: "fabrication-agent",          labelHe: "מסגרייה" },
+        { pattern: /תיאומים|קואורדינציה|QA/, agentId: "coordination-qa-agent",     labelHe: "QA ותיאומים" },
+        { pattern: /ביצוע שטח|שטח/,          agentId: "field-ops-agent",            labelHe: "ביצוע שטח" },
+        { pattern: /כספים|גבייה/,             agentId: "billing-collections-agent",  labelHe: "כספים וגבייה" },
+        { pattern: /הזמנות|תפעול/,            agentId: "orders-agent",              labelHe: "הזמנות ותפעול" },
+      ];
+      const PATH_TO_DEPT: Record<string, { agentId: string; labelHe: string }> = {
+        "/graphics":    { agentId: "graphics-production-agent", labelHe: "גרפיקה וייצור" },
+        "/fabrication": { agentId: "fabrication-agent",         labelHe: "מסגרייה" },
+      };
+
+      const lowerDept = message.toLowerCase();
+      let deptAgentId: string | null = null;
+      let deptLabel = "המחלקה";
+      const deptMatch = DEPT_MAP.find(d => d.pattern.test(lowerDept));
+      if (deptMatch) {
+        deptAgentId = deptMatch.agentId;
+        deptLabel   = deptMatch.labelHe;
+      } else if (pageContext) {
+        const fromPath = PATH_TO_DEPT[pageContext.pathname];
+        if (fromPath) { deptAgentId = fromPath.agentId; deptLabel = fromPath.labelHe; }
+      }
+
+      if (!deptAgentId) {
+        return {
+          content: "לא זיהיתי איזה מחלקה אתה שואל עליה.\n\nניתן לשאול על: **גרפיקה**, **מסגרייה**, **QA ותיאומים**, **ביצוע שטח**, **כספים וגבייה**, **הזמנות ותפעול**.",
+          sourceRefs: [],
+        };
+      }
+
+      const [dExcRes, dTaskRes, dApprRes] = await Promise.all([
+        db.from("agent_exceptions").select("id,severity,title").eq("agent_id", deptAgentId).in("status", ["open","acknowledged"]).order("severity", { ascending: false }).limit(10),
+        db.from("agent_tasks").select("id,title,priority").eq("agent_id", deptAgentId).in("status", ["open","in_progress"]).order("priority", { ascending: false }).limit(8),
+        db.from("agent_approvals").select("id,title").eq("agent_id", deptAgentId).eq("status", "pending").limit(5),
+      ]);
+      const dExcs  = dExcRes.data ?? [];
+      const dTasks = dTaskRes.data ?? [];
+      const dApprs = dApprRes.data ?? [];
+
+      if (dExcs.length === 0 && dTasks.length === 0 && dApprs.length === 0) {
+        return { content: `✅ **${deptLabel}** — המחלקה פועלת תקין, אין חריגות פתוחות.`, sourceRefs: [] };
+      }
+
+      const dLines: string[] = [`🏢 **מצב ${deptLabel} — ${new Date().toLocaleDateString("he-IL")}**\n`];
+      const dCrit = dExcs.filter(e => e.severity === "critical" || e.severity === "error");
+      const dWarn = dExcs.filter(e => e.severity === "warn" || e.severity === "info");
+      if (dCrit.length > 0) {
+        dLines.push(`🔴 **חריגות קריטיות (${dCrit.length}):**`);
+        dCrit.slice(0, 5).forEach(e => dLines.push(`  ${SEV_ICON[e.severity as string] ?? "🔴"} ${e.title as string}`));
+      }
+      if (dWarn.length > 0) {
+        dLines.push(`🟡 **אזהרות (${dWarn.length}):**`);
+        dWarn.slice(0, 4).forEach(e => dLines.push(`  • ${e.title as string}`));
+      }
+      if (dExcs.length === 0) dLines.push("✅ אין חריגות פתוחות");
+      if (dTasks.length > 0) {
+        dLines.push(`\n⚡ **${dTasks.length} משימות פתוחות:**`);
+        dTasks.slice(0, 5).forEach(t => dLines.push(`  • ${t.title as string} — ${PRI_HE[t.priority as string] ?? t.priority}`));
+      }
+      if (dApprs.length > 0) {
+        dLines.push(`\n📋 **${dApprs.length} אישורים ממתינים:**`);
+        dApprs.slice(0, 3).forEach(a => dLines.push(`  • ${a.title as string}`));
+      }
+      return {
+        content: dLines.join("\n"),
+        sourceRefs: dExcs.slice(0, 3).map(e => ({ table: "agent_exceptions", id: e.id as string, label: e.title as string })),
+      };
+    }
+
+    case "qa_pilot": {
+      const QA_AGENT = "coordination-qa-agent";
+      const [qExcRes, qTaskRes, qApprRes] = await Promise.all([
+        db.from("agent_exceptions").select("id,severity,title").eq("agent_id", QA_AGENT).in("status", ["open","acknowledged"]).order("severity", { ascending: false }).limit(15),
+        db.from("agent_tasks").select("id,title,priority").eq("agent_id", QA_AGENT).in("status", ["open","in_progress"]).limit(10),
+        db.from("agent_approvals").select("id,title").eq("agent_id", QA_AGENT).eq("status", "pending").limit(10),
+      ]);
+      const qExcs  = qExcRes.data ?? [];
+      const qTasks = qTaskRes.data ?? [];
+      const qApprs = qApprRes.data ?? [];
+      const qCrit  = qExcs.filter(e => e.severity === "critical" || e.severity === "error");
+
+      const pilotReady   = qCrit.length === 0 && qApprs.length === 0 && qTasks.length < 3;
+      const pilotWarning = !pilotReady && qCrit.length === 0;
+
+      const qLines: string[] = [`🔍 **סטטוס מוכנות פיילוט — ${new Date().toLocaleDateString("he-IL")}**\n`];
+      qLines.push(`${qCrit.length === 0 ? "✅" : "❌"} חריגות QA קריטיות: **${qCrit.length}** (מתוך ${qExcs.length} בסה"כ)`);
+      qLines.push(`${qTasks.length === 0 ? "✅" : qTasks.length < 3 ? "⚠️" : "❌"} משימות פתוחות: **${qTasks.length}**`);
+      qLines.push(`${qApprs.length === 0 ? "✅" : "❌"} אישורים ממתינים: **${qApprs.length}**`);
+
+      if (qExcs.length > 0) {
+        qLines.push(`\n**חריגות QA פתוחות:**`);
+        qExcs.slice(0, 6).forEach(e => qLines.push(`  ${SEV_ICON[e.severity as string] ?? "🟡"} ${e.title as string}`));
+      }
+      if (qTasks.length > 0) {
+        qLines.push(`\n**משימות פתוחות:**`);
+        qTasks.slice(0, 4).forEach(t => qLines.push(`  • ${t.title as string}`));
+      }
+      if (qApprs.length > 0) {
+        qLines.push(`\n**אישורים ממתינים:**`);
+        qApprs.slice(0, 3).forEach(a => qLines.push(`  • ${a.title as string}`));
+      }
+      qLines.push("");
+      if (pilotReady) {
+        qLines.push("**המלצה: ✅ ניתן להתחיל פיילוט** — אין חריגות קריטיות, אין אישורים ממתינים.");
+      } else if (pilotWarning) {
+        qLines.push("**המלצה: ⚠️ יש נושאים לסגירה לפני פיילוט** — אין חריגות קריטיות, אך יש משימות/אישורים פתוחים.");
+      } else {
+        qLines.push("**המלצה: ❌ לא מומלץ להתחיל פיילוט** — סגור את החריגות הקריטיות תחילה.");
+      }
+      return {
+        content: qLines.join("\n"),
+        sourceRefs: qExcs.slice(0, 3).map(e => ({ table: "agent_exceptions", id: e.id as string, label: e.title as string })),
+      };
+    }
+
+    case "agent_status": {
+      if (agentFilter) {
+        return {
+          content: "מידע מפורט על סוכנים זמין דרך **מרכז הפיקוד**. פתח את הצ׳אט של מרכז הפיקוד (כפתור 🤖) לצפייה ברשימת הסוכנים.",
+          sourceRefs: [],
+        };
+      }
+      const [agRes, agExcRes, agTaskRes] = await Promise.all([
+        db.from("agents").select("id,name,status,last_run_at").limit(15),
+        db.from("agent_exceptions").select("agent_id,severity").in("status", ["open","acknowledged"]).in("severity", ["critical","error"]),
+        db.from("agent_tasks").select("agent_id").in("status", ["open","in_progress"]),
+      ]);
+      const agAgents = agRes.data ?? [];
+      const agExcs   = agExcRes.data ?? [];
+      const agTasks  = agTaskRes.data ?? [];
+      const excByAg  = new Map<string, number>();
+      for (const e of agExcs)  excByAg.set(e.agent_id as string, (excByAg.get(e.agent_id as string) ?? 0) + 1);
+      const taskByAg = new Map<string, number>();
+      for (const t of agTasks) taskByAg.set(t.agent_id as string, (taskByAg.get(t.agent_id as string) ?? 0) + 1);
+
+      const agLines: string[] = [`🤖 **מצב סוכנים — ${new Date().toLocaleDateString("he-IL")}**\n`, `סה"כ: **${agAgents.length}** סוכנים\n`];
+      for (const a of agAgents) {
+        const critCnt = excByAg.get(a.id as string) ?? 0;
+        const taskCnt = taskByAg.get(a.id as string) ?? 0;
+        const lastRun = a.last_run_at ? fmtDate(a.last_run_at as string) : "טרם הופעל";
+        const icon    = critCnt > 0 ? "🔴" : a.status === "active" ? "🟢" : "⚪";
+        agLines.push(`${icon} **${a.name as string}** | סריקה: ${lastRun}${critCnt > 0 ? ` | ⚠ ${critCnt} קריטי` : ""}${taskCnt > 0 ? ` | ${taskCnt} משימות` : ""}`);
+      }
+      return { content: agLines.join("\n"), sourceRefs: [] };
+    }
+
+    case "navigation": {
+      const NAV_MAP2: { pattern: RegExp; labelHe: string; path: string }[] = [
+        { pattern: /הזמנות/,            labelHe: "הזמנות",        path: "/orders" },
+        { pattern: /מחסן|מלאי/,         labelHe: "מחסן",          path: "/warehouse" },
+        { pattern: /גרפיקה/,            labelHe: "גרפיקה",        path: "/graphics" },
+        { pattern: /מסגרייה/,           labelHe: "מסגרייה",       path: "/fabrication" },
+        { pattern: /שטח|יומנים/,        labelHe: "יומני שטח",     path: "/work-diary" },
+        { pattern: /כספים|הנהח/,        labelHe: "הנה\"ח",        path: "/accounting" },
+        { pattern: /לקוחות/,            labelHe: "לקוחות",        path: "/customers" },
+        { pattern: /קטלוג|תמחור/,       labelHe: "קטלוג ותמחור", path: "/catalog" },
+        { pattern: /סוכנים|פיקוד/,      labelHe: "מרכז הפיקוד",  path: "/agents" },
+        { pattern: /רווחיות/,           labelHe: "רווחיות",       path: "/profitability" },
+        { pattern: /לוח זמנים/,         labelHe: "לוח זמנים",     path: "/schedule" },
+        { pattern: /בטיחות/,            labelHe: "בטיחות",        path: "/safety" },
+      ];
+      const lowerNav = message.toLowerCase();
+      const navHit = NAV_MAP2.find(n => n.pattern.test(lowerNav));
+      if (!navHit) {
+        const allPages = NAV_MAP2.map(n => `• ${n.labelHe} → \`${n.path}\``).join("\n");
+        return { content: `🗺 **מפת הניווט:**\n\n${allPages}`, sourceRefs: [] };
+      }
+      return { content: `🗺 כדי לראות **${navHit.labelHe}**, עבור לנתיב: \`${navHit.path}\``, sourceRefs: [] };
+    }
+
+    case "supplier_documents": {
+      const [pendingRes, dupRes, postedRes] = await Promise.all([
+        db.from("supplier_documents")
+          .select("id,document_type,supplier_name_raw,document_number,document_date,total_after_vat,status,suppliers(name)")
+          .in("status", ["draft_ready", "needs_review"])
+          .order("created_at", { ascending: false })
+          .limit(10),
+        db.from("supplier_documents")
+          .select("id,document_type,supplier_name_raw,document_number,total_after_vat")
+          .eq("status", "duplicate_suspected")
+          .limit(5),
+        db.from("supplier_documents")
+          .select("id,total_after_vat")
+          .eq("status", "posted")
+          .gte("created_at", new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+      ]);
+
+      const pending = pendingRes.data ?? [];
+      const dups    = dupRes.data ?? [];
+      const posted  = postedRes.data ?? [];
+      const totalPostedAmt = (posted as Array<{ total_after_vat: number | null }>)
+        .reduce((s, d) => s + (d.total_after_vat ?? 0), 0);
+
+      const sdLines: string[] = [`📄 **מסמכי ספקים — מצב נוכחי**\n`];
+      sdLines.push(`ממתינים לבדיקה: **${pending.length}** | חשד לכפילות: **${dups.length}** | נרשמו החודש: **${posted.length}** (₪${totalPostedAmt.toLocaleString("he-IL")})\n`);
+
+      if (pending.length > 0) {
+        sdLines.push("**מסמכים ממתינים:**");
+        pending.slice(0, 6).forEach(d => {
+          const sup = (d as Record<string, unknown>).suppliers;
+          const supName = (sup as { name?: string } | null)?.name ?? (d as { supplier_name_raw: string }).supplier_name_raw;
+          const total = (d as { total_after_vat: number | null }).total_after_vat;
+          sdLines.push(`  • ${supName || "ספק לא מזוהה"} | ${(d as { document_number: string }).document_number || "ללא מספר"} ${total != null ? `· ₪${total.toLocaleString("he-IL")}` : ""}`);
+        });
+      }
+      if (dups.length > 0) {
+        sdLines.push("\n⚠️ **מסמכים עם חשד לכפילות — נדרשת בדיקה ידנית:**");
+        dups.slice(0, 3).forEach(d => {
+          sdLines.push(`  • ${(d as { supplier_name_raw: string }).supplier_name_raw || "—"} | ${(d as { document_number: string }).document_number || "—"}`);
+        });
+      }
+
+      return {
+        content: sdLines.join("\n"),
+        sourceRefs: pending.slice(0, 3).map(d => ({ table: "supplier_documents", id: (d as { id: string }).id, label: (d as { document_number: string }).document_number || "מסמך" })),
+      };
+    }
+
+    case "expenses": {
+      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const [expRes, categoryRes] = await Promise.all([
+        db.from("expense_records")
+          .select("id,total_amount,supplier_id,document_type,expense_date,suppliers(name)")
+          .gte("expense_date", monthStart.substring(0, 10))
+          .order("expense_date", { ascending: false })
+          .limit(20),
+        db.from("expense_records")
+          .select("category,total_amount")
+          .gte("expense_date", monthStart.substring(0, 10)),
+      ]);
+
+      const expenses = expRes.data ?? [];
+      const allExp   = categoryRes.data ?? [];
+
+      const totalAmt = (expenses as Array<{ total_amount: number }>)
+        .reduce((s, e) => s + (e.total_amount ?? 0), 0);
+
+      const byCategory: Record<string, number> = {};
+      for (const e of allExp as Array<{ category: string; total_amount: number }>) {
+        if (!e.category) continue;
+        byCategory[e.category] = (byCategory[e.category] ?? 0) + (e.total_amount ?? 0);
+      }
+      const topCats = Object.entries(byCategory)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+
+      const expLines: string[] = [`💰 **הוצאות — ${new Date().toLocaleDateString("he-IL", { month: "long", year: "numeric" })}**\n`];
+      expLines.push(`סה"כ הוצאות החודש: **₪${totalAmt.toLocaleString("he-IL")}** (${expenses.length} מסמכים)\n`);
+
+      if (topCats.length > 0) {
+        expLines.push("**הוצאות לפי קטגוריה:**");
+        topCats.forEach(([cat, amt]) => expLines.push(`  • ${cat}: ₪${amt.toLocaleString("he-IL")}`));
+      }
+
+      if (expenses.length > 0) {
+        expLines.push("\n**הוצאות אחרונות:**");
+        expenses.slice(0, 5).forEach(e => {
+          const sup = (e as Record<string, unknown>).suppliers;
+          const supName = (sup as { name?: string } | null)?.name ?? "—";
+          expLines.push(`  • ${supName} · ₪${(e as { total_amount: number }).total_amount?.toLocaleString("he-IL")} · ${fmtDate((e as { expense_date: string }).expense_date)}`);
+        });
+      }
+
+      return {
+        content: expLines.join("\n"),
+        sourceRefs: expenses.slice(0, 3).map(e => ({ table: "expense_records", id: (e as { id: string }).id, label: (e as Record<string, unknown>).suppliers ? ((e as Record<string, unknown>).suppliers as { name: string }).name : "הוצאה" })),
+      };
+    }
+
+    case "general": {
+      const isCC = !agentFilter;
+      const genLines = [
+        "לא זיהיתי את נושא השאלה שלך.\n",
+        "**אני יכול לענות על:**",
+        "• חריגות ושגיאות — \"מה השגיאות הפתוחות?\" / \"מה אלו 49 השגיאות?\"",
+        "• משימות ועדיפויות — \"מה הכי דחוף?\"",
+        "• אישורים — \"מה ממתין לאישורי?\"",
+        "• חיוב — \"מה ממתין לחיוב?\"",
+        "• יומני שטח — \"אילו יומנים ממתינים?\"",
+        "• מלאי ומחסן — \"מה מצב המחסן?\"",
+        "• רווחיות — \"מה הרווחיות?\"",
+        "• מוכנות פיילוט — \"האם אפשר להתחיל פיילוט?\"",
+        "• מצב מחלקה — \"מה מצב הגרפיקה?\" / \"מה מצב המסגרייה?\"",
+        "• מה דורש טיפול — \"מה דורש טיפול כרגע?\"",
+      ];
+      if (isCC) {
+        genLines.push("• מצב סוכנים — \"איזה סוכנים פעילים?\"");
+        genLines.push("• ניווט — \"איפה אני רואה הזמנות?\"");
+      }
+      return { content: genLines.join("\n"), sourceRefs: [] };
+    }
+
+    // "summary" + catch-all
     default: {
+      // Command-center: show agent health overview
+      if (!agentFilter) {
+        const [ccAgRes, ccExcRes, ccTaskRes, ccApprRes] = await Promise.all([
+          db.from("agents").select("id,name,status").limit(15),
+          db.from("agent_exceptions").select("agent_id,severity,status").in("status", ["open","acknowledged"]),
+          db.from("agent_tasks").select("agent_id,priority").in("status", ["open","in_progress"]),
+          db.from("agent_approvals").select("agent_id").eq("status", "pending"),
+        ]);
+        const ccAgents = ccAgRes.data ?? [];
+        const ccExcs   = ccExcRes.data ?? [];
+        const ccTasks  = ccTaskRes.data ?? [];
+        const ccApprs  = ccApprRes.data ?? [];
+        const ccCrit   = ccExcs.filter(e => e.severity === "critical").length;
+        const ccErrors = ccExcs.filter(e => e.severity === "error").length;
+        const ccHigh   = ccTasks.filter(t => t.priority === "high" || t.priority === "critical").length;
+        const ccLines  = [
+          `🖥️ **מצב מרכז הפיקוד — ${new Date().toLocaleDateString("he-IL")}**\n`,
+          `🤖 סוכנים: **${ccAgents.length}**`,
+          ccCrit > 0 || ccErrors > 0
+            ? `🔴 חריגות: **${ccExcs.length} פתוחות** (${ccCrit} קריטיות, ${ccErrors} שגיאות)`
+            : `🟢 חריגות: **${ccExcs.length} פתוחות** — ללא קריטיות`,
+          `⚡ משימות: **${ccTasks.length} פתוחות** (${ccHigh} גבוהה)`,
+          `📋 אישורים ממתינים: **${ccApprs.length}**`,
+        ];
+        if (ccCrit > 0) {
+          ccLines.push(`\n⚠️ שאל "מה השגיאות הקריטיות?" לפרטים.`);
+        } else if (ccApprs.length > 0) {
+          ccLines.push(`\n💡 ${ccApprs.length} אישורים ממתינים.`);
+        } else {
+          ccLines.push(`\n✅ המצב תקין.`);
+        }
+        return { content: ccLines.join("\n"), sourceRefs: [] };
+      }
+
+      // Ops-manager: operational summary
       const [excRes, taskRes, approvalRes, diaryRes, orderRes] = await Promise.all([
         db.from("agent_exceptions").select("id,severity,status,agent_id").in("status", ["open","acknowledged"]),
         db.from("agent_tasks").select("id,priority,status").in("status", ["open","in_progress"]),
