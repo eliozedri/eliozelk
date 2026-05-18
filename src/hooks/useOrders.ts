@@ -52,6 +52,8 @@ const COLUMN_MAP: Partial<Record<keyof WorkOrder, string>> = {
   // Warehouse domain
   warehouseRequired:       "warehouse_required",
   warehouseStatus:         "warehouse_status",
+  warehouseReadyAt:        "warehouse_ready_at",
+  warehouseReleasedAt:     "warehouse_released_at",
   // Field execution domain (only scheduling/office writes these)
   jobName:                   "job_name",
   requiredDate:              "required_date",
@@ -132,6 +134,8 @@ function fromRow(r: Record<string, unknown>): WorkOrder {
     // Warehouse columns
     warehouseRequired:      r.warehouse_required != null ? (r.warehouse_required as boolean) : false,
     warehouseStatus:        (r.warehouse_status as WorkOrder["warehouseStatus"]) ?? null,
+    warehouseReadyAt:       (r.warehouse_ready_at as string | null) ?? blob.warehouseReadyAt ?? null,
+    warehouseReleasedAt:    (r.warehouse_released_at as string | null) ?? blob.warehouseReleasedAt ?? null,
     // Field execution columns
     jobName:                   (r.job_name as string | null) ?? null,
     requiredDate:              (r.required_date as string | null) ?? null,
@@ -198,6 +202,8 @@ function toRow(o: WorkOrder) {
     customer_approval_status:    o.customerApprovalStatus ?? "approved",
     warehouse_required:          o.warehouseRequired ?? false,
     warehouse_status:            o.warehouseStatus ?? null,
+    warehouse_ready_at:          o.warehouseReadyAt ?? null,
+    warehouse_released_at:       o.warehouseReleasedAt ?? null,
     job_name:                    o.jobName ?? null,
     required_date:               o.requiredDate ?? null,
     estimated_execution_hours:   o.estimatedExecutionHours ?? null,
@@ -673,9 +679,12 @@ export function useOrders() {
 
     const check = canMarkReadyForInstallation(order);
 
+    const now = new Date().toISOString();
+    // Record the human release action timestamp regardless of which path is taken
+    await _patchOrder(id, { warehouseReleasedAt: now });
+
     if (check.ok) {
       // Warehouse + all other required departments done → advance to ready_installation
-      const now = new Date().toISOString();
       await _patchOrder(id, {
         status: "ready_installation",
         ...(!order.readyForExecutionAt ? { readyForExecutionAt: now } : {}),

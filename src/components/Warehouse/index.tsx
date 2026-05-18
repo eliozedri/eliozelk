@@ -90,7 +90,10 @@ function OrderCard({
 
   function advance() {
     if (warehouseStatus === "pending")    void updateOrderFields(order.id, { warehouseStatus: "processing" });
-    if (warehouseStatus === "processing") void updateOrderFields(order.id, { warehouseStatus: "ready" });
+    if (warehouseStatus === "processing") {
+      const now = new Date().toISOString();
+      void updateOrderFields(order.id, { warehouseStatus: "ready", warehouseReadyAt: now });
+    }
   }
 
   return (

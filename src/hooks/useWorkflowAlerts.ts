@@ -6,6 +6,7 @@ import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { stageEntryTime } from "@/lib/workflowEngine";
 import { getOrderDiaries } from "@/lib/executionUtils";
 import { checkFabricationAnomalies } from "@/lib/fabricationAnomalyRules";
+import { checkWarehouseAnomalies } from "@/lib/warehouseAnomalyRules";
 import type { WorkflowAlert } from "@/lib/workflowAlertTypes";
 
 // Re-export shared types so existing consumers don't need to change their import path
@@ -311,6 +312,9 @@ export function useWorkflowAlerts(): WorkflowAlert[] {
 
     // ── Fabrication QA anomalies ─────────────────────────────────────────
     alerts.push(...checkFabricationAnomalies(orders, now));
+
+    // ── Warehouse QA anomalies ───────────────────────────────────────────
+    alerts.push(...checkWarehouseAnomalies(orders, now));
 
     return alerts.sort(
       (a, b) => (a.severity === "critical" ? 0 : 1) - (b.severity === "critical" ? 0 : 1)
