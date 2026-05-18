@@ -64,7 +64,7 @@ export const ALL_TABS: { id: TabId; label: string; path: string; section: string
   { id: "catalog", label: "מוצרים ושירותים", path: "/catalog", section: "מחלקות" },
   { id: "safety", label: "אביזרי בטיחות", path: "/safety", section: "מחלקות" },
   { id: "accounting", label: "הנהלת חשבונות", path: "/accounting", section: "מחלקות" },
-  { id: "supplier-documents", label: "מסמכי ספקים", path: "/supplier-documents", section: "מחלקות" },
+  { id: "supplier-documents", label: "סריקת מסמך", path: "/supplier-documents", section: "ניהול" },
   { id: "workmap", label: "מפת עבודות", path: "/workmap", section: "בקרת שטח" },
   { id: "schedule", label: "סידור שבועי", path: "/schedule", section: "בקרת שטח" },
   { id: "crews", label: "צוותי שטח", path: "/crews", section: "בקרת שטח" },
@@ -124,8 +124,8 @@ export const ALL_ACTIONS: ActionPermission[] = Object.keys(ACTION_PERMISSION_LAB
 export const ROLE_DEFAULTS: Record<Role, { tabs: TabId[] | ["*"]; actions: ActionPermission[] | ["*"] }> = {
   master: { tabs: ["*"], actions: ["*"] },
   office_manager: {
-    tabs: ["dashboard", "orders", "customers"],
-    actions: ["create_order", "edit_order", "create_customer", "edit_customer"],
+    tabs: ["dashboard", "orders", "customers", "supplier-documents"],
+    actions: ["create_order", "edit_order", "create_customer", "edit_customer", "upload_supplier_document", "review_supplier_document"],
   },
   graphics_manager: {
     tabs: ["dashboard", "orders", "graphics", "fabrication"],
