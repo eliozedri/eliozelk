@@ -250,15 +250,18 @@ void (async () => {
   console.log("═══════════════════════════════════════════════════════════════");
 
   await setup();
-  await test1_ordersExist();
-  await test2_mappedOrderWithoutConsumption();
-  await test3_addConsumption_reconciled();
-  await test4_unmappedOrder();
-  await test5_nonInventoryOrder();
-  await test6_agentExceptions();
-  await test7_noConsumptionModification();
-  await test8_phase34Regression();
-  await cleanup();
+  try {
+    await test1_ordersExist();
+    await test2_mappedOrderWithoutConsumption();
+    await test3_addConsumption_reconciled();
+    await test4_unmappedOrder();
+    await test5_nonInventoryOrder();
+    await test6_agentExceptions();
+    await test7_noConsumptionModification();
+    await test8_phase34Regression();
+  } finally {
+    await cleanup();
+  }
 
   console.log(`\n═══════════════════════════════════════════════════════════════`);
   console.log(`  Tests passed: ${passed} | Failed: ${failed}`);

@@ -268,15 +268,18 @@ void (async () => {
   console.log("═══════════════════════════════════════════════════════════════");
 
   await setup();
-  await test1_calcHelpers();
-  await test2_upsertCreatesRecommendation();
-  await test3_upsertIsIdempotent();
-  await test4_differentTypesAreIndependent();
-  await test5_dismissDoesNotReopen();
-  await test6_resolveWhenStockOk();
-  await test7_approveInternal();
-  await test8_dismissByUser();
-  await cleanup();
+  try {
+    await test1_calcHelpers();
+    await test2_upsertCreatesRecommendation();
+    await test3_upsertIsIdempotent();
+    await test4_differentTypesAreIndependent();
+    await test5_dismissDoesNotReopen();
+    await test6_resolveWhenStockOk();
+    await test7_approveInternal();
+    await test8_dismissByUser();
+  } finally {
+    await cleanup();
+  }
 
   console.log(`\n═══════════════════════════════════════════════════════════════`);
   console.log(`  Tests passed: ${passed} | Failed: ${failed}`);
