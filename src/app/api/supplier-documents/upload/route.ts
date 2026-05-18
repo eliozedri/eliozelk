@@ -11,6 +11,13 @@ import {
   suggestCategory,
   suggestInventoryAction,
 } from "@/lib/supplierDocuments/classification";
+import {
+  USER_CARD_DEFAULT_TYPE,
+  USER_CARD_LABELS,
+  DOCUMENT_TYPE_LABELS,
+  isTypeMismatch,
+} from "@/types/supplierDocument";
+import type { UserDocumentCard } from "@/types/supplierDocument";
 
 const BUCKET = "supplier-documents";
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
@@ -64,6 +71,9 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "לא ניתן לקרוא את הקובץ" }, { status: 400 });
   }
+
+  const selectedDocumentType = (formData.get("selectedDocumentType") as UserDocumentCard | null) || null;
+  const hintType = selectedDocumentType ? USER_CARD_DEFAULT_TYPE[selectedDocumentType] : undefined;
 
   const file = formData.get("file") as File | null;
   if (!file) {
@@ -180,6 +190,7 @@ export async function POST(req: NextRequest) {
       fileBuffer: buffer,
       fileName: file.name,
       fileType: file.type,
+      documentTypeHint: hintType,
     });
 
     const ocrUpdate: Record<string, unknown> = {
@@ -200,10 +211,24 @@ export async function POST(req: NextRequest) {
       if (h.totalAfterVat != null)     ocrUpdate.total_after_vat = h.totalAfterVat;
       ocrUpdate.extraction_confidence = h.confidence;
       ocrUpdate.extraction_notes      = h.notes ?? "OCR הושלם";
-      ocrUpdate.parsed_json           = h as unknown as Record<string, unknown>;
+      const mismatchWarning =
+        selectedDocumentType &&
+        h.documentType !== "unknown" &&
+        isTypeMismatch(selectedDocumentType, h.documentType)
+          ? `OCR זיהה "${DOCUMENT_TYPE_LABELS[h.documentType]}" — נבחר כרטיס "${USER_CARD_LABELS[selectedDocumentType]}"`
+          : undefined;
+      ocrUpdate.parsed_json = {
+        ...(h as unknown as Record<string, unknown>),
+        ...(selectedDocumentType ? { selectedDocumentType } : {}),
+        detectedDocumentType: h.documentType,
+        ...(mismatchWarning ? { typeMismatchWarning: mismatchWarning } : {}),
+      };
     } else {
       ocrUpdate.extraction_confidence = 0;
       ocrUpdate.extraction_notes      = extraction.error ?? "OCR נכשל — יש להזין נתונים ידנית";
+      if (selectedDocumentType) {
+        ocrUpdate.parsed_json = { selectedDocumentType, detectedDocumentType: "unknown" };
+      }
     }
 
     if (extraction.rawText) ocrUpdate.raw_text = extraction.rawText;

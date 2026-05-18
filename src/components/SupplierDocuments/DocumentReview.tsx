@@ -16,6 +16,9 @@ import {
   INVENTORY_ACTION_LABELS,
   INVENTORY_ACTION_COLORS,
   DOCUMENT_CATEGORIES,
+  USER_CARD_LABELS,
+  USER_CARD_BUSINESS_EFFECT,
+  docTypeToUserCard,
 } from "@/types/supplierDocument";
 import type {
   SupplierDocument,
@@ -23,6 +26,7 @@ import type {
   PostingPreview,
   InventoryLineAction,
   SupplierDocumentType,
+  UserDocumentCard,
 } from "@/types/supplierDocument";
 
 const DOCUMENT_TYPE_OPTIONS = Object.entries(DOCUMENT_TYPE_LABELS) as [SupplierDocumentType, string][];
@@ -217,6 +221,10 @@ export function DocumentReview({
   const canPost = !isPosted && !isRejected;
   const sup = doc.suppliers;
 
+  const selectedCard = doc.parsedJson?.selectedDocumentType as UserDocumentCard | undefined;
+  const typeMismatchWarning = doc.parsedJson?.typeMismatchWarning as string | undefined;
+  const businessEffect = USER_CARD_BUSINESS_EFFECT[docTypeToUserCard(editedDocType)];
+
   return (
     <Overlay onClose={onClose}>
       {/* Header */}
@@ -258,6 +266,14 @@ export function DocumentReview({
             ביטחון חילוץ: {Math.round((doc.extractionConfidence ?? 0) * 100)}%
             {doc.extractionNotes ? ` · ${doc.extractionNotes}` : ""}
           </p>
+        </div>
+      )}
+
+      {/* Type mismatch warning */}
+      {typeMismatchWarning && (
+        <div className="mx-5 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm font-semibold text-amber-800">אי-התאמה בסוג מסמך</p>
+          <p className="text-xs text-amber-700 mt-0.5">{typeMismatchWarning} — יש לאמת ולתקן אם נדרש</p>
         </div>
       )}
 
@@ -364,6 +380,28 @@ export function DocumentReview({
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {/* Document header fields */}
           <Section title="פרטי מסמך">
+            {/* User pre-selection + business effect */}
+            <div className="flex flex-wrap items-center gap-3 mb-3 pb-3 border-b border-gray-100">
+              {selectedCard && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-500">נבחר ע&quot;י המשתמש:</span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+                    {USER_CARD_LABELS[selectedCard]}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-xs">
+                <span className={`px-2 py-0.5 rounded-full font-medium ${businessEffect.createsExpense === true ? "bg-red-100 text-red-700" : businessEffect.createsExpense === false ? "bg-gray-100 text-gray-500" : "bg-amber-100 text-amber-700"}`}>
+                  {businessEffect.createsExpense === true ? "יוצר הוצאה" : businessEffect.createsExpense === false ? "ללא הוצאה" : "הוצאה אפשרית"}
+                </span>
+                <span className={`px-2 py-0.5 rounded-full font-medium ${businessEffect.updatesInventory === true ? "bg-green-100 text-green-700" : businessEffect.updatesInventory === false ? "bg-gray-100 text-gray-500" : "bg-amber-100 text-amber-700"}`}>
+                  {businessEffect.updatesInventory === true ? "עדכון מלאי" : businessEffect.updatesInventory === false ? "ללא השפעת מלאי" : "מלאי אפשרי"}
+                </span>
+                {businessEffect.awaitInvoiceMatch && (
+                  <span className="px-2 py-0.5 rounded-full font-medium bg-purple-100 text-purple-700">ממתין להתאמת חשבונית</span>
+                )}
+              </div>
+            </div>
             {!isPosted && (
               <div className="grid grid-cols-3 gap-3 mb-3">
                 <Field label="סוג מסמך">

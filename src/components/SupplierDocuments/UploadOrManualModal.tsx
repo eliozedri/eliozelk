@@ -13,10 +13,14 @@ import {
   DOCUMENT_TYPE_LABELS,
   DOCUMENT_CATEGORIES,
   INVENTORY_ACTION_LABELS,
+  USER_CARD_LABELS,
+  USER_CARD_DESCRIPTIONS,
+  USER_CARD_DEFAULT_TYPE,
 } from "@/types/supplierDocument";
 import type {
   SupplierDocumentType,
   InventoryLineAction,
+  UserDocumentCard,
 } from "@/types/supplierDocument";
 
 interface Supplier { id: string; name: string; vat_number: string; }
@@ -59,7 +63,8 @@ export function UploadOrManualModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const [mode, setMode] = useState<"choose" | "upload" | "manual" | "camera">("choose");
+  const [mode, setMode] = useState<"type-select" | "choose" | "upload" | "manual" | "camera">("type-select");
+  const [userCard, setUserCard] = useState<UserDocumentCard | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -89,6 +94,7 @@ export function UploadOrManualModal({
       const tok = await getToken();
       const form = new FormData();
       form.append("file", file);
+      if (userCard) form.append("selectedDocumentType", userCard);
       const res = await fetch("/api/supplier-documents/upload", {
         method: "POST",
         headers: { Authorization: `Bearer ${tok}` },
@@ -115,6 +121,7 @@ export function UploadOrManualModal({
       const tok = await getToken();
       const form = new FormData();
       form.append("file", selectedFile);
+      if (userCard) form.append("selectedDocumentType", userCard);
       const res = await fetch("/api/supplier-documents/upload", {
         method: "POST",
         headers: { Authorization: `Bearer ${tok}` },
@@ -165,6 +172,7 @@ export function UploadOrManualModal({
         },
         body: JSON.stringify({
           documentType: docType,
+          selectedDocumentType: userCard ?? undefined,
           supplierId: supplierId || undefined,
           supplierNameRaw,
           supplierVatRaw,
@@ -201,6 +209,64 @@ export function UploadOrManualModal({
     setLines(prev => prev.filter((_, i) => i !== idx));
   }
 
+  // ── Document type pre-selection (4 cards) ────────────────────────────────
+  if (mode === "type-select") {
+    const cards: { id: UserDocumentCard; color: string; iconPath: string }[] = [
+      {
+        id: "invoice",
+        color: "border-orange-300 hover:border-orange-500 hover:bg-orange-50",
+        iconPath: "M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z",
+      },
+      {
+        id: "delivery_note",
+        color: "border-blue-300 hover:border-blue-500 hover:bg-blue-50",
+        iconPath: "M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4",
+      },
+      {
+        id: "receipt",
+        color: "border-green-300 hover:border-green-500 hover:bg-green-50",
+        iconPath: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
+      },
+      {
+        id: "other",
+        color: "border-gray-300 hover:border-gray-500 hover:bg-gray-50",
+        iconPath: "M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
+      },
+    ];
+    const iconColors: Record<UserDocumentCard, string> = {
+      invoice: "bg-orange-100 text-orange-600",
+      delivery_note: "bg-blue-100 text-blue-600",
+      receipt: "bg-green-100 text-green-600",
+      other: "bg-gray-100 text-gray-600",
+    };
+    return (
+      <ModalShell onClose={onClose} title="הוסף מסמך ספק">
+        <p className="text-sm text-gray-500 mb-4">מה סוג המסמך שברצונך לקלוט?</p>
+        <div className="grid grid-cols-2 gap-3">
+          {cards.map(card => (
+            <button
+              key={card.id}
+              onClick={() => {
+                setUserCard(card.id);
+                setDocType(USER_CARD_DEFAULT_TYPE[card.id]);
+                setMode("choose");
+              }}
+              className={`flex flex-col items-center gap-2 p-4 border-2 rounded-xl transition-colors text-center ${card.color}`}
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${iconColors[card.id]}`}>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d={card.iconPath} />
+                </svg>
+              </div>
+              <p className="font-semibold text-sm text-gray-900">{USER_CARD_LABELS[card.id]}</p>
+              <p className="text-xs text-gray-500 leading-snug">{USER_CARD_DESCRIPTIONS[card.id]}</p>
+            </button>
+          ))}
+        </div>
+      </ModalShell>
+    );
+  }
+
   // ── Camera processing screen ──────────────────────────────────────────────
   if (mode === "camera") {
     return (
@@ -229,8 +295,16 @@ export function UploadOrManualModal({
   // ── Mode chooser ──────────────────────────────────────────────────────────
   if (mode === "choose") {
     return (
-      <ModalShell onClose={onClose} title="הוסף מסמך ספק">
-        <p className="text-sm text-gray-500 mb-6">בחר אופן הזנת המסמך</p>
+      <ModalShell onClose={onClose} title="הוסף מסמך ספק" onBack={() => setMode("type-select")}>
+        {userCard && (
+          <div className="mb-4 flex items-center gap-2">
+            <span className="text-xs text-gray-500">סוג נבחר:</span>
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
+              {USER_CARD_LABELS[userCard]}
+            </span>
+          </div>
+        )}
+        <p className="text-sm text-gray-500 mb-4">בחר אופן הזנת המסמך</p>
         <div className="flex flex-col gap-3">
           <button
             onClick={() => setMode("upload")}

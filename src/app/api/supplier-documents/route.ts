@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { nanoid } from "nanoid";
-import type { SupplierDocumentType, PaymentStatus } from "@/types/supplierDocument";
+import type { SupplierDocumentType, PaymentStatus, UserDocumentCard } from "@/types/supplierDocument";
 
 async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
     fileType?: string;
     fileHash?: string;
     rawText?: string;
+    selectedDocumentType?: UserDocumentCard;
     lines?: Array<{
       lineNumber: number;
       originalDescription: string;
@@ -130,6 +131,7 @@ export async function POST(req: NextRequest) {
     file_type:           body.fileType ?? "",
     file_hash:           body.fileHash ?? null,
     raw_text:            body.rawText ?? null,
+    parsed_json:         body.selectedDocumentType ? { selectedDocumentType: body.selectedDocumentType } : null,
     created_by:          createdBy,
     created_at:          now,
     updated_at:          now,
