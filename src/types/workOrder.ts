@@ -238,6 +238,7 @@ export interface WorkOrder {
   fabricationDetails?: FabricationDetails;
   fabricationStatus?: FabricationStatus;
   fabricationAcknowledgedAt?: string | null;
+  fabricationReadyAt?: string | null;
   fabricationCompletedAt?: string | null;
   // Problem tracking
   problems?: OrderProblem[];

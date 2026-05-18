@@ -5,34 +5,19 @@ import { useOrdersContext } from "@/context/OrdersContext";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { stageEntryTime } from "@/lib/workflowEngine";
 import { getOrderDiaries } from "@/lib/executionUtils";
+import { checkFabricationAnomalies } from "@/lib/fabricationAnomalyRules";
+import type { WorkflowAlert } from "@/lib/workflowAlertTypes";
 
-export type AlertSeverity = "warn" | "critical";
-export type AlertDepartment = "graphics" | "fabrication" | "office" | "schedule" | "accounting";
-
-export interface WorkflowAlert {
-  id: string;
-  severity: AlertSeverity;
-  department: AlertDepartment;
-  message: string;
-  count: number;
-  href: string;
-  orderNumbers?: string[];
-}
-
-export const DEPT_LABELS: Record<AlertDepartment, string> = {
-  graphics:    "גרפיקה",
-  fabrication: "מסגרייה",
-  office:      "משרד",
-  schedule:    "תיאום",
-  accounting:  "הנה״ח",
-};
+// Re-export shared types so existing consumers don't need to change their import path
+export type { AlertSeverity, AlertDepartment, WorkflowAlert, AffectedOrderContext } from "@/lib/workflowAlertTypes";
+export { DEPT_LABELS } from "@/lib/workflowAlertTypes";
 
 export function useWorkflowAlerts(): WorkflowAlert[] {
   const { orders } = useOrdersContext();
   const { diaries } = useWorkDiaryContext();
 
   return useMemo(() => {
-    const now = Date.now();
+    const now = Date.now(); // eslint-disable-line react-hooks/purity
     const alerts: WorkflowAlert[] = [];
 
     function h(ts: string): number {
@@ -323,6 +308,9 @@ export function useWorkflowAlerts(): WorkflowAlert[] {
         orderNumbers: missingDiary.map(o => o.orderNumber),
       });
     }
+
+    // ── Fabrication QA anomalies ─────────────────────────────────────────
+    alerts.push(...checkFabricationAnomalies(orders, now));
 
     return alerts.sort(
       (a, b) => (a.severity === "critical" ? 0 : 1) - (b.severity === "critical" ? 0 : 1)

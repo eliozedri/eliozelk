@@ -37,6 +37,7 @@ const COLUMN_MAP: Partial<Record<keyof WorkOrder, string>> = {
   fabricationRequired:       "fabrication_required",
   fabricationStatus:         "fabrication_status",
   fabricationAcknowledgedAt: "fabrication_acknowledged_at",
+  fabricationReadyAt:        "fabrication_ready_at",
   fabricationCompletedAt:    "fabrication_completed_at",
   // Accounting domain (only accounting dept writes these)
   accountingStatus:          "accounting_status",
@@ -116,6 +117,7 @@ function fromRow(r: Record<string, unknown>): WorkOrder {
     fabricationRequired:       r.fabrication_required != null ? (r.fabrication_required as boolean) : (blob.fabricationRequired ?? false),
     fabricationStatus:         (r.fabrication_status as FabricationStatus | null) ?? blob.fabricationStatus,
     fabricationAcknowledgedAt: (r.fabrication_acknowledged_at as string | null) ?? blob.fabricationAcknowledgedAt ?? null,
+    fabricationReadyAt:        (r.fabrication_ready_at as string | null) ?? blob.fabricationReadyAt ?? null,
     fabricationCompletedAt:    (r.fabrication_completed_at as string | null) ?? blob.fabricationCompletedAt ?? null,
     // Accounting columns
     accountingStatus:          (r.accounting_status as AccountingStatus | null) ?? blob.accountingStatus,
@@ -184,6 +186,7 @@ function toRow(o: WorkOrder) {
     fabrication_required:        o.fabricationRequired ?? false,
     fabrication_status:          o.fabricationStatus ?? null,
     fabrication_acknowledged_at: o.fabricationAcknowledgedAt ?? null,
+    fabrication_ready_at:        o.fabricationReadyAt ?? null,
     fabrication_completed_at:    o.fabricationCompletedAt ?? null,
     accounting_status:           o.accountingStatus ?? "pending",
     invoiced_at:                 o.invoicedAt ?? null,

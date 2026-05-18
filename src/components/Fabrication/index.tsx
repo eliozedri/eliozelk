@@ -169,7 +169,8 @@ function FabricationCard({ order }: { order: WorkOrder }) {
     const now = new Date().toISOString();
     const extra: Partial<WorkOrder> = { fabricationStatus: next };
     if (next === "acknowledged") extra.fabricationAcknowledgedAt = now;
-    if (next === "completed") extra.fabricationCompletedAt = now;
+    if (next === "ready")        extra.fabricationReadyAt = now;
+    if (next === "completed")    extra.fabricationCompletedAt = now;
     updateOrderFields(order.id, extra);
   }
 
