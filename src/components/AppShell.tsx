@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { AuthProvider } from "@/context/AuthContext";
 import { GlobalFloatingChatProvider, GlobalChatMount } from "@/context/GlobalFloatingChatContext";
+import { GlobalChatLauncher } from "@/components/AgentChat/GlobalChatLauncher";
 
 const AUTH_PATHS = ["/login", "/setup"];
 
@@ -72,6 +73,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Global floating chat — persists across all routes */}
         <GlobalChatMount />
+        {/* Global chat launcher — floating buttons, permission-aware */}
+        <GlobalChatLauncher />
       </GlobalFloatingChatProvider>
     </AuthProvider>
   );

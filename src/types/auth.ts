@@ -86,7 +86,8 @@ export type ActionPermission =
   | "manage_crews"
   | "submit_diary"
   | "delete_diary"
-  | "manage_access";
+  | "manage_access"
+  | "chat_ops_manager";
 
 export const ACTION_PERMISSION_LABELS: Record<ActionPermission, string> = {
   create_order: "יצירת הזמנות",
@@ -103,6 +104,7 @@ export const ACTION_PERMISSION_LABELS: Record<ActionPermission, string> = {
   submit_diary: "הגשת יומן עבודה",
   delete_diary: "מחיקת יומן עבודה",
   manage_access: "ניהול משתמשים והרשאות",
+  chat_ops_manager: "שיחה עם מנהל התפעול",
 };
 
 export const ALL_ACTIONS: ActionPermission[] = Object.keys(ACTION_PERMISSION_LABELS) as ActionPermission[];
