@@ -56,7 +56,7 @@ export function useCrews() {
     // ARCHITECTURE: Supabase is the sole source of truth for operational business data.
     // localStorage is not used — no seeding, no fallback, no caching.
     const db = getSupabase();
-    if (!db) { return; } // eslint-disable-line react-hooks/set-state-in-effect
+    if (!db) { return; }
 
     const fetchAll = () =>
       db.from("crews").select("*").order("created_at", { ascending: true })

@@ -110,10 +110,6 @@ async function getMovements(itemId: string, type: string) {
   return data ?? [];
 }
 
-async function getAgentTasks(entityId: string) {
-  const { data } = await db.from("agent_tasks").select("id,title,category").eq("related_entity_id", entityId);
-  return data ?? [];
-}
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
@@ -125,14 +121,14 @@ async function test1_phase32_still_works() {
   await makeReservation(catId, orderId, rowId, 4);
 
   const r1 = await syncConsumptionForOrder(db, orderId, diaryId);
-  r1.consumptionsCreated === 1 ? pass("first run: consumptionsCreated=1") : fail(`first run: ${r1.consumptionsCreated}`);
-  r1.errors.length === 0 ? pass("no errors") : fail(`errors: ${JSON.stringify(r1.errors)}`);
+  if (r1.consumptionsCreated === 1) pass("first run: consumptionsCreated=1"); else fail(`first run: ${r1.consumptionsCreated}`);
+  if (r1.errors.length === 0) pass("no errors"); else fail(`errors: ${JSON.stringify(r1.errors)}`);
 
   const r2 = await syncConsumptionForOrder(db, orderId, diaryId);
-  r2.consumptionsCreated === 0 ? pass("idempotent: consumptionsCreated=0") : fail(`idempotency failed: ${r2.consumptionsCreated}`);
+  if (r2.consumptionsCreated === 0) pass("idempotent: consumptionsCreated=0"); else fail(`idempotency failed: ${r2.consumptionsCreated}`);
 
   const qty = await getCatalogQty(catId);
-  qty === 6 ? pass("current_quantity deducted once: 10-4=6") : fail(`qty=${qty} expected 6`);
+  if (qty === 6) pass("current_quantity deducted once: 10-4=6"); else fail(`qty=${qty} expected 6`);
 
   // cleanup
   const cons = await getConsumptions(orderId);
@@ -153,13 +149,13 @@ async function test2_no_double_consume() {
   const r2 = await syncConsumptionForOrder(db, orderId, diary2);
 
   const totalCreated = r1.consumptionsCreated + r2.consumptionsCreated;
-  totalCreated === 1 ? pass("total consumptionsCreated=1 across 2 diary runs") : fail(`total=${totalCreated}`);
+  if (totalCreated === 1) pass("total consumptionsCreated=1 across 2 diary runs"); else fail(`total=${totalCreated}`);
 
   const qty = await getCatalogQty(catId);
-  qty === 6 ? pass("qty deducted once: 10-4=6") : fail(`qty=${qty} expected 6`);
+  if (qty === 6) pass("qty deducted once: 10-4=6"); else fail(`qty=${qty} expected 6`);
 
   const cons = await getConsumptions(orderId);
-  cons.length === 1 ? pass("exactly 1 consumption record") : fail(`${cons.length} records`);
+  if (cons.length === 1) pass("exactly 1 consumption record"); else fail(`${cons.length} records`);
   cons.forEach(c => reg("inventory_consumptions", (c as { id: string }).id));
   const movs = await getMovements(catId, "consume");
   movs.forEach(m => reg("inventory_movements", (m as { id: string }).id));
@@ -176,7 +172,7 @@ async function test3_consumption_has_quantitySource() {
 
   const cons = await getConsumptions(orderId);
   const meta = (cons[0] as unknown as { metadata?: { quantitySource?: string } })?.metadata;
-  meta?.quantitySource ? pass(`quantitySource='${meta.quantitySource}'`) : fail("quantitySource missing from metadata");
+  if (meta?.quantitySource) pass(`quantitySource='${meta.quantitySource}'`); else fail("quantitySource missing from metadata");
 
   cons.forEach(c => reg("inventory_consumptions", (c as { id: string }).id));
   const movs = await getMovements(catId, "consume");
@@ -193,21 +189,21 @@ async function test4_return_from_field() {
     orderId, catalogItemId: catId, orderItemKey: rowId,
     returnedQty: 2, notes: "test return", returnedBy: "tester",
   });
-  r1.errors.length === 0 ? pass("no errors") : fail(`errors: ${JSON.stringify(r1.errors)}`);
-  r1.movementsWritten === 1 ? pass("movementsWritten=1") : fail(`movementsWritten=${r1.movementsWritten}`);
+  if (r1.errors.length === 0) pass("no errors"); else fail(`errors: ${JSON.stringify(r1.errors)}`);
+  if (r1.movementsWritten === 1) pass("movementsWritten=1"); else fail(`movementsWritten=${r1.movementsWritten}`);
 
   const qty1 = await getCatalogQty(catId);
-  qty1 === 8 ? pass("qty after return: 6+2=8") : fail(`qty=${qty1} expected 8`);
+  if (qty1 === 8) pass("qty after return: 6+2=8"); else fail(`qty=${qty1} expected 8`);
 
   // Second return (idempotency — same order+item+key)
   const r2 = await returnFromField(db, {
     orderId, catalogItemId: catId, orderItemKey: rowId,
     returnedQty: 2, notes: "duplicate return", returnedBy: "tester",
   });
-  r2.warnings.some(w => w.includes("already recorded")) ? pass("idempotent: duplicate return blocked") : fail(`expected 'already recorded' warning, got: ${JSON.stringify(r2.warnings)}`);
+  if (r2.warnings.some(w => w.includes("already recorded"))) pass("idempotent: duplicate return blocked"); else fail(`expected 'already recorded' warning, got: ${JSON.stringify(r2.warnings)}`);
 
   const qty2 = await getCatalogQty(catId);
-  qty2 === 8 ? pass("qty unchanged after duplicate return") : fail(`qty=${qty2} expected 8`);
+  if (qty2 === 8) pass("qty unchanged after duplicate return"); else fail(`qty=${qty2} expected 8`);
 
   const movs = await getMovements(catId, "return");
   movs.forEach(m => reg("inventory_movements", (m as { id: string }).id));
@@ -236,7 +232,7 @@ async function test5_delivery_note_draft_no_stock() {
   reg("delivery_note_items", itemId);
 
   const qtyAfter = await getCatalogQty(catId);
-  qtyAfter === qtyBefore ? pass("draft note does not increase stock") : fail(`qty changed from ${qtyBefore} to ${qtyAfter}`);
+  if (qtyAfter === qtyBefore) pass("draft note does not increase stock"); else fail(`qty changed from ${qtyBefore} to ${qtyAfter}`);
 }
 
 async function test6_delivery_note_approved_increases_stock() {
@@ -261,14 +257,14 @@ async function test6_delivery_note_approved_increases_stock() {
   reg("delivery_note_items", itemId);
 
   const r = await approveDeliveryNote(db, noteId, "tester");
-  r.errors.length === 0 ? pass("no errors") : fail(`errors: ${JSON.stringify(r.errors)}`);
-  r.itemsReceived === 1 ? pass("itemsReceived=1") : fail(`itemsReceived=${r.itemsReceived}`);
+  if (r.errors.length === 0) pass("no errors"); else fail(`errors: ${JSON.stringify(r.errors)}`);
+  if (r.itemsReceived === 1) pass("itemsReceived=1"); else fail(`itemsReceived=${r.itemsReceived}`);
 
   const qtyAfter = await getCatalogQty(catId);
-  qtyAfter === qtyBefore + 3 ? pass(`qty: ${qtyBefore}+3=${qtyAfter}`) : fail(`qty=${qtyAfter} expected ${qtyBefore + 3}`);
+  if (qtyAfter === qtyBefore + 3) pass(`qty: ${qtyBefore}+3=${qtyAfter}`); else fail(`qty=${qtyAfter} expected ${qtyBefore + 3}`);
 
   const movs = await getMovements(catId, "receive");
-  movs.length >= 1 ? pass(`receive movement written (${movs.length})`) : fail("no receive movement");
+  if (movs.length >= 1) pass(`receive movement written (${movs.length})`); else fail("no receive movement");
   movs.forEach(m => reg("inventory_movements", (m as { id: string }).id));
 }
 
@@ -296,13 +292,13 @@ async function test7_delivery_note_no_double_receive() {
 
   // Re-approve
   const r2 = await approveDeliveryNote(db, noteId, "tester");
-  r2.itemsSkipped >= 1 ? pass("second approve: item skipped (idempotent)") : fail(`itemsSkipped=${r2.itemsSkipped}`);
+  if (r2.itemsSkipped >= 1) pass("second approve: item skipped (idempotent)"); else fail(`itemsSkipped=${r2.itemsSkipped}`);
 
   const qtyAfterSecond = await getCatalogQty(catId);
-  qtyAfterSecond === qtyAfterFirst ? pass("qty unchanged on re-approve") : fail(`qty changed: ${qtyAfterFirst} → ${qtyAfterSecond}`);
+  if (qtyAfterSecond === qtyAfterFirst) pass("qty unchanged on re-approve"); else fail(`qty changed: ${qtyAfterFirst} → ${qtyAfterSecond}`);
 
   const movs = await getMovements(catId, "receive");
-  movs.length === 1 ? pass("exactly 1 receive movement") : fail(`${movs.length} receive movements`);
+  if (movs.length === 1) pass("exactly 1 receive movement"); else fail(`${movs.length} receive movements`);
   movs.forEach(m => reg("inventory_movements", (m as { id: string }).id));
 }
 
@@ -324,8 +320,8 @@ async function test8_unmapped_delivery_item_no_stock() {
   reg("delivery_note_items", itemId);
 
   const r = await approveDeliveryNote(db, noteId, "tester");
-  r.mappingTasksCreated >= 1 ? pass("mappingTasksCreated >= 1") : fail(`mappingTasksCreated=${r.mappingTasksCreated}`);
-  r.itemsReceived === 0       ? pass("itemsReceived=0 (no stock update)") : fail(`itemsReceived=${r.itemsReceived}`);
+  if (r.mappingTasksCreated >= 1) pass("mappingTasksCreated >= 1"); else fail(`mappingTasksCreated=${r.mappingTasksCreated}`);
+  if (r.itemsReceived === 0) pass("itemsReceived=0 (no stock update)"); else fail(`itemsReceived=${r.itemsReceived}`);
 
   // Cleanup tasks
   const { data: tasks } = await db.from("agent_tasks").select("id").eq("related_entity_id", noteId);
@@ -352,13 +348,13 @@ async function test9_count_mismatch_creates_task() {
   reg("delivery_note_items", itemId);
 
   const r = await approveDeliveryNote(db, noteId, "tester");
-  r.mismatchTasksCreated >= 1 ? pass("mismatchTasksCreated >= 1") : fail(`mismatchTasksCreated=${r.mismatchTasksCreated}`);
+  if (r.mismatchTasksCreated >= 1) pass("mismatchTasksCreated >= 1"); else fail(`mismatchTasksCreated=${r.mismatchTasksCreated}`);
 
   const { data: tasks } = await db.from("agent_tasks").select("id").eq("related_entity_id", noteId);
   (tasks ?? []).forEach(t => reg("agent_tasks", (t as { id: string }).id));
   // Stock should still be received (counted qty used)
   const qty = await getCatalogQty(catId);
-  qty === 18 ? pass("stock received with counted qty (10+8=18)") : fail(`qty=${qty}`);
+  if (qty === 18) pass("stock received with counted qty (10+8=18)"); else fail(`qty=${qty}`);
 
   const movs = await getMovements(catId, "receive");
   movs.forEach(m => reg("inventory_movements", (m as { id: string }).id));

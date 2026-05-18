@@ -291,7 +291,6 @@ export function useOrders() {
     const db = getSupabase();
     if (!db) return;
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll();
 
     // work_orders → column-level changes (status, fabrication, accounting, etc.)

@@ -169,10 +169,10 @@ async function runTests(seed: Awaited<ReturnType<typeof seedData>>) {
   const resB = await syncConsumptionForOrder(db, orderId, diaryId);
   info(`result: consumptionsCreated=${resB.consumptionsCreated} movementsWritten=${resB.movementsWritten} reservationsConsumed=${resB.reservationsConsumed} errors=${JSON.stringify(resB.errors)} warnings=${JSON.stringify(resB.warnings)}`);
 
-  resB.consumptionsCreated === 1 ? pass("consumptionsCreated = 1") : fail(`consumptionsCreated = ${resB.consumptionsCreated}`);
-  resB.movementsWritten >= 1    ? pass(`movementsWritten = ${resB.movementsWritten}`) : fail(`movementsWritten = ${resB.movementsWritten}`);
-  resB.reservationsConsumed === 1 ? pass("reservationsConsumed = 1") : fail(`reservationsConsumed = ${resB.reservationsConsumed}`);
-  resB.errors.length === 0       ? pass("no errors") : fail(`errors: ${JSON.stringify(resB.errors)}`);
+  if (resB.consumptionsCreated === 1) pass("consumptionsCreated = 1"); else fail(`consumptionsCreated = ${resB.consumptionsCreated}`);
+  if (resB.movementsWritten >= 1) pass(`movementsWritten = ${resB.movementsWritten}`); else fail(`movementsWritten = ${resB.movementsWritten}`);
+  if (resB.reservationsConsumed === 1) pass("reservationsConsumed = 1"); else fail(`reservationsConsumed = ${resB.reservationsConsumed}`);
+  if (resB.errors.length === 0) pass("no errors"); else fail(`errors: ${JSON.stringify(resB.errors)}`);
 
   // Register any new consumptions + movements for cleanup
   const { data: conRows } = await db.from("inventory_consumptions").select("id").eq("order_id", orderId);
@@ -186,8 +186,8 @@ async function runTests(seed: Awaited<ReturnType<typeof seedData>>) {
   console.log("\n── Test C: Idempotency (second run) ─────────────────────────────");
   const resC = await syncConsumptionForOrder(db, orderId, diaryId);
   info(`result: consumptionsCreated=${resC.consumptionsCreated} movementsWritten=${resC.movementsWritten}`);
-  resC.consumptionsCreated === 0 ? pass("consumptionsCreated = 0 (idempotent)") : fail(`consumptionsCreated = ${resC.consumptionsCreated} (should be 0)`);
-  resC.errors.length === 0       ? pass("no errors") : fail(`errors: ${JSON.stringify(resC.errors)}`);
+  if (resC.consumptionsCreated === 0) pass("consumptionsCreated = 0 (idempotent)"); else fail(`consumptionsCreated = ${resC.consumptionsCreated} (should be 0)`);
+  if (resC.errors.length === 0) pass("no errors"); else fail(`errors: ${JSON.stringify(resC.errors)}`);
 
   // ── Test D: current_quantity deducted exactly once ─────────────────────────
   console.log("\n── Test D: current_quantity deducted exactly once ────────────────");
@@ -197,9 +197,8 @@ async function runTests(seed: Awaited<ReturnType<typeof seedData>>) {
     fail(`could not read catalog item: ${catNowErr?.message}`);
   } else {
     const expected = 10 - 4; // original 10, consume 4 (reservation qty)
-    catNow.current_quantity === expected
-      ? pass(`current_quantity = ${catNow.current_quantity} (10 - 4 = ${expected})`)
-      : fail(`current_quantity = ${catNow.current_quantity}, expected ${expected}`);
+    if (catNow.current_quantity === expected) pass(`current_quantity = ${catNow.current_quantity} (10 - 4 = ${expected})`);
+    else fail(`current_quantity = ${catNow.current_quantity}, expected ${expected}`);
   }
 
   // ── Test E: inventory_movements has exactly one 'consume' movement ─────────
@@ -212,8 +211,8 @@ async function runTests(seed: Awaited<ReturnType<typeof seedData>>) {
   if (movsErr) {
     fail(`movement query error: ${movsErr.message}`);
   } else {
-    movs!.length === 1 ? pass(`exactly 1 consume movement (qty=${movs![0].quantity})`) : fail(`expected 1 consume movement, got ${movs!.length}`);
-    movs![0]?.quantity === -4 ? pass("movement quantity = -4") : fail(`movement quantity = ${movs![0]?.quantity}`);
+    if (movs!.length === 1) pass(`exactly 1 consume movement (qty=${movs![0].quantity})`); else fail(`expected 1 consume movement, got ${movs!.length}`);
+    if (movs![0]?.quantity === -4) pass("movement quantity = -4"); else fail(`movement quantity = ${movs![0]?.quantity}`);
   }
 
   // ── Test F: Reservation status = 'consumed' ────────────────────────────────
@@ -223,8 +222,8 @@ async function runTests(seed: Awaited<ReturnType<typeof seedData>>) {
   if (resStatusErr || !resStatus) {
     fail(`reservation read error: ${resStatusErr?.message}`);
   } else {
-    resStatus.status === "consumed"               ? pass("reservation status = 'consumed'") : fail(`reservation status = '${resStatus.status}'`);
-    resStatus.release_reason === "consumed_by_diary" ? pass("release_reason = 'consumed_by_diary'") : fail(`release_reason = '${resStatus.release_reason}'`);
+    if (resStatus.status === "consumed") pass("reservation status = 'consumed'"); else fail(`reservation status = '${resStatus.status}'`);
+    if (resStatus.release_reason === "consumed_by_diary") pass("release_reason = 'consumed_by_diary'"); else fail(`release_reason = '${resStatus.release_reason}'`);
   }
 
   // ── Test G: inventory_consumptions row exists with correct fields ──────────
@@ -235,10 +234,10 @@ async function runTests(seed: Awaited<ReturnType<typeof seedData>>) {
   if (consErr || !cons) {
     fail(`consumption read error: ${consErr?.message}`);
   } else {
-    cons.status === "consumed"             ? pass("consumption status = 'consumed'") : fail(`consumption status = '${cons.status}'`);
-    cons.quantity === 4                    ? pass("consumption quantity = 4") : fail(`consumption quantity = ${cons.quantity}`);
-    cons.order_item_key === accessoryRowId ? pass("order_item_key matches") : fail(`order_item_key mismatch: ${cons.order_item_key}`);
-    cons.reservation_id === reservationId  ? pass("reservation_id linked") : fail(`reservation_id mismatch: ${cons.reservation_id}`);
+    if (cons.status === "consumed") pass("consumption status = 'consumed'"); else fail(`consumption status = '${cons.status}'`);
+    if (cons.quantity === 4) pass("consumption quantity = 4"); else fail(`consumption quantity = ${cons.quantity}`);
+    if (cons.order_item_key === accessoryRowId) pass("order_item_key matches"); else fail(`order_item_key mismatch: ${cons.order_item_key}`);
+    if (cons.reservation_id === reservationId) pass("reservation_id linked"); else fail(`reservation_id mismatch: ${cons.reservation_id}`);
   }
 }
 

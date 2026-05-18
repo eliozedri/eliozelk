@@ -165,7 +165,6 @@ async function test2_mappedOrderWithoutConsumption() {
 // Test 3: Add consumption → order should be reconciled
 async function test3_addConsumption_reconciled() {
   console.log("\n── Test 3: Add consumption → order becomes reconciled ──────────────");
-  const now = new Date().toISOString();
   const { error } = await db.from("inventory_consumptions").insert({
     order_id:       ORDER_MAPPED,
     order_item_key: "row1",
