@@ -6,7 +6,7 @@ import {
   FileText, Table2, LayoutDashboard, Users, Palette, Wrench,
   Database, ShieldCheck, Warehouse, DollarSign, Map, Calendar,
   UsersRound, BookOpen, TrendingUp, Bot, Settings, ShieldPlus,
-  LogOut, X, Cable,
+  LogOut, X, Cable, ScanLine,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { canAccessTab, canPerformAction, ROLE_LABELS } from "@/types/auth";
@@ -65,6 +65,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "orders", href: "/new-order", label: "הזמנה חדשה", icon: <FileText className={ICON_CLS} />, matchFn: (p) => p === "/new-order", noBadge: true },
       { tabId: "work-diary", href: "/work-diary", label: "יומן עבודה חדש", icon: <BookOpen className={ICON_CLS} />, matchFn: (p) => p.startsWith("/work-diary") },
+      { tabId: "supplier-documents", href: "/supplier-documents", label: "סריקת מסמך", icon: <ScanLine className={ICON_CLS} />, matchFn: (p) => p.startsWith("/supplier-documents"), noBadge: true },
     ],
   },
   {
