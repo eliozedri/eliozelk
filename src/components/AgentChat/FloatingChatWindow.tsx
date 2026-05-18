@@ -168,7 +168,10 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
 
   useEffect(() => {
     if (isOpen && !minimized) {
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      setTimeout(() => {
+        const el = messagesEndRef.current;
+        if (el?.parentElement) el.parentElement.scrollTop = el.parentElement.scrollHeight;
+      }, 50);
     }
   }, [messages, isOpen, minimized]);
 
@@ -243,7 +246,7 @@ export function FloatingChatWindow({ isOpen, onClose, agentId, agentName, agentI
   return (
     <div
       ref={panelRef}
-      className="fixed z-50 flex flex-col rounded-2xl shadow-2xl overflow-hidden select-none relative"
+      className="fixed z-50 flex flex-col rounded-2xl shadow-2xl overflow-hidden select-none"
       style={{
         left:      pos.x,
         top:       pos.y,
