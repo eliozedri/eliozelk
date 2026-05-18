@@ -49,6 +49,11 @@ const SCANNABLE_AGENTS = new Set([
   "billing-collections-agent",
   "cfo-agent",
   "catalog-pricing-agent",
+  "graphics-production-agent",
+  "fabrication-agent",
+  "coordination-qa-agent",
+  "orders-agent",
+  "equipment-fleet-agent",
 ]);
 
 type ScanStatus = "idle" | "running" | "success" | "error";
@@ -1138,6 +1143,8 @@ export function AgentCommandCenter() {
             stats={agentStats}
             scanStatuses={scanStatuses}
             meetings={meetings}
+            activityFeed={activityFeed}
+            loading={loading}
             onAgentSelect={setSelectedAgent}
             onAgentChat={openAgentChat}
             onMeetingOpen={openMeetingChat}
