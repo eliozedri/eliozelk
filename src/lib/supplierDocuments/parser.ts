@@ -348,7 +348,7 @@ function extractSupplierName(text: string): string {
 
 // ── Main parser ───────────────────────────────────────────────────────────────
 
-export function parseOcrText(rawText: string): ParseResult {
+export function parseOcrText(rawText: string, typeHint?: SupplierDocumentType): ParseResult {
   const classification    = classifyDocumentType(rawText);
   const vatNumber         = extractVatNumber(rawText);
   const documentNumber    = extractDocumentNumber(rawText);
@@ -370,23 +370,34 @@ export function parseOcrText(rawText: string): ParseResult {
 
   const lines = extractLines(rawText);
 
+  // Adjust scoring based on user's pre-selected document type
+  // Delivery notes: totals are optional; reward found line items instead
+  // Receipt: total is the key field; line items are secondary
+  const isDeliveryHint = typeHint === "delivery_note" || typeHint === "goods_receipt";
+
   let confidence = 0.3;
-  if (vatNumber)             confidence += 0.15;
-  if (documentNumber)        confidence += 0.15;
-  if (documentDate)          confidence += 0.10;
-  if (totalAfterVat != null) confidence += 0.15;
-  if (supplierName)          confidence += 0.10;
+  if (vatNumber)                              confidence += 0.15;
+  if (documentNumber)                         confidence += 0.15;
+  if (documentDate)                           confidence += 0.10;
+  if (!isDeliveryHint && totalAfterVat != null) confidence += 0.15;
+  if (isDeliveryHint && lines.length > 0)      confidence += 0.15;
+  if (supplierName)                           confidence += 0.10;
   confidence = Math.min(confidence, 0.95);
 
   const missing: string[] = [];
-  if (!vatNumber)            missing.push("מס׳ עוסק לא נמצא");
-  if (!documentNumber)       missing.push("מספר מסמך לא נמצא");
-  if (!documentDate)         missing.push("תאריך לא נמצא");
-  if (totalAfterVat == null) missing.push("סכום לא נמצא");
+  if (!vatNumber)                               missing.push("מס׳ עוסק לא נמצא");
+  if (!documentNumber)                          missing.push("מספר מסמך לא נמצא");
+  if (!documentDate)                            missing.push("תאריך לא נמצא");
+  if (!isDeliveryHint && totalAfterVat == null) missing.push("סכום לא נמצא");
+
+  // When OCR can't classify (unknown) but user gave a hint, use the hint as the document type
+  const finalDocType = (classification.type === "unknown" && typeHint && typeHint !== "unknown")
+    ? typeHint
+    : classification.type as SupplierDocumentType;
 
   return {
     header: {
-      documentType: classification.type as SupplierDocumentType,
+      documentType: finalDocType,
       supplierName,
       supplierVat: vatNumber,
       documentNumber,

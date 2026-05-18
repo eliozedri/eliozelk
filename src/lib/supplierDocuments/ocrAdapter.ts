@@ -9,6 +9,7 @@ export interface ExtractionInput {
   fileName?: string;
   fileType?: string;
   rawText?: string;
+  documentTypeHint?: SupplierDocumentType; // user's pre-selected card → guides parser priorities
 }
 
 export interface ExtractedHeader {
@@ -122,7 +123,7 @@ const tesseractProvider: ExtractionProvider = async (input) => {
   }
 
   const { parseOcrText } = await import("./parser");
-  const parsed = parseOcrText(rawText);
+  const parsed = parseOcrText(rawText, input.documentTypeHint);
   return { available: true, rawText, header: parsed.header, lines: parsed.lines };
 };
 

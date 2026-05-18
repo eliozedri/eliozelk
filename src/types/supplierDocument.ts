@@ -318,6 +318,64 @@ export interface PostingPreview {
   canPost: boolean;
 }
 
+// ── User document-type pre-selection (4-card UI flow) ─────────────────────────
+
+export type UserDocumentCard = "invoice" | "delivery_note" | "receipt" | "other";
+
+export const USER_CARD_LABELS: Record<UserDocumentCard, string> = {
+  invoice:       "חשבונית",
+  delivery_note: "תעודת משלוח",
+  receipt:       "קבלה",
+  other:         "אחר",
+};
+
+export const USER_CARD_DESCRIPTIONS: Record<UserDocumentCard, string> = {
+  invoice:       "קליטת הוצאה מספק, כולל מעִה ושורות פריטים",
+  delivery_note: "קליטת סחורה למלאי והתאמה לחשבונית בהמשך",
+  receipt:       "אסמכתת תשלום או קבלה מספק",
+  other:         "מסמך כללי לבדיקה וסיווג ידני",
+};
+
+// Default SupplierDocumentType used as OCR hint for each card
+export const USER_CARD_DEFAULT_TYPE: Record<UserDocumentCard, SupplierDocumentType> = {
+  invoice:       "tax_invoice",
+  delivery_note: "delivery_note",
+  receipt:       "receipt",
+  other:         "unknown",
+};
+
+// SupplierDocumentType values in the same group as each card (mismatch detection)
+export const USER_CARD_TYPE_GROUPS: Record<UserDocumentCard, SupplierDocumentType[]> = {
+  invoice:       ["supplier_invoice", "tax_invoice", "invoice_receipt"],
+  delivery_note: ["delivery_note", "goods_receipt"],
+  receipt:       ["receipt", "invoice_receipt"],
+  other:         ["supplier_quote", "supplier_order_confirmation", "unknown"],
+};
+
+export interface CardBusinessEffect {
+  createsExpense: boolean | "maybe";
+  updatesInventory: boolean | "maybe";
+  awaitInvoiceMatch: boolean;
+}
+
+export const USER_CARD_BUSINESS_EFFECT: Record<UserDocumentCard, CardBusinessEffect> = {
+  invoice:       { createsExpense: true,    updatesInventory: "maybe", awaitInvoiceMatch: false },
+  delivery_note: { createsExpense: false,   updatesInventory: true,    awaitInvoiceMatch: true  },
+  receipt:       { createsExpense: true,    updatesInventory: false,   awaitInvoiceMatch: false },
+  other:         { createsExpense: "maybe", updatesInventory: false,   awaitInvoiceMatch: false },
+};
+
+export function docTypeToUserCard(docType: SupplierDocumentType): UserDocumentCard {
+  for (const [card, types] of Object.entries(USER_CARD_TYPE_GROUPS) as [UserDocumentCard, SupplierDocumentType[]][]) {
+    if (types.includes(docType)) return card;
+  }
+  return "other";
+}
+
+export function isTypeMismatch(userCard: UserDocumentCard, detectedType: SupplierDocumentType): boolean {
+  return !USER_CARD_TYPE_GROUPS[userCard].includes(detectedType);
+}
+
 // ── Duplicate check result ─────────────────────────────────────────────────
 
 export interface DuplicateCheckResult {
