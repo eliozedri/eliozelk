@@ -75,12 +75,12 @@ No new files. No schema changes. No new API routes.
 | `exceptions` | `"שגיאות"`, `"חריגות"`, `"אזהרות"`, `"כמה שגיאות"`, `"כמה חריגות"` |
 | `urgent` | `"הדחוף ביותר"`, `"הכי דחוף"`, `"הכי קריטי"` |
 | `approvals` | `"ממתין לאישורי"`, `"לאישורי"`, `"מה ממתין"` (shared with needs_attention) |
-| `summary` | remove — `"מה המצב"` now routes to `department_status` or `command_center_summary` based on channel |
+| `summary` | The intent is kept; its **handler** branches by channel: command-center → agent health overview; ops-manager → operational status block. `"מה המצב"` remains a summary keyword. |
 
 ### New Intents
 
 #### `needs_attention`
-**Keywords:** `"דורש טיפול"`, `"לטפל"`, `"לטיפול"`, `"מה צריך טיפול"`, `"מה מחכה"`, `"מה ממתין"`, `"מה נשאר"`, `"מה פתוח"`
+**Keywords:** `"דורש טיפול"`, `"לטפל"`, `"לטיפול"`, `"מה צריך טיפול"`, `"מה מחכה"`, `"מה נשאר"`, `"מה פתוח"` — Note: `"מה ממתין"` is shared with `approvals`; `needs_attention` is checked **first** in intent detection order since it is more general.
 
 **Handler:** Query in parallel:
 - Open/critical exceptions (all agents or filtered)
@@ -269,7 +269,7 @@ History is NOT used to synthesize new answers or blend topics. It is only used t
 ### Command Center (agentId = null)
 
 Primary use cases:
-- "מה מצב המערכת?" → system health summary (agent counts, issue counts)
+- "מה מצב המערכת?" → `summary` intent, command-center branch → agent health overview (agent counts, issue counts)
 - "איזה סוכנים פעילים?" → `agent_status` intent
 - "איפה אני רואה הזמנות?" → `navigation` intent
 - "מה נשאר לסיום?" → `needs_attention` across all agents
