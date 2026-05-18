@@ -371,6 +371,14 @@ export function OrdersTableV2() {
 
   return (
     <section className="px-6 pb-10" aria-label="טבלת הזמנות V2">
+      {/* Visibility marker — temporary diagnostic banner */}
+      <div
+        className="mb-3 px-4 py-2 rounded-lg text-sm font-bold text-amber-900 border border-amber-300"
+        style={{ backgroundColor: "#fef3c7" }}
+      >
+        ✦ טבלת הזמנות V2 — תצוגה ניסיונית · {sortedOrders.length} הזמנות פעילות
+      </div>
+
       {/* Section header */}
       <div className="flex items-center gap-3 mb-4 pt-2">
         <div className="w-1 h-7 rounded-full" style={{ backgroundColor: "#f59e0b" }} />
