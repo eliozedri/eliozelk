@@ -1,0 +1,194 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getServiceSupabase } from "@/lib/supabase/server";
+import type { SupplierDocumentType, PaymentStatus, InventoryLineAction } from "@/types/supplierDocument";
+
+async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!token) return null;
+  const db = getServiceSupabase();
+  const { data: { user }, error } = await db.auth.getUser(token);
+  if (error || !user) return null;
+  return user.id;
+}
+
+// GET /api/supplier-documents/[id] — full document with lines and supplier
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const userId = await getAuthenticatedUserId(req);
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const db = getServiceSupabase();
+
+  const { data: doc, error: docErr } = await db
+    .from("supplier_documents")
+    .select(`
+      *,
+      suppliers ( id, name, vat_number, phone, email, whatsapp, address, city, contact_person )
+    `)
+    .eq("id", id)
+    .single();
+
+  if (docErr || !doc) {
+    return NextResponse.json({ error: "מסמך לא נמצא" }, { status: 404 });
+  }
+
+  const { data: lines } = await db
+    .from("supplier_document_lines")
+    .select(`
+      *,
+      catalog_items ( id, name, current_quantity, minimum_quantity, cost_price, unit_of_measure )
+    `)
+    .eq("document_id", id)
+    .order("line_number");
+
+  const { data: events } = await db
+    .from("document_review_events")
+    .select("id,event_type,field_name,old_value,new_value,notes,created_by,created_at")
+    .eq("document_id", id)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  const { data: dupChecks } = await db
+    .from("document_duplicate_checks")
+    .select("id,check_type,match_score,result,details,override_approved,created_at")
+    .eq("document_id", id)
+    .order("match_score", { ascending: false });
+
+  return NextResponse.json({
+    ...doc,
+    lines: lines ?? [],
+    reviewEvents: events ?? [],
+    duplicateChecks: dupChecks ?? [],
+  });
+}
+
+// PATCH /api/supplier-documents/[id] — update document header or line fields
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const userId = await getAuthenticatedUserId(req);
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const db = getServiceSupabase();
+
+  const { data: profile } = await db
+    .from("profiles")
+    .select("name")
+    .eq("id", userId)
+    .single();
+  const userName = (profile as { name?: string } | null)?.name ?? userId;
+
+  // Verify document exists and is not posted/archived
+  const { data: existing } = await db
+    .from("supplier_documents")
+    .select("id,status")
+    .eq("id", id)
+    .single();
+
+  if (!existing) return NextResponse.json({ error: "מסמך לא נמצא" }, { status: 404 });
+  const ex = existing as { id: string; status: string };
+  if (ex.status === "posted" || ex.status === "archived") {
+    return NextResponse.json({ error: "לא ניתן לערוך מסמך שנרשם או הועבר לארכיון" }, { status: 409 });
+  }
+
+  let body: {
+    documentType?: SupplierDocumentType;
+    supplierId?: string;
+    supplierNameRaw?: string;
+    supplierVatRaw?: string;
+    documentNumber?: string;
+    documentDate?: string;
+    dueDate?: string;
+    currency?: string;
+    subtotalBeforeVat?: number;
+    vatAmount?: number;
+    vatRate?: number;
+    totalAfterVat?: number;
+    paymentStatus?: PaymentStatus;
+    linkedOrderRef?: string;
+    linkedDeliveryNoteId?: string;
+    notes?: string;
+    status?: string;
+    // Line updates
+    lineUpdates?: Array<{
+      id: string;
+      category?: string;
+      inventoryAction?: InventoryLineAction;
+      catalogItemId?: string | null;
+      quantity?: number;
+      unitPrice?: number;
+      unitOfMeasure?: string;
+      normalizedDescription?: string;
+      status?: string;
+    }>;
+  };
+
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const now = new Date().toISOString();
+
+  // Build document update payload
+  const docUpdate: Record<string, unknown> = { updated_at: now };
+  if (body.documentType !== undefined) docUpdate.document_type = body.documentType;
+  if (body.supplierId !== undefined) docUpdate.supplier_id = body.supplierId;
+  if (body.supplierNameRaw !== undefined) docUpdate.supplier_name_raw = body.supplierNameRaw;
+  if (body.supplierVatRaw !== undefined) docUpdate.supplier_vat_raw = body.supplierVatRaw;
+  if (body.documentNumber !== undefined) docUpdate.document_number = body.documentNumber;
+  if (body.documentDate !== undefined) docUpdate.document_date = body.documentDate;
+  if (body.dueDate !== undefined) docUpdate.due_date = body.dueDate;
+  if (body.currency !== undefined) docUpdate.currency = body.currency;
+  if (body.subtotalBeforeVat !== undefined) docUpdate.subtotal_before_vat = body.subtotalBeforeVat;
+  if (body.vatAmount !== undefined) docUpdate.vat_amount = body.vatAmount;
+  if (body.vatRate !== undefined) docUpdate.vat_rate = body.vatRate;
+  if (body.totalAfterVat !== undefined) docUpdate.total_after_vat = body.totalAfterVat;
+  if (body.paymentStatus !== undefined) docUpdate.payment_status = body.paymentStatus;
+  if (body.linkedOrderRef !== undefined) docUpdate.linked_order_ref = body.linkedOrderRef;
+  if (body.linkedDeliveryNoteId !== undefined) docUpdate.linked_delivery_note_id = body.linkedDeliveryNoteId;
+  if (body.notes !== undefined) docUpdate.notes = body.notes;
+  if (body.status !== undefined) docUpdate.status = body.status;
+
+  if (Object.keys(docUpdate).length > 1) {
+    const { error: updateErr } = await db
+      .from("supplier_documents")
+      .update(docUpdate)
+      .eq("id", id);
+    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  }
+
+  // Apply line updates
+  if (body.lineUpdates && body.lineUpdates.length > 0) {
+    for (const lu of body.lineUpdates) {
+      const lineUpdate: Record<string, unknown> = { updated_at: now };
+      if (lu.category !== undefined) lineUpdate.category = lu.category;
+      if (lu.inventoryAction !== undefined) lineUpdate.inventory_action = lu.inventoryAction;
+      if (lu.catalogItemId !== undefined) lineUpdate.catalog_item_id = lu.catalogItemId;
+      if (lu.quantity !== undefined) lineUpdate.quantity = lu.quantity;
+      if (lu.unitPrice !== undefined) lineUpdate.unit_price = lu.unitPrice;
+      if (lu.unitOfMeasure !== undefined) lineUpdate.unit_of_measure = lu.unitOfMeasure;
+      if (lu.normalizedDescription !== undefined) lineUpdate.normalized_description = lu.normalizedDescription;
+      if (lu.status !== undefined) lineUpdate.status = lu.status;
+
+      await db.from("supplier_document_lines").update(lineUpdate).eq("id", lu.id);
+    }
+  }
+
+  // Write audit event
+  await db.from("document_review_events").insert({
+    document_id: id,
+    event_type:  "edited",
+    notes:       "עריכה ידנית על ידי משתמש",
+    created_by:  userName,
+    created_at:  now,
+  });
+
+  return NextResponse.json({ ok: true });
+}

@@ -43,6 +43,7 @@ export type TabId =
   | "catalog"
   | "safety"
   | "accounting"
+  | "supplier-documents"
   | "workmap"
   | "schedule"
   | "crews"
@@ -62,6 +63,7 @@ export const ALL_TABS: { id: TabId; label: string; path: string; section: string
   { id: "catalog", label: "מוצרים ושירותים", path: "/catalog", section: "מחלקות" },
   { id: "safety", label: "אביזרי בטיחות", path: "/safety", section: "מחלקות" },
   { id: "accounting", label: "הנהלת חשבונות", path: "/accounting", section: "מחלקות" },
+  { id: "supplier-documents", label: "מסמכי ספקים", path: "/supplier-documents", section: "מחלקות" },
   { id: "workmap", label: "מפת עבודות", path: "/workmap", section: "בקרת שטח" },
   { id: "schedule", label: "סידור שבועי", path: "/schedule", section: "בקרת שטח" },
   { id: "crews", label: "צוותי שטח", path: "/crews", section: "בקרת שטח" },
@@ -87,7 +89,11 @@ export type ActionPermission =
   | "submit_diary"
   | "delete_diary"
   | "manage_access"
-  | "chat_ops_manager";
+  | "chat_ops_manager"
+  | "upload_supplier_document"
+  | "review_supplier_document"
+  | "post_supplier_document"
+  | "override_duplicate";
 
 export const ACTION_PERMISSION_LABELS: Record<ActionPermission, string> = {
   create_order: "יצירת הזמנות",
@@ -105,6 +111,10 @@ export const ACTION_PERMISSION_LABELS: Record<ActionPermission, string> = {
   delete_diary: "מחיקת יומן עבודה",
   manage_access: "ניהול משתמשים והרשאות",
   chat_ops_manager: "שיחה עם מנהל התפעול",
+  upload_supplier_document: "העלאת מסמכי ספקים",
+  review_supplier_document: "בדיקת מסמכי ספקים",
+  post_supplier_document: "רישום מסמכי ספקים",
+  override_duplicate: "אישור כפילות ידני",
 };
 
 export const ALL_ACTIONS: ActionPermission[] = Object.keys(ACTION_PERMISSION_LABELS) as ActionPermission[];
@@ -120,16 +130,16 @@ export const ROLE_DEFAULTS: Record<Role, { tabs: TabId[] | ["*"]; actions: Actio
     actions: ["manage_graphics"],
   },
   procurement_manager: {
-    tabs: ["dashboard", "warehouse", "catalog", "safety"],
-    actions: ["manage_catalog"],
+    tabs: ["dashboard", "warehouse", "catalog", "safety", "supplier-documents"],
+    actions: ["manage_catalog", "upload_supplier_document", "review_supplier_document", "post_supplier_document"],
   },
   tender_manager: {
     tabs: ["dashboard", "orders", "customers"],
     actions: ["create_order", "view_accounting"],
   },
   finance_manager: {
-    tabs: ["dashboard", "accounting", "profitability", "cost-settings", "agents"],
-    actions: ["view_accounting", "export_accounting"],
+    tabs: ["dashboard", "accounting", "supplier-documents", "profitability", "cost-settings", "agents"],
+    actions: ["view_accounting", "export_accounting", "review_supplier_document", "post_supplier_document"],
   },
   fleet_manager: {
     tabs: ["dashboard", "crews", "schedule", "workmap"],
