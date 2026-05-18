@@ -159,6 +159,7 @@ export interface OrderActivity {
 // ─── Work Order ──────────────────────────────────────────────────────────────
 
 export type WorkOrderStatus =
+  | "draft"                                   // order is being entered — not yet submitted to pipeline
   | "graphics_pending"
   | "graphics_active"
   | "graphics_done"
@@ -223,7 +224,7 @@ export interface WorkOrder {
   status: WorkOrderStatus;
   createdAt: string;
   updatedAt: string;
-  graphicsSentAt: string;
+  graphicsSentAt: string | null;
   graphicsAcknowledgedAt: string | null;
   graphicsAcknowledgedBy: string | null;
   graphicsCompletedAt: string | null;
@@ -244,6 +245,7 @@ export interface WorkOrder {
   activities?: OrderActivity[];
   // Field execution
   jobName?: string | null;
+  requiredDate?: string | null;
   estimatedExecutionHours?: number;
   readyForExecutionAt?: string | null;
   assignedCrewId?: string | null;
@@ -263,6 +265,7 @@ export interface WorkOrder {
 // ─── Status config ───────────────────────────────────────────────────────────
 
 export const STATUS_LABELS: Record<WorkOrderStatus, string> = {
+  draft: "טיוטה",
   graphics_pending: "ממתין לאישור גרפיקה",
   graphics_active: "בטיפול גרפיקה",
   graphics_done: "גרפיקה הושלמה",
@@ -273,6 +276,7 @@ export const STATUS_LABELS: Record<WorkOrderStatus, string> = {
 };
 
 export const STATUS_COLORS: Record<WorkOrderStatus, string> = {
+  draft: "bg-gray-100 text-gray-500",
   graphics_pending: "bg-amber-100 text-amber-700",
   graphics_active: "bg-blue-100 text-blue-700",
   graphics_done: "bg-green-100 text-green-700",
@@ -298,6 +302,8 @@ export interface ProgressState {
 
 export function getProgressState(status: WorkOrderStatus): ProgressState {
   switch (status) {
+    case "draft":
+      return { completedSteps: 0, activeStep: 0, isPending: true };
     case "graphics_pending":
       return { completedSteps: 1, activeStep: 1, isPending: true };
     case "graphics_active":

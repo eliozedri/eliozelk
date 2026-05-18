@@ -142,11 +142,13 @@ export function OrderForm() {
     }
     const submitted = await addOrder(order, priority);
     resetOrder();
-    const typeMsg = order.orderType === "pickup"
-      ? "הזמנת האיסוף נפתחה"
-      : order.orderType === "equipment_supply"
-      ? "הזמנת הציוד נפתחה"
-      : "ההזמנה נשלחה למחלקת גרפיקה";
+    const typeMsg = submitted.status === "graphics_pending"
+      ? "ההזמנה נשלחה למחלקת גרפיקה"
+      : submitted.orderType === "pickup"
+      ? "הזמנת האיסוף נפתחה — מועברת להכנה"
+      : submitted.orderType === "equipment_supply"
+      ? "הזמנת הציוד נפתחה — מועברת להכנה"
+      : "ההזמנה נפתחה";
     setSuccessMessage(`${typeMsg} — מספר הזמנה: ${submitted.orderNumber}`);
     setTimeout(() => setSuccessMessage(null), 5000);
   };
@@ -276,9 +278,9 @@ export function OrderForm() {
           onChange={(partial) => updateHeader(partial as Partial<OrderHeaderType>)}
         />
 
-        {/* שם עבודה + מקום עבודה — available for all order types */}
+        {/* שם עבודה + מועד ספקה + מקום עבודה — available for all order types */}
         {order.orderType && (
-          <div className="grid grid-cols-2 gap-3 mt-1">
+          <div className="grid grid-cols-3 gap-3 mt-1">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">
                 שם עבודה / אתר עבודה <span className="text-red-500">*</span>
@@ -292,6 +294,19 @@ export function OrderForm() {
                 onChange={(e) => updateHeader({ jobName: e.target.value })}
                 className={inputCls}
                 placeholder="לדוג׳: סימון חניון עיריית אשקלון"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                מועד ספקה נדרש
+                <span className="text-gray-400 font-normal mr-1">(אופציונלי)</span>
+              </label>
+              <input
+                type="date"
+                value={order.requiredDate ?? ""}
+                onChange={(e) => updateHeader({ requiredDate: e.target.value })}
+                className={inputCls}
+                dir="ltr"
               />
             </div>
             <div>

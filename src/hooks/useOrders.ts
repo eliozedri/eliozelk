@@ -53,6 +53,7 @@ const COLUMN_MAP: Partial<Record<keyof WorkOrder, string>> = {
   warehouseStatus:         "warehouse_status",
   // Field execution domain (only scheduling/office writes these)
   jobName:                   "job_name",
+  requiredDate:              "required_date",
   estimatedExecutionHours:   "estimated_execution_hours",
   readyForExecutionAt:       "ready_for_execution_at",
   assignedCrewId:            "assigned_crew_id",
@@ -131,6 +132,7 @@ function fromRow(r: Record<string, unknown>): WorkOrder {
     warehouseStatus:        (r.warehouse_status as WorkOrder["warehouseStatus"]) ?? null,
     // Field execution columns
     jobName:                   (r.job_name as string | null) ?? null,
+    requiredDate:              (r.required_date as string | null) ?? null,
     estimatedExecutionHours:   r.estimated_execution_hours != null ? Number(r.estimated_execution_hours) : blob.estimatedExecutionHours,
     readyForExecutionAt:       (r.ready_for_execution_at as string | null) ?? blob.readyForExecutionAt ?? null,
     assignedCrewId:            (r.assigned_crew_id as string | null) ?? blob.assignedCrewId ?? null,
@@ -194,6 +196,7 @@ function toRow(o: WorkOrder) {
     warehouse_required:          o.warehouseRequired ?? false,
     warehouse_status:            o.warehouseStatus ?? null,
     job_name:                    o.jobName ?? null,
+    required_date:               o.requiredDate ?? null,
     estimated_execution_hours:   o.estimatedExecutionHours ?? null,
     ready_for_execution_at:      o.readyForExecutionAt ?? null,
     assigned_crew_id:            o.assignedCrewId ?? null,
@@ -266,7 +269,11 @@ function insertActivity(
 
 // ═══════════════════════════════════════════════════════════════════════
 export function useOrders() {
-  const [orders, setOrders] = useState<WorkOrder[]>([]);
+  // Lazy init: if Supabase isn't configured (local-only mode), seed from localStorage
+  // immediately so the first render already has data (avoids a synchronous setState in the effect).
+  const [orders, setOrders] = useState<WorkOrder[]>(() =>
+    typeof window !== "undefined" && !getSupabase() ? loadLocal() : [],
+  );
   const ref = useRef<WorkOrder[]>([]);
 
   useEffect(() => { ref.current = orders; }, [orders]);
@@ -306,8 +313,9 @@ export function useOrders() {
   // ── Realtime subscriptions ────────────────────────────────────────────
   useEffect(() => {
     const db = getSupabase();
-    if (!db) { setOrders(loadLocal()); return; }
+    if (!db) return; // Already seeded from localStorage by useState lazy initializer
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll();
 
     // work_orders → column-level changes (status, fabrication, accounting, etc.)
@@ -476,6 +484,16 @@ export function useOrders() {
       orderNumber = generateOrderNumberLocal(ref.current);
     }
 
+    // Determine initial status explicitly based on order type and content.
+    // field_work always routes through graphics (road sign company default).
+    // pickup/equipment_supply without custom sign/graphic work skip the graphics
+    // queue and go directly to the production/preparation stage.
+    const hasSignWork = snapshot.signRows.some(r => r.signNumber.trim()) ||
+                        snapshot.miscRows.some(r => r.description.trim());
+    const needsGraphics = snapshot.orderType === "field_work" || hasSignWork;
+    const initialStatus: WorkOrderStatus = needsGraphics ? "graphics_pending" : "production";
+    const initialGraphicsSentAt = needsGraphics ? now : null;
+
     const newOrder: WorkOrder = {
       id: nanoid(),
       orderNumber,
@@ -491,6 +509,7 @@ export function useOrders() {
       warehouseRequired: (snapshot.accessoryRows ?? []).some(r => r.description?.trim() !== ""),
       warehouseStatus: (snapshot.accessoryRows ?? []).some(r => r.description?.trim() !== "") ? "pending" : null,
       jobName: snapshot.jobName?.trim() || null,
+      requiredDate: snapshot.requiredDate?.trim() || null,
       location: snapshot.location?.trim() || undefined,
       signRows: snapshot.signRows,
       accessoryRows: snapshot.accessoryRows,
@@ -502,10 +521,10 @@ export function useOrders() {
       fabricationStatus: snapshot.fabricationRequired ? "pending" : undefined,
       priority,
       notes,
-      status: "graphics_pending",
+      status: initialStatus,
       createdAt: now,
       updatedAt: now,
-      graphicsSentAt: now,
+      graphicsSentAt: initialGraphicsSentAt,
       graphicsAcknowledgedAt: null,
       graphicsAcknowledgedBy: null,
       graphicsCompletedAt: null,
@@ -522,9 +541,9 @@ export function useOrders() {
           setOrders(prev => prev.filter(o => o.id !== newOrder.id));
         } else {
           const depts: string[] = [];
-          if (newOrder.signRows?.length || newOrder.miscRows?.length) depts.push("מחלקת גרפיקה");
+          if (needsGraphics) depts.push("מחלקת גרפיקה");
           if (newOrder.warehouseRequired) depts.push("מחלקת מחסן");
-          if (depts.length === 0) depts.push("מחלקת גרפיקה");
+          if (depts.length === 0) depts.push("הכנה");
           insertActivity(newOrder.id, "order_created", `הזמנה נוצרה ונשלחה ל${depts.join(" ו")}`);
         }
       });
@@ -620,9 +639,14 @@ export function useOrders() {
     const merged: WorkOrder = { ...current, ...fields };
     const extra: Partial<WorkOrder> = {};
 
-    // Auto-advance: production → ready_installation when all required departments are done.
-    // Uses canMarkReadyForInstallation as the single source of truth (same rule as manual transition).
-    if (("warehouseStatus" in fields || "fabricationStatus" in fields) && merged.status === "production") {
+    // Auto-advance: production or graphics_done → ready_installation when all required departments done.
+    // Covers both the normal production path and the edge case where fabrication completes
+    // while the order is still at graphics_done (i.e. warehouse already marked ready but
+    // the explicit release hasn't fired yet — fabrication's update acts as the final trigger).
+    if (
+      ("warehouseStatus" in fields || "fabricationStatus" in fields) &&
+      (merged.status === "production" || merged.status === "graphics_done")
+    ) {
       if (canMarkReadyForInstallation(merged).ok) {
         extra.status = "ready_installation";
         if (!merged.readyForExecutionAt) extra.readyForExecutionAt = new Date().toISOString();
@@ -633,6 +657,47 @@ export function useOrders() {
 
     if (extra.status === "ready_installation") {
       insertActivity(id, "status_changed", "כל שלבי ההכנה הושלמו — ההזמנה מוכנה לביצוע");
+    }
+  }, [_patchOrder]);
+
+  // ── releaseWarehouseOrder ──────────────────────────────────────────────
+  // Called when warehouse clicks "שחרר לביצוע שטח" after marking an order ready.
+  // Determines the correct next status and unblocks the order from graphics_done
+  // when fabrication is still in progress (graphics_done → production).
+  const releaseWarehouseOrder = useCallback(async (id: string): Promise<void> => {
+    const order = ref.current.find(o => o.id === id);
+    if (!order || order.warehouseStatus !== "ready") return;
+
+    const check = canMarkReadyForInstallation(order);
+
+    if (check.ok) {
+      // Warehouse + all other required departments done → advance to ready_installation
+      const now = new Date().toISOString();
+      await _patchOrder(id, {
+        status: "ready_installation",
+        ...(!order.readyForExecutionAt ? { readyForExecutionAt: now } : {}),
+      });
+      insertActivity(
+        id, "status_changed",
+        "מחסן שחרר את ההזמנה לביצוע שטח — כל שלבי ההכנה הושלמו",
+        { department: "warehouse" },
+      );
+    } else if (order.status === "graphics_done" && order.fabricationRequired) {
+      // Graphics done, warehouse done, but fabrication still in progress.
+      // Unblock graphics_done → production so fabrication can continue to completion.
+      await _patchOrder(id, { status: "production" });
+      insertActivity(
+        id, "status_changed",
+        "מחסן שחרר — ההזמנה עוברת לשלב ייצור, מסגרייה ממשיכה בתהליך",
+        { department: "warehouse" },
+      );
+    } else {
+      // Already at production with fabrication pending — warehouse's job is done, just log.
+      insertActivity(
+        id, "status_changed",
+        "מחסן שחרר — ממתין להשלמת מחלקות ייצור",
+        { department: "warehouse" },
+      );
     }
   }, [_patchOrder]);
 
@@ -773,7 +838,7 @@ export function useOrders() {
   return {
     orders, addOrder, acknowledgeOrder, completeGraphics,
     approveCustomerOrder,
-    updateOrderStatus, updateOrderFields, addOrderActivity,
+    updateOrderStatus, updateOrderFields, releaseWarehouseOrder, addOrderActivity,
     addOrderProblem, resolveOrderProblem,
     deleteOrder,
   };

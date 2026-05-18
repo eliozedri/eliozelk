@@ -199,7 +199,7 @@ function FabricationCard({ order }: { order: WorkOrder }) {
               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700">דחוף</span>
             )}
           </div>
-          <span className="text-xs text-gray-500">נכנסה {formatDate(order.graphicsSentAt)}</span>
+          <span className="text-xs text-gray-500">נכנסה {order.graphicsSentAt ? formatDate(order.graphicsSentAt) : "—"}</span>
         </div>
         <StatusBadge status={status} />
       </div>
@@ -279,7 +279,7 @@ export function Fabrication() {
   const { orders } = useOrdersContext();
   const [showCompleted, setShowCompleted] = useState(false);
 
-  const fabOrders = orders.filter((o) => o.fabricationRequired);
+  const fabOrders = orders.filter((o) => o.fabricationRequired && o.status !== "cancelled");
 
   const visibleGroups = STATUS_GROUPS.filter((g) =>
     showCompleted ? true : !g.statuses.includes("completed")

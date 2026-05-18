@@ -209,7 +209,7 @@ function GraphicsOrderCard({ order, onAcknowledge, onComplete }: {
             <span className="text-xs text-gray-500 truncate">{order.jobName || order.city || order.location}</span>
           )}
         </div>
-        <div className="text-xs text-gray-400 shrink-0">{formatDate(order.graphicsSentAt)}</div>
+        <div className="text-xs text-gray-400 shrink-0">{order.graphicsSentAt ? formatDate(order.graphicsSentAt) : "—"}</div>
       </div>
 
       {/* Stats */}

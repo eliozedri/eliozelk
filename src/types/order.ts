@@ -65,6 +65,7 @@ export interface OrderState extends OrderHeader {
   orderType?: "field_work" | "pickup" | "equipment_supply";
   fulfillmentMethod?: "self_pickup" | "delivery" | null;
   awaitingCustomerApproval?: boolean;
+  requiredDate?: string;
   jobName?: string;
   location?: string;
   signRows: SignRow[];

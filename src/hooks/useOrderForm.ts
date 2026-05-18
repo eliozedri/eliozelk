@@ -51,6 +51,7 @@ function initialState(): OrderState {
     orderType: undefined,
     fulfillmentMethod: undefined,
     awaitingCustomerApproval: false,
+    requiredDate: "",
     jobName: "",
     location: "",
     signRows: [emptySignRow()],
@@ -93,7 +94,7 @@ export function useOrderForm() {
   }, [order]);
 
   const updateHeader = useCallback(
-    (partial: Partial<Pick<OrderState, "date" | "customer" | "contactPerson" | "orderedBy" | "city" | "generalNotes" | "jobName" | "location" | "orderType" | "fulfillmentMethod" | "awaitingCustomerApproval">>) => {
+    (partial: Partial<Pick<OrderState, "date" | "customer" | "contactPerson" | "orderedBy" | "city" | "generalNotes" | "jobName" | "location" | "orderType" | "fulfillmentMethod" | "awaitingCustomerApproval" | "requiredDate">>) => {
       setOrder((prev) => ({ ...prev, ...partial }));
     },
     []
