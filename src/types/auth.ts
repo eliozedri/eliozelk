@@ -172,12 +172,14 @@ export interface UserProfile {
 
 export function canAccessTab(profile: UserProfile, tabId: TabId): boolean {
   if (!profile.is_active) return false;
+  if (profile.role === "master") return true;
   if (profile.allowed_tabs.includes("*")) return true;
   return profile.allowed_tabs.includes(tabId);
 }
 
 export function canPerformAction(profile: UserProfile, action: ActionPermission): boolean {
   if (!profile.is_active) return false;
+  if (profile.role === "master") return true;
   if (profile.action_permissions.includes("*")) return true;
   return profile.action_permissions.includes(action);
 }
