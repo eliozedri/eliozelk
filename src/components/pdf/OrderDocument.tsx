@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from "@react-pdf/renderer";
-import type { OrderSnapshot } from "@/types/order";
+import type { MiscRow, OrderSnapshot } from "@/types/order";
 import {
   DOC_PRIMARY,
   DOC_GOLD,
@@ -114,19 +114,26 @@ const s = StyleSheet.create({
   td: { fontSize: 8, color: DARK, textAlign: "right" },
   emptyRow: { padding: 10, textAlign: "center", color: GRAY, fontSize: 8 },
 
-  /* Column widths — signs */
-  colNum:     { width: "10%" },
-  colQty:     { width: "8%"  },
-  colSize:    { width: "18%" },
-  colType:    { width: "18%" },
-  colImg:     { width: "10%", textAlign: "center" },
-  colNotes:   { width: "36%" },
+  /* Column widths — traffic signs (signRows) */
+  colNum:   { width: "10%" },
+  colQty:   { width: "8%"  },
+  colSize:  { width: "18%" },
+  colType:  { width: "18%" },
+  colImg:   { width: "10%", textAlign: "center" },
+  colNotes: { width: "36%" },
 
-  /* Column widths — misc */
-  mColDesc:   { width: "55%" },
-  mColQty:    { width: "12%" },
-  mColUnit:   { width: "15%" },
-  mColNotes:  { width: "18%" },
+  /* Column widths — standard misc sections (signsRows / accessoryRows / serviceRows) */
+  mColDesc:  { width: "55%" },
+  mColQty:   { width: "12%" },
+  mColUnit:  { width: "15%" },
+  mColNotes: { width: "18%" },
+
+  /* Column widths — custom-size sign (שלט לפי מידה, with dimension column) */
+  cColDesc:  { width: "40%" },
+  cColDim:   { width: "20%" },
+  cColQty:   { width: "10%" },
+  cColUnit:  { width: "12%" },
+  cColNotes: { width: "18%" },
 
   signImage: { width: 28, height: 28, objectFit: "contain" },
 
@@ -142,7 +149,7 @@ const s = StyleSheet.create({
     gap: 6,
   },
   managerNoteLabel: { fontSize: 8, fontWeight: 700, color: "#92400e", marginBottom: 3, textAlign: "right" },
-  managerNoteText: { fontSize: 8, color: "#78350f", textAlign: "right" },
+  managerNoteText:  { fontSize: 8, color: "#78350f", textAlign: "right" },
 
   /* ── Signature block ── */
   sigSection: {
@@ -151,9 +158,9 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     gap: 20,
   },
-  sigBox: { flex: 1, borderTop: `2 solid ${PRIMARY}`, paddingTop: 6 },
+  sigBox:  { flex: 1, borderTop: `2 solid ${PRIMARY}`, paddingTop: 6 },
   sigLabel: { fontSize: 8, color: GRAY, textAlign: "right" },
-  sigLine: { marginTop: 24, borderBottom: `1 dashed #d1d5db` },
+  sigLine:  { marginTop: 24, borderBottom: `1 dashed #d1d5db` },
 
   /* ── Footer ── */
   footer: {
@@ -171,17 +178,54 @@ const s = StyleSheet.create({
   footerText: { fontSize: 7, color: "#9ca3af" },
 });
 
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
+
+function formatDim(w?: string, h?: string): string {
+  const wt = w?.trim();
+  const ht = h?.trim();
+  if (wt && ht) return `${wt}×${ht} ס״מ`;
+  if (wt) return `${wt} ס״מ`;
+  if (ht) return `${ht} ס״מ`;
+  return "—";
+}
+
 function formatDate(iso: string): string {
   if (!iso) return "—";
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
 }
 
+/* Shared 4-column table for signsRows / accessoryRows / serviceRows */
+function MiscTable({ rows }: { rows: MiscRow[] }) {
+  return (
+    <View style={s.table}>
+      <View style={s.tableHeader}>
+        <Text style={[s.th, s.mColDesc]}>תיאור פריט</Text>
+        <Text style={[s.th, s.mColQty]}>כמות</Text>
+        <Text style={[s.th, s.mColUnit]}>יחידה</Text>
+        <Text style={[s.th, s.mColNotes]}>הערות</Text>
+      </View>
+      {rows.map((row, i) => (
+        <View key={row.id} style={i % 2 === 0 ? s.tableRow : s.tableRowAlt}>
+          <Text style={[s.td, s.mColDesc]}>{row.description}</Text>
+          <Text style={[s.td, s.mColQty]}>{row.quantity || "—"}</Text>
+          <Text style={[s.td, s.mColUnit]}>{row.catalogItemUnit || "—"}</Text>
+          <Text style={[s.td, s.mColNotes]}>{row.notes || "—"}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/* ── Constants ───────────────────────────────────────────────────────────── */
+
 const ORDER_TYPE_LABELS: Record<string, string> = {
-  execution:        "ביצוע עבודה",
+  field_work:       "ביצוע עבודה",
   pickup:           "הזמנה לאיסוף",
   equipment_supply: "אספקת ציוד",
 };
+
+/* ── Component ───────────────────────────────────────────────────────────── */
 
 interface Props {
   order: OrderSnapshot;
@@ -190,23 +234,26 @@ interface Props {
 export function OrderDocument({ order }: Props) {
   const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
   const generatedAt = formatDate(new Date().toISOString().split("T")[0]);
-  const orderTypeLabel = ORDER_TYPE_LABELS[(order as { orderType?: string }).orderType ?? ""] || "ביצוע עבודה";
+  const orderTypeLabel = ORDER_TYPE_LABELS[(order as { orderType?: string }).orderType ?? ""] ?? "ביצוע עבודה";
 
-  const signRows = order.signRows.filter((r) => r.signNumber || r.quantity);
-  const miscRows = order.miscRows.filter((r) => r.description);
+  const signRows     = order.signRows.filter((r) => r.signNumber || r.quantity);
+  const miscRows     = order.miscRows.filter((r) => r.description);
+  const signsRows    = (order.signsRows     ?? []).filter((r) => r.description);
+  const accessoryRows = (order.accessoryRows ?? []).filter((r) => r.description);
+  const serviceRows  = (order.serviceRows   ?? []).filter((r) => r.description);
 
   return (
     <Document>
       <Page size="A4" style={s.page}>
 
-        {/* Header band */}
+        {/* ── Header band ──────────────────────────────────────────────── */}
         <View style={s.headerBand}>
           <View style={s.headerLeft}>
             <Text style={s.companyName}>אלקיים סימון כבישים בע״מ</Text>
             <Text style={s.companyTagline}>Road Marking & Signage Solutions</Text>
           </View>
           <View style={s.headerRight}>
-            <Text style={s.docTitle}>הזמנת שילוט</Text>
+            <Text style={s.docTitle}>הזמנת עבודה</Text>
             <Text style={s.orderNumberLabel}>מספר הזמנה</Text>
             <Text style={s.orderNumberValue}>{(order as { orderNumber?: string }).orderNumber || "—"}</Text>
           </View>
@@ -214,7 +261,7 @@ export function OrderDocument({ order }: Props) {
 
         <View style={s.body}>
 
-          {/* Meta grid */}
+          {/* ── Meta grid ────────────────────────────────────────────── */}
           <View style={s.metaGrid}>
             <View style={s.metaField}>
               <Text style={s.metaLabel}>תאריך הזמנה</Text>
@@ -248,10 +295,10 @@ export function OrderDocument({ order }: Props) {
             ) : null}
           </View>
 
-          {/* Signs section */}
+          {/* ── 1. תמרורים ───────────────────────────────────────────── */}
           <View style={s.sectionHeading}>
             <View style={s.sectionBar} />
-            <Text style={s.sectionTitle}>תמרורים ושלטים</Text>
+            <Text style={s.sectionTitle}>תמרורים</Text>
           </View>
           <View style={s.table}>
             <View style={s.tableHeader}>
@@ -283,43 +330,78 @@ export function OrderDocument({ order }: Props) {
             ))}
           </View>
 
-          {/* Misc section */}
+          {/* ── 2. שלט לפי מידה (5 cols: desc / dim / qty / unit / notes) ── */}
           {miscRows.length > 0 && (
             <>
               <View style={s.sectionHeading}>
                 <View style={s.sectionBar} />
-                <Text style={s.sectionTitle}>פריטים נוספים / שונות</Text>
+                <Text style={s.sectionTitle}>שלט לפי מידה</Text>
               </View>
               <View style={s.table}>
                 <View style={s.tableHeader}>
-                  <Text style={[s.th, s.mColDesc]}>תיאור פריט</Text>
-                  <Text style={[s.th, s.mColQty]}>כמות</Text>
-                  <Text style={[s.th, s.mColUnit]}>יחידה</Text>
-                  <Text style={[s.th, s.mColNotes]}>הערות</Text>
+                  <Text style={[s.th, s.cColDesc]}>תיאור</Text>
+                  <Text style={[s.th, s.cColDim]}>מידה</Text>
+                  <Text style={[s.th, s.cColQty]}>כמות</Text>
+                  <Text style={[s.th, s.cColUnit]}>יחידה</Text>
+                  <Text style={[s.th, s.cColNotes]}>הערות</Text>
                 </View>
                 {miscRows.map((row, i) => (
                   <View key={row.id} style={i % 2 === 0 ? s.tableRow : s.tableRowAlt}>
-                    <Text style={[s.td, s.mColDesc]}>{row.description}</Text>
-                    <Text style={[s.td, s.mColQty]}>{row.quantity || "—"}</Text>
-                    <Text style={[s.td, s.mColUnit]}>{(row as { catalogItemUnit?: string }).catalogItemUnit || "—"}</Text>
-                    <Text style={[s.td, s.mColNotes]}>{row.notes || "—"}</Text>
+                    <Text style={[s.td, s.cColDesc]}>{row.description}</Text>
+                    <Text style={[s.td, s.cColDim]}>{formatDim(row.customWidth, row.customHeight)}</Text>
+                    <Text style={[s.td, s.cColQty]}>{row.quantity || "—"}</Text>
+                    <Text style={[s.td, s.cColUnit]}>{row.catalogItemUnit || "—"}</Text>
+                    <Text style={[s.td, s.cColNotes]}>{row.notes || "—"}</Text>
                   </View>
                 ))}
               </View>
             </>
           )}
 
-          {/* Manager note */}
+          {/* ── 3. שלטים ושילוט ──────────────────────────────────────── */}
+          {signsRows.length > 0 && (
+            <>
+              <View style={s.sectionHeading}>
+                <View style={s.sectionBar} />
+                <Text style={s.sectionTitle}>שלטים ושילוט</Text>
+              </View>
+              <MiscTable rows={signsRows} />
+            </>
+          )}
+
+          {/* ── 4. אביזרים ───────────────────────────────────────────── */}
+          {accessoryRows.length > 0 && (
+            <>
+              <View style={s.sectionHeading}>
+                <View style={s.sectionBar} />
+                <Text style={s.sectionTitle}>אביזרים</Text>
+              </View>
+              <MiscTable rows={accessoryRows} />
+            </>
+          )}
+
+          {/* ── 5. מוצרים ושירותים נוספים ───────────────────────────── */}
+          {serviceRows.length > 0 && (
+            <>
+              <View style={s.sectionHeading}>
+                <View style={s.sectionBar} />
+                <Text style={s.sectionTitle}>מוצרים ושירותים נוספים</Text>
+              </View>
+              <MiscTable rows={serviceRows} />
+            </>
+          )}
+
+          {/* ── General notes ─────────────────────────────────────────── */}
           {(order as { generalNotes?: string }).generalNotes ? (
             <View style={s.managerNote}>
               <View style={{ flex: 1, alignItems: "flex-end" }}>
-                <Text style={s.managerNoteLabel}>הערת מנהל</Text>
+                <Text style={s.managerNoteLabel}>הערות כלליות</Text>
                 <Text style={s.managerNoteText}>{(order as { generalNotes?: string }).generalNotes}</Text>
               </View>
             </View>
           ) : null}
 
-          {/* Signature block */}
+          {/* ── Signature block ───────────────────────────────────────── */}
           <View style={s.sigSection}>
             <View style={s.sigBox}>
               <Text style={s.sigLabel}>חתימת מורשה / מנהל</Text>
@@ -339,7 +421,7 @@ export function OrderDocument({ order }: Props) {
 
         </View>
 
-        {/* Footer */}
+        {/* ── Footer ───────────────────────────────────────────────────── */}
         <View style={s.footer} fixed>
           <Text style={s.footerText}>אלקיים סימון כבישים בע״מ · Road Marking &amp; Signage Solutions</Text>
           <Text style={s.footerText}>הופק: {generatedAt}</Text>
