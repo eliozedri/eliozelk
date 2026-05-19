@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { AgentStats } from "@/types/agent";
 
@@ -15,8 +15,17 @@ const ACTIVE_AGENT_IDS = [
   "fabrication-agent",
 ] as const;
 
-// CORS header — permits the local brainstorm preview (any localhost port) to fetch live stats.
-const CORS = { "Access-Control-Allow-Origin": "http://localhost:58394" };
+// CORS — allow the production domain and any localhost origin in development only.
+const PROD_ORIGIN = "https://eliozelk.vercel.app";
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  if (!origin) return {};
+  if (origin === PROD_ORIGIN) return { "Access-Control-Allow-Origin": origin };
+  if (process.env.NODE_ENV !== "production" && origin.startsWith("http://localhost:")) {
+    return { "Access-Control-Allow-Origin": origin };
+  }
+  return {};
+}
 
 // Speaking indicator: agent is considered "speaking" if it has a recent activity_feed entry
 // of a communication type within the last 60 seconds.
@@ -25,18 +34,20 @@ const SPEAKING_WINDOW_MS = 60_000;
 
 type StatsLive = AgentStats & { speaking: boolean };
 
-export async function OPTIONS() {
+export async function OPTIONS(request: NextRequest) {
+  const cors = corsHeaders(request.headers.get("origin"));
   return new NextResponse(null, {
     status: 204,
     headers: {
-      ...CORS,
+      ...cors,
       "Access-Control-Allow-Methods": "GET",
       "Access-Control-Allow-Headers": "Content-Type",
     },
   });
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const cors = corsHeaders(request.headers.get("origin"));
   try {
     const db = getServiceSupabase();
     const since = new Date(Date.now() - SPEAKING_WINDOW_MS).toISOString();
@@ -67,7 +78,7 @@ export async function GET() {
 
     if (taskRes.error ?? excRes.error ?? apprRes.error) {
       const msg = taskRes.error?.message ?? excRes.error?.message ?? apprRes.error?.message;
-      return NextResponse.json({ error: msg }, { status: 500, headers: CORS });
+      return NextResponse.json({ error: msg }, { status: 500, headers: cors });
     }
 
     const tasks      = taskRes.data  ?? [];
@@ -92,10 +103,10 @@ export async function GET() {
     }
 
     return NextResponse.json(stats, {
-      headers: { ...CORS, "Cache-Control": "no-store" },
+      headers: { ...cors, "Cache-Control": "no-store" },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
-    return NextResponse.json({ error: message }, { status: 500, headers: CORS });
+    return NextResponse.json({ error: message }, { status: 500, headers: cors });
   }
 }

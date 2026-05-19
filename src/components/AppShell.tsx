@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { AuthProvider } from "@/context/AuthContext";
 import { GlobalFloatingChatProvider, GlobalChatMount } from "@/context/GlobalFloatingChatContext";
 import { GlobalChatLauncher } from "@/components/AgentChat/GlobalChatLauncher";
+import { OfflineBanner } from "@/components/OfflineBanner";
 
 const AUTH_PATHS = ["/login", "/setup"];
 
@@ -22,11 +23,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
   if (isAuthPage) {
-    return <AuthProvider>{children}</AuthProvider>;
+    return (
+      <>
+        <OfflineBanner />
+        <AuthProvider>{children}</AuthProvider>
+      </>
+    );
   }
 
   return (
     <AuthProvider>
+      <OfflineBanner />
       <GlobalFloatingChatProvider>
         {/* Mobile hamburger button — visible only on small screens */}
         <button
