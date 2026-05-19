@@ -217,6 +217,7 @@ export interface WorkOrder {
   jobSlash?: string;      // kept optional for backward compat
   reference?: string;     // kept optional for backward compat
   signRows: SignRow[];
+  signsRows?: MiscRow[];
   miscRows: MiscRow[];
   accessoryRows?: MiscRow[];
   serviceRows?: MiscRow[];

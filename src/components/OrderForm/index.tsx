@@ -43,10 +43,11 @@ function validate(order: ReturnType<typeof useOrderForm>["order"]): string | nul
   if (!order.jobName?.trim()) return "נא להזין שם עבודה / אתר עבודה";
 
   const hasSign = order.signRows.some((r) => r.signNumber.trim());
+  const hasSignage = (order.signsRows ?? []).some((r) => r.description.trim());
   const hasAccessory = (order.accessoryRows ?? []).some((r) => r.description.trim());
   const hasMisc = order.miscRows.some((r) => r.description.trim());
   const hasService = (order.serviceRows ?? []).some((r) => r.description.trim());
-  if (!hasSign && !hasAccessory && !hasMisc && !hasService) {
+  if (!hasSign && !hasSignage && !hasAccessory && !hasMisc && !hasService) {
     return "נא להוסיף לפחות פריט אחד להזמנה";
   }
 
@@ -55,7 +56,7 @@ function validate(order: ReturnType<typeof useOrderForm>["order"]): string | nul
       return `כמות לא תקינה בשורת תמרור: ${r.signNumber}`;
     }
   }
-  for (const r of [...(order.accessoryRows ?? []), ...order.miscRows, ...(order.serviceRows ?? [])]) {
+  for (const r of [...(order.signsRows ?? []), ...(order.accessoryRows ?? []), ...order.miscRows, ...(order.serviceRows ?? [])]) {
     if (r.description.trim() && r.quantity !== "" && Number(r.quantity) <= 0) {
       return `כמות לא תקינה בפריט: ${r.description}`;
     }
@@ -71,6 +72,9 @@ export function OrderForm() {
     addSignRow,
     updateSignRow,
     removeSignRow,
+    addSignsRow,
+    updateSignsRow,
+    removeSignsRow,
     addAccessoryRow,
     updateAccessoryRow,
     removeAccessoryRow,
@@ -343,6 +347,16 @@ export function OrderForm() {
           accentColor="bg-amber-50"
           showDimensionRows
           alwaysShowDimensions
+        />
+
+        <MiscSection
+          rows={order.signsRows ?? []}
+          onAdd={addSignsRow}
+          onUpdate={updateSignsRow}
+          onRemove={removeSignsRow}
+          title="שלטים ושילוט"
+          accentColor="bg-blue-50"
+          allowedCatalogTypes={["product"]}
         />
 
         <MiscSection

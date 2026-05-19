@@ -64,7 +64,7 @@ const COLUMN_MAP: Partial<Record<keyof WorkOrder, string>> = {
 
 // Fields that live in the content JSONB blob (set at order creation by office)
 const CONTENT_FIELDS = new Set<keyof WorkOrder>([
-  "signRows", "miscRows", "accessoryRows", "serviceRows", "notes", "generalNotes",
+  "signRows", "signsRows", "miscRows", "accessoryRows", "serviceRows", "notes", "generalNotes",
   "attachments", "fabricationDetails",
 ]);
 

@@ -71,6 +71,7 @@ export interface OrderState extends OrderHeader {
   jobName?: string;
   location?: string;
   signRows: SignRow[];
+  signsRows: MiscRow[];
   accessoryRows: MiscRow[];
   miscRows: MiscRow[];
   serviceRows: MiscRow[];

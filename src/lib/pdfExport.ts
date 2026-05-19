@@ -18,6 +18,10 @@ export function exportWorkOrderCSV(order: WorkOrder): void {
       "שלט", r.signNumber || "", r.quantity || "1", "יחידה", r.size || "", r.type || "", r.notes || ""
     ].map(csvEscape).join(","));
   }
+  for (const r of (order.signsRows ?? [])) {
+    if (!r.description) continue;
+    rows.push(["שלטים ושילוט", r.description, r.quantity || "1", r.catalogItemUnit || "יחידה", "", "", r.notes || ""].map(csvEscape).join(","));
+  }
   for (const r of (order.accessoryRows ?? [])) {
     if (!r.description) continue;
     rows.push(["אביזר", r.description, r.quantity || "1", r.catalogItemUnit || "יחידה", "", "", r.notes || ""].map(csvEscape).join(","));
@@ -77,6 +81,7 @@ export async function openWorkOrderPDF(order: WorkOrder): Promise<void> {
     jobName: order.jobName ?? "",
     location: order.location ?? "",
     signRows: order.signRows ?? [],
+    signsRows: order.signsRows ?? [],
     accessoryRows: order.accessoryRows ?? [],
     miscRows: order.miscRows ?? [],
     serviceRows: order.serviceRows ?? [],

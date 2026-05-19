@@ -55,6 +55,7 @@ function initialState(): OrderState {
     jobName: "",
     location: "",
     signRows: [emptySignRow()],
+    signsRows: [emptyMiscRow()],
     accessoryRows: [emptyMiscRow()],
     miscRows: [emptyMiscRow()],
     serviceRows: [emptyMiscRow()],
@@ -75,6 +76,7 @@ export function useOrderForm() {
       setOrder({ // eslint-disable-line react-hooks/set-state-in-effect
         ...initialState(),
         ...draft,
+        signsRows: draft.signsRows ?? [emptyMiscRow()],
         accessoryRows: draft.accessoryRows ?? [emptyMiscRow()],
         serviceRows: draft.serviceRows ?? [emptyMiscRow()],
         generalNotes: draft.generalNotes ?? "",
@@ -118,6 +120,25 @@ export function useOrderForm() {
     setOrder((prev) => {
       const filtered = prev.signRows.filter((r) => r.id !== id);
       return { ...prev, signRows: filtered.length > 0 ? filtered : [emptySignRow()] };
+    });
+  }, []);
+
+  // Signs rows (שלטים ושילוט)
+  const addSignsRow = useCallback(() => {
+    setOrder((prev) => ({ ...prev, signsRows: [...(prev.signsRows ?? []), emptyMiscRow()] }));
+  }, []);
+
+  const updateSignsRow = useCallback((id: string, partial: Partial<MiscRow>) => {
+    setOrder((prev) => ({
+      ...prev,
+      signsRows: (prev.signsRows ?? []).map((row) => (row.id === id ? { ...row, ...partial } : row)),
+    }));
+  }, []);
+
+  const removeSignsRow = useCallback((id: string) => {
+    setOrder((prev) => {
+      const filtered = (prev.signsRows ?? []).filter((r) => r.id !== id);
+      return { ...prev, signsRows: filtered.length > 0 ? filtered : [emptyMiscRow()] };
     });
   }, []);
 
@@ -210,6 +231,9 @@ export function useOrderForm() {
     addSignRow,
     updateSignRow,
     removeSignRow,
+    addSignsRow,
+    updateSignsRow,
+    removeSignsRow,
     addAccessoryRow,
     updateAccessoryRow,
     removeAccessoryRow,
