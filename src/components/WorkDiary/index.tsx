@@ -235,7 +235,7 @@ export function WorkDiaryForm() {
     setIsDirty(true);
   }, []);
 
-  async function handleSaveDraft() {
+  const handleSaveDraft = useCallback(async () => {
     if (!diary) return;
     setSaving(true);
     try {
@@ -245,21 +245,21 @@ export function WorkDiaryForm() {
     } finally {
       setSaving(false);
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diary, savedToDB]);
 
-  async function handleSaveDraftForGuard() {
+  const handleSaveDraftForGuard = useCallback(async () => {
     await handleSaveDraft();
-  }
+  }, [handleSaveDraft]);
 
-  function handleDiscardForGuard() {
-    // If we have a DB record (user saved as draft before), delete it
+  const handleDiscardForGuard = useCallback(() => {
     if (savedToDB && diary) {
       deleteDiary(diary.id);
     }
     setDiary(createLocalDiary());
     setIsDirty(false);
     setSavedToDB(false);
-  }
+  }, [diary, savedToDB, deleteDiary]);
 
   async function handleSubmit() {
     if (!diary) return;

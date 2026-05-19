@@ -29,10 +29,9 @@ export function NavigationGuardProvider({ children }: { children: React.ReactNod
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const guardRef = useRef<NavigationGuard | null>(null);
 
-  useEffect(() => { guardRef.current = guard; }, [guard]);
-
   const registerGuard = useCallback((g: NavigationGuard) => {
-    setGuard(g);
+    guardRef.current = g;  // sync — requestNavigate reads this during click handlers
+    setGuard(g);           // async — triggers Sidebar re-render to switch Link→button
   }, []);
 
   const clearGuard = useCallback(() => {
