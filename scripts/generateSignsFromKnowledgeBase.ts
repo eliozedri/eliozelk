@@ -29,6 +29,7 @@ const CATEGORY_FILES = [
 // NO numeric ranges are used. Shape is derived entirely from the
 // "Shape / Color" description in the knowledge base entry.
 const SHAPE_RULES: Array<{ keywords: string[]; shape: string }> = [
+  // Physical sign shapes — checked first so artwork/symbol descriptions cannot override them.
   { keywords: ["inverted triangle"], shape: "משולש הפוך" },
   { keywords: ["octagon", "octagonal"], shape: "מתומן" },
   { keywords: ["diamond"], shape: "יהלום" },
@@ -36,9 +37,17 @@ const SHAPE_RULES: Array<{ keywords: string[]; shape: string }> = [
     keywords: ["barrier", "gate", "chevron", "delineator", "signal housing", "signal lamp"],
     shape: "מיוחד",
   },
+  { keywords: ["triangle"], shape: "משולש" },
+  { keywords: ["circle", "circular"], shape: "עיגול" },
+  { keywords: ["rectangle", "rectangular"], shape: "מלבן" },
+  { keywords: ["panel"], shape: "מלבן" },
+  // Road-surface markings — last resort, only fires when no physical shape keyword matched.
+  // Removed: "road surface" (matched "road surface symbol" artwork), "diagonal" (matched
+  // diagonal bars on mounted signs), "stripes" (matched reflective stripes on barrier panels).
   {
     keywords: [
-      "road surface",
+      "on road surface",
+      "diagonal arrow",
       "surface marking",
       "road marking",
       "road centre",
@@ -46,18 +55,12 @@ const SHAPE_RULES: Array<{ keywords: string[]; shape: string }> = [
       "transverse line",
       "shark teeth",
       "dashed line",
-      "diagonal",
-      "stripes",
       "markings",
       "marking",
       "painted",
     ],
     shape: "סימון כביש",
   },
-  { keywords: ["triangle"], shape: "משולש" },
-  { keywords: ["circle", "circular"], shape: "עיגול" },
-  { keywords: ["rectangle", "rectangular"], shape: "מלבן" },
-  { keywords: ["panel"], shape: "מלבן" },
 ];
 
 // Hebrew reversal detection.

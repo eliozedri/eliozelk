@@ -1,6 +1,6 @@
 # Traffic Sign Audit Report
 
-Generated: 2026-05-19T10:55:16.364Z
+Generated: 2026-05-19T11:16:42.642Z
 Total SIGNS_DATA entries: 326
 Total images in public/signs/: 326
 
@@ -11,9 +11,9 @@ Total images in public/signs/: 326
 | 1. Road markings with wrong shape (8xx must be סימון כביש) | 0 |
 | 2. Suspicious 4xx circle assignments (עיגול + needsReview) | 3 |
 | 3. Missing Hebrew name | 66 |
-| 4. Unknown shape (לא ידוע) | 122 |
+| 4. Unknown shape (לא ידוע) | 123 |
 | 5. Invalid shape token (not in allowed vocabulary) | 0 |
-| 6. All entries flagged needsReview | 166 |
+| 6. All entries flagged needsReview | 167 |
 | 7. Metadata entries with no image (available=false) | 0 |
 | 8. Images with no metadata entry | 0 |
 
@@ -110,6 +110,7 @@ Total images in public/signs/: 326
 - `511`: shape=לא ידוע
 - `512`: shape=לא ידוע
 - `513`: shape=לא ידוע
+- `515`: shape=לא ידוע
 - `601`: shape=לא ידוע
 - `602`: shape=לא ידוע
 - `603`: shape=לא ידוע
@@ -225,7 +226,7 @@ Total images in public/signs/: 326
 
 ## 6. All entries flagged needsReview
 
-- `101`: shape="סימון כביש", name="שיבכ שבושמ"
+- `101`: shape="משולש", name="שיבכ שבושמ"
 - `106`: shape="משולש", name="ךרד תלתופמ"
 - `110`: shape="משולש", name="שיבכה ךלוה רצו ןימי דצמ / לאמש דצמ"
 - `111`: shape="משולש", name="רבעמ רצ וא לושכמ"
@@ -243,9 +244,9 @@ Total images in public/signs/: 326
 - `124`: shape="משולש", name="הינפ ןיא תידדצה ךרדל"
 - `128`: shape="משולש", name="תבכר תמוקמ הצוח"
 - `129`: shape="משולש", name="שגפמ לזרב תליסמ"
-- `130`: shape="סימון כביש", name="שגפמ לזרב תליסמ — קחרמ 300 מ"
-- `131`: shape="סימון כביש", name="שגפמ לזרב תליסמ — קחרמ 200 מ"
-- `132`: shape="סימון כביש", name="שגפמ לזרב תליסמ — קחרמ 100 מ"
+- `130`: shape="משולש", name="שגפמ לזרב תליסמ — קחרמ 300 מ"
+- `131`: shape="משולש", name="שגפמ לזרב תליסמ — קחרמ 200 מ"
+- `132`: shape="משולש", name="שגפמ לזרב תליסמ — קחרמ 100 מ"
 - `133`: shape="משולש", name="שגפמ לזרב תליסמ — תחא הליסמ"
 - `134`: shape="לא ידוע", name="שגפמ לזרב תליסמ — תחא הליסממ רתוי"
 - `135`: shape="משולש", name="רבעמ הייצח לגר יכלוהל"
@@ -273,6 +274,7 @@ Total images in public/signs/: 326
 - `511`: shape="לא ידוע", name="מקום עצירה לגוס מסוים של כלי רכב — אבני שפה צבועות אדום-צהוב"
 - `512`: shape="לא ידוע", name="מקום עצירה לגוס מסוים — אבן שפה וצלע"
 - `513`: shape="לא ידוע", name="מקום עצירה לגוס מסוים — ללא אבן שפה"
+- `515`: shape="לא ידוע", name="נתיב לתחבורה ציבורית — קו רצוף ומקוטע משולבים"
 - `601`: shape="לא ידוע", name="שם הצומת או המחלף"
 - `602`: shape="לא ידוע", name="הכוונה לפני מחלף — מחוץ לעיר"
 - `603`: shape="לא ידוע", name="הכוונה לפני צומת — מחוץ לעיר"
