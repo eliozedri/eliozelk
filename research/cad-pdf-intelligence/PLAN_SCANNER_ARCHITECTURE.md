@@ -598,15 +598,74 @@ Any change to an APPROVED output creates a new revision with its own audit trail
 
 **Do not implement Stage G yet.** This section defines what the first implementation should do when the time comes.
 
+### Prerequisite resolved: sign-code extraction strategy (2026-05-19)
+
+A diagnostic (`08_text_code_diagnostic.py`) was run against `50-448-02-400.pdf` to determine whether sign codes are extractable as PDF text objects.
+
+**Findings (definitive):**
+
+| Finding | Result |
+|---|---|
+| Sign codes extractable as PDF text? | **No — text_codes_not_available** |
+| Hebrew labels extractable as PDF text? | **No — hebrew_vector_paths_only** |
+| Real (usable) PDF text tokens on the page | **0 sign codes; 12 admin tokens only** (revision dates, sheet number, R=22.0) |
+| Zero-size artifact tokens | **3** (tokens '499', '798', '504' — bboxes < 1pt, invisible stubs) |
+| Embedded raster images | **6** JPEG blocks in title block area (y > 3500 display coords) — not map content |
+
+All sign codes and Hebrew annotations on this plan are rendered as **vector/Bezier paths** — the same encoding as the rest of the drawing. `page.get_text()` returns only administrative metadata. This is confirmed by rawdict showing 0 usable text spans.
+
+**Stage G sign-code reading strategy: Vision API required (primary). No PDF text fallback exists.**
+
+A Vision API call (Claude vision model) should be sent a rendered crop of each sign candidate's local area and asked to identify nearby sign codes. This is the same mechanism already planned for Stage F Hebrew label extraction.
+
+Note: The zero-size artifact stubs (`499`, `798`, `504`) at positions (785,2519), (773,2595), (727,2854) are AutoCAD PDF accessibility remnants. They must be filtered with a minimum bbox dimension threshold (≥ 2pt) before any sign-code candidate evaluation.
+
+---
+
+### Pole assembly grouping — configurable research parameter (not hardcoded)
+
+**Important caution:** The proximity radius used to group sign clusters into pole assemblies must **not** be a hardcoded constant. It is a **configurable research parameter** that must be tuned per plan and validated visually.
+
+**Why fixed-radius grouping is dangerous:**
+
+| Plan context | Risk of fixed 50pt radius |
+|---|---|
+| Dense intersection (3–5 signs within 60pt) | Adjacent signs on separate poles may be incorrectly merged into one "assembly" |
+| Sparse highway plan (signs 200pt apart) | Signs on the same pole may be missed because the radius is too small |
+| Unusual pole geometry (angled fan layout) | Euclidean distance alone may miss signs that are geometrically close but logically separate |
+
+**Assembly grouping must use multiple signals, not distance alone:**
+
+1. **Distance** — centroid-to-centroid distance (configurable radius: default 50pt, tunable)
+2. **Direction / orientation** — signs on the same pole are typically stacked vertically; a purely horizontal grouping suggests separate poles
+3. **Nearby code association** — two clusters with the same written code cannot be on the same pole (duplicate code = two separate poles with the same sign type)
+4. **Visual alignment** — clusters whose bboxes share a vertical axis are more likely same-pole than clusters offset horizontally
+5. **Member count sanity** — an assembly of 6+ signs on one pole is unusual for Israeli standard arrangements; flag for review
+
+**Configurable parameters (document these as named constants in Stage G):**
+
+```python
+# Stage G pole grouping parameters — tune per project, do NOT hardcode
+POLE_GROUPING_RADIUS_PTS    = 50.0   # max centroid distance to consider same pole
+POLE_GROUPING_MAX_SIGNS     = 5      # assemblies larger than this → flag for review
+POLE_GROUPING_VERTICAL_BIAS = True   # prefer vertical stacking; penalize purely horizontal
+POLE_GROUPING_AMBIGUITY_FLAG = True  # if grouping decision is close, mark requires_review
+```
+
+**If grouping is ambiguous — never force:** When two signs are at distance 45pt (within the 50pt threshold) but the context is ambiguous (horizontal offset, different code orientation, conflicting direction), mark the assembly as `grouping_ambiguous = true, requires_review = true`. Do not silently force them into one pole.
+
+**Debug confirmation required:** Every run of Stage G must produce a `pole_grouping_debug_overlay.png` — a rendered crop showing detected assemblies with grouping radius circles drawn around each anchor. A human must review this overlay before trusting the grouping results.
+
+---
+
 ### First scope (narrow — research only)
 
-Stage G v1 should focus on **one well-defined sub-problem**: using Stage F legend icon crops as plan-specific templates to find where each sign type appears on the map, and attempting to read nearby written codes.
+Stage G v1 should focus on **one well-defined sub-problem**: using Stage F legend icon crops as plan-specific templates to find where each sign type appears on the map, with Vision API for nearby sign-code reading.
 
 **Inputs:**
 - `symbol_clusters.json` (Stage 4 — DBSCAN clusters)
 - `legend_vocabulary.json` (Stage F — legend row crops)
-- `vector_objects.json` (Stage 2 — raw vector objects including any text blocks)
-- Rendered page image (for visual matching)
+- Rendered page image (for visual matching + Vision API crops)
 
 **Algorithm (first implementation):**
 
@@ -614,34 +673,36 @@ Stage G v1 should focus on **one well-defined sub-problem**: using Stage F legen
 1. Load legend row crops from Stage F
    For each legend row (icon crop):
      a. Run template match against rendered page at multiple scales
-     b. Record match locations above threshold
+     b. Record match locations above LEGEND_MATCH_THRESHOLD
      c. These become "legend-matched sign candidates"
 
 2. For each sign candidate (from Stage 4 clusters + Step 1):
-   a. Define search zone: 80pt radius around centroid
-   b. Find text blocks in vector_objects.json within zone
-   c. Score each text block by distance + sign code pattern match
-   d. If clear winner (single candidate, score >> next): assign as written_code
-   e. If ambiguous or missing: assign source = unresolved, flag for review
+   a. Render a local crop: centroid ± 80pt at 150 DPI
+   b. Send crop to Vision API (Claude): "What sign code number appears near this sign?"
+   c. Vision returns code (or null if none visible)
+   d. Apply association rules (Section 4): single code in crop → assign; multiple → flag
+   e. If Vision returns null → source = unresolved, requires_review = true
 
 3. Group candidates into pole assemblies:
-   a. Candidates within POLE_RADIUS (50pt) centroid distance = one pole
-   b. Record member list, plate count, sign codes
+   a. Use POLE_GROUPING_RADIUS_PTS (default 50pt) + direction + code consistency checks
+   b. Any ambiguous grouping → grouping_ambiguous = true, requires_review = true
+   c. Generate pole_grouping_debug_overlay.png for visual review
 
 4. For each unique sign code found:
    a. Count total occurrences
-   b. Compare to legend כמות if available
+   b. Compare to legend כמות if available (Vision API required for Stage F כמות extraction)
    c. If mismatch or legend entry not found: emit contradiction record
 
 5. Output:
    - sign_inventory.json (schema per Section 5)
    - sign_inventory_debug_overlay.png (colored annotations on rendered page)
+   - pole_grouping_debug_overlay.png (grouping radius circles, assembly members)
    - sign_inventory_report.md (human-readable summary)
    - noise_report.json (suppressed/uncertain objects)
 ```
 
 **Stage G v1 explicitly does NOT:**
-- Implement Hebrew OCR (test whether sign codes are text objects first; if vector text: use `get_text()`; if bezier: Vision API required)
+- Use PDF text extraction for sign codes (confirmed non-available; see diagnostic above)
 - Implement GPS coordinate projection
 - Implement guardrail / barrier / road marking detection
 - Implement Type B, C, D, or E variant detection
@@ -654,7 +715,8 @@ Stage G v1 should focus on **one well-defined sub-problem**: using Stage F legen
 
 - Stage G v1 validated on 3+ different plan PDFs (different engineers, different projects)
 - Precision/recall measured against a known-good plan where final quantities are already established
-- Hebrew OCR strategy confirmed (vector text vs. Vision API decision made)
+- Pole grouping parameters tuned and confirmed with visual debug overlays
+- Vision API call format confirmed and tested for sign-code extraction accuracy
 - At least one professional engineer has reviewed Stage G v1 output and assessed its usefulness
 
 ---
