@@ -230,7 +230,7 @@ function SystemHealthSidebar({ summary, rooms, stats, presenceMap, scanStatuses 
     : "#4ade80";
 
   return (
-    <div className="flex flex-col gap-3 overflow-y-auto" style={{ minWidth: 0 }}>
+    <div className="flex flex-col gap-3" style={{ minWidth: 0 }}>
       <div className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.25)" }}>
         📊 בריאות מערכת
       </div>
@@ -300,7 +300,7 @@ function ActivityFeedSidebar({ events, loading }: {
   loading?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-2 overflow-y-auto" style={{ minWidth: 0 }}>
+    <div className="flex flex-col gap-2" style={{ minWidth: 0 }}>
       <div className="text-[9px] font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.25)" }}>
         📋 שיחת הסוכנים
       </div>
@@ -884,7 +884,7 @@ export function DigitalHQ({
 
         {/* System Health — top on mobile, left column on desktop */}
         <div
-          className="p-4 border-b border-white/[0.07] lg:border-b-0"
+          className="p-4 border-b border-white/[0.07] lg:border-b-0 lg:overflow-y-auto lg:min-h-0"
           style={{ borderLeft: "1px solid rgba(255,255,255,0.07)" }}
         >
           <SystemHealthSidebar
@@ -955,7 +955,7 @@ export function DigitalHQ({
 
         {/* Activity Feed — bottom on mobile, right column on desktop */}
         <div
-          className="p-4 border-t border-white/[0.07] lg:border-t-0"
+          className="p-4 border-t border-white/[0.07] lg:border-t-0 max-h-[55vh] overflow-y-auto lg:max-h-none lg:overflow-y-auto lg:min-h-0"
           style={{ borderRight: "1px solid rgba(255,255,255,0.07)" }}
         >
           <ActivityFeedSidebar events={feedEvents} loading={loading} />
