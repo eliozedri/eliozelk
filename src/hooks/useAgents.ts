@@ -156,13 +156,16 @@ export function useAgents(): AgentsHookValue {
   const [activityFeed, setActivity]   = useState<AgentActivityFeedItem[]>([]);
   const [loading, setLoading]         = useState(true);
   const versionRef                    = useRef(0);
+  const initialLoadDone               = useRef(false);
 
   const load = useCallback(async () => {
     const db = getSupabase();
     if (!db) return;
 
     const v = ++versionRef.current;
-    setLoading(true);
+    // Only show loading skeleton on the very first load — background refreshes
+    // (e.g. post-scan) update data in-place without blanking the UI.
+    if (!initialLoadDone.current) setLoading(true);
 
     const [agRes, taskRes, excRes, apprRes, actRes] = await Promise.all([
       db.from("agents").select("*").order("created_at"),
@@ -185,6 +188,7 @@ export function useAgents(): AgentsHookValue {
     setExceptions(excList);
     setApprovals(apprList);
     setActivity(actList);
+    initialLoadDone.current = true;
     setLoading(false);
   }, []);
 

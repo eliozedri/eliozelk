@@ -838,7 +838,9 @@ export function DigitalHQ({
   }, [selectedRoom, agentMap, presenceMap, stats, scanStatuses, feedEvents]);
 
   // ── Loading state ────────────────────────────────────────────────────────
-  if (loading) {
+  // Only show skeletons on initial load (no data yet). Background refreshes
+  // (e.g. post-scan) keep the existing UI mounted and update data in-place.
+  if (loading && agents.length === 0) {
     return (
       <div dir="rtl" className="space-y-3">
         <SkeletonCard className="h-28" />
