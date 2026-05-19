@@ -755,6 +755,7 @@ export function AccountingPage() {
   const filtered = useMemo(() => {
     return orders.filter((o) => {
       if (o.status === "cancelled") return false;
+      if (o.status === "draft") return false;
       if (filterCustomer && !o.customer.toLowerCase().includes(filterCustomer.toLowerCase())) return false;
       if (filterDateFrom && o.date < filterDateFrom) return false;
       if (filterDateTo && o.date > filterDateTo) return false;

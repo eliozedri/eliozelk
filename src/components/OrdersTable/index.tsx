@@ -1274,6 +1274,7 @@ export function OrdersTable() {
   const [completingOrder, setCompletingOrder] = useState<WorkOrder | null>(null);
   const [cancelingOrder, setCancelingOrder] = useState<WorkOrder | null>(null);
   const [pendingStatusChange, setPendingStatusChange] = useState<PendingStatusChange | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   // Build phone lookup map from customers
   const phoneMap = useMemo(() => {
@@ -1297,6 +1298,11 @@ export function OrdersTable() {
     return {
       total: operational.length,
       completed: orders.filter((o) => o.status === "completed").length,
+      readyInstallation: orders.filter((o) => o.status === "ready_installation").length,
+      warehouseProcessing: orders.filter((o) =>
+        o.warehouseRequired && o.warehouseStatus === "processing" &&
+        o.status !== "completed" && o.status !== "cancelled"
+      ).length,
       graphicsPending: operational.filter((o) => o.status === "graphics_pending").length,
       graphicsActive: operational.filter((o) => o.status === "graphics_active").length,
       fabricationActive: operational.filter((o) => o.fabricationRequired && o.fabricationStatus !== "completed").length,
@@ -1304,6 +1310,16 @@ export function OrdersTable() {
       urgent: operational.filter((o) => o.priority === "urgent").length,
     };
   }, [orders]);
+
+  const completedOrders = useMemo(
+    () => showCompleted
+      ? orders
+          .filter(o => o.status === "completed")
+          .sort((a, b) => new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime())
+          .slice(0, 30)
+      : [],
+    [orders, showCompleted]
+  );
 
   const hasFilters = search !== "" || statusFilter !== "all" || priorityFilter !== "all" || showProblemsOnly;
 
@@ -1394,7 +1410,7 @@ export function OrdersTable() {
         <DraftOrdersPanel drafts={draftOrders} onDelete={deleteOrder} />
 
         {/* ── KPI Cards ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <KpiCard
             icon={<KpiIcon type="total" />}
             iconBg="bg-blue-50 text-blue-600"
@@ -1403,10 +1419,17 @@ export function OrdersTable() {
           />
           <KpiCard
             icon={<KpiIcon type="completed" />}
-            iconBg="bg-green-50 text-green-600"
-            value={counts.completed}
-            label="הושלמו"
-            onFilter={() => applyFilter("completed")}
+            iconBg="bg-teal-50 text-teal-600"
+            value={counts.readyInstallation}
+            label="מוכנים לתיאום"
+            onFilter={() => applyFilter("ready_installation")}
+          />
+          <KpiCard
+            icon={<KpiIcon type="fabrication" />}
+            iconBg="bg-cyan-50 text-cyan-600"
+            value={counts.warehouseProcessing}
+            label="בטיפול מחסן"
+            onFilter={() => { setStatusFilter("all"); setShowProblemsOnly(false); setCurrentPage(0); }}
           />
           <KpiCard
             icon={<KpiIcon type="fabrication" />}
@@ -1488,6 +1511,18 @@ export function OrdersTable() {
               נקה סינונים
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setShowCompleted(v => !v)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors whitespace-nowrap ${
+              showCompleted
+                ? "bg-gray-200 text-gray-700 border-gray-300"
+                : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+            }`}
+          >
+            {showCompleted ? "הסתר הושלמו" : "הצג הושלמו"}
+          </button>
 
           <div className="mr-auto">
             <Link
@@ -1592,6 +1627,59 @@ export function OrdersTable() {
             </>
           )}
         </div>
+        {/* ── Completed Orders Section ── */}
+        {showCompleted && (
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+              <span className="text-sm font-bold text-gray-500">הושלמו ({counts.completed})</span>
+              {counts.completed > 30 && <span className="text-xs text-gray-400">מוצגות 30 האחרונות</span>}
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden opacity-80">
+              {completedOrders.length === 0 ? (
+                <div className="py-10 text-center text-xs text-gray-400">אין הזמנות שהושלמו</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-right" dir="rtl">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="px-3 py-3 text-xs font-semibold text-gray-500 w-8 text-center">#</th>
+                        <th className="px-2 py-3 text-xs font-semibold text-gray-500 w-8 text-center">אופי</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-gray-500">שם / מספר הזמנה</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-gray-500">לקוח</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-gray-500">מיקום</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-gray-500">תאריך יצירה</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-gray-500">התקדמות</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-gray-500">סטטוס</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-gray-500">עדכון אחרון</th>
+                        <th className="px-3 py-3 text-xs font-semibold text-gray-500">פעולות</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {completedOrders.map((order, idx) => (
+                        <OrderRow
+                          key={order.id}
+                          order={order}
+                          index={completedOrders.length - idx}
+                          phoneMap={phoneMap}
+                          riskScore={riskScores.get(order.id)}
+                          onUpdateStatus={handleUpdateStatus}
+                          onApproveCustomer={approveCustomerOrder}
+                          onSelect={(o) => setSelectedOrderId(o.id)}
+                          onStartComplete={setCompletingOrder}
+                          onRequestCancel={setCancelingOrder}
+                          onRequestStatusChange={setPendingStatusChange}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Order Detail Slide-Over */}
