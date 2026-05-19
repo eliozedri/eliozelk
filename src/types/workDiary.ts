@@ -72,6 +72,49 @@ export interface DiarySignature {
 
 export type DiaryApprovalStatus = "pending" | "approved" | "rejected";
 
+export interface SecurityTeamLine {
+  quantity: string;
+  notes: string;
+}
+
+export interface SecurityTeams {
+  arrowBoards: SecurityTeamLine;   // עגלות חץ
+  inspectors: SecurityTeamLine;    // פקחים
+}
+
+export interface AdditionalTeamLine {
+  quantity: string;
+  notes: string;
+}
+
+export interface AdditionalTeamsOtherEntry {
+  id: string;
+  description: string;
+  quantity: string;
+  notes: string;
+}
+
+export interface AdditionalTeams {
+  crane: AdditionalTeamLine;       // מנוף
+  sweeper: AdditionalTeamLine;     // מקרצפת
+  other: AdditionalTeamsOtherEntry[];
+}
+
+export function emptySecurityTeams(): SecurityTeams {
+  return {
+    arrowBoards: { quantity: "", notes: "" },
+    inspectors: { quantity: "", notes: "" },
+  };
+}
+
+export function emptyAdditionalTeams(): AdditionalTeams {
+  return {
+    crane: { quantity: "", notes: "" },
+    sweeper: { quantity: "", notes: "" },
+    other: [],
+  };
+}
+
 export interface WorkDiary {
   id: string;
   diaryNumber: string;
@@ -124,10 +167,9 @@ export interface WorkDiary {
   approvedAt?: string;
   rejectionReason?: string;
 
-  // ─── Additional crews ────────────────────────────────────
-  securityGuards?: string[];     // names of security personnel on site
-  additionalCrews?: string[];    // names of sub-contractors / extra crew
-  additionalEquipment?: string[]; // machinery/tools beyond the main vehicle
+  // ─── Security & additional teams ─────────────────────────
+  securityTeams?: SecurityTeams;
+  additionalTeams?: AdditionalTeams;
 }
 
 // ── Seed factories ──────────────────────────────────────────
@@ -251,9 +293,6 @@ export function createEmptyDiary(diaryNumber: string): WorkDiary {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     submittedAt: null,
-    securityGuards: [],
-    additionalCrews: [],
-    additionalEquipment: [],
   };
 }
 

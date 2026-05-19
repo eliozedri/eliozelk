@@ -254,6 +254,7 @@ export interface WorkOrder {
   assignedCrewId?: string | null;
   scheduledDate?: string | null;
   requiredWorkers?: number | null;
+  estimatedDurationDays?: number | null;
   // Warehouse domain — parallel to fabrication, tracks stock prep
   warehouseRequired: boolean;
   warehouseStatus?: "pending" | "processing" | "ready" | null;
