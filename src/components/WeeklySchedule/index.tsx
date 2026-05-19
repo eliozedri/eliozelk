@@ -37,6 +37,28 @@ function formatDayHeader(d: Date): string {
   return d.toLocaleDateString("he-IL", { day: "numeric", month: "numeric" });
 }
 
+// ── Multi-day span helpers ────────────────────────────────────────────────────
+
+interface JobSlot {
+  order: WorkOrder;
+  dayIndex: number;  // 1-based: which day of the job's span this slot represents
+  totalDays: number; // total duration (estimatedDurationDays)
+}
+
+// Returns all ISO dates covered by a job (scheduledDate + estimatedDurationDays days).
+// Does NOT skip Saturdays — the board simply has no Saturday column, so those dates
+// fall outside the grid automatically.
+function getJobSpanDates(order: WorkOrder): string[] {
+  if (!order.scheduledDate) return [];
+  const n = Math.max(1, order.estimatedDurationDays ?? 1);
+  const start = new Date(order.scheduledDate + "T00:00:00");
+  return Array.from({ length: n }, (_, i) => {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    return toISODate(d);
+  });
+}
+
 // Returns the best display title for a job — prefers jobName over customer/order number
 function jobDisplayTitle(order: WorkOrder): string {
   if (order.jobName?.trim()) return order.jobName.trim();
@@ -242,7 +264,7 @@ interface AssignModalProps {
   order: WorkOrder;
   crews: Crew[];
   weekDates: Date[];
-  onAssign: (orderId: string, crewId: string, date: string, hours: number, workers: number) => void;
+  onAssign: (orderId: string, crewId: string, date: string, hours: number, workers: number, durationDays: number) => void;
   onClose: () => void;
 }
 
@@ -252,6 +274,7 @@ function AssignModal({ order, crews, weekDates, onAssign, onClose }: AssignModal
   const [dateStr, setDateStr] = useState(order.scheduledDate ?? toISODate(weekDates[0]));
   const [hours, setHours] = useState(order.estimatedExecutionHours ?? 4);
   const [workers, setWorkers] = useState(order.requiredWorkers ?? 2);
+  const [durationDays, setDurationDays] = useState(order.estimatedDurationDays ?? 1);
 
   const title = jobDisplayTitle(order);
 
@@ -315,6 +338,21 @@ function AssignModal({ order, crews, weekDates, onAssign, onClose }: AssignModal
               onChange={(e) => setWorkers(Math.max(1, parseInt(e.target.value) || 1))}
             />
           </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-600">מספר ימי עבודה</label>
+            <input
+              type="number" min={1} max={30} step={1}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400"
+              value={durationDays}
+              onChange={(e) => setDurationDays(Math.max(1, parseInt(e.target.value) || 1))}
+            />
+            {durationDays > 1 && (
+              <p className="text-[10px] text-blue-600 mt-0.5">
+                העבודה תוצג ב-{durationDays} ימים החל מהתאריך שנבחר
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2 justify-end pt-2">
@@ -326,7 +364,7 @@ function AssignModal({ order, crews, weekDates, onAssign, onClose }: AssignModal
           </button>
           <button
             disabled={!crewId || activeCrews.length === 0}
-            onClick={() => { onAssign(order.id, crewId, dateStr, hours, workers); onClose(); }}
+            onClick={() => { onAssign(order.id, crewId, dateStr, hours, workers, durationDays); onClose(); }}
             className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             שמור שיבוץ
@@ -347,24 +385,40 @@ const DIARY_STATUS_CHIP: Record<DiaryCompletionStatus, { label: string; cls: str
   rejected:  { label: "יומן נדחה", cls: "text-red-500" },
 };
 
-function JobChip({ order, diaryStatus, onClick }: { order: WorkOrder; diaryStatus: DiaryCompletionStatus; onClick: () => void }) {
+function JobChip({ order, diaryStatus, onClick, dayIndex = 1, totalDays = 1 }: {
+  order: WorkOrder;
+  diaryStatus: DiaryCompletionStatus;
+  onClick: () => void;
+  dayIndex?: number;
+  totalDays?: number;
+}) {
   const slaColor = getSlaColor(order.readyForExecutionAt);
   const { dot } = SLA_COLORS[slaColor];
   const chip = DIARY_STATUS_CHIP[diaryStatus];
   const title = jobDisplayTitle(order);
   const sub = order.location?.trim() || order.city?.trim() || order.customer;
+  const isMultiDay = totalDays > 1;
+  // Continuation days (not the first) are visually distinguished
+  const chipBg = isMultiDay && dayIndex > 1
+    ? "bg-indigo-50 border-indigo-200 hover:bg-indigo-100"
+    : "bg-blue-50 border-blue-200 hover:bg-blue-100";
 
   return (
     <button
       onClick={onClick}
-      className="w-full text-right px-2 py-1.5 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors flex items-start gap-1.5 text-xs group"
+      className={`w-full text-right px-2 py-1.5 rounded-lg border transition-colors flex items-start gap-1.5 text-xs group ${chipBg}`}
     >
       <div className={`w-2 h-2 rounded-full mt-0.5 shrink-0 ${dot}`} />
       <div className="min-w-0 flex-1">
         <div className="font-bold text-gray-900 truncate">{title}</div>
         {sub && <div className="text-gray-500 truncate text-[10px]">{sub}</div>}
-        <div className="flex items-center gap-1.5 mt-0.5">
-          {order.estimatedExecutionHours && (
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          {isMultiDay && (
+            <span className="text-[9px] font-bold text-indigo-600 bg-indigo-100 px-1 rounded">
+              יום {dayIndex}/{totalDays}
+            </span>
+          )}
+          {order.estimatedExecutionHours && !isMultiDay && (
             <span className="text-blue-600">{order.estimatedExecutionHours}h</span>
           )}
           {order.requiredWorkers && (
@@ -444,15 +498,18 @@ function MonthlyView({ orders, onJobClick }: MonthlyViewProps) {
   }, [monthOffset]);
 
   const scheduledByDay = useMemo(() => {
-    const map: Record<string, WorkOrder[]> = {};
+    const map: Record<string, JobSlot[]> = {};
     for (const o of orders) {
       if (!o.scheduledDate) continue;
-      const d = new Date(o.scheduledDate + "T00:00:00");
-      if (d.getFullYear() === year && d.getMonth() === month) {
-        const key = String(d.getDate());
-        if (!map[key]) map[key] = [];
-        map[key].push(o);
-      }
+      const totalDays = Math.max(1, o.estimatedDurationDays ?? 1);
+      getJobSpanDates(o).forEach((date, idx) => {
+        const d = new Date(date + "T00:00:00");
+        if (d.getFullYear() === year && d.getMonth() === month) {
+          const key = String(d.getDate());
+          if (!map[key]) map[key] = [];
+          map[key].push({ order: o, dayIndex: idx + 1, totalDays });
+        }
+      });
     }
     return map;
   }, [orders, year, month]);
@@ -524,18 +581,24 @@ function MonthlyView({ orders, onJobClick }: MonthlyViewProps) {
                 <div className={`text-xs font-bold self-end px-1 rounded ${isToday ? "bg-blue-600 text-white px-1.5 py-0.5 rounded-full" : "text-gray-500"}`}>
                   {dayNum}
                 </div>
-                {jobs.map((o) => {
-                  const title = jobDisplayTitle(o);
+                {jobs.map((slot) => {
+                  const title = jobDisplayTitle(slot.order);
+                  const isMultiDay = slot.totalDays > 1;
+                  const chipBg = isMultiDay && slot.dayIndex > 1
+                    ? "bg-indigo-50 border-indigo-200 hover:bg-indigo-100"
+                    : "bg-blue-50 border-blue-200 hover:bg-blue-100";
                   return (
                     <button
-                      key={o.id}
-                      onClick={() => onJobClick(o)}
-                      className="w-full text-right px-1.5 py-1 rounded bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors flex flex-col gap-0.5 text-[10px]"
+                      key={`${slot.order.id}-${slot.dayIndex}`}
+                      onClick={() => onJobClick(slot.order)}
+                      className={`w-full text-right px-1.5 py-1 rounded border transition-colors flex flex-col gap-0.5 text-[10px] ${chipBg}`}
                     >
                       <span className="font-bold text-gray-900 truncate leading-tight">{title}</span>
-                      {o.estimatedExecutionHours != null && (
-                        <span className="text-blue-600 font-medium">{o.estimatedExecutionHours}h</span>
-                      )}
+                      {isMultiDay ? (
+                        <span className="text-indigo-600 font-bold">יום {slot.dayIndex}/{slot.totalDays}</span>
+                      ) : slot.order.estimatedExecutionHours != null ? (
+                        <span className="text-blue-600 font-medium">{slot.order.estimatedExecutionHours}h</span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -588,16 +651,19 @@ export function WeeklySchedule() {
   const weekDateStrings = useMemo(() => weekDates.map(toISODate), [weekDates]);
 
   const scheduledThisWeek = useMemo(() =>
-    readyOrders.filter((o) => o.scheduledDate && weekDateStrings.includes(o.scheduledDate)),
+    readyOrders.filter((o) =>
+      o.scheduledDate && getJobSpanDates(o).some(d => weekDateStrings.includes(d))
+    ),
     [readyOrders, weekDateStrings]
   );
 
-  const handleAssign = useCallback((orderId: string, crewId: string, date: string, hours: number, workers: number) => {
+  const handleAssign = useCallback((orderId: string, crewId: string, date: string, hours: number, workers: number, durationDays: number) => {
     updateOrderFields(orderId, {
       assignedCrewId: crewId,
       scheduledDate: date,
       estimatedExecutionHours: hours,
       requiredWorkers: workers,
+      estimatedDurationDays: durationDays,
     });
   }, [updateOrderFields]);
 
@@ -613,21 +679,26 @@ export function WeeklySchedule() {
   const completedThisWeek = useMemo(() => {
     if (!showCompleted) return [];
     return orders.filter(
-      (o) => o.status === "completed" && o.scheduledDate && weekDateStrings.includes(o.scheduledDate)
+      (o) => o.status === "completed" && o.scheduledDate &&
+        getJobSpanDates(o).some(d => weekDateStrings.includes(d))
     );
   }, [orders, showCompleted, weekDateStrings]);
 
-  // Per crew/day workload
+  // Per crew/day workload — each entry is a JobSlot so we know day index/total for multi-day jobs
   const workloadMap = useMemo(() => {
-    const map: Record<string, Record<string, WorkOrder[]>> = {};
+    const map: Record<string, Record<string, JobSlot[]>> = {};
     for (const crew of crews) {
       map[crew.id] = {};
       for (const d of weekDateStrings) map[crew.id][d] = [];
     }
     for (const o of [...scheduledThisWeek, ...completedThisWeek]) {
-      if (o.assignedCrewId && o.scheduledDate && map[o.assignedCrewId]) {
-        map[o.assignedCrewId][o.scheduledDate]?.push(o);
-      }
+      if (!o.assignedCrewId || !map[o.assignedCrewId]) continue;
+      const totalDays = Math.max(1, o.estimatedDurationDays ?? 1);
+      getJobSpanDates(o).forEach((date, idx) => {
+        if (map[o.assignedCrewId!]?.[date] !== undefined) {
+          map[o.assignedCrewId!][date].push({ order: o, dayIndex: idx + 1, totalDays });
+        }
+      });
     }
     return map;
   }, [scheduledThisWeek, completedThisWeek, crews, weekDateStrings]);
@@ -793,8 +864,11 @@ export function WeeklySchedule() {
 
                     {/* Day cells */}
                     {weekDateStrings.map((dateStr) => {
-                      const jobs = workloadMap[crew.id]?.[dateStr] ?? [];
-                      const totalHours = jobs.reduce((s, o) => s + (o.estimatedExecutionHours ?? 0), 0);
+                      const slots = workloadMap[crew.id]?.[dateStr] ?? [];
+                      // Per-day hours: for multi-day jobs, divide total hours by duration to avoid double-counting
+                      const totalHours = slots.reduce((s, slot) =>
+                        s + (slot.order.estimatedExecutionHours ?? 0) / slot.totalDays, 0
+                      );
                       const overload = totalHours > crew.dailyCapacityHours;
                       const isToday = dateStr === todayStr;
                       return (
@@ -802,17 +876,19 @@ export function WeeklySchedule() {
                           key={dateStr}
                           className={`px-1.5 py-1.5 border-l border-gray-200 min-h-[80px] flex flex-col gap-1 ${overload ? "bg-red-50" : isToday ? "bg-blue-50/50" : ""}`}
                         >
-                          {jobs.length > 0 && (
+                          {slots.length > 0 && (
                             <div className={`text-[9px] font-bold text-right mb-0.5 ${overload ? "text-red-600" : "text-gray-400"}`}>
-                              {totalHours}h {overload ? "⚠ עומס" : ""}
+                              {Math.round(totalHours * 10) / 10}h {overload ? "⚠ עומס" : ""}
                             </div>
                           )}
-                          {jobs.map((o) => (
+                          {slots.map((slot) => (
                             <JobChip
-                              key={o.id}
-                              order={o}
-                              diaryStatus={diaryCompletionStatus(diaries, o.id)}
-                              onClick={() => setViewingOrder(o)}
+                              key={`${slot.order.id}-${slot.dayIndex}`}
+                              order={slot.order}
+                              diaryStatus={diaryCompletionStatus(diaries, slot.order.id)}
+                              onClick={() => setViewingOrder(slot.order)}
+                              dayIndex={slot.dayIndex}
+                              totalDays={slot.totalDays}
                             />
                           ))}
                           {unscheduled.length > 0 && (
