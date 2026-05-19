@@ -1,7 +1,10 @@
 import { SIGNS_DATA } from "@/data/signs";
 import type { SignRecord } from "@/types/order";
 
-const KNOWN_SHAPES = new Set(["משולש", "עיגול", "מלבן", "מיוחד"]);
+const KNOWN_SHAPES = new Set([
+  "משולש", "עיגול", "מלבן", "משולש הפוך",
+  "מתומן", "יהלום", "סימון כביש", "מיוחד",
+]);
 
 function normalizeInput(raw: string): string {
   const s = raw.trim().toLowerCase();

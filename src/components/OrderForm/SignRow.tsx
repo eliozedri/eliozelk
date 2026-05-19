@@ -36,7 +36,8 @@ export function SignRow({ row, onChange, onRemove }: Props) {
 
   useEffect(() => {
     if (status === "found" && record) {
-      onChange({ imageUrl: `/signs/${record.imageFile}`, notes: record.shape, lookupStatus: "found" });
+      const autoNote = record.name ? `${record.shape} — ${record.name}` : record.shape;
+      onChange({ imageUrl: `/signs/${record.imageFile}`, notes: autoNote, lookupStatus: "found" });
     } else if (status === "not_found") {
       onChange({ imageUrl: null, lookupStatus: "not_found" });
     } else if (status === "idle") {

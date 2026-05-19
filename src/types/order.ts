@@ -2,8 +2,10 @@ export interface SignRecord {
   number: string;
   imageFile: string;
   shape: string;
+  name: string;
   series: string;
   available: boolean;
+  needsReview: boolean;
 }
 
 export interface SignRow {
