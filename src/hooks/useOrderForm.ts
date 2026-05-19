@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import type { MiscRow, OrderAttachment, OrderState, SignRow, FabricationDetails } from "@/types/order";
 import type { WorkOrder } from "@/types/workOrder";
@@ -67,10 +67,16 @@ function initialState(): OrderState {
   };
 }
 
-export function useOrderForm() {
+export function useOrderForm(opts?: { skipLocalStorage?: boolean }) {
+  const skipLSRef = useRef(opts?.skipLocalStorage ?? false);
   const [order, setOrder] = useState<OrderState>(initialState);
 
   useEffect(() => {
+    if (skipLSRef.current) {
+      // Editing a DB draft — clear any stale localStorage so future /new-order visits start fresh
+      if (typeof window !== "undefined") localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
     const draft = loadDraft();
     if (draft) {
       // Migrate old drafts that may be missing new fields

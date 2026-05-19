@@ -124,7 +124,7 @@ export function OrderForm({ draftId }: { draftId?: string }) {
     removeAttachment,
     resetOrder,
     initFromWorkOrder,
-  } = useOrderForm();
+  } = useOrderForm({ skipLocalStorage: !!draftId });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileError, setFileError] = useState<string | null>(null);

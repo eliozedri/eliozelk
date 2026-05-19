@@ -372,16 +372,6 @@ function ExpandedRow({ order }: ExpandedRowProps) {
   );
 }
 
-const ALL_STATUSES = [
-  { value: "all", label: "כל הסטטוסים" },
-  { value: "graphics_pending", label: STATUS_LABELS.graphics_pending },
-  { value: "graphics_active", label: STATUS_LABELS.graphics_active },
-  { value: "graphics_done", label: STATUS_LABELS.graphics_done },
-  { value: "production", label: STATUS_LABELS.production },
-  { value: "ready_installation", label: STATUS_LABELS.ready_installation },
-  { value: "completed", label: STATUS_LABELS.completed },
-];
-
 function agingDays(isoDate: string): number {
   return Math.round((Date.now() - new Date(isoDate).getTime()) / 86_400_000);
 }
@@ -521,7 +511,7 @@ export function AccountingPage() {
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
-  const [filterStatus, setFilterStatus] = useState("completed");
+
   const [filterOrderType, setFilterOrderType] = useState("all");
   const [filterCity, setFilterCity] = useState("");
   const [filterAccountingStatus, setFilterAccountingStatus] = useState("all");
@@ -755,19 +745,17 @@ export function AccountingPage() {
 
   const filtered = useMemo(() => {
     return orders.filter((o) => {
-      if (o.status === "cancelled") return false;
-      if (o.status === "draft") return false;
+      if (o.status !== "completed") return false;
       if (filterCustomer && !o.customer.toLowerCase().includes(filterCustomer.toLowerCase())) return false;
       if (filterDateFrom && o.date < filterDateFrom) return false;
       if (filterDateTo && o.date > filterDateTo) return false;
-      if (filterStatus !== "all" && o.status !== filterStatus) return false;
       if (filterOrderType !== "all" && o.orderType !== filterOrderType) return false;
       if (filterCity && !(o.city ?? o.location ?? "").toLowerCase().includes(filterCity.toLowerCase())) return false;
       if (filterAccountingStatus !== "all" && (o.accountingStatus ?? "pending") !== filterAccountingStatus) return false;
       if (filterJobName && !(o.jobName ?? "").toLowerCase().includes(filterJobName.toLowerCase())) return false;
       return true;
     });
-  }, [orders, filterCustomer, filterDateFrom, filterDateTo, filterStatus, filterOrderType, filterCity, filterAccountingStatus, filterJobName]);
+  }, [orders, filterCustomer, filterDateFrom, filterDateTo, filterOrderType, filterCity, filterAccountingStatus, filterJobName]);
 
   const kpis = useMemo(() => {
     const completed = filtered.filter((o) => o.status === "completed").length;
@@ -792,7 +780,7 @@ export function AccountingPage() {
       filterCustomer,
       filterDateFrom,
       filterDateTo,
-      filterStatus,
+      filterStatus: "completed",
       generatedAt: new Date().toISOString(),
     };
   }
@@ -1793,18 +1781,6 @@ export function AccountingPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">סטטוס הזמנה</label>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-              >
-                {ALL_STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">סוג עבודה</label>
               <select
                 value={filterOrderType}
@@ -1839,7 +1815,6 @@ export function AccountingPage() {
                 setFilterCustomer("");
                 setFilterDateFrom("");
                 setFilterDateTo("");
-                setFilterStatus("completed");
                 setFilterOrderType("all");
                 setFilterCity("");
                 setFilterAccountingStatus("all");
