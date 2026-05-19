@@ -30,7 +30,9 @@ The only reliable output right now is the set of **177 local code crops** — wh
 | Local crop rendering (177 crops at 160pt) | ✅ Complete | `outputs/stage_g_code_crops/` |
 | Legend icon template matching | ⚠️ Weak | Max score 0.25 — below useful threshold |
 | Pole assembly grouping (119 groups) | ⚠️ Provisional | Unvalidated, configurable, research-only |
-| Sign code reading | ❌ Pending | Vision API not configured |
+| Local OCR diagnostic (Tesseract) | ✅ Complete | 177 crops, 0 confident reads — see Section L |
+| Sign code reading (local) | ❌ Confirmed infeasible | Tesseract LSTM: 0% reduction (Section L) |
+| Sign code reading (Vision API) | ❌ Pending | ANTHROPIC_API_KEY not configured |
 | Hebrew label extraction | ❌ Pending | Vision API required |
 | Legend quantity (כמות) extraction | ❌ Pending | Vision API required |
 | Quantity reconciliation | ❌ Not started | Requires Vision codes first |
@@ -540,11 +542,63 @@ Every approved item must carry:
 
 ---
 
+## L. Local OCR Diagnostic Results (Stage 10)
+
+**Date run:** 2026-05-19 / 2026-05-20  
+**Script:** `10_local_ocr_sign_codes.py`  
+**Engine:** Tesseract 5.5.2 (LSTM, eng+snum), 7 preprocessing variants per crop  
+**Elapsed:** 5,171 seconds (86 minutes)
+
+### L.1 Diagnostic Summary
+
+| Category | Count | % of total |
+|----------|-------|------------|
+| Confident accepted reads | **0** | **0%** |
+| Medium confidence (single variant, human review) | 41 | 23.2% |
+| Zero output — Vision fallback needed | 67 | 37.9% |
+| Human review only | 110 | 62.1% |
+| **Still requiring Vision or human review** | **177** | **100%** |
+
+**Vision API usage reduction achieved: 0%.**
+
+### L.2 Root Cause
+
+AutoCAD PDF exports render ALL text (sign codes, speed values, annotations) as vector-path Bezier outlines. There are no PDF text objects. This is a **training distribution mismatch**, not a configuration problem:
+
+- Annotation code strokes (1–3px at 150 DPI): below Tesseract recognition threshold
+- Speed value strokes inside red circles (bold CAD block font): not in LSTM training distribution
+
+No combination of preprocessing, `--psm`, `--oem`, or whitelist flags will reliably fix this.
+
+### L.3 Useful Signal Retained
+
+Despite zero confident reads:
+- 41 medium candidates are retained as **weak cross-check signals only** — not accepted codes
+- CC analysis showed 15–86 digit-sized components near crop centers per crop
+- OCC-0031 CC debug image confirms that `901` and `632` are visually isolatable as tight CC groups
+- This validates the tight-crop approach as the primary next POC
+
+### L.4 Implication for Next Steps
+
+Local OCR (Tesseract) is **not a viable solution for this crop type**. The recommended path is:
+
+1. POC 1: CC-based tight numeric crop + multi-engine Tesseract (different from current broad-crop approach)
+2. POC 2: Digit template matching (specific to this CAD font)
+3. POC 3: Vector glyph recognition from `get_drawings()` data
+4. POC 4: PaddleOCR smoke test (~101MB, CPU-only, no GPU)
+5. Vision API as fallback only for unresolved occurrences after POCs 1–4
+
+Full strategy: `LOCAL_FIRST_PLAN_SCANNER_STRATEGY.md`
+
+---
+
 ## Next Steps
 
-**Immediate (before any further pipeline development):**
+**Updated order of priority (post-OCR diagnostic):**
 
-1. **Run Stage G v1 with ANTHROPIC_API_KEY configured.** This is the single most valuable next action. It will convert 177 pending crops into actual sign code readings and reveal how many codes are readable.
+1. **Run local POCs 1–4 before spending any Vision API credits.** The Tesseract diagnostic proved that naive OCR on broad crops fails. Tight-crop + alternative engines may reduce Vision usage significantly.
+
+2. **Run Stage G v1 with ANTHROPIC_API_KEY configured** (after POCs, as fallback measurement). This will convert remaining unresolved crops into actual sign code readings.
 
 2. **Run Stage F Vision call** (pass API key to `07_extract_legend.py`). Extract Hebrew labels, sign codes, and כמות quantities from the plan legend. This gives the ground truth vocabulary against which Stage G codes will be reconciled.
 
@@ -578,13 +632,14 @@ Every approved item must carry:
 
 ## Is it Safe to Proceed to the Next Step?
 
-**Yes — the next step is running Stage G v1 with the Vision API key, not building new pipeline stages.**
+**Yes — the next step is running local POCs (tight crop, digit templates, vector glyphs, PaddleOCR), not spending Vision API credits yet.**
 
-Stage G v1 is complete as a research pipeline. The architecture is sound. The outputs are correctly structured. The code crops are correctly positioned. The correct next step is measurement: run with Vision and see how many codes are readable.
+Stage G v1 is complete as a crop-generation pipeline. The local OCR diagnostic (Stage 10) has confirmed that naive Tesseract OCR on broad crops is not sufficient. Local POCs 1–4 must be evaluated first to determine how many crops can be resolved without paid API calls.
 
-**Do not build Stage G v2 before measuring Stage G v1 Vision performance.**  
-**Do not start production UI before Vision measurement.**  
-**Do not start BOQ generation before at least one ground-truth comparison.**
+**Do not run Vision API before attempting local POCs 1–4.**  
+**Do not build Stage G v2 before measuring POC performance.**  
+**Do not start production UI before at least one ground-truth comparison.**  
+**Do not start BOQ generation before sign codes are validated on ≥ 3 plans.**
 
 ---
 

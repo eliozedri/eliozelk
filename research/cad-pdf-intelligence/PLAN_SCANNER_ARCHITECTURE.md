@@ -769,6 +769,85 @@ Stage G v1 is a research-only script producing `sign_inventory.json` and a debug
 
 ---
 
+## 16. Scale-Based Measurement and BOQ Quantities
+
+### 16.1 Purpose
+
+Beyond counting sign occurrences, a complete BOQ requires **linear and area quantities**: guardrail metres, road marking lengths, exclusion zone areas, delineator post spacings. These require a calibrated coordinate transform from PDF units to real-world metres.
+
+### 16.2 Eight-Type Quantity Taxonomy
+
+| Type | Description | Example |
+|------|-------------|---------|
+| **Counted** | Integer occurrences | Signs: 23 × code 402 |
+| **Grouped** | Assemblies with sub-items | 15 pole assemblies (Type A, 2 signs each) |
+| **Linear-measured** | Distance in metres | Guardrail: 247m |
+| **Area-measured** | Surface in m² | Road markings: 84m² |
+| **Declared** | Annotation label, not measured | "50m exclusion zone" |
+| **Calculated** | Derived from other quantities | Total clamps = sign count × 2 |
+| **Reconciled** | Cross-plan or vs. BoM | Plan: 23 signs; delivery note: 25 |
+| **Human-approved** | Final after engineer review | Approved: 247m guardrail |
+
+### 16.3 Scale Detection — Four Sources
+
+| Source | Method | Reliability |
+|--------|--------|-------------|
+| **Title block annotation** | OCR for "קנה מידה 1:500" in title block region | High — explicit |
+| **Graphic scale bar** | Detect horizontal line + tick marks + adjacent distance labels | Medium — may be absent |
+| **Known dimension annotation** | Measure PDF distance between annotated point pair; divide by label value | Medium — annotation precision varies |
+| **Human calibration** | User clicks two points in viewer, enters real-world distance | Highest — always available as fallback |
+
+Cross-validate Source 1 vs. Source 2 when both are present. Require human calibration when sources conflict.
+
+### 16.4 Measurement Pipeline
+
+```
+page.get_drawings()
+  → Identify polylines representing guardrail, marking, barrier geometry
+  → Compute cumulative path length in PDF units (pt)
+  → Apply scale factor: length_m = length_pt × (real_unit / pdf_unit)
+  → Store in measurement record with calibration_id reference
+```
+
+### 16.5 Measurement Record Schema
+
+```json
+{
+  "measurement_id": "MEAS-0001",
+  "type": "linear",
+  "element": "guardrail",
+  "value_m": 247.3,
+  "confidence": "medium",
+  "scale_source": "title_block",
+  "scale_ratio": "1:500",
+  "calibration_id": "CAL-2026-05-20-001",
+  "pdf_start_pt": [1230, 450],
+  "pdf_end_pt": [1725, 450],
+  "pdf_length_pt": 495.0,
+  "review_status": "pending"
+}
+```
+
+### 16.6 Human Calibration Path
+
+When automated scale detection fails or produces conflicting results:
+1. Present plan thumbnail; user clicks two reference points.
+2. User enters the known real-world distance.
+3. Calibration factor computed and stored in `plan_calibration.json`.
+4. All measurements for this plan use the stored factor.
+5. Calibration is audit-logged with creator and timestamp.
+
+### 16.7 Risk Model
+
+| Risk | Mitigation |
+|------|-----------|
+| Scale annotation OCR error | Cross-validate against graphic scale bar |
+| Plan contains multiple scales (detail insets) | Detect and flag scale-region boundaries |
+| Measurement extends off-road | Human review required for all linear measurements |
+| Unit ambiguity (cm vs. m) | Normalise to metres at input; flag implausible values (< 0.1m or > 5,000m) |
+
+---
+
 ## Appendix: Pipeline Stage Map
 
 ```
@@ -779,13 +858,20 @@ Stage 04  DBSCAN cluster symbols (eps=25)         → symbol_clusters.json
 Stage 05  [reserved]
 Stage E   Template match vs. catalog              → sign_recognition_report.md
 Stage F   Legend extraction                       → legend_vocabulary.json  [SHIPPED]
-Stage G   Sign inventory + pole grouping          → sign_inventory.json     [NEXT — not yet implemented]
+Stage G   Sign inventory + pole grouping          → sign_inventory.json     [SHIPPED — local OCR failed, Vision pending]
+Stage 10  Local OCR diagnostic (Tesseract)        → local_ocr_sign_codes.json  [DONE — 0% reduction]
 Stage H   [future] GPS coordinate projection      → sign_inventory_gps.json
 Stage I   [future] Cross-plan aggregation         → company_sign_database
 Stage J   [future] Guardrail / barrier detection  → execution_objects.json
-Stage K   [future] BOQ generation                 → draft_boq.json
+Stage K   [future] BOQ generation (incl. scale)   → draft_boq.json
+POC 1     Tight CC crop + Tesseract               → 11_tight_crop_ocr.py
+POC 2     Digit template OCR                      → 12_digit_template_ocr.py
+POC 3     Vector glyph recognition                → 13_vector_glyph_recognition.py
+POC 4     PaddleOCR smoke test                    → 14_paddleocr_smoke_test.py
 ```
 
-**"סורק תוכניות" product** = Stages F + G + Stage J + BOQ generation + human review UI, packaged for production use with full audit trail and approval workflow.
+**"סורק תוכניות" product** = Stages F + G + Scale detection (Section 16) + Stage J + BOQ generation + human review UI, packaged for production use with full audit trail and approval workflow.
 
 **"תרגול ולמידה"** = Teaching loop integrated into the human review UI, allowing plan-specific and company-level rules to accumulate over time.
+
+**Local-first strategy** = See `LOCAL_FIRST_PLAN_SCANNER_STRATEGY.md` for the full POC sequence, decision matrix, and semi-automatic fallback levels.
