@@ -2,3 +2,6 @@
 outputs/
 __pycache__/
 *.pyc
+
+# Sign catalog "variant 2" files are legitimate template variants, not Finder duplicates
+!sign_catalog/* 2.png
