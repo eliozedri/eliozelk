@@ -43,6 +43,21 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
     };
   }
 
+  function numInp(key: keyof WorkDiary, step = "1") {
+    const raw = diary[key];
+    return {
+      type: "number" as const,
+      min: "0",
+      step,
+      dir: "ltr" as const,
+      value: raw !== undefined && raw !== null ? String(raw) : "",
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+        onChange({ [key]: e.target.value === "" ? undefined : Number(e.target.value) }),
+      disabled,
+      className: inputCls,
+    };
+  }
+
   function addCrewMember() {
     onChange({ crewMembers: [...(diary.crewMembers ?? []), ""] });
   }
@@ -91,6 +106,9 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
           <Field label="איש קשר">
             <input type="text" placeholder="שם איש הקשר" {...inp("contactName")} />
           </Field>
+          <Field label="טלפון איש קשר">
+            <input type="tel" dir="ltr" placeholder="050-0000000" {...inp("contactPhone")} />
+          </Field>
         </div>
       </SectionCard>
 
@@ -135,6 +153,37 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
             + הוסף איש צוות
           </button>
         )}
+      </SectionCard>
+
+      {/* רכב */}
+      <SectionCard title="רכב">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="מספר רכב">
+            <input type="text" dir="ltr" placeholder="123-45-678" {...inp("vehicleNumber")} />
+          </Field>
+          <Field label="שם נהג">
+            <input type="text" placeholder="שם הנהג" {...inp("driverName")} />
+          </Field>
+        </div>
+      </SectionCard>
+
+      {/* נתוני יום */}
+      <SectionCard title="נתוני יום" accent>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="סכום לחיוב (₪)">
+            <input placeholder="0" {...numInp("billedAmount")} />
+          </Field>
+          <Field label="שעות ביצוע">
+            <input placeholder="0" {...numInp("executionTimeHours", "0.5")} />
+          </Field>
+          <Field label="שעות נסיעה">
+            <input placeholder="0" {...numInp("travelTimeHours", "0.5")} />
+          </Field>
+          <Field label="שעות המתנה">
+            <input placeholder="0" {...numInp("waitingTimeHours", "0.5")} />
+          </Field>
+        </div>
+        <p className="mt-3 text-xs text-gray-400">שעות ביצוע / נסיעה / המתנה משמשות לחישוב הרווחיות היומית</p>
       </SectionCard>
     </div>
   );

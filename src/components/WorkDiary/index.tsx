@@ -13,6 +13,7 @@ import { PaintingTab } from "./PaintingTab";
 import { PolesSignsTab } from "./PolesSignsTab";
 import { DocumentTab } from "./DocumentTab";
 import { DiaryActions } from "./DiaryActions";
+import { ProfitabilityPanel } from "./ProfitabilityPanel";
 import { exportWorkDiaryPDF, openEmailDraft } from "@/lib/workDiaryExport";
 
 function DiaryIcon({ className }: { className?: string }) {
@@ -338,6 +339,9 @@ export function WorkDiaryForm() {
               signatureError={signatureError}
               onSignatureChange={() => setSignatureError(false)}
             />
+          )}
+          {activeTab === "profitability" && (
+            <ProfitabilityPanel diary={diary} />
           )}
 
         </div>
