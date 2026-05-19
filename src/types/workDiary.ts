@@ -118,6 +118,7 @@ export function emptyAdditionalTeams(): AdditionalTeams {
 export interface WorkDiary {
   id: string;
   diaryNumber: string;
+  draftName?: string;
   status: WorkDiaryStatus;
   customerName: string;
   siteName: string;

@@ -173,9 +173,11 @@ export function OrderForm() {
 
   function isImage(type: string) { return type.startsWith("image/"); }
 
-  const { addOrder } = useOrdersContext();
+  const { addOrder, updateOrderFields, deleteOrder } = useOrdersContext();
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  // Track the DB draft ID so "שמור כטיוטה" updates rather than inserts on repeat calls
+  const draftOrderIdRef = useRef<string | null>(null);
 
   // ── Dirty detection: form has meaningful data beyond the empty defaults ──
   const isDirty = useMemo(() => {
@@ -190,17 +192,37 @@ export function OrderForm() {
     return false;
   }, [order]);
 
-  // "Save as draft" for guard: localStorage already persists form state automatically.
-  // Just signal the guard that it's been acknowledged.
+  // "Save as draft" for guard: create a DB record with status "draft" on first call,
+  // update it on subsequent calls so the user can recover the order from the orders list.
   const handleSaveDraftForGuard = useCallback(async () => {
-    // localStorage is already up to date (saved on every change in useOrderForm)
-    // nothing more to do — draft is retrievable on next visit
-  }, []);
+    if (draftOrderIdRef.current) {
+      // Already saved once — update existing draft
+      await updateOrderFields(draftOrderIdRef.current, {
+        customer: order.customer,
+        jobName: order.jobName ?? null,
+        city: order.city ?? "",
+        signRows: order.signRows,
+        miscRows: order.miscRows,
+        signsRows: order.signsRows ?? [],
+        accessoryRows: order.accessoryRows ?? [],
+        serviceRows: order.serviceRows ?? [],
+        generalNotes: order.generalNotes || undefined,
+        updatedAt: new Date().toISOString(),
+      });
+    } else {
+      const draft = await addOrder(order, "normal", { asDraft: true });
+      draftOrderIdRef.current = draft.id;
+    }
+  }, [order, addOrder, updateOrderFields]);
 
-  // "Discard" for guard: clear localStorage + reset form
-  const handleDiscardForGuard = useCallback(() => {
+  // "Discard" for guard: delete the DB draft (if created) and reset the form
+  const handleDiscardForGuard = useCallback(async () => {
+    if (draftOrderIdRef.current) {
+      await deleteOrder(draftOrderIdRef.current);
+      draftOrderIdRef.current = null;
+    }
     resetOrder();
-  }, [resetOrder]);
+  }, [resetOrder, deleteOrder]);
 
   // Register dirty guard — only when form has data and no success shown (not submitted)
   useDirtyGuard({
@@ -215,6 +237,11 @@ export function OrderForm() {
       setValidationError(err);
       setTimeout(() => setValidationError(null), 4000);
       return;
+    }
+    // If a draft was saved while guard was pending, delete it — the real order replaces it
+    if (draftOrderIdRef.current) {
+      await deleteOrder(draftOrderIdRef.current);
+      draftOrderIdRef.current = null;
     }
     const submitted = await addOrder(order, priority);
     resetOrder();

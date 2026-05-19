@@ -446,8 +446,11 @@ export function useOrders() {
 
   // ── addOrder ──────────────────────────────────────────────────────────
   const addOrder = useCallback(async (
-    snapshot: OrderState, priority: OrderPriority = "normal", notes = ""
+    snapshot: OrderState,
+    priority: OrderPriority = "normal",
+    opts: { notes?: string; asDraft?: boolean } = {}
   ): Promise<WorkOrder> => {
+    const { notes = "", asDraft = false } = opts;
     const now = new Date().toISOString();
     const db = getSupabase();
 
@@ -464,14 +467,13 @@ export function useOrders() {
       orderNumber = generateOrderNumberLocal(ref.current);
     }
 
-    // Determine initial status explicitly based on order type and content.
-    // field_work always routes through graphics (road sign company default).
-    // pickup/equipment_supply without custom sign/graphic work skip the graphics
-    // queue and go directly to the production/preparation stage.
+    // Determine initial status. Draft orders stay as "draft" regardless of content.
+    // For live orders: field_work always routes through graphics; pickup/equipment_supply
+    // without sign work skip the graphics queue.
     const hasSignWork = snapshot.signRows.some(r => r.signNumber.trim()) ||
                         snapshot.miscRows.some(r => r.description.trim());
-    const needsGraphics = snapshot.orderType === "field_work" || hasSignWork;
-    const initialStatus: WorkOrderStatus = needsGraphics ? "graphics_pending" : "production";
+    const needsGraphics = !asDraft && (snapshot.orderType === "field_work" || hasSignWork);
+    const initialStatus: WorkOrderStatus = asDraft ? "draft" : (needsGraphics ? "graphics_pending" : "production");
     const initialGraphicsSentAt = needsGraphics ? now : null;
 
     const newOrder: WorkOrder = {
@@ -521,7 +523,7 @@ export function useOrders() {
         if (error) {
           console.error("[orders] insert failed:", error.message);
           setOrders(prev => prev.filter(o => o.id !== newOrder.id));
-        } else {
+        } else if (!asDraft) {
           const depts: string[] = [];
           if (needsGraphics) depts.push("מחלקת גרפיקה");
           if (newOrder.warehouseRequired) depts.push("מחלקת מחסן");

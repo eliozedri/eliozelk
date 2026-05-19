@@ -9,6 +9,9 @@ export interface Customer {
   contactPerson?: string;
   contactEmail?: string;
   contactPhone?: string;
+  address?: string;
+  openBalance?: number;
+  billingNotes?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -23,6 +26,9 @@ export interface CustomerFormState {
   contactPerson?: string;
   contactEmail?: string;
   contactPhone?: string;
+  address?: string;
+  openBalance?: number;
+  billingNotes?: string;
 }
 
 export type CustomerErrors = Partial<Record<keyof CustomerFormState, string>>;

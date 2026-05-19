@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { WorkDiary } from "@/types/workDiary";
 import { useCustomersContext } from "@/context/CustomersContext";
 import { OrderLinkCard } from "./OrderLinkCard";
@@ -27,6 +28,25 @@ function SectionCard({ title, children, accent = false }: { title: string; child
     <div className={`bg-white rounded-xl border shadow-sm p-5 ${accent ? "border-blue-200" : "border-gray-200"}`}>
       <h3 className={`text-sm font-bold mb-4 ${accent ? "text-blue-700" : "text-gray-700"}`}>{title}</h3>
       {children}
+    </div>
+  );
+}
+
+function CollapsibleSectionCard({ title, accent = false, defaultOpen = true, children }: { title: string; accent?: boolean; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={`bg-white rounded-xl border shadow-sm ${accent ? "border-blue-200" : "border-gray-200"}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className={`w-full flex items-center justify-between px-5 py-4 rounded-xl hover:bg-gray-50 transition-colors ${open ? "rounded-b-none" : ""}`}
+      >
+        <h3 className={`text-sm font-bold ${accent ? "text-blue-700" : "text-gray-700"}`}>{title}</h3>
+        <svg className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && <div className="px-5 pb-5">{children}</div>}
     </div>
   );
 }
@@ -168,8 +188,8 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
         </div>
       </SectionCard>
 
-      {/* נתוני יום */}
-      <SectionCard title="נתוני יום" accent>
+      {/* נתוני יום — collapsible */}
+      <CollapsibleSectionCard title="נתוני יום" accent defaultOpen={false}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="סכום לחיוב (₪)">
             <input placeholder="0" {...numInp("billedAmount")} />
@@ -185,7 +205,7 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
           </Field>
         </div>
         <p className="mt-3 text-xs text-gray-400">שעות ביצוע / נסיעה / המתנה משמשות לחישוב הרווחיות היומית</p>
-      </SectionCard>
+      </CollapsibleSectionCard>
 
       <OrderLinkCard
         orderId={diary.orderId}

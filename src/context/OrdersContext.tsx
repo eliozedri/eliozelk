@@ -7,7 +7,7 @@ import type { WorkOrder, WorkOrderStatus, OrderPriority, OrderProblemStatus, Ord
 
 interface OrdersContextValue {
   orders: WorkOrder[];
-  addOrder: (snapshot: OrderState, priority?: OrderPriority, notes?: string) => Promise<WorkOrder>;
+  addOrder: (snapshot: OrderState, priority?: OrderPriority, opts?: { notes?: string; asDraft?: boolean }) => Promise<WorkOrder>;
   acknowledgeOrder: (id: string, acknowledgedBy?: string) => Promise<void>;
   completeGraphics: (id: string) => Promise<void>;
   approveCustomerOrder: (id: string) => Promise<void>;
