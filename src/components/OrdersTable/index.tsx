@@ -296,6 +296,7 @@ function ProgressTracker({ order }: { order: WorkOrder }) {
   const { status } = order;
   const { completedSteps, activeStep, isPending } = getProgressState(status);
   const n = LIFECYCLE_STAGES.length;
+  const [showTip, setShowTip] = useState(false);
 
   if (status === "cancelled") {
     return (
@@ -309,7 +310,19 @@ function ProgressTracker({ order }: { order: WorkOrder }) {
   const showFab = order.fabricationRequired;
 
   return (
-    <div className="flex flex-col items-center gap-1 min-w-[100px]">
+    <div
+      className="flex flex-col items-center gap-1 min-w-[100px] relative"
+      onMouseEnter={() => setShowTip(true)}
+      onMouseLeave={() => setShowTip(false)}
+    >
+      {showTip && (
+        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+          <div className="bg-gray-800 text-white text-xs font-medium px-2.5 py-1 rounded-lg whitespace-nowrap shadow-lg">
+            {STATUS_LABELS[status]}
+          </div>
+          <div className="w-0 h-0 mx-auto border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-gray-800" />
+        </div>
+      )}
       <div className="flex items-center">
         {LIFECYCLE_STAGES.map((stage, i) => {
           const isDone = i < completedSteps;
