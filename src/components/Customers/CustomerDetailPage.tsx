@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCustomersContext } from "@/context/CustomersContext";
@@ -148,8 +148,12 @@ function ProfitabilityRow({ s }: { s: OrderProfitabilitySummary }) {
 
 export function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
-  const { customers } = useCustomersContext();
+  const { customers, updateCustomer } = useCustomersContext();
   const { orders } = useOrdersContext();
+
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesValue, setNotesValue] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
   const { byCustomer, byOrder } = useOperationalKPIs();
   const riskScores = useOrderRiskScores();
 
@@ -226,7 +230,7 @@ export function CustomerDetailPage() {
         {/* Header card */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
           <div className="flex items-start justify-between flex-wrap gap-4">
-            <div>
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2.5 mb-1">
                 {risk && (
                   <span className={`w-3 h-3 rounded-full shrink-0 ${risk.dot}`} title={risk.label} />
@@ -238,21 +242,104 @@ export function CustomerDetailPage() {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-500">
-                {customer.phone && <span dir="ltr">{customer.phone}</span>}
+
+              {/* Primary contact info */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 mt-1">
+                {customer.phone && (
+                  <a href={`tel:${customer.phone}`} dir="ltr" className="hover:text-blue-600 transition-colors">
+                    {customer.phone}
+                  </a>
+                )}
                 {customer.location && <span>{customer.location}</span>}
+                {customer.paymentTerms && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
+                    תנאי תשלום: {customer.paymentTerms}
+                  </span>
+                )}
               </div>
-              {customer.paymentTerms && (
-                <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
-                  תנאי תשלום: {customer.paymentTerms}
+
+              {/* Secondary contact */}
+              {(customer.contactPerson || customer.contactPhone || customer.contactEmail) && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 border-t border-gray-100 pt-2">
+                  {customer.contactPerson && (
+                    <span className="font-semibold text-gray-700">איש קשר: {customer.contactPerson}</span>
+                  )}
+                  {customer.contactPhone && (
+                    <a href={`tel:${customer.contactPhone}`} dir="ltr" className="hover:text-blue-600 transition-colors">
+                      {customer.contactPhone}
+                    </a>
+                  )}
+                  {customer.contactEmail && (
+                    <a href={`mailto:${customer.contactEmail}`} className="hover:text-blue-600 transition-colors">
+                      {customer.contactEmail}
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {/* Open balance callout */}
+              {uninvoicedOrders.length > 0 && (
+                <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-800">
+                  <span>יתרת חוב פתוחה:</span>
+                  <span>{uninvoicedOrders.length} הזמנות לא חויבו</span>
                 </div>
               )}
             </div>
-            <div className="text-xs text-gray-400">נוסף {formatDate(customer.createdAt)}</div>
+            <div className="text-xs text-gray-400 shrink-0">נוסף {formatDate(customer.createdAt)}</div>
           </div>
-          {customer.notes && (
-            <div className="mt-3 p-3 rounded-lg bg-gray-50 text-sm text-gray-600">{customer.notes}</div>
-          )}
+
+          {/* Notes — editable */}
+          <div className="mt-3 border-t border-gray-100 pt-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-gray-500">הערות</span>
+              {!editingNotes && (
+                <button
+                  type="button"
+                  onClick={() => { setNotesValue(customer.notes ?? ""); setEditingNotes(true); }}
+                  className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  עריכה
+                </button>
+              )}
+            </div>
+            {editingNotes ? (
+              <div className="flex flex-col gap-2">
+                <textarea
+                  rows={3}
+                  value={notesValue}
+                  onChange={(e) => setNotesValue(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                  placeholder="הוסף הערות על הלקוח..."
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={savingNotes}
+                    onClick={async () => {
+                      setSavingNotes(true);
+                      try { await updateCustomer(customer.id, { notes: notesValue }); setEditingNotes(false); }
+                      finally { setSavingNotes(false); }
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {savingNotes ? "שומר..." : "שמור"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingNotes(false)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    ביטול
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className={`text-sm ${customer.notes ? "text-gray-600" : "text-gray-300 italic"}`}>
+                {customer.notes || "אין הערות"}
+              </p>
+            )}
+          </div>
+
           {risk && customerMetrics && (
             <div className={`mt-3 flex items-start gap-2 p-3 rounded-lg border text-xs ${risk.banner}`}>
               <AlertIcon />
@@ -338,7 +425,7 @@ export function CustomerDetailPage() {
               href="/accounting"
               className="mr-auto text-xs font-semibold text-amber-800 hover:text-amber-900 underline whitespace-nowrap"
             >
-              פתח בחשבונאות
+              פתח בחשבונאות →
             </Link>
           </div>
         )}

@@ -39,6 +39,7 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; border: string;
   pending:    { label: "ממתין להכנה",  bg: "bg-amber-50",  border: "border-amber-200",  badge: "bg-amber-100 text-amber-700" },
   processing: { label: "בהכנה",        bg: "bg-blue-50",   border: "border-blue-200",   badge: "bg-blue-100 text-blue-700" },
   ready:      { label: "מוכן",         bg: "bg-green-50",  border: "border-green-200",  badge: "bg-green-100 text-green-700" },
+  completed:  { label: "הושלמו",       bg: "bg-gray-50",   border: "border-gray-200",   badge: "bg-gray-100 text-gray-600" },
 };
 
 // ── Availability badge for a single linked accessory row ─────────────────────
@@ -1129,6 +1130,8 @@ export function Warehouse() {
     }
   }
 
+  const [showCompletedWarehouse, setShowCompletedWarehouse] = useState(false);
+
   const warehouseOrders = orders
     .filter(o =>
       o.warehouseRequired &&
@@ -1145,10 +1148,15 @@ export function Warehouse() {
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
 
-  const groups: { key: string; orders: WorkOrder[] }[] = [
+  const completedWarehouseOrders = showCompletedWarehouse
+    ? orders.filter(o => o.warehouseRequired && o.status === "completed").sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    : [];
+
+  const groups: { key: string; label?: string; orders: WorkOrder[] }[] = [
     { key: "pending",    orders: warehouseOrders.filter(o => !o.warehouseStatus || o.warehouseStatus === "pending") },
     { key: "processing", orders: warehouseOrders.filter(o => o.warehouseStatus === "processing") },
     { key: "ready",      orders: warehouseOrders.filter(o => o.warehouseStatus === "ready") },
+    ...(showCompletedWarehouse ? [{ key: "completed", label: "עבודות שהושלמו", orders: completedWarehouseOrders }] : []),
   ];
 
   // Build return candidates: completed orders with proxy-consumed items
@@ -1197,9 +1205,19 @@ export function Warehouse() {
             <p className="text-sm text-gray-500">הכנת הזמנות, ניהול מלאי וקליטת סחורה</p>
           </div>
           {activeTab === "orders" && (
-            <div className="mr-auto flex items-center gap-2">
-              <span className="text-sm text-gray-500">פתוחות:</span>
-              <span className="font-black text-gray-900">{warehouseOrders.filter(o => o.warehouseStatus !== "ready").length}</span>
+            <div className="mr-auto flex items-center gap-3">
+              <span className="text-sm text-gray-500">פתוחות: <strong className="text-gray-900">{warehouseOrders.filter(o => o.warehouseStatus !== "ready").length}</strong></span>
+              <button
+                type="button"
+                onClick={() => setShowCompletedWarehouse(v => !v)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                  showCompletedWarehouse
+                    ? "bg-gray-200 text-gray-700 border-gray-300"
+                    : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                {showCompletedWarehouse ? "הסתר הושלמו" : "הצג הושלמו"}
+              </button>
             </div>
           )}
         </div>
@@ -1218,7 +1236,7 @@ export function Warehouse() {
 
         {/* Orders tab */}
         {activeTab === "orders" && (
-          warehouseOrders.length === 0 ? (
+          warehouseOrders.length === 0 && (!showCompletedWarehouse || completedWarehouseOrders.length === 0) ? (
             <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
               <svg className="w-12 h-12 text-gray-300 mx-auto mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>

@@ -1,11 +1,13 @@
 "use client";
 
-export type DiaryTab = "header" | "painting" | "poles" | "docs" | "profitability";
+export type DiaryTab = "header" | "painting" | "poles" | "security" | "additional" | "docs" | "profitability";
 
 const ALL_TABS: { id: DiaryTab; label: string }[] = [
   { id: "header", label: "פרטי עבודה" },
   { id: "painting", label: "צביעה" },
   { id: "poles", label: "עמודים ותמרורים" },
+  { id: "security", label: "צוותי אבטחה" },
+  { id: "additional", label: "צוותים וכלים" },
   { id: "docs", label: "תיעוד" },
   { id: "profitability", label: "רווחיות" },
 ];

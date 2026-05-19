@@ -123,6 +123,11 @@ export interface WorkDiary {
   approvedBy?: string;
   approvedAt?: string;
   rejectionReason?: string;
+
+  // ─── Additional crews ────────────────────────────────────
+  securityGuards?: string[];     // names of security personnel on site
+  additionalCrews?: string[];    // names of sub-contractors / extra crew
+  additionalEquipment?: string[]; // machinery/tools beyond the main vehicle
 }
 
 // ── Seed factories ──────────────────────────────────────────
@@ -246,6 +251,9 @@ export function createEmptyDiary(diaryNumber: string): WorkDiary {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     submittedAt: null,
+    securityGuards: [],
+    additionalCrews: [],
+    additionalEquipment: [],
   };
 }
 

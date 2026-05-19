@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { nanoid } from "nanoid";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCostRatesContext } from "@/context/CostRatesContext";
+import { useDirtyGuard } from "@/context/NavigationGuardContext";
 import type { WorkDiary } from "@/types/workDiary";
-import { DIARY_STATUS_LABELS, DIARY_STATUS_COLORS } from "@/types/workDiary";
+import { DIARY_STATUS_LABELS, DIARY_STATUS_COLORS, createEmptyDiary } from "@/types/workDiary";
 import { calculateProfitability, STATUS_LABELS, STATUS_COLORS, STATUS_DOT } from "@/lib/profitability";
 import { TabBar, type DiaryTab } from "./TabBar";
 import { DiaryHeader } from "./DiaryHeader";
@@ -14,7 +16,10 @@ import { PolesSignsTab } from "./PolesSignsTab";
 import { DocumentTab } from "./DocumentTab";
 import { DiaryActions } from "./DiaryActions";
 import { ProfitabilityPanel } from "./ProfitabilityPanel";
+import { SecurityTeamsTab } from "./SecurityTeamsTab";
+import { AdditionalTeamsTab } from "./AdditionalTeamsTab";
 import { exportWorkDiaryPDF, openEmailDraft } from "@/lib/workDiaryExport";
+import { getSupabase } from "@/lib/supabase/client";
 
 function DiaryIcon({ className }: { className?: string }) {
   return (
@@ -96,136 +101,167 @@ function DiaryRow({ diary, profitStatus, profitColors, dotColor, netProfit, onOp
   );
 }
 
-// ── List view ─────────────────────────────────────────────────────────────────
+// ── Saved diaries panel (shown above the new-diary form) ──────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function DiaryListView({ onNew, onOpen }: { onNew: () => void; onOpen: (d: WorkDiary) => void }) {
+function SavedDiariesPanel({ onOpen }: { onOpen: (d: WorkDiary) => void }) {
   const { diaries, deleteDiary } = useWorkDiaryContext();
   const { rates } = useCostRatesContext();
+  const [expanded, setExpanded] = useState(false);
 
   const rows = useMemo(() =>
-    diaries.map((d) => {
-      const r = calculateProfitability(d, rates);
-      return {
-        diary: d,
-        profitStatus: STATUS_LABELS[r.status],
-        profitColors: STATUS_COLORS[r.status],
-        dotColor: STATUS_DOT[r.status],
-        netProfit: r.netProfit,
-      };
-    }), [diaries, rates]);
+    diaries
+      .filter(d => d.status === "draft" || d.status === "submitted")
+      .sort((a, b) => {
+        const ad = a.executionDate || a.createdAt;
+        const bd = b.executionDate || b.createdAt;
+        return bd.localeCompare(ad);
+      })
+      .slice(0, expanded ? 50 : 5)
+      .map((d) => {
+        const r = calculateProfitability(d, rates);
+        return { diary: d, profitStatus: STATUS_LABELS[r.status], profitColors: STATUS_COLORS[r.status], dotColor: STATUS_DOT[r.status], netProfit: r.netProfit };
+      }),
+    [diaries, rates, expanded]);
 
-  const sorted = useMemo(() =>
-    [...rows].sort((a, b) => {
-      const ad = a.diary.executionDate || a.diary.createdAt;
-      const bd = b.diary.executionDate || b.diary.createdAt;
-      return bd.localeCompare(ad);
-    }), [rows]);
+  const total = diaries.filter(d => d.status === "draft" || d.status === "submitted").length;
+
+  if (total === 0) return null;
 
   return (
-    <div className="min-h-screen bg-surface pb-10">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
-        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <DiaryIcon className="w-7 h-7 text-blue-600 shrink-0" />
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">יומן עבודה</h1>
-              <p className="text-xs text-gray-400">{diaries.length} יומנים שמורים</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onNew}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors shadow-sm"
-          >
-            <PlusIcon />
-            יומן חדש
-          </button>
+    <div className="max-w-3xl mx-auto px-4 mb-4">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div
+          className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+          onClick={() => setExpanded(e => !e)}
+        >
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">יומנים שמורים ({total})</span>
+          <svg className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
         </div>
-      </div>
-
-      {/* List */}
-      <div className="max-w-3xl mx-auto mt-4 px-4">
-        {sorted.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
-            <DiaryIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 font-medium mb-1">אין יומנים שמורים</p>
-            <p className="text-xs text-gray-400 mb-6">צור יומן עבודה חדש לתיעוד עבודת השטח</p>
-            <button
-              type="button"
-              onClick={onNew}
-              className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm transition-colors"
-            >
-              + יומן עבודה חדש
-            </button>
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">יומנים</span>
-              <span className="text-xs text-gray-400">{sorted.length} יומנים</span>
-            </div>
-            {sorted.map((row) => (
-              <DiaryRow
-                key={row.diary.id}
-                diary={row.diary}
-                profitStatus={row.profitStatus}
-                profitColors={row.profitColors}
-                dotColor={row.dotColor}
-                netProfit={row.netProfit}
-                onOpen={() => onOpen(row.diary)}
-                onDelete={() => deleteDiary(row.diary.id)}
-              />
-            ))}
-          </div>
+        {expanded && rows.map((row) => (
+          <DiaryRow
+            key={row.diary.id}
+            diary={row.diary}
+            profitStatus={row.profitStatus}
+            profitColors={row.profitColors}
+            dotColor={row.dotColor}
+            netProfit={row.netProfit}
+            onOpen={() => onOpen(row.diary)}
+            onDelete={() => deleteDiary(row.diary.id)}
+          />
+        ))}
+        {!expanded && (
+          <div className="px-4 py-2 text-xs text-gray-400">לחץ להצגת יומנים שמורים</div>
         )}
       </div>
     </div>
   );
 }
 
+// ── Local initializer — NO DB write ──────────────────────────────────────────
+
+function createLocalDiary(): WorkDiary {
+  const today = new Date().toISOString().split("T")[0];
+  return {
+    ...createEmptyDiary("—"),            // placeholder number; real one assigned on first save
+    id: nanoid(),
+    executionDate: today,
+    startTime: "",                       // require manual entry (not auto-filled with current time)
+    endTime: "",
+  };
+}
+
 // ── Form view ─────────────────────────────────────────────────────────────────
 
 export function WorkDiaryForm() {
-  const { createDiary, saveDiary, submitDiary, approveDiary, rejectDiary } = useWorkDiaryContext();
+  const { diaries, saveDiary, submitDiary, approveDiary, rejectDiary, deleteDiary } = useWorkDiaryContext();
   const { profile } = useAuth();
   const canApprove = profile?.role === "master" || profile?.role === "office_manager";
-  const [diary, setDiary] = useState<WorkDiary | null>(null);
+
+  // Local form state — no DB row created on mount
+  const [diary, setDiary] = useState<WorkDiary>(createLocalDiary);
   const [activeTab, setActiveTab] = useState<DiaryTab>("header");
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [signatureError, setSignatureError] = useState(false);
 
-  // Auto-open a blank diary on mount — this page is a form, not a list
-  useEffect(() => {
-    let cancelled = false;
-    createDiary().then((d) => {
-      if (!cancelled) { setDiary(d); setActiveTab("header"); }
-    });
-    return () => { cancelled = true; };
-  }, [createDiary]);
+  // Track whether this diary has been persisted to DB yet
+  const [savedToDB, setSavedToDB] = useState(false);
+  // Track dirty state — becomes true as soon as any field is changed
+  const [isDirty, setIsDirty] = useState(false);
 
-  async function handleNew() {
-    const d = await createDiary();
-    setDiary(d);
-    setActiveTab("header");
-    setSuccessMessage(null);
+  const isSubmitted = diary.status === "submitted";
+
+  // ── Generate a real diary number from the DB counter ─────────────────────
+  async function assignRealDiaryNumber(localDiary: WorkDiary): Promise<WorkDiary> {
+    const db = getSupabase();
+    if (!db) return localDiary;
+    const { data, error } = await db.rpc("next_counter", { counter_key: "diary" });
+    if (!error && data != null) {
+      const year = new Date().getFullYear();
+      const number = `WD-${year}-${String(data as number).padStart(3, "0")}`;
+      return { ...localDiary, diaryNumber: number };
+    }
+    // Fallback: use max existing + 1
+    const year = new Date().getFullYear();
+    const prefix = `WD-${year}-`;
+    const existing = diaries
+      .filter(d => d.diaryNumber.startsWith(prefix))
+      .map(d => parseInt(d.diaryNumber.replace(prefix, ""), 10))
+      .filter(n => !isNaN(n));
+    const next = existing.length > 0 ? Math.max(...existing) + 1 : 1;
+    return { ...localDiary, diaryNumber: `${prefix}${String(next).padStart(3, "0")}` };
   }
+
+  // ── Persist draft (create or update) ─────────────────────────────────────
+  async function persistDraft(d: WorkDiary): Promise<WorkDiary> {
+    let toSave = d;
+    if (!savedToDB) {
+      toSave = await assignRealDiaryNumber(d);
+    }
+    const now = new Date().toISOString();
+    const withTimestamp = { ...toSave, updatedAt: now };
+    saveDiary(withTimestamp);
+    setSavedToDB(true);
+    return withTimestamp;
+  }
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   const handleChange = useCallback((partial: Partial<WorkDiary>) => {
     setDiary((prev) => (prev ? { ...prev, ...partial } : prev));
+    setIsDirty(true);
   }, []);
 
-  function handleSaveDraft() {
+  async function handleSaveDraft() {
     if (!diary) return;
     setSaving(true);
-    saveDiary(diary);
-    setTimeout(() => setSaving(false), 600);
+    try {
+      const saved = await persistDraft(diary);
+      setDiary(saved);
+      setIsDirty(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleSubmit() {
+  async function handleSaveDraftForGuard() {
+    await handleSaveDraft();
+  }
+
+  function handleDiscardForGuard() {
+    // If we have a DB record (user saved as draft before), delete it
+    if (savedToDB && diary) {
+      deleteDiary(diary.id);
+    }
+    setDiary(createLocalDiary());
+    setIsDirty(false);
+    setSavedToDB(false);
+  }
+
+  async function handleSubmit() {
     if (!diary) return;
     if (!diary.customerName.trim() || !diary.siteName.trim() || !diary.executionDate) {
       alert("נא למלא שם קבלן, אתר עבודה ותאריך ביצוע לפני השליחה.");
@@ -238,11 +274,45 @@ export function WorkDiaryForm() {
       return;
     }
     setSignatureError(false);
-    saveDiary(diary);
-    submitDiary(diary.id);
-    const submitted = { ...diary, status: "submitted" as const, submittedAt: new Date().toISOString() };
+
+    // Persist to DB first if not already saved
+    let toSubmit = diary;
+    if (!savedToDB) {
+      setSaving(true);
+      try {
+        toSubmit = await persistDraft(diary);
+      } finally {
+        setSaving(false);
+      }
+    }
+
+    // Mark submitted
+    const now = new Date().toISOString();
+    const submitted: WorkDiary = { ...toSubmit, status: "submitted", submittedAt: now, updatedAt: now };
+    saveDiary(submitted);
+    submitDiary(toSubmit.id);
     setDiary(submitted);
-    setSuccessMessage(`יומן עבודה ${diary.diaryNumber} נשלח בהצלחה ותויק בהנהלת חשבונות.`);
+    setIsDirty(false);
+    setSavedToDB(true);
+    setSuccessMessage(`יומן עבודה ${toSubmit.diaryNumber} נשלח בהצלחה ותויק בהנהלת חשבונות.`);
+  }
+
+  function handleNew() {
+    setDiary(createLocalDiary());
+    setActiveTab("header");
+    setSuccessMessage(null);
+    setIsDirty(false);
+    setSavedToDB(false);
+    setSignatureError(false);
+  }
+
+  function handleOpenExisting(existing: WorkDiary) {
+    setDiary(existing);
+    setActiveTab("header");
+    setSuccessMessage(null);
+    setIsDirty(false);
+    setSavedToDB(true);      // already in DB
+    setSignatureError(false);
   }
 
   async function handleExportPDF() {
@@ -261,19 +331,17 @@ export function WorkDiaryForm() {
     openEmailDraft(diary);
   }
 
-  // Loading state while the first diary is being created
-  if (!diary) {
-    return (
-      <div className="min-h-screen bg-surface flex items-center justify-center">
-        <div className="text-center">
-          <DiaryIcon className="w-10 h-10 text-blue-300 mx-auto mb-3 animate-pulse" />
-          <p className="text-sm text-gray-400">פותח יומן עבודה...</p>
-        </div>
-      </div>
-    );
-  }
+  // ── Draft protection via NavigationGuardContext ───────────────────────────
+  // Only guard when the form has dirty unsaved data and is not yet submitted
+  const shouldGuard = isDirty && !isSubmitted;
 
-  const disabled = diary.status === "submitted";
+  useDirtyGuard({
+    isDirty: shouldGuard,
+    onSaveDraft: handleSaveDraftForGuard,
+    onDiscard: handleDiscardForGuard,
+  });
+
+  const disabled = isSubmitted;
 
   return (
     <div className="min-h-screen bg-surface pb-24">
@@ -284,9 +352,12 @@ export function WorkDiaryForm() {
           <div className="min-w-0">
             <h1 className="text-xl font-bold text-gray-900">יומן עבודה</h1>
             <p className="text-xs text-gray-400">
-              {diary.diaryNumber}
+              {diary.diaryNumber !== "—" ? diary.diaryNumber : "יומן חדש"}
               {diary.customerName ? ` · ${diary.customerName}` : ""}
               {diary.executionDate ? ` · ${diary.executionDate}` : ""}
+              {isDirty && !isSubmitted && (
+                <span className="mr-2 text-amber-600 font-medium">· שינויים לא שמורים</span>
+              )}
             </p>
           </div>
           {successMessage && (
@@ -306,6 +377,9 @@ export function WorkDiaryForm() {
           )}
         </div>
       </div>
+
+      {/* Saved diaries panel — collapsed by default */}
+      <SavedDiariesPanel onOpen={handleOpenExisting} />
 
       {/* Tabs */}
       <div className="max-w-5xl mx-auto">
@@ -331,6 +405,12 @@ export function WorkDiaryForm() {
               disabled={disabled}
             />
           )}
+          {activeTab === "security" && (
+            <SecurityTeamsTab diary={diary} onChange={handleChange} disabled={disabled} />
+          )}
+          {activeTab === "additional" && (
+            <AdditionalTeamsTab diary={diary} onChange={handleChange} disabled={disabled} />
+          )}
           {activeTab === "docs" && (
             <DocumentTab
               diary={diary}
@@ -343,13 +423,12 @@ export function WorkDiaryForm() {
           {activeTab === "profitability" && (
             <ProfitabilityPanel diary={diary} />
           )}
-
         </div>
       </div>
 
       <DiaryActions
         status={diary.status}
-        diaryNumber={diary.diaryNumber}
+        diaryNumber={diary.diaryNumber !== "—" ? diary.diaryNumber : "יומן חדש"}
         approvalStatus={diary.approvalStatus}
         approvedBy={diary.approvedBy}
         rejectionReason={diary.rejectionReason}
@@ -359,12 +438,12 @@ export function WorkDiaryForm() {
         onExportPDF={handleExportPDF}
         onEmail={handleEmail}
         onApprove={() => {
-          if (!diary || !profile) return;
+          if (!diary || !profile || !savedToDB) return;
           approveDiary(diary.id, profile.name);
           setDiary(prev => prev ? { ...prev, approvalStatus: "approved", approvedBy: profile.name } : prev);
         }}
         onReject={(reason) => {
-          if (!diary) return;
+          if (!diary || !savedToDB) return;
           rejectDiary(diary.id, reason);
           setDiary(prev => prev ? { ...prev, approvalStatus: "rejected", rejectionReason: reason } : prev);
         }}

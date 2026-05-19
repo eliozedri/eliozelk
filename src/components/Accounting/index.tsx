@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { useOrdersContext } from "@/context/OrdersContext";
 import type { WorkOrder } from "@/types/workOrder";
-import { STATUS_LABELS, STATUS_COLORS } from "@/types/workOrder";
+import { STATUS_LABELS, STATUS_COLORS, ORDER_TYPE_LABELS, ACCOUNTING_STATUS_LABELS } from "@/types/workOrder";
 import { exportAccountingCSV, exportAccountingExcel, exportAccountingPDF, exportCustomerBillingPDF, exportCustomerBillingExcel } from "@/lib/accountingExport";
 import type { AccountingReportData } from "@/components/pdf/AccountingDocument";
 import { useWorkDiaryContext } from "@/context/WorkDiaryContext";
@@ -521,7 +521,10 @@ export function AccountingPage() {
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("completed");
+  const [filterOrderType, setFilterOrderType] = useState("all");
+  const [filterCity, setFilterCity] = useState("");
+  const [filterAccountingStatus, setFilterAccountingStatus] = useState("all");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [diaryExportingId, setDiaryExportingId] = useState<string | null>(null);
@@ -756,9 +759,12 @@ export function AccountingPage() {
       if (filterDateFrom && o.date < filterDateFrom) return false;
       if (filterDateTo && o.date > filterDateTo) return false;
       if (filterStatus !== "all" && o.status !== filterStatus) return false;
+      if (filterOrderType !== "all" && o.orderType !== filterOrderType) return false;
+      if (filterCity && !(o.city ?? o.location ?? "").toLowerCase().includes(filterCity.toLowerCase())) return false;
+      if (filterAccountingStatus !== "all" && (o.accountingStatus ?? "pending") !== filterAccountingStatus) return false;
       return true;
     });
-  }, [orders, filterCustomer, filterDateFrom, filterDateTo, filterStatus]);
+  }, [orders, filterCustomer, filterDateFrom, filterDateTo, filterStatus, filterOrderType, filterCity, filterAccountingStatus]);
 
   const kpis = useMemo(() => {
     const completed = filtered.filter((o) => o.status === "completed").length;
@@ -1744,6 +1750,16 @@ export function AccountingPage() {
               />
             </div>
             <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">עיר / מיקום</label>
+              <input
+                type="text"
+                value={filterCity}
+                onChange={(e) => setFilterCity(e.target.value)}
+                placeholder="חיפוש עיר או מיקום"
+                className="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400"
+              />
+            </div>
+            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">מתאריך</label>
               <input
                 type="date"
@@ -1764,7 +1780,7 @@ export function AccountingPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">סטטוס</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">סטטוס הזמנה</label>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
@@ -1772,6 +1788,32 @@ export function AccountingPage() {
               >
                 {ALL_STATUSES.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">סוג עבודה</label>
+              <select
+                value={filterOrderType}
+                onChange={(e) => setFilterOrderType(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+              >
+                <option value="all">כל הסוגים</option>
+                {(Object.entries(ORDER_TYPE_LABELS) as [string, string][]).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">סטטוס חשבוני</label>
+              <select
+                value={filterAccountingStatus}
+                onChange={(e) => setFilterAccountingStatus(e.target.value)}
+                className="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+              >
+                <option value="all">כל הסטטוסים</option>
+                {(Object.entries(ACCOUNTING_STATUS_LABELS) as [string, string][]).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
                 ))}
               </select>
             </div>
@@ -1784,7 +1826,10 @@ export function AccountingPage() {
                 setFilterCustomer("");
                 setFilterDateFrom("");
                 setFilterDateTo("");
-                setFilterStatus("all");
+                setFilterStatus("completed");
+                setFilterOrderType("all");
+                setFilterCity("");
+                setFilterAccountingStatus("all");
               }}
               className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
             >

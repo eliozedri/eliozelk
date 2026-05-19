@@ -22,7 +22,11 @@ export function OrderLinkCard({ orderId, onChange, disabled = false }: Props) {
   const available = useMemo(
     () =>
       orders
-        .filter((o) => o.status !== "cancelled")
+        .filter((o) =>
+          o.status === "ready_installation" ||
+          o.status === "production" ||
+          o.status === "completed"
+        )
         .sort((a, b) => b.date.localeCompare(a.date)),
     [orders]
   );

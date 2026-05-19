@@ -82,8 +82,9 @@ export function useDashboardKPIs(): DashboardKPIs {
            o.status !== "completed" && o.status !== "cancelled"
     ).length;
 
+    // Only count SUBMITTED diaries on today's date — drafts and page visits do not count
     const todayFieldDiaries = diaries.filter(
-      d => d.executionDate === todayStr
+      d => d.status === "submitted" && d.executionDate === todayStr
     ).length;
 
     // ── Pipeline SLA breakdown ───────────────────────────────────────────────

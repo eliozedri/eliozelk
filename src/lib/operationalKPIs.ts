@@ -246,9 +246,12 @@ export function computeOperationalKPIs(
   const crewMap = new Map(crews.map(c => [c.id, c]));
   const crewByLeader = new Map(crews.map(c => [c.leader.toLowerCase(), c]));
 
-  // Compute profitability for every diary once (O(n) pass)
+  // Only include submitted or approved diaries in profitability analytics — exclude drafts
+  const submittedDiaries = diaries.filter(d => d.status === "submitted" || d.status === "cancelled");
+
+  // Compute profitability for every submitted diary once (O(n) pass)
   const results: Array<{ diary: WorkDiary; result: ProfitabilityResult }> =
-    diaries.map(d => ({ diary: d, result: calculateProfitability(d, rates) }));
+    submittedDiaries.map(d => ({ diary: d, result: calculateProfitability(d, rates) }));
 
   // ── Global aggregate ──
   const global = aggregateProfitability(results.map(r => r.result));

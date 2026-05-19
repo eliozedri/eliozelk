@@ -111,13 +111,14 @@ function OpenProblems({ order }: { order: WorkOrder }) {
   );
 }
 
-function GraphicsOrderCard({ order, onAcknowledge, onComplete }: {
+function GraphicsOrderCard({ order, onAcknowledge, onComplete, overrideCfg }: {
   order: WorkOrder;
   onAcknowledge?: () => Promise<void>;
   onComplete?: () => Promise<void>;
+  overrideCfg?: typeof STATUS_CONFIG[string];
 }) {
   const isPending = order.status === "graphics_pending";
-  const cfg = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.graphics_pending;
+  const cfg = overrideCfg ?? STATUS_CONFIG[order.status] ?? STATUS_CONFIG.graphics_pending;
   const signCount = order.signRows.filter((r) => r.signNumber).length;
   const miscCount = [
     ...order.miscRows.filter((r) => r.description),
@@ -268,14 +269,21 @@ function GraphicsOrderCard({ order, onAcknowledge, onComplete }: {
 
 export function Graphics() {
   const { orders, acknowledgeOrder, completeGraphics } = useOrdersContext();
+  const [showCompleted, setShowCompleted] = useState(false);
 
-  const pending = orders.filter((o) => o.status === "graphics_pending");
-  const active = orders.filter((o) => o.status === "graphics_active");
+  const pending   = orders.filter((o) => o.status === "graphics_pending");
+  const active    = orders.filter((o) => o.status === "graphics_active");
+  const completed = showCompleted ? orders.filter((o) => o.status === "graphics_done") : [];
   const urgentPending = pending.filter((o) => o.priority === "urgent").length;
 
+  const STATUS_CONFIG_DONE: typeof STATUS_CONFIG[string] = {
+    label: "גרפיקה הושלמה", bg: "bg-green-50", border: "border-green-200", badge: "bg-green-100 text-green-700",
+  };
+
   const groups: { key: string; label: string; orders: WorkOrder[]; dot: string }[] = [
-    { key: "graphics_pending", label: "הזמנות נכנסות", orders: pending, dot: "bg-amber-400" },
-    { key: "graphics_active",  label: "עבודות פעילות", orders: active,  dot: "bg-blue-500" },
+    { key: "graphics_pending", label: "הזמנות נכנסות",  orders: pending,   dot: "bg-amber-400" },
+    { key: "graphics_active",  label: "עבודות פעילות",  orders: active,    dot: "bg-blue-500"  },
+    ...(showCompleted ? [{ key: "graphics_done", label: "עבודות שהושלמו", orders: completed, dot: "bg-green-500" }] : []),
   ];
 
   return (
@@ -306,6 +314,13 @@ export function Graphics() {
             )}
             <span className="text-sm text-gray-500">פתוחות:</span>
             <span className="font-black text-gray-900">{pending.length + active.length}</span>
+            <button
+              type="button"
+              onClick={() => setShowCompleted(v => !v)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${showCompleted ? "bg-green-100 border-green-300 text-green-700" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+            >
+              {showCompleted ? "הסתר הושלמו" : "הצג הושלמו"}
+            </button>
           </div>
         </div>
 
@@ -345,6 +360,7 @@ export function Graphics() {
                           order={o}
                           onAcknowledge={o.status === "graphics_pending" ? () => acknowledgeOrder(o.id) : undefined}
                           onComplete={o.status === "graphics_active" ? () => completeGraphics(o.id) : undefined}
+                          overrideCfg={o.status === "graphics_done" ? STATUS_CONFIG_DONE : undefined}
                         />
                       ))
                     )}

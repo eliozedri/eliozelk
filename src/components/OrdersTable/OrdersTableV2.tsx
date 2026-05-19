@@ -309,6 +309,16 @@ function V2Row({
           </div>
         )}
 
+        {/* Warehouse processing chip */}
+        {order.warehouseRequired && order.warehouseStatus === "processing" && (
+          <div className="shrink-0 hidden lg:flex items-center">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-teal-100 text-teal-700">
+              <Package className="w-3 h-3" />
+              בטיפול מחסן
+            </span>
+          </div>
+        )}
+
         {/* Billing ready badge */}
         {billingReady && (
           <div className="shrink-0 hidden lg:flex items-center">
@@ -347,6 +357,7 @@ function V2Row({
 export function OrdersTableV2() {
   const { orders } = useOrdersContext();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const sortedOrders = useMemo(() => {
     const urgencyRank: Record<UrgencyLevel, number> = { critical: 0, warning: 1, ok: 2 };
@@ -362,9 +373,16 @@ export function OrdersTableV2() {
       .sort((a, b) => {
         const rankDiff = urgencyRank[a.urgency] - urgencyRank[b.urgency];
         if (rankDiff !== 0) return rankDiff;
-        return b.hours - a.hours; // oldest in stage first within group
+        return b.hours - a.hours;
       });
   }, [orders]);
+
+  const completedOrders = useMemo(() => {
+    if (!showCompleted) return [];
+    return orders
+      .filter((o) => o.status === "completed")
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }, [orders, showCompleted]);
 
   const toggle = (id: string) =>
     setExpandedId((prev) => (prev === id ? null : id));
@@ -382,7 +400,7 @@ export function OrdersTableV2() {
       {/* Section header */}
       <div className="flex items-center gap-3 mb-4 pt-2">
         <div className="w-1 h-7 rounded-full" style={{ backgroundColor: "#f59e0b" }} />
-        <div>
+        <div className="flex-1">
           <h2
             className="text-sm font-black uppercase tracking-widest"
             style={{ color: "#0d1b2e" }}
@@ -393,9 +411,20 @@ export function OrdersTableV2() {
             תצוגת ניהול · {sortedOrders.length} הזמנות פעילות · ממוין לפי דחיפות
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowCompleted(v => !v)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+            showCompleted
+              ? "bg-gray-200 text-gray-700 border-gray-300"
+              : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+          }`}
+        >
+          {showCompleted ? "הסתר הושלמו" : "הצג הושלמו"}
+        </button>
       </div>
 
-      {/* Table container */}
+      {/* Active orders table */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         {sortedOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -414,6 +443,30 @@ export function OrdersTableV2() {
           ))
         )}
       </div>
+
+      {/* Completed orders section */}
+      {showCompleted && (
+        <div className="mt-6">
+          <div className="flex items-center gap-2 mb-3 px-1">
+            <CheckCircle2 className="w-4 h-4 text-gray-400" />
+            <span className="text-sm font-bold text-gray-500">הושלמו ({completedOrders.length})</span>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden opacity-75">
+            {completedOrders.length === 0 ? (
+              <div className="py-10 text-center text-xs text-gray-400">אין הזמנות שהושלמו</div>
+            ) : (
+              completedOrders.map((order) => (
+                <V2Row
+                  key={order.id}
+                  order={order}
+                  expanded={expandedId === order.id}
+                  onToggle={() => toggle(order.id)}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

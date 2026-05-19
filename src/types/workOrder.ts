@@ -275,7 +275,7 @@ export const STATUS_LABELS: Record<WorkOrderStatus, string> = {
   graphics_active: "בטיפול גרפיקה",
   graphics_done: "גרפיקה הושלמה",
   production: "בייצור",
-  ready_installation: "מוכן להתקנה",
+  ready_installation: "מוכן לביצוע ושיבוץ",
   completed: "הושלם",
   cancelled: "בוטל",
 };

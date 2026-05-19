@@ -1,41 +1,53 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Menu } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { AuthProvider } from "@/context/AuthContext";
 import { GlobalFloatingChatProvider, GlobalChatMount } from "@/context/GlobalFloatingChatContext";
 import { GlobalChatLauncher } from "@/components/AgentChat/GlobalChatLauncher";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { NavigationGuardProvider, useNavigationGuard } from "@/context/NavigationGuardContext";
+import { DraftProtectionModal } from "@/components/ui/DraftProtectionModal";
 
 const AUTH_PATHS = ["/login", "/setup"];
 
 const NAVY = "#0d1b2e";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+// Inner shell — sits inside NavigationGuardProvider so it can consume the guard context
+function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isAuthPage = AUTH_PATHS.includes(pathname);
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const { showModal, pendingHref, confirmSaveDraft, confirmDiscard, confirmStay, clearGuard } = useNavigationGuard();
 
   // Close sidebar on navigation
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
-  if (isAuthPage) {
-    return (
-      <>
-        <OfflineBanner />
-        <AuthProvider>{children}</AuthProvider>
-      </>
-    );
+  async function handleSaveDraft() {
+    await confirmSaveDraft();
+    // After draft saved, navigate to the pending href
+    if (pendingHref) {
+      clearGuard();
+      router.push(pendingHref);
+    }
+  }
+
+  function handleDiscard() {
+    confirmDiscard();
+    if (pendingHref) {
+      router.push(pendingHref);
+    }
   }
 
   return (
-    <AuthProvider>
+    <>
       <OfflineBanner />
       <GlobalFloatingChatProvider>
-        {/* Mobile hamburger button — visible only on small screens */}
+        {/* Mobile hamburger */}
         <button
           onClick={() => setSidebarOpen(true)}
           className="fixed top-3 right-3 z-30 flex items-center justify-center w-10 h-10 rounded-xl shadow-md md:hidden no-print"
@@ -54,7 +66,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         )}
 
         <div className="flex min-h-screen">
-          {/* Sidebar: fixed overlay on mobile, static on desktop */}
           <div
             className={`
               fixed inset-y-0 right-0 z-50
@@ -69,11 +80,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <main className="flex-1 min-w-0">{children}</main>
         </div>
 
-        {/* Global floating chat — persists across all routes */}
+        {/* Global floating chat */}
         <GlobalChatMount />
-        {/* Global chat launcher — floating buttons, permission-aware */}
         <GlobalChatLauncher />
+
+        {/* Draft protection modal — renders globally when any form is dirty + user tries to leave */}
+        {showModal && (
+          <DraftProtectionModal
+            onStay={confirmStay}
+            onSaveDraft={handleSaveDraft}
+            onDiscard={handleDiscard}
+          />
+        )}
       </GlobalFloatingChatProvider>
+    </>
+  );
+}
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isAuthPage = AUTH_PATHS.includes(pathname);
+
+  if (isAuthPage) {
+    return (
+      <>
+        <OfflineBanner />
+        <AuthProvider>{children}</AuthProvider>
+      </>
+    );
+  }
+
+  return (
+    <AuthProvider>
+      <NavigationGuardProvider>
+        <AppShellInner>{children}</AppShellInner>
+      </NavigationGuardProvider>
     </AuthProvider>
   );
 }

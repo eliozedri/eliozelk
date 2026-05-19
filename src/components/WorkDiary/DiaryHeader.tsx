@@ -107,7 +107,7 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
           <Field label="איש קשר">
             <input type="text" placeholder="שם איש הקשר" {...inp("contactName")} />
           </Field>
-          <Field label="טלפון איש קשר">
+          <Field label="טלפון איש קשר (אופציונלי)">
             <input type="tel" dir="ltr" placeholder="050-0000000" {...inp("contactPhone")} />
           </Field>
         </div>

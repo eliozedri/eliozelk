@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   FileText, Table2, LayoutDashboard, Users, Palette, Wrench,
   Database, ShieldCheck, Warehouse, DollarSign, Map, Calendar,
@@ -12,6 +12,7 @@ import { useAuth } from "@/context/AuthContext";
 import { canAccessTab, canPerformAction, ROLE_LABELS } from "@/types/auth";
 import type { TabId } from "@/types/auth";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useNavigationGuard } from "@/context/NavigationGuardContext";
 
 const NAVY = "#0d1b2e";
 const NAVY_MID = "#1a2d4a";
@@ -99,19 +100,36 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-function SidebarLink({ href, label, active, icon, onClick, badge, badgeVariant, title }: {
+function SidebarLink({ href, label, active, icon, onClick, badge, badgeVariant, title, onGuardedNavigate }: {
   href: string; label: string; active: boolean; icon: React.ReactNode;
   onClick?: () => void; badge?: number; badgeVariant?: "amber" | "red" | "blue" | "teal"; title?: string;
+  onGuardedNavigate?: (href: string) => void;
 }) {
-  return (
-    <Link href={href} onClick={onClick} title={title}
-      style={active
-        ? { backgroundColor: "rgba(255,255,255,0.10)", color: "#ffffff", fontWeight: 600, borderRightColor: EK_GOLD, borderRightWidth: 3, borderRightStyle: "solid" }
-        : { color: "rgba(255,255,255,0.55)", borderRightColor: "transparent", borderRightWidth: 3, borderRightStyle: "solid" }}
-      className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all group hover:bg-white/10 hover:!text-white">
-      <span style={{ color: active ? EK_GOLD : "rgba(255,255,255,0.35)" }} className="shrink-0 group-hover:!text-white/70 transition-colors">{icon}</span>
+  const sharedStyle = active
+    ? { backgroundColor: "rgba(255,255,255,0.10)", color: "#ffffff", fontWeight: 600, borderRightColor: EK_GOLD, borderRightWidth: 3, borderRightStyle: "solid" as const }
+    : { color: "rgba(255,255,255,0.55)", borderRightColor: "transparent", borderRightWidth: 3, borderRightStyle: "solid" as const };
+  const sharedCls = "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all group hover:bg-white/10 hover:!text-white w-full text-right";
+  const iconEl = <span style={{ color: active ? EK_GOLD : "rgba(255,255,255,0.35)" }} className="shrink-0 group-hover:!text-white/70 transition-colors">{icon}</span>;
+  const inner = (
+    <>
+      {iconEl}
       <span className="truncate flex-1">{label}</span>
       {badge !== undefined && <NavBadge count={badge} variant={badgeVariant} />}
+    </>
+  );
+
+  if (onGuardedNavigate) {
+    return (
+      <button type="button" title={title} style={sharedStyle} className={sharedCls}
+        onClick={() => { onGuardedNavigate(href); onClick?.(); }}>
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <Link href={href} onClick={onClick} title={title} style={sharedStyle} className={sharedCls}>
+      {inner}
     </Link>
   );
 }
@@ -133,14 +151,30 @@ const TAB_BADGES: Partial<Record<TabId, { count: keyof ReturnType<typeof useNoti
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { profile, loading, logout } = useAuth();
   const notif = useNotifications();
+  const { guard, requestNavigate } = useNavigationGuard();
 
   const showAll = loading || !profile;
   const canSeeTab = (tabId: TabId) => showAll || canAccessTab(profile!, tabId);
   const canManageAccess = showAll || canPerformAction(profile!, "manage_access");
 
+  // When modal resolves with a pending href (and modal is now closed), navigate
+  // This is handled in AppShellInner — here we just handle the guarded click
+  function guardedNavigate(href: string) {
+    onClose?.();
+    if (guard?.isDirty) {
+      requestNavigate(href);
+    } else {
+      router.push(href);
+    }
+  }
+
   const handleNavClick = () => { onClose?.(); };
+
+  // Whether to use guarded navigation — only when a dirty form is registered
+  const isDirtyGuard = guard?.isDirty ?? false;
 
   return (
     <aside className="w-64 md:w-52 h-full min-h-screen flex flex-col shrink-0"
@@ -175,6 +209,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
               active={AGENTS_NAV_ITEM.matchFn(pathname)}
               icon={AGENTS_NAV_ITEM.icon}
               onClick={handleNavClick}
+              onGuardedNavigate={isDirtyGuard ? guardedNavigate : undefined}
             />
           </div>
         )}
@@ -191,7 +226,8 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
                   <SidebarLink key={item.href} href={item.href} label={item.label}
                     active={item.matchFn(pathname)} icon={item.icon} onClick={handleNavClick}
                     badge={cfg ? notif[cfg.count] : undefined}
-                    badgeVariant={cfg?.variant} title={item.title} />
+                    badgeVariant={cfg?.variant} title={item.title}
+                    onGuardedNavigate={isDirtyGuard ? guardedNavigate : undefined} />
                 );
               })}
             </div>
@@ -202,10 +238,12 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           <SectionLabel label="מערכת" />
         )}
         {canManageAccess && (
-          <SidebarLink href="/access" label="הרשאות גישה" active={pathname.startsWith("/access")} icon={<ShieldPlus className={ICON_CLS} />} onClick={handleNavClick} />
+          <SidebarLink href="/access" label="הרשאות גישה" active={pathname.startsWith("/access")} icon={<ShieldPlus className={ICON_CLS} />} onClick={handleNavClick}
+            onGuardedNavigate={isDirtyGuard ? guardedNavigate : undefined} />
         )}
         {canSeeTab("integrations") && (
-          <SidebarLink href="/integrations" label="אינטגרציות" active={pathname.startsWith("/integrations")} icon={<Cable className={ICON_CLS} />} onClick={handleNavClick} />
+          <SidebarLink href="/integrations" label="אינטגרציות" active={pathname.startsWith("/integrations")} icon={<Cable className={ICON_CLS} />} onClick={handleNavClick}
+            onGuardedNavigate={isDirtyGuard ? guardedNavigate : undefined} />
         )}
       </nav>
 

@@ -14,6 +14,7 @@ import { isSchedulingCandidate } from "@/lib/workflowEngine";
 // ── Week helpers ─────────────────────────────────────────────────────────────
 
 const WEEK_DAYS_HE = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי"];
+const MONTH_NAMES_HE = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
 
 function getWeekDates(weekOffset: number): Date[] {
   const now = new Date();
@@ -415,6 +416,138 @@ function UnscheduledJobCard({ order, onAssign }: { order: WorkOrder; onAssign: (
   );
 }
 
+// ── Monthly View ─────────────────────────────────────────────────────────────
+
+interface MonthlyViewProps {
+  orders: WorkOrder[];
+  onJobClick: (o: WorkOrder) => void;
+}
+
+function MonthlyView({ orders, onJobClick }: MonthlyViewProps) {
+  const [monthOffset, setMonthOffset] = useState(0);
+
+  const { year, month, label, days } = useMemo(() => {
+    const base = new Date();
+    base.setDate(1);
+    base.setMonth(base.getMonth() + monthOffset);
+    const y = base.getFullYear();
+    const m = base.getMonth();
+    const firstDay = new Date(y, m, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    // Build calendar grid: pad start with nulls so day 1 falls on correct column
+    const grid: (number | null)[] = Array(firstDay).fill(null);
+    for (let d = 1; d <= daysInMonth; d++) grid.push(d);
+    // Pad end to full rows (multiple of 6 for Sun-Fri)
+    while (grid.length % 6 !== 0) grid.push(null);
+    // Remove trailing rows that are all null AND all days in them are > daysInMonth
+    return { year: y, month: m, label: `${MONTH_NAMES_HE[m]} ${y}`, days: grid };
+  }, [monthOffset]);
+
+  const scheduledByDay = useMemo(() => {
+    const map: Record<string, WorkOrder[]> = {};
+    for (const o of orders) {
+      if (!o.scheduledDate) continue;
+      const d = new Date(o.scheduledDate + "T00:00:00");
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        const key = String(d.getDate());
+        if (!map[key]) map[key] = [];
+        map[key].push(o);
+      }
+    }
+    return map;
+  }, [orders, year, month]);
+
+  const todayStr = toISODate(new Date());
+  const todayDay = (() => {
+    const t = new Date();
+    return t.getFullYear() === year && t.getMonth() === month ? t.getDate() : -1;
+  })();
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* Month navigation */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+        <button
+          onClick={() => setMonthOffset((v) => v - 1)}
+          className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-bold text-gray-800">{label}</span>
+          {monthOffset !== 0 && (
+            <button
+              onClick={() => setMonthOffset(0)}
+              className="text-xs font-medium text-blue-600 hover:underline"
+            >
+              החודש הנוכחי
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => setMonthOffset((v) => v + 1)}
+          className="p-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
+        >
+          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Day-of-week header */}
+      <div className="grid grid-cols-6 border-b border-gray-100">
+        {WEEK_DAYS_HE.map((d) => (
+          <div key={d} className="py-2 text-center text-xs font-semibold text-gray-500 bg-gray-50 border-l border-gray-100 first:border-l-0">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      {Array.from({ length: days.length / 6 }, (_, rowIdx) => (
+        <div key={rowIdx} className="grid grid-cols-6 border-b border-gray-100 last:border-b-0">
+          {days.slice(rowIdx * 6, rowIdx * 6 + 6).map((dayNum, colIdx) => {
+            if (dayNum === null) {
+              return <div key={colIdx} className="min-h-[90px] border-l border-gray-100 first:border-l-0 bg-gray-50/50" />;
+            }
+            const jobs = scheduledByDay[String(dayNum)] ?? [];
+            const isToday = dayNum === todayDay;
+            const isoDate = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+            const isPast = isoDate < todayStr;
+            return (
+              <div
+                key={colIdx}
+                className={`min-h-[90px] border-l border-gray-100 first:border-l-0 p-1.5 flex flex-col gap-1 ${isToday ? "bg-blue-50/60" : isPast ? "bg-gray-50/30" : ""}`}
+              >
+                <div className={`text-xs font-bold self-end px-1 rounded ${isToday ? "bg-blue-600 text-white px-1.5 py-0.5 rounded-full" : "text-gray-500"}`}>
+                  {dayNum}
+                </div>
+                {jobs.map((o) => {
+                  const title = jobDisplayTitle(o);
+                  return (
+                    <button
+                      key={o.id}
+                      onClick={() => onJobClick(o)}
+                      className="w-full text-right px-1.5 py-1 rounded bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors flex flex-col gap-0.5 text-[10px]"
+                    >
+                      <span className="font-bold text-gray-900 truncate leading-tight">{title}</span>
+                      {o.estimatedExecutionHours != null && (
+                        <span className="text-blue-600 font-medium">{o.estimatedExecutionHours}h</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export function WeeklySchedule() {
@@ -423,6 +556,8 @@ export function WeeklySchedule() {
   const { diaries } = useWorkDiaryContext();
 
   const [weekOffset, setWeekOffset] = useState(0);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [viewMode, setViewMode] = useState<"week" | "month">("week");
   // viewingOrder: an already-scheduled job the user clicked → shows JobDetailModal
   const [viewingOrder, setViewingOrder] = useState<WorkOrder | null>(null);
   // assigningOrder: job being assigned/re-assigned → shows AssignModal
@@ -475,6 +610,13 @@ export function WeeklySchedule() {
     setViewingOrder(null);
   }, [updateOrderFields]);
 
+  const completedThisWeek = useMemo(() => {
+    if (!showCompleted) return [];
+    return orders.filter(
+      (o) => o.status === "completed" && o.scheduledDate && weekDateStrings.includes(o.scheduledDate)
+    );
+  }, [orders, showCompleted, weekDateStrings]);
+
   // Per crew/day workload
   const workloadMap = useMemo(() => {
     const map: Record<string, Record<string, WorkOrder[]>> = {};
@@ -482,13 +624,13 @@ export function WeeklySchedule() {
       map[crew.id] = {};
       for (const d of weekDateStrings) map[crew.id][d] = [];
     }
-    for (const o of scheduledThisWeek) {
+    for (const o of [...scheduledThisWeek, ...completedThisWeek]) {
       if (o.assignedCrewId && o.scheduledDate && map[o.assignedCrewId]) {
         map[o.assignedCrewId][o.scheduledDate]?.push(o);
       }
     }
     return map;
-  }, [scheduledThisWeek, crews, weekDateStrings]);
+  }, [scheduledThisWeek, completedThisWeek, crews, weekDateStrings]);
 
   const activeCrews = useMemo(() => crews.filter((c) => c.active), [crews]);
 
@@ -506,35 +648,69 @@ export function WeeklySchedule() {
         {/* Header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">סידור שבועי</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{viewMode === "month" ? "סידור חודשי" : "סידור שבועי"}</h1>
             <p className="text-sm text-gray-500 mt-0.5">שיבוץ עבודות לצוותים לפי ימים</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* View mode toggle */}
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setViewMode("week")}
+                className={`px-3 py-1.5 text-xs font-bold transition-colors ${viewMode === "week" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+              >
+                שבועי
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("month")}
+                className={`px-3 py-1.5 text-xs font-bold transition-colors border-r border-gray-200 ${viewMode === "month" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+              >
+                חודשי
+              </button>
+            </div>
+            {viewMode === "week" && (
             <button
-              onClick={() => setWeekOffset((w) => w - 1)}
-              className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
+              type="button"
+              onClick={() => setShowCompleted(v => !v)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                showCompleted
+                  ? "bg-gray-200 text-gray-700 border-gray-300"
+                  : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+              }`}
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
+              {showCompleted ? "הסתר הושלמו" : "הצג הושלמו"}
             </button>
-            <button
-              onClick={() => setWeekOffset(0)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${weekOffset === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}
-            >
-              השבוע
-            </button>
-            <button
-              onClick={() => setWeekOffset((w) => w + 1)}
-              className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </button>
-            <span className="text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
-              {weekLabel}
-            </span>
+            )}
+            {viewMode === "week" && (
+              <>
+                <button
+                  onClick={() => setWeekOffset((w) => w - 1)}
+                  className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setWeekOffset(0)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${weekOffset === 0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}
+                >
+                  השבוע
+                </button>
+                <button
+                  onClick={() => setWeekOffset((w) => w + 1)}
+                  className="p-2 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition-colors"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
+                <span className="text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-1.5">
+                  {weekLabel}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -553,7 +729,13 @@ export function WeeklySchedule() {
           )}
         </div>
 
-        <div className="flex flex-col gap-4 md:flex-row md:items-start">
+        {/* Monthly view */}
+        {viewMode === "month" && (
+          <MonthlyView orders={orders} onJobClick={setViewingOrder} />
+        )}
+
+        {/* Weekly view */}
+        {viewMode === "week" && <div className="flex flex-col gap-4 md:flex-row md:items-start">
 
           {/* Unscheduled jobs — full width on mobile, fixed sidebar on desktop */}
           <div className="w-full md:w-64 md:shrink-0 flex flex-col gap-3">
@@ -649,7 +831,7 @@ export function WeeklySchedule() {
               </div>
             )}
           </div>
-        </div>
+        </div>}
 
       </div>
 

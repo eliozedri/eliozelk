@@ -13,36 +13,59 @@ interface Props {
 const inputCls =
   "w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 transition-all";
 
+const CITIES = Object.keys(CITY_COORDINATES)
+  .filter((c) => !c.includes("-"))
+  .sort((a, b) => a.localeCompare(b, "he"));
+
 export function OrderHeader({ header, onChange }: Props) {
   const { customers, syncStatus } = useCustomersContext();
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+  const [showCitySuggestions, setShowCitySuggestions] = useState(false);
+  const [citySearch, setCitySearch] = useState(header.city);
+  const customerWrapperRef = useRef<HTMLDivElement>(null);
+  const cityWrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
+      if (customerWrapperRef.current && !customerWrapperRef.current.contains(e.target as Node)) {
+        setShowCustomerSuggestions(false);
+      }
+      if (cityWrapperRef.current && !cityWrapperRef.current.contains(e.target as Node)) {
+        setShowCitySuggestions(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const suggestions = header.customer.trim().length >= 1
+  // Sync citySearch when header.city changes externally (e.g., reset)
+  useEffect(() => { setCitySearch(header.city); }, [header.city]);
+
+  const customerSuggestions = header.customer.trim().length >= 1
     ? customers
         .filter((c) => c.name.toLowerCase().includes(header.customer.toLowerCase()))
         .slice(0, 6)
     : [];
 
+  const citySuggestions = citySearch.trim().length >= 1
+    ? CITIES.filter((c) => c.includes(citySearch.trim())).slice(0, 10)
+    : CITIES.slice(0, 10);
+
   function selectCustomer(name: string) {
     onChange({ customer: name });
-    setShowSuggestions(false);
+    setShowCustomerSuggestions(false);
+  }
+
+  function selectCity(city: string) {
+    setCitySearch(city);
+    onChange({ city });
+    setShowCitySuggestions(false);
   }
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 mb-4">
-      {/* Row 1: date + company + contact + orderer */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+      {/* Row 1: date + company + contact + city */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
 
         {/* תאריך */}
         <div className="flex flex-col gap-1">
@@ -67,7 +90,7 @@ export function OrderHeader({ header, onChange }: Props) {
         </div>
 
         {/* שם החברה */}
-        <div className="flex flex-col gap-1" ref={wrapperRef}>
+        <div className="flex flex-col gap-1" ref={customerWrapperRef}>
           <label className="text-sm font-medium text-gray-600">
             שם החברה <span className="text-red-500">*</span>
           </label>
@@ -77,19 +100,19 @@ export function OrderHeader({ header, onChange }: Props) {
               value={header.customer}
               onChange={(e) => {
                 onChange({ customer: e.target.value });
-                setShowSuggestions(true);
+                setShowCustomerSuggestions(true);
               }}
-              onFocus={() => { if (header.customer.trim().length >= 1) setShowSuggestions(true); }}
+              onFocus={() => { if (header.customer.trim().length >= 1) setShowCustomerSuggestions(true); }}
               placeholder="שם לקוח / חברה"
               className={inputCls}
               autoComplete="off"
             />
-            {showSuggestions && header.customer.trim().length >= 1 && (
+            {showCustomerSuggestions && header.customer.trim().length >= 1 && (
               <div className="absolute top-full right-0 mt-1 w-full bg-white rounded-lg border border-gray-200 shadow-lg z-50 overflow-hidden">
                 {syncStatus === "loading" ? (
                   <div className="px-3 py-2.5 text-sm text-gray-400">טוען לקוחות...</div>
-                ) : suggestions.length > 0 ? (
-                  suggestions.map((c) => (
+                ) : customerSuggestions.length > 0 ? (
+                  customerSuggestions.map((c) => (
                     <button
                       key={c.id}
                       type="button"
@@ -113,47 +136,56 @@ export function OrderHeader({ header, onChange }: Props) {
           </div>
         </div>
 
-        {/* איש קשר */}
+        {/* מזמין / איש קשר — merged field */}
         <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-600">איש קשר</label>
+          <label className="text-sm font-medium text-gray-600">מזמין / איש קשר</label>
           <input
             type="text"
             value={header.contactPerson}
             onChange={(e) => onChange({ contactPerson: e.target.value })}
-            placeholder="שם איש קשר"
+            placeholder="שם המזמין / איש הקשר"
             className={inputCls}
           />
         </div>
 
-        {/* מזמין */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-600">מזמין</label>
-          <input
-            type="text"
-            value={header.orderedBy}
-            onChange={(e) => onChange({ orderedBy: e.target.value })}
-            placeholder="שם המזמין"
-            className={inputCls}
-          />
-        </div>
-      </div>
-
-      {/* Row 2: city only */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <div className="flex flex-col gap-1 md:col-span-2">
+        {/* עיר — searchable */}
+        <div className="flex flex-col gap-1" ref={cityWrapperRef}>
           <label className="text-sm font-medium text-gray-600">
             עיר <span className="text-red-500">*</span>
           </label>
-          <select
-            value={header.city}
-            onChange={(e) => onChange({ city: e.target.value })}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-400 bg-white transition-all"
-          >
-            <option value="">— בחר עיר —</option>
-            {Object.keys(CITY_COORDINATES).sort().map((city) => (
-              <option key={city} value={city}>{city}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <input
+              type="text"
+              value={citySearch}
+              onChange={(e) => {
+                setCitySearch(e.target.value);
+                onChange({ city: e.target.value });
+                setShowCitySuggestions(true);
+              }}
+              onFocus={() => setShowCitySuggestions(true)}
+              placeholder="חיפוש עיר..."
+              className={inputCls}
+              autoComplete="off"
+            />
+            {showCitySuggestions && (
+              <div className="absolute top-full right-0 mt-1 w-full bg-white rounded-lg border border-gray-200 shadow-lg z-50 overflow-hidden max-h-48 overflow-y-auto">
+                {citySuggestions.length > 0 ? (
+                  citySuggestions.map((city) => (
+                    <button
+                      key={city}
+                      type="button"
+                      onMouseDown={() => selectCity(city)}
+                      className="w-full px-3 py-2 text-sm text-right hover:bg-blue-50 transition-colors text-gray-800"
+                    >
+                      {city}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-2.5 text-sm text-gray-400">לא נמצאו ערים תואמות</div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

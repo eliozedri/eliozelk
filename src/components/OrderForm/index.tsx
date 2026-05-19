@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- attachment thumbnails use base64 dataURLs, incompatible with next/image */
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo, useCallback, type ReactNode } from "react";
 import { nanoid } from "nanoid";
 import { useOrderForm } from "@/hooks/useOrderForm";
 import type { OrderAttachment } from "@/types/order";
@@ -12,6 +12,7 @@ import { MiscSection } from "./MiscSection";
 import { FormActions } from "./FormActions";
 import type { OrderHeader as OrderHeaderType } from "@/types/order";
 import type { OrderPriority } from "@/types/workOrder";
+import { useDirtyGuard } from "@/context/NavigationGuardContext";
 
 const inputCls =
   "w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 transition-all";
@@ -32,6 +33,40 @@ function CheckIcon() {
     <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12" />
     </svg>
+  );
+}
+
+function CollapsibleSection({ title, defaultOpen = true, badge, children }: {
+  title: string;
+  defaultOpen?: boolean;
+  badge?: number;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="mb-4">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-xl border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-gray-700">{title}</span>
+          {badge !== undefined && badge > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">
+              {badge}
+            </span>
+          )}
+        </div>
+        <svg
+          className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && <div className="mt-1">{children}</div>}
+    </div>
   );
 }
 
@@ -141,6 +176,38 @@ export function OrderForm() {
   const { addOrder } = useOrdersContext();
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // ── Dirty detection: form has meaningful data beyond the empty defaults ──
+  const isDirty = useMemo(() => {
+    if (order.customer.trim()) return true;
+    if ((order.jobName ?? "").trim()) return true;
+    if (order.city) return true;
+    if (order.signRows.some(r => r.signNumber.trim())) return true;
+    if (order.miscRows.some(r => r.description.trim())) return true;
+    if ((order.signsRows ?? []).some(r => r.description.trim())) return true;
+    if ((order.accessoryRows ?? []).some(r => r.description.trim())) return true;
+    if ((order.serviceRows ?? []).some(r => r.description.trim())) return true;
+    return false;
+  }, [order]);
+
+  // "Save as draft" for guard: localStorage already persists form state automatically.
+  // Just signal the guard that it's been acknowledged.
+  const handleSaveDraftForGuard = useCallback(async () => {
+    // localStorage is already up to date (saved on every change in useOrderForm)
+    // nothing more to do — draft is retrievable on next visit
+  }, []);
+
+  // "Discard" for guard: clear localStorage + reset form
+  const handleDiscardForGuard = useCallback(() => {
+    resetOrder();
+  }, [resetOrder]);
+
+  // Register dirty guard — only when form has data and no success shown (not submitted)
+  useDirtyGuard({
+    isDirty: isDirty && !successMessage,
+    onSaveDraft: handleSaveDraftForGuard,
+    onDiscard: handleDiscardForGuard,
+  });
 
   const handleSubmit = async (priority: OrderPriority) => {
     const err = validate(order);
@@ -349,39 +416,60 @@ export function OrderForm() {
           alwaysShowDimensions
         />
 
-        <MiscSection
-          rows={order.signsRows ?? []}
-          onAdd={addSignsRow}
-          onUpdate={updateSignsRow}
-          onRemove={removeSignsRow}
+        <CollapsibleSection
           title="שלטים ושילוט"
-          accentColor="bg-blue-50"
-          allowedCatalogTypes={["product"]}
-        />
+          defaultOpen={false}
+          badge={(order.signsRows ?? []).filter(r => r.description.trim()).length || undefined}
+        >
+          <MiscSection
+            rows={order.signsRows ?? []}
+            onAdd={addSignsRow}
+            onUpdate={updateSignsRow}
+            onRemove={removeSignsRow}
+            title="שלטים ושילוט"
+            accentColor="bg-blue-50"
+            allowedCatalogTypes={["product"]}
+          />
+        </CollapsibleSection>
 
-        <MiscSection
-          rows={order.accessoryRows ?? []}
-          onAdd={addAccessoryRow}
-          onUpdate={updateAccessoryRow}
-          onRemove={removeAccessoryRow}
+        <CollapsibleSection
           title="אביזרים"
-          accentColor="bg-teal-50"
-          allowedCatalogTypes={["product", "material", "equipment"]}
-        />
+          defaultOpen={false}
+          badge={(order.accessoryRows ?? []).filter(r => r.description.trim()).length || undefined}
+        >
+          <MiscSection
+            rows={order.accessoryRows ?? []}
+            onAdd={addAccessoryRow}
+            onUpdate={updateAccessoryRow}
+            onRemove={removeAccessoryRow}
+            title="אביזרים"
+            accentColor="bg-teal-50"
+            allowedCatalogTypes={["product", "material", "equipment"]}
+          />
+        </CollapsibleSection>
 
-        <MiscSection
-          rows={order.serviceRows ?? []}
-          onAdd={addServiceRow}
-          onUpdate={updateServiceRow}
-          onRemove={removeServiceRow}
+        <CollapsibleSection
           title="מוצרים ושירותים נוספים"
-          accentColor="bg-purple-50"
-          allowedCatalogTypes={["service", "labor", "misc", "equipment"]}
-        />
+          defaultOpen={false}
+          badge={(order.serviceRows ?? []).filter(r => r.description.trim()).length || undefined}
+        >
+          <MiscSection
+            rows={order.serviceRows ?? []}
+            onAdd={addServiceRow}
+            onUpdate={updateServiceRow}
+            onRemove={removeServiceRow}
+            title="מוצרים ושירותים נוספים"
+            accentColor="bg-purple-50"
+            allowedCatalogTypes={["service", "labor", "misc", "equipment"]}
+          />
+        </CollapsibleSection>
 
         {/* General notes */}
+        <CollapsibleSection
+          title="הערות כלליות"
+          defaultOpen={!!(order.generalNotes)}
+        >
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">הערות כלליות</label>
           <textarea
             value={order.generalNotes}
             onChange={(e) => updateHeader({ generalNotes: e.target.value })}
@@ -390,8 +478,14 @@ export function OrderForm() {
             className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 resize-none"
           />
         </div>
+        </CollapsibleSection>
 
         {/* File attachments */}
+        <CollapsibleSection
+          title="קבצים מצורפים"
+          defaultOpen={false}
+          badge={(order.attachments ?? []).length || undefined}
+        >
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 mb-4">
           <div className="flex items-center justify-between mb-3">
             <label className="block text-sm font-medium text-gray-700">קבצים מצורפים</label>
@@ -436,6 +530,7 @@ export function OrderForm() {
             </ul>
           )}
         </div>
+        </CollapsibleSection>
 
         {/* Fabrication */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 px-5 py-4 mb-4">
