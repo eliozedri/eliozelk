@@ -16,6 +16,9 @@ scipy>=1.10.0         # DBSCAN clustering
 # Stage E — sign template matching (installed)
 opencv-python-headless>=4.8.0
 
+# Stage G/H — Vision API sign-code reading (installed 2026-05-19)
+anthropic>=0.103.0            # Claude Vision API client
+
 # Optional — future stages
 # ezdxf>=1.0.0                  # Stage F: DXF export
 # svgwrite>=1.4.3                # alternative SVG generation
