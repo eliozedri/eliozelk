@@ -1,11 +1,12 @@
 # Plan Scanner Architecture
 ## CAD PDF Intelligence — Professional Plan-Reading Logic
 
-**Date:** 2026-05-19 (updated 2026-05-19)  
+**Date:** 2026-05-19 (updated 2026-05-20)  
 **Pipeline location:** `research/cad-pdf-intelligence/`  
 **Status:** Research architecture notes — not production-integrated  
+**Policy:** Local-first, open-source-first, free-first. No paid API dependency. See `LOCAL_FIRST_PLAN_SCANNER_STRATEGY.md` Section 2.  
 **Predecessor:** Stage F (`07_extract_legend.py`) shipped and validated  
-**Next pipeline stage:** Stage G (sign inventory extraction) — designed here, not yet implemented
+**Current state:** Stage G complete (177 crops), Stage 10 OCR diagnostic complete (0% reduction), local POC sequence pending
 
 ---
 
@@ -870,8 +871,10 @@ POC 3     Vector glyph recognition                → 13_vector_glyph_recognitio
 POC 4     PaddleOCR smoke test                    → 14_paddleocr_smoke_test.py
 ```
 
-**"סורק תוכניות" product** = Stages F + G + Scale detection (Section 16) + Stage J + BOQ generation + human review UI, packaged for production use with full audit trail and approval workflow.
+**"סורק תוכניות" product** = All 11 sub-agents of מחלקת הנדסה ותוכניות, packaged for production use. 100% local, no paid APIs. Full audit trail and approval workflow.
 
-**"תרגול ולמידה"** = Teaching loop integrated into the human review UI, allowing plan-specific and company-level rules to accumulate over time.
+**"תרגול ולמידה"** = Teaching loop (sub-agent 6) integrated throughout; accumulates plan-specific and company-wide rules over time.
 
-**Local-first strategy** = See `LOCAL_FIRST_PLAN_SCANNER_STRATEGY.md` for the full POC sequence, decision matrix, and semi-automatic fallback levels.
+**Local-first strategy (v2.0)** = See `LOCAL_FIRST_PLAN_SCANNER_STRATEGY.md` for the complete architecture: 20 sections covering open-source tooling research, multi-agent architecture, decision matrix, 22 mandatory core principles, 5-level fallback (paid API demoted to Level 5 research-only note), and 7-POC free-first roadmap.
+
+**Open-source tooling research** = See `LOCAL_FIRST_PLAN_SCANNER_STRATEGY.md` Section 15 for evaluated GitHub repositories: PyMuPDF, ezdxf, pdf.js, PaddleOCR, eDOCr, VIA, Label Studio, Gradio, Shapely, LangGraph, and others.

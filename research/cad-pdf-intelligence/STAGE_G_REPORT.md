@@ -594,11 +594,17 @@ Full strategy: `LOCAL_FIRST_PLAN_SCANNER_STRATEGY.md`
 
 ## Next Steps
 
-**Updated order of priority (post-OCR diagnostic):**
+**Updated order of priority (post-OCR diagnostic, local-first policy):**
 
-1. **Run local POCs 1–4 before spending any Vision API credits.** The Tesseract diagnostic proved that naive OCR on broad crops fails. Tight-crop + alternative engines may reduce Vision usage significantly.
+1. **POC 1 — Tight CC crop + Tesseract** (`11_tight_crop_ocr.py`): CC-based tight numeric region extraction. 1–2 hours.
+2. **POC 2 — Digit template matching** (`12_digit_template_ocr.py`): Plan-specific digit templates from speed-limit circles. 3–4 hours.
+3. **POC 3 — Vector glyph recognition** (`13_vector_glyph_recognition.py`): Native PDF vector paths for digit recognition. 30 min feasibility + 2–3 hours.
+4. **POC 4 — PaddleOCR smoke test** (`14_paddleocr_smoke_test.py`): 5–10 tight crops only. 1 hour.
+5. **POC 5 — Interactive Plan Decomposition** (`15_plan_decomposition.py`): Auto-detect element groups. 3–4 hours.
+6. **POC 6 — Manual Calibration + Measurement** (`16_measurement_poc.py`): Scale detection + Shapely measurement. 2–3 hours.
+7. **POC 7 — Human Teaching Loop prototype** (`17_teaching_loop_poc.py`): Rule storage and review queue. 4–8 hours.
 
-2. **Run Stage G v1 with ANTHROPIC_API_KEY configured** (after POCs, as fallback measurement). This will convert remaining unresolved crops into actual sign code readings.
+**Paid Vision API is not an approved next step.** See `LOCAL_FIRST_PLAN_SCANNER_STRATEGY.md` Section 2 (No Paid API Dependency Policy).
 
 2. **Run Stage F Vision call** (pass API key to `07_extract_legend.py`). Extract Hebrew labels, sign codes, and כמות quantities from the plan legend. This gives the ground truth vocabulary against which Stage G codes will be reconciled.
 
@@ -632,12 +638,12 @@ Full strategy: `LOCAL_FIRST_PLAN_SCANNER_STRATEGY.md`
 
 ## Is it Safe to Proceed to the Next Step?
 
-**Yes — the next step is running local POCs (tight crop, digit templates, vector glyphs, PaddleOCR), not spending Vision API credits yet.**
+**Yes — the next step is running local POCs 1–7 (see Section L.4 above).**
 
-Stage G v1 is complete as a crop-generation pipeline. The local OCR diagnostic (Stage 10) has confirmed that naive Tesseract OCR on broad crops is not sufficient. Local POCs 1–4 must be evaluated first to determine how many crops can be resolved without paid API calls.
+Stage G v1 is complete as a crop-generation pipeline. The local OCR diagnostic (Stage 10) has confirmed that naive Tesseract OCR on broad crops is not sufficient. The local-first strategy (see `LOCAL_FIRST_PLAN_SCANNER_STRATEGY.md`) defines the full free/open-source POC roadmap.
 
-**Do not run Vision API before attempting local POCs 1–4.**  
-**Do not build Stage G v2 before measuring POC performance.**  
+**Paid Vision API is not an approved or planned next step** (policy: `LOCAL_FIRST_PLAN_SCANNER_STRATEGY.md` Section 2).  
+**Do not build Stage G v2 before measuring POC 1–4 performance.**  
 **Do not start production UI before at least one ground-truth comparison.**  
 **Do not start BOQ generation before sign codes are validated on ≥ 3 plans.**
 
