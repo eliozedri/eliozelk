@@ -78,8 +78,8 @@ export interface SecurityTeamLine {
 }
 
 export interface SecurityTeams {
-  arrowBoards: SecurityTeamLine;   // עגלות חץ
-  inspectors: SecurityTeamLine;    // פקחים
+  arrowBoards: SecurityTeamLine[];   // עגלות חץ
+  inspectors: SecurityTeamLine[];    // פקחים
 }
 
 export interface AdditionalTeamLine {
@@ -102,8 +102,26 @@ export interface AdditionalTeams {
 
 export function emptySecurityTeams(): SecurityTeams {
   return {
-    arrowBoards: { quantity: "", notes: "" },
-    inspectors: { quantity: "", notes: "" },
+    arrowBoards: [{ quantity: "", notes: "" }],
+    inspectors: [{ quantity: "", notes: "" }],
+  };
+}
+
+// Normalize persisted SecurityTeams: old diaries stored single objects, new format uses arrays.
+export function normalizeSecurityTeams(raw: unknown): SecurityTeams {
+  const empty = emptySecurityTeams();
+  if (!raw || typeof raw !== "object") return empty;
+  const r = raw as Record<string, unknown>;
+
+  function toArray(v: unknown): SecurityTeamLine[] {
+    if (!v) return [{ quantity: "", notes: "" }];
+    if (Array.isArray(v)) return v as SecurityTeamLine[];
+    return [v as SecurityTeamLine]; // old single-object format
+  }
+
+  return {
+    arrowBoards: toArray(r.arrowBoards),
+    inspectors: toArray(r.inspectors),
   };
 }
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkDiary, WorkDiaryStatus, DiaryApprovalStatus } from "@/types/workDiary";
-import { createEmptyDiary } from "@/types/workDiary";
+import { createEmptyDiary, normalizeSecurityTeams } from "@/types/workDiary";
 import { getSupabase } from "@/lib/supabase/client";
 
 function fromRow(r: Record<string, unknown>): WorkDiary {
@@ -25,6 +25,7 @@ function fromRow(r: Record<string, unknown>): WorkDiary {
     approvedAt: (r.approved_at as string | null | undefined) ?? data.approvedAt,
     rejectionReason: (r.rejection_reason as string | null | undefined) ?? data.rejectionReason,
     crewMembers: Array.isArray(data.crewMembers) ? data.crewMembers : [],
+    securityTeams: data.securityTeams ? normalizeSecurityTeams(data.securityTeams) : undefined,
   } as WorkDiary;
 }
 
