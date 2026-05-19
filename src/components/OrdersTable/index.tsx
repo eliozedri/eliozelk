@@ -1265,6 +1265,7 @@ export function OrdersTable() {
   const [statusFilter, setStatusFilter] = useState<WorkOrderStatus | "all">("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "normal" | "urgent">("all");
   const [showProblemsOnly, setShowProblemsOnly] = useState(false);
+  const [warehouseFilter, setWarehouseFilter] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const selectedOrder = useMemo(
@@ -1321,18 +1322,27 @@ export function OrdersTable() {
     [orders, showCompleted]
   );
 
-  const hasFilters = search !== "" || statusFilter !== "all" || priorityFilter !== "all" || showProblemsOnly;
+  const hasFilters = search !== "" || statusFilter !== "all" || priorityFilter !== "all" || showProblemsOnly || warehouseFilter;
 
   const clearFilters = useCallback(() => {
     setSearch("");
     setStatusFilter("all");
     setPriorityFilter("all");
     setShowProblemsOnly(false);
+    setWarehouseFilter(false);
     setCurrentPage(0);
   }, []);
 
   const applyFilter = useCallback((status: WorkOrderStatus) => {
     setStatusFilter(status);
+    setWarehouseFilter(false);
+    setCurrentPage(0);
+  }, []);
+
+  const applyWarehouseFilter = useCallback(() => {
+    setWarehouseFilter(true);
+    setStatusFilter("all");
+    setShowProblemsOnly(false);
     setCurrentPage(0);
   }, []);
 
@@ -1350,9 +1360,10 @@ export function OrdersTable() {
         : o.status === statusFilter;
       const matchesPriority = priorityFilter === "all" || o.priority === priorityFilter;
       const matchesProblems = !showProblemsOnly || hasOpenProblems(o);
-      return matchesSearch && matchesStatus && matchesPriority && matchesProblems;
+      const matchesWarehouse = !warehouseFilter || (o.warehouseRequired && o.warehouseStatus === "processing");
+      return matchesSearch && matchesStatus && matchesPriority && matchesProblems && matchesWarehouse;
     });
-  }, [orders, search, statusFilter, priorityFilter, showProblemsOnly]);
+  }, [orders, search, statusFilter, priorityFilter, showProblemsOnly, warehouseFilter]);
 
   // Reset page when filters change
   const totalPages = Math.ceil(filtered.length / ROWS_PER_PAGE);
@@ -1429,14 +1440,14 @@ export function OrdersTable() {
             iconBg="bg-cyan-50 text-cyan-600"
             value={counts.warehouseProcessing}
             label="בטיפול מחסן"
-            onFilter={() => { setStatusFilter("all"); setShowProblemsOnly(false); setCurrentPage(0); }}
+            onFilter={applyWarehouseFilter}
           />
           <KpiCard
             icon={<KpiIcon type="fabrication" />}
             iconBg="bg-orange-50 text-orange-600"
             value={counts.fabricationActive}
             label="בטיפול מסגרייה"
-            onFilter={() => { setStatusFilter("all"); setShowProblemsOnly(false); setCurrentPage(0); }}
+            onFilter={() => { setStatusFilter("all"); setWarehouseFilter(false); setShowProblemsOnly(false); setCurrentPage(0); }}
           />
           <KpiCard
             icon={<KpiIcon type="active" />}
@@ -1450,7 +1461,7 @@ export function OrdersTable() {
             iconBg="bg-red-50 text-red-600"
             value={counts.withProblems}
             label="בעיות בהזמנות"
-            onFilter={() => { setShowProblemsOnly(true); setStatusFilter("all"); setCurrentPage(0); }}
+            onFilter={() => { setShowProblemsOnly(true); setStatusFilter("all"); setWarehouseFilter(false); setCurrentPage(0); }}
           />
         </div>
 
@@ -1474,12 +1485,22 @@ export function OrdersTable() {
             )}
           </div>
 
+          {/* Warehouse filter active badge */}
+          {warehouseFilter && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-50 text-cyan-700 border border-cyan-200">
+              בטיפול מחסן
+              <button onClick={() => { setWarehouseFilter(false); setCurrentPage(0); }} className="hover:text-cyan-900">
+                <XSmallIcon />
+              </button>
+            </span>
+          )}
+
           {/* Status filter */}
           <div className="flex items-center gap-1.5">
             <label className="text-xs text-gray-500 whitespace-nowrap font-medium">סטטוס:</label>
             <select
               value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value as WorkOrderStatus | "all"); setCurrentPage(0); }}
+              onChange={(e) => { setStatusFilter(e.target.value as WorkOrderStatus | "all"); setWarehouseFilter(false); setCurrentPage(0); }}
               className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white outline-none focus:ring-2 focus:ring-blue-400"
             >
               <option value="all">פעילות</option>
