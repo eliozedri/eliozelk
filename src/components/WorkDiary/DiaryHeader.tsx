@@ -2,6 +2,7 @@
 
 import type { WorkDiary } from "@/types/workDiary";
 import { useCustomersContext } from "@/context/CustomersContext";
+import { OrderLinkCard } from "./OrderLinkCard";
 
 const inputCls =
   "w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 disabled:bg-gray-50 disabled:text-gray-500";
@@ -185,6 +186,12 @@ export function DiaryHeader({ diary, onChange, disabled = false }: Props) {
         </div>
         <p className="mt-3 text-xs text-gray-400">שעות ביצוע / נסיעה / המתנה משמשות לחישוב הרווחיות היומית</p>
       </SectionCard>
+
+      <OrderLinkCard
+        orderId={diary.orderId}
+        onChange={(v) => onChange({ orderId: v })}
+        disabled={disabled}
+      />
     </div>
   );
 }
