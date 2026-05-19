@@ -143,8 +143,11 @@ function fromRow(r: Record<string, unknown>): WorkOrder {
     scheduledDate:             (r.scheduled_date as string | null) ?? blob.scheduledDate ?? null,
     requiredWorkers:           r.required_workers != null ? Number(r.required_workers) : null,
     // Content arrays — must default to [] if blob doesn't carry them (e.g. older orders or realtime payloads)
-    signRows:  Array.isArray(blob.signRows)  ? blob.signRows  : [],
-    miscRows:  Array.isArray(blob.miscRows)  ? blob.miscRows  : [],
+    signRows:      Array.isArray(blob.signRows)      ? blob.signRows      : [],
+    signsRows:     Array.isArray(blob.signsRows)     ? blob.signsRows     : [],
+    miscRows:      Array.isArray(blob.miscRows)      ? blob.miscRows      : [],
+    accessoryRows: Array.isArray(blob.accessoryRows) ? blob.accessoryRows : [],
+    serviceRows:   Array.isArray(blob.serviceRows)   ? blob.serviceRows   : [],
     // Joined arrays (present in fetchAll response, empty in realtime payloads)
     problems:    ((r.order_problems as Record<string, unknown>[]) ?? []).map(fromProblemRow),
     activities:  [], // Loaded on demand from order_activities (not in main subscription)
@@ -156,11 +159,13 @@ function fromRow(r: Record<string, unknown>): WorkOrder {
 function buildContentBlob(o: WorkOrder): Record<string, unknown> {
   return {
     signRows:           o.signRows,
+    signsRows:          o.signsRows          ?? [],
     miscRows:           o.miscRows,
-    accessoryRows:      o.accessoryRows ?? [],
+    accessoryRows:      o.accessoryRows      ?? [],
+    serviceRows:        o.serviceRows        ?? [],
     notes:              o.notes,
-    generalNotes:       o.generalNotes ?? null,
-    attachments:        o.attachments ?? [],
+    generalNotes:       o.generalNotes       ?? null,
+    attachments:        o.attachments        ?? [],
     fabricationDetails: o.fabricationDetails ?? null,
   };
 }
@@ -486,9 +491,11 @@ export function useOrders() {
       jobName: snapshot.jobName?.trim() || null,
       requiredDate: snapshot.requiredDate?.trim() || null,
       location: snapshot.location?.trim() || undefined,
-      signRows: snapshot.signRows,
-      accessoryRows: snapshot.accessoryRows,
-      miscRows: snapshot.miscRows,
+      signRows:     snapshot.signRows,
+      signsRows:    snapshot.signsRows    ?? [],
+      miscRows:     snapshot.miscRows,
+      accessoryRows: snapshot.accessoryRows ?? [],
+      serviceRows:  snapshot.serviceRows  ?? [],
       generalNotes: snapshot.generalNotes || undefined,
       attachments: snapshot.attachments?.length ? snapshot.attachments : undefined,
       fabricationRequired: snapshot.fabricationRequired || undefined,
