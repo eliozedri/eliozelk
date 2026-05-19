@@ -75,11 +75,11 @@ export function useDashboardKPIs(): DashboardKPIs {
 
     // ── Command strip metrics ────────────────────────────────────────────────
     const openOrders = orders.filter(
-      o => o.status !== "completed" && o.status !== "cancelled"
+      o => o.status !== "completed" && o.status !== "cancelled" && o.status !== "draft"
     ).length;
     const urgentOpen = orders.filter(
       o => o.priority === "urgent" &&
-           o.status !== "completed" && o.status !== "cancelled"
+           o.status !== "completed" && o.status !== "cancelled" && o.status !== "draft"
     ).length;
 
     // Only count SUBMITTED diaries on today's date — drafts and page visits do not count

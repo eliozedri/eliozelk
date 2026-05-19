@@ -1185,8 +1185,79 @@ function EmptyState({ hasFilters, onClear }: { hasFilters: boolean; onClear: () 
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
+// ─── Draft Orders Panel ────────────────────────────────────────────────────
+
+function DraftOrdersPanel({ drafts, onDelete }: { drafts: WorkOrder[]; onDelete: (id: string) => Promise<void> }) {
+  const [open, setOpen] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  if (drafts.length === 0) return null;
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-amber-100 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span className="text-sm font-bold text-amber-800">טיוטות הזמנות ({drafts.length})</span>
+          <span className="text-xs text-amber-600">— הזמנות שנשמרו כטיוטה</span>
+        </div>
+        <svg className={`w-4 h-4 text-amber-600 transition-transform ${open ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="border-t border-amber-200 divide-y divide-amber-100">
+          {drafts.map(d => (
+            <div key={d.id} className="flex items-center gap-3 px-4 py-3 bg-white/60 hover:bg-white/80 transition-colors">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  {d.jobName && (
+                    <span className="text-sm font-semibold text-gray-800 truncate">{d.jobName}</span>
+                  )}
+                  <span className="font-mono text-xs text-gray-400">{d.orderNumber}</span>
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {d.customer && <span className="text-xs text-gray-500">{d.customer}</span>}
+                  {d.location && <span className="text-xs text-gray-400">{d.location}</span>}
+                  <span className="text-xs text-gray-400">{new Date(d.createdAt).toLocaleDateString("he-IL")}</span>
+                </div>
+              </div>
+              <Link
+                href={`/new-order?edit=${d.id}`}
+                className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors whitespace-nowrap"
+              >
+                המשך עריכה
+              </Link>
+              <button
+                type="button"
+                disabled={deletingId === d.id}
+                onClick={async () => {
+                  setDeletingId(d.id);
+                  try { await onDelete(d.id); } finally { setDeletingId(null); }
+                }}
+                className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                title="מחק טיוטה"
+              >
+                <XSmallIcon />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Component ─────────────────────────────────────────────────────────
+
 export function OrdersTable() {
-  const { orders, updateOrderStatus, updateOrderFields, approveCustomerOrder } = useOrdersContext();
+  const { orders, updateOrderStatus, updateOrderFields, approveCustomerOrder, deleteOrder } = useOrdersContext();
   const { customers } = useCustomersContext();
   const riskScores = useOrderRiskScores();
 
@@ -1212,6 +1283,13 @@ export function OrdersTable() {
     }
     return map;
   }, [customers]);
+
+  const draftOrders = useMemo(
+    () => orders.filter(o => o.status === "draft").sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    ),
+    [orders]
+  );
 
   // Derived counts for KPI cards — all scoped to operational (non-terminal) orders
   const counts = useMemo(() => {
@@ -1311,6 +1389,9 @@ export function OrdersTable() {
             )}
           </div>
         </div>
+
+        {/* ── Draft Orders ── */}
+        <DraftOrdersPanel drafts={draftOrders} onDelete={deleteOrder} />
 
         {/* ── KPI Cards ── */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
