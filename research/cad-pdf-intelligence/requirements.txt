@@ -19,6 +19,10 @@ opencv-python-headless>=4.8.0
 # Stage G/H — Vision API sign-code reading (installed 2026-05-19)
 anthropic>=0.103.0            # Claude Vision API client
 
+# Stage G — Local OCR diagnostic (installed 2026-05-19)
+# System dep: brew install tesseract  (tesseract 5.5.2, eng+snum data)
+pytesseract>=0.3.13           # thin pytesseract wrapper around tesseract binary
+
 # Optional — future stages
 # ezdxf>=1.0.0                  # Stage F: DXF export
 # svgwrite>=1.4.3                # alternative SVG generation
