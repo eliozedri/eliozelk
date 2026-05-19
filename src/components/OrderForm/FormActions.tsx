@@ -9,6 +9,7 @@ interface Props {
   order: OrderSnapshot;
   onReset: () => void;
   onSubmit?: (priority: OrderPriority) => void;
+  onSaveDraft?: () => Promise<void>;
 }
 
 function PrintIcon() {
@@ -57,9 +58,20 @@ function SendIcon() {
   );
 }
 
-export function FormActions({ order, onReset, onSubmit }: Props) {
+function SaveDraftIcon() {
+  return (
+    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+      <polyline points="17 21 17 13 7 13 7 21" />
+      <polyline points="7 3 7 8 15 8" />
+    </svg>
+  );
+}
+
+export function FormActions({ order, onReset, onSubmit, onSaveDraft }: Props) {
   const [exporting, setExporting] = useState(false);
   const [urgent, setUrgent] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const handleExportPDF = async () => {
     setExporting(true);
@@ -69,6 +81,13 @@ export function FormActions({ order, onReset, onSubmit }: Props) {
 
   const handleSubmit = () => {
     if (onSubmit) onSubmit(urgent ? "urgent" : "normal");
+  };
+
+  const handleSaveDraft = async () => {
+    if (!onSaveDraft) return;
+    setSaving(true);
+    try { await onSaveDraft(); }
+    finally { setSaving(false); }
   };
 
   const outlineCls =
@@ -97,6 +116,19 @@ export function FormActions({ order, onReset, onSubmit }: Props) {
             <span className={urgent ? "text-red-600 font-semibold" : ""}>הזמנה דחופה</span>
           </label>
         </div>
+      )}
+
+      {/* Save draft */}
+      {onSaveDraft && (
+        <button
+          type="button"
+          onClick={handleSaveDraft}
+          disabled={saving}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-400 disabled:opacity-50 transition-all"
+        >
+          <SaveDraftIcon />
+          <span>{saving ? "שומר..." : "שמור כטיוטה"}</span>
+        </button>
       )}
 
       {/* Secondary actions */}

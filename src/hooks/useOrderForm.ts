@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { nanoid } from "nanoid";
 import type { MiscRow, OrderAttachment, OrderState, SignRow, FabricationDetails } from "@/types/order";
+import type { WorkOrder } from "@/types/workOrder";
 
 function todayISO(): string {
   return new Date().toISOString().split("T")[0];
@@ -224,6 +225,31 @@ export function useOrderForm() {
     localStorage.removeItem(STORAGE_KEY);
   }, []);
 
+  const initFromWorkOrder = useCallback((o: WorkOrder) => {
+    setOrder({
+      date: o.date,
+      customer: o.customer,
+      contactPerson: o.contactPerson ?? "",
+      orderedBy: o.orderedBy ?? "",
+      city: o.city ?? "",
+      orderType: o.orderType,
+      fulfillmentMethod: o.fulfillmentMethod ?? undefined,
+      awaitingCustomerApproval: o.customerApprovalStatus === "pending",
+      requiredDate: o.requiredDate ?? "",
+      jobName: o.jobName ?? "",
+      location: o.location ?? "",
+      signRows: o.signRows.length > 0 ? o.signRows : [emptySignRow()],
+      signsRows: (o.signsRows ?? []).length > 0 ? (o.signsRows ?? []) : [emptyMiscRow()],
+      accessoryRows: (o.accessoryRows ?? []).length > 0 ? (o.accessoryRows ?? []) : [emptyMiscRow()],
+      miscRows: o.miscRows.length > 0 ? o.miscRows : [emptyMiscRow()],
+      serviceRows: (o.serviceRows ?? []).length > 0 ? (o.serviceRows ?? []) : [emptyMiscRow()],
+      generalNotes: o.generalNotes ?? "",
+      attachments: o.attachments ?? [],
+      fabricationRequired: o.fabricationRequired ?? false,
+      fabricationDetails: o.fabricationDetails ?? emptyFabrication(),
+    });
+  }, []);
+
   return {
     order,
     updateHeader,
@@ -247,5 +273,6 @@ export function useOrderForm() {
     addAttachment,
     removeAttachment,
     resetOrder,
+    initFromWorkOrder,
   };
 }

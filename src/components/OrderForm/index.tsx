@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- attachment thumbnails use base64 dataURLs, incompatible with next/image */
 
-import { useState, useRef, useMemo, useCallback, type ReactNode } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect, type ReactNode } from "react";
 import { nanoid } from "nanoid";
 import { useOrderForm } from "@/hooks/useOrderForm";
 import type { OrderAttachment } from "@/types/order";
@@ -99,7 +99,7 @@ function validate(order: ReturnType<typeof useOrderForm>["order"]): string | nul
   return null;
 }
 
-export function OrderForm() {
+export function OrderForm({ draftId }: { draftId?: string }) {
   const {
     order,
     updateHeader,
@@ -123,6 +123,7 @@ export function OrderForm() {
     addAttachment,
     removeAttachment,
     resetOrder,
+    initFromWorkOrder,
   } = useOrderForm();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -173,11 +174,22 @@ export function OrderForm() {
 
   function isImage(type: string) { return type.startsWith("image/"); }
 
-  const { addOrder, updateOrderFields, deleteOrder } = useOrdersContext();
+  const { addOrder, updateOrderFields, deleteOrder, orders } = useOrdersContext();
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   // Track the DB draft ID so "שמור כטיוטה" updates rather than inserts on repeat calls
   const draftOrderIdRef = useRef<string | null>(null);
+  const loadedDraftRef = useRef(false);
+
+  // When editing an existing draft (via /new-order?edit=<id>), load its data into the form
+  useEffect(() => {
+    if (!draftId || loadedDraftRef.current) return;
+    const draft = orders.find(o => o.id === draftId && o.status === "draft");
+    if (!draft) return;
+    loadedDraftRef.current = true;
+    initFromWorkOrder(draft);
+    draftOrderIdRef.current = draftId;
+  }, [draftId, orders, initFromWorkOrder]);
 
   // ── Dirty detection: form has meaningful data beyond the empty defaults ──
   const isDirty = useMemo(() => {
@@ -622,7 +634,7 @@ export function OrderForm() {
           )}
         </div>
 
-        <FormActions order={order} onReset={resetOrder} onSubmit={handleSubmit} />
+        <FormActions order={order} onReset={resetOrder} onSubmit={handleSubmit} onSaveDraft={handleSaveDraftForGuard} />
       </div>
     </div>
   );

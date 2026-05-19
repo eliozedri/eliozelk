@@ -525,6 +525,7 @@ export function AccountingPage() {
   const [filterOrderType, setFilterOrderType] = useState("all");
   const [filterCity, setFilterCity] = useState("");
   const [filterAccountingStatus, setFilterAccountingStatus] = useState("all");
+  const [filterJobName, setFilterJobName] = useState("");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [diaryExportingId, setDiaryExportingId] = useState<string | null>(null);
@@ -763,9 +764,10 @@ export function AccountingPage() {
       if (filterOrderType !== "all" && o.orderType !== filterOrderType) return false;
       if (filterCity && !(o.city ?? o.location ?? "").toLowerCase().includes(filterCity.toLowerCase())) return false;
       if (filterAccountingStatus !== "all" && (o.accountingStatus ?? "pending") !== filterAccountingStatus) return false;
+      if (filterJobName && !(o.jobName ?? "").toLowerCase().includes(filterJobName.toLowerCase())) return false;
       return true;
     });
-  }, [orders, filterCustomer, filterDateFrom, filterDateTo, filterStatus, filterOrderType, filterCity, filterAccountingStatus]);
+  }, [orders, filterCustomer, filterDateFrom, filterDateTo, filterStatus, filterOrderType, filterCity, filterAccountingStatus, filterJobName]);
 
   const kpis = useMemo(() => {
     const completed = filtered.filter((o) => o.status === "completed").length;
@@ -1761,6 +1763,16 @@ export function AccountingPage() {
               />
             </div>
             <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">שם עבודה</label>
+              <input
+                type="text"
+                value={filterJobName}
+                onChange={(e) => setFilterJobName(e.target.value)}
+                placeholder="חיפוש לפי שם עבודה"
+                className="w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400"
+              />
+            </div>
+            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">מתאריך</label>
               <input
                 type="date"
@@ -1831,6 +1843,7 @@ export function AccountingPage() {
                 setFilterOrderType("all");
                 setFilterCity("");
                 setFilterAccountingStatus("all");
+                setFilterJobName("");
               }}
               className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
             >

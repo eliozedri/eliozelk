@@ -475,10 +475,16 @@ function UnscheduledJobCard({ order, onAssign }: { order: WorkOrder; onAssign: (
 interface MonthlyViewProps {
   orders: WorkOrder[];
   onJobClick: (o: WorkOrder) => void;
+  showCompleted: boolean;
 }
 
-function MonthlyView({ orders, onJobClick }: MonthlyViewProps) {
+function MonthlyView({ orders, onJobClick, showCompleted }: MonthlyViewProps) {
   const [monthOffset, setMonthOffset] = useState(0);
+
+  const visibleOrders = useMemo(
+    () => showCompleted ? orders : orders.filter(o => o.status !== "completed"),
+    [orders, showCompleted]
+  );
 
   const { year, month, label, days } = useMemo(() => {
     const base = new Date();
@@ -499,7 +505,7 @@ function MonthlyView({ orders, onJobClick }: MonthlyViewProps) {
 
   const scheduledByDay = useMemo(() => {
     const map: Record<string, JobSlot[]> = {};
-    for (const o of orders) {
+    for (const o of visibleOrders) {
       if (!o.scheduledDate) continue;
       const totalDays = Math.max(1, o.estimatedDurationDays ?? 1);
       getJobSpanDates(o).forEach((date, idx) => {
@@ -512,7 +518,7 @@ function MonthlyView({ orders, onJobClick }: MonthlyViewProps) {
       });
     }
     return map;
-  }, [orders, year, month]);
+  }, [visibleOrders, year, month]);
 
   const todayStr = toISODate(new Date());
   const todayDay = (() => {
@@ -740,7 +746,6 @@ export function WeeklySchedule() {
                 חודשי
               </button>
             </div>
-            {viewMode === "week" && (
             <button
               type="button"
               onClick={() => setShowCompleted(v => !v)}
@@ -752,7 +757,6 @@ export function WeeklySchedule() {
             >
               {showCompleted ? "הסתר הושלמו" : "הצג הושלמו"}
             </button>
-            )}
             {viewMode === "week" && (
               <>
                 <button
@@ -802,7 +806,7 @@ export function WeeklySchedule() {
 
         {/* Monthly view */}
         {viewMode === "month" && (
-          <MonthlyView orders={orders} onJobClick={setViewingOrder} />
+          <MonthlyView orders={orders} onJobClick={setViewingOrder} showCompleted={showCompleted} />
         )}
 
         {/* Weekly view */}
