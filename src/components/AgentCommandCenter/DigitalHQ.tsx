@@ -634,21 +634,15 @@ function ActiveAgentsPresenceBar({
   presenceMap: Map<string, AgentPresence>;
   onAgentSelect: (a: Agent) => void;
 }) {
-  const MAX_VISIBLE = 12;
-  const visible = agents.slice(0, MAX_VISIBLE);
-  const overflow = agents.length - visible.length;
-
   return (
-    <div
-      className="flex items-center gap-2 overflow-x-auto py-1 px-1"
-    >
+    <div className="flex items-center gap-x-2 gap-y-1.5 flex-wrap py-2 px-1">
       <span className="text-[9px] font-bold uppercase tracking-widest flex-shrink-0"
         style={{ color: "rgba(255,255,255,0.2)" }}>
         נוכחות:
       </span>
       <div className="w-px h-5 flex-shrink-0" style={{ background: "rgba(255,255,255,0.08)" }} />
 
-      {visible.map(agent => {
+      {agents.map(agent => {
         const p = presenceMap.get(agent.id);
         const status = p?.presenceStatus ?? "idle";
         const inMeeting = status === "in_meeting";
@@ -677,13 +671,6 @@ function ActiveAgentsPresenceBar({
           </button>
         );
       })}
-
-      {overflow > 0 && (
-        <div className="flex items-center px-2.5 py-1 rounded-full flex-shrink-0 text-[9px] font-semibold"
-          style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.35)" }}>
-          +{overflow} עוד
-        </div>
-      )}
     </div>
   );
 }
