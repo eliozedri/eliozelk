@@ -59,3 +59,8 @@ catalog/
 # Local-only artifacts (not for deployment)
 neural_core_asset_extract_v1/
 .claude/scheduled_tasks.lock
+
+# Source/research materials — reorganized outside app runtime
+# These live in מקורות מידע/ on disk and are not part of the deployed app.
+Sign/
+מקורות\ מידע/
