@@ -219,6 +219,7 @@ export interface WorkOrder {
   signRows: SignRow[];
   miscRows: MiscRow[];
   accessoryRows?: MiscRow[];
+  serviceRows?: MiscRow[];
   priority: OrderPriority;
   notes: string;
   status: WorkOrderStatus;

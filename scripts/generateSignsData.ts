@@ -6,18 +6,45 @@ const OUTPUT_FILE = path.join(__dirname, "../src/data/signs.ts");
 
 type HebrewShape = "משולש" | "עיגול" | "מלבן" | "מיוחד" | "לא ידוע";
 
+// Per-sign shape overrides derived from Sign/knowledge-base (Traffic Ordinance 2022).
+// These override the series-level defaults for signs with non-standard shapes.
+const SHAPE_OVERRIDES: Record<number, HebrewShape> = {
+  // 3xx — Right-of-way series: most are special shapes
+  301: "מיוחד", // inverted triangle (yield)
+  302: "מיוחד", // octagon (STOP)
+  303: "מיוחד", // inverted triangle (roundabout yield)
+  304: "מיוחד", // mobile octagon (STOP)
+  305: "מיוחד", // mobile proceed sign
+  306: "מיוחד", // pedestrian crossing sign
+  309: "מיוחד", // yellow diamond (priority road)
+  310: "מיוחד", // yellow diamond + bar (end priority road)
+  // 4xx exceptions — most 4xx are circles (prohibition/restriction), but some are rectangular
+  401: "מלבן",  // closed road — rectangular sign with bars
+  403: "מיוחד", // barrier/chevron at obstruction
+  404: "מיוחד", // railway barrier gate
+  418: "מלבן",  // no-driving-instruction zone start
+  419: "מלבן",  // no-driving-instruction zone end
+  424: "מלבן",  // urban area start
+  425: "מלבן",  // urban area end
+  435: "מלבן",  // heavy-vehicle parking ban zone
+  436: "מלבן",  // disabled parking zone (blue rectangle)
+  440: "מלבן",  // clean-air zone start
+  441: "מלבן",  // clean-air zone end
+};
+
 function resolveShape(key: string): HebrewShape {
   if (key.startsWith("p")) return "לא ידוע";
   const n = parseInt(key.split("_")[0], 10);
-  if (n >= 100 && n < 200) return "משולש";
-  if (n >= 200 && n < 300) return "עיגול";
-  if (n >= 300 && n < 400) return "מלבן";
-  if (n >= 400 && n < 500) return "עיגול";
-  if (n >= 500 && n < 600) return "מלבן";
-  if (n >= 600 && n < 700) return "מלבן";
-  if (n >= 700 && n < 800) return "מלבן";
-  if (n >= 800 && n < 900) return "עיגול";
-  if (n >= 900 && n < 1000) return "מיוחד";
+  if (SHAPE_OVERRIDES[n] !== undefined) return SHAPE_OVERRIDES[n];
+  if (n >= 100 && n < 200) return "משולש";   // Warning & Alert — equilateral triangle
+  if (n >= 200 && n < 300) return "מלבן";    // Instruction — blue rectangle (arrows)
+  if (n >= 300 && n < 400) return "מלבן";    // Right-of-way — mostly special, handled by overrides
+  if (n >= 400 && n < 500) return "עיגול";   // Prohibitions — circle (red border, white bg)
+  if (n >= 500 && n < 600) return "מלבן";    // Public transport — rectangle
+  if (n >= 600 && n < 700) return "מלבן";    // Information & guidance — rectangle
+  if (n >= 700 && n < 800) return "מלבן";    // Traffic lights & lane control — rectangle
+  if (n >= 800 && n < 900) return "מיוחד";   // Road surface markings — lines/stripes on road
+  if (n >= 900 && n < 1000) return "מיוחד";  // Work zone — varies
   return "לא ידוע";
 }
 

@@ -79,6 +79,7 @@ export async function openWorkOrderPDF(order: WorkOrder): Promise<void> {
     signRows: order.signRows ?? [],
     accessoryRows: order.accessoryRows ?? [],
     miscRows: order.miscRows ?? [],
+    serviceRows: order.serviceRows ?? [],
     generalNotes: order.generalNotes ?? "",
     attachments: order.attachments ?? [],
     fabricationRequired: order.fabricationRequired ?? false,

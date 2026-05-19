@@ -71,6 +71,7 @@ export interface OrderState extends OrderHeader {
   signRows: SignRow[];
   accessoryRows: MiscRow[];
   miscRows: MiscRow[];
+  serviceRows: MiscRow[];
   generalNotes: string;
   attachments: OrderAttachment[];
   fabricationRequired: boolean;

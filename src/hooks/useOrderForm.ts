@@ -57,6 +57,7 @@ function initialState(): OrderState {
     signRows: [emptySignRow()],
     accessoryRows: [emptyMiscRow()],
     miscRows: [emptyMiscRow()],
+    serviceRows: [emptyMiscRow()],
     generalNotes: "",
     attachments: [],
     fabricationRequired: false,
@@ -75,6 +76,7 @@ export function useOrderForm() {
         ...initialState(),
         ...draft,
         accessoryRows: draft.accessoryRows ?? [emptyMiscRow()],
+        serviceRows: draft.serviceRows ?? [emptyMiscRow()],
         generalNotes: draft.generalNotes ?? "",
         attachments: draft.attachments ?? [],
         fabricationRequired: draft.fabricationRequired ?? false,
@@ -138,6 +140,25 @@ export function useOrderForm() {
     });
   }, []);
 
+  // Service rows (מוצרים ושירותים נוספים)
+  const addServiceRow = useCallback(() => {
+    setOrder((prev) => ({ ...prev, serviceRows: [...(prev.serviceRows ?? []), emptyMiscRow()] }));
+  }, []);
+
+  const updateServiceRow = useCallback((id: string, partial: Partial<MiscRow>) => {
+    setOrder((prev) => ({
+      ...prev,
+      serviceRows: (prev.serviceRows ?? []).map((row) => (row.id === id ? { ...row, ...partial } : row)),
+    }));
+  }, []);
+
+  const removeServiceRow = useCallback((id: string) => {
+    setOrder((prev) => {
+      const filtered = (prev.serviceRows ?? []).filter((r) => r.id !== id);
+      return { ...prev, serviceRows: filtered.length > 0 ? filtered : [emptyMiscRow()] };
+    });
+  }, []);
+
   // Misc rows
   const addMiscRow = useCallback(() => {
     setOrder((prev) => ({ ...prev, miscRows: [...prev.miscRows, emptyMiscRow()] }));
@@ -192,6 +213,9 @@ export function useOrderForm() {
     addAccessoryRow,
     updateAccessoryRow,
     removeAccessoryRow,
+    addServiceRow,
+    updateServiceRow,
+    removeServiceRow,
     addMiscRow,
     updateMiscRow,
     removeMiscRow,

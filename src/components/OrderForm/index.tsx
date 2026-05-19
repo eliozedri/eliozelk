@@ -45,7 +45,8 @@ function validate(order: ReturnType<typeof useOrderForm>["order"]): string | nul
   const hasSign = order.signRows.some((r) => r.signNumber.trim());
   const hasAccessory = (order.accessoryRows ?? []).some((r) => r.description.trim());
   const hasMisc = order.miscRows.some((r) => r.description.trim());
-  if (!hasSign && !hasAccessory && !hasMisc) {
+  const hasService = (order.serviceRows ?? []).some((r) => r.description.trim());
+  if (!hasSign && !hasAccessory && !hasMisc && !hasService) {
     return "נא להוסיף לפחות פריט אחד להזמנה";
   }
 
@@ -54,7 +55,7 @@ function validate(order: ReturnType<typeof useOrderForm>["order"]): string | nul
       return `כמות לא תקינה בשורת תמרור: ${r.signNumber}`;
     }
   }
-  for (const r of [...(order.accessoryRows ?? []), ...order.miscRows]) {
+  for (const r of [...(order.accessoryRows ?? []), ...order.miscRows, ...(order.serviceRows ?? [])]) {
     if (r.description.trim() && r.quantity !== "" && Number(r.quantity) <= 0) {
       return `כמות לא תקינה בפריט: ${r.description}`;
     }
@@ -73,6 +74,9 @@ export function OrderForm() {
     addAccessoryRow,
     updateAccessoryRow,
     removeAccessoryRow,
+    addServiceRow,
+    updateServiceRow,
+    removeServiceRow,
     addMiscRow,
     updateMiscRow,
     removeMiscRow,
@@ -331,6 +335,17 @@ export function OrderForm() {
         />
 
         <MiscSection
+          rows={order.miscRows}
+          onAdd={addMiscRow}
+          onUpdate={updateMiscRow}
+          onRemove={removeMiscRow}
+          title="שלט לפי מידה"
+          accentColor="bg-amber-50"
+          showDimensionRows
+          alwaysShowDimensions
+        />
+
+        <MiscSection
           rows={order.accessoryRows ?? []}
           onAdd={addAccessoryRow}
           onUpdate={updateAccessoryRow}
@@ -341,14 +356,13 @@ export function OrderForm() {
         />
 
         <MiscSection
-          rows={order.miscRows}
-          onAdd={addMiscRow}
-          onUpdate={updateMiscRow}
-          onRemove={removeMiscRow}
-          title="שלט לפי מידה"
-          accentColor="bg-blue-50"
-          showDimensionRows
-          alwaysShowDimensions
+          rows={order.serviceRows ?? []}
+          onAdd={addServiceRow}
+          onUpdate={updateServiceRow}
+          onRemove={removeServiceRow}
+          title="מוצרים ושירותים נוספים"
+          accentColor="bg-purple-50"
+          allowedCatalogTypes={["service", "labor", "misc", "equipment"]}
         />
 
         {/* General notes */}
