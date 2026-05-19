@@ -33,6 +33,9 @@ function fromRow(r: Record<string, unknown>): Customer {
     contactPerson: r.contact_person as string | undefined,
     contactEmail: r.contact_email as string | undefined,
     contactPhone: r.contact_phone as string | undefined,
+    address: r.address as string | undefined,
+    openBalance: r.open_balance != null ? Number(r.open_balance) : undefined,
+    billingNotes: r.billing_notes as string | undefined,
     createdAt: (r.created_at as string) ?? new Date().toISOString(),
     updatedAt: (r.updated_at as string) ?? new Date().toISOString(),
   };
@@ -50,6 +53,9 @@ function toRow(c: Customer) {
     contact_person: c.contactPerson ?? null,
     contact_email: c.contactEmail ?? null,
     contact_phone: c.contactPhone ?? null,
+    address: c.address ?? null,
+    open_balance: c.openBalance ?? null,
+    billing_notes: c.billingNotes ?? null,
     created_at: c.createdAt,
     updated_at: c.updatedAt,
   };

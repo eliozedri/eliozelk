@@ -154,6 +154,9 @@ export function CustomerDetailPage() {
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
+  const [editingBillingNotes, setEditingBillingNotes] = useState(false);
+  const [billingNotesValue, setBillingNotesValue] = useState("");
+  const [savingBillingNotes, setSavingBillingNotes] = useState(false);
   const { byCustomer, byOrder } = useOperationalKPIs();
   const riskScores = useOrderRiskScores();
 
@@ -251,6 +254,7 @@ export function CustomerDetailPage() {
                   </a>
                 )}
                 {customer.location && <span>{customer.location}</span>}
+                {customer.address && <span className="text-gray-500">{customer.address}</span>}
                 {customer.paymentTerms && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
                     תנאי תשלום: {customer.paymentTerms}
@@ -336,6 +340,58 @@ export function CustomerDetailPage() {
             ) : (
               <p className={`text-sm ${customer.notes ? "text-gray-600" : "text-gray-300 italic"}`}>
                 {customer.notes || "אין הערות"}
+              </p>
+            )}
+          </div>
+
+          {/* Billing notes — editable */}
+          <div className="mt-3 border-t border-gray-100 pt-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-gray-500">הערות חיוב</span>
+              {!editingBillingNotes && (
+                <button
+                  type="button"
+                  onClick={() => { setBillingNotesValue(customer.billingNotes ?? ""); setEditingBillingNotes(true); }}
+                  className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  עריכה
+                </button>
+              )}
+            </div>
+            {editingBillingNotes ? (
+              <div className="flex flex-col gap-2">
+                <textarea
+                  rows={2}
+                  value={billingNotesValue}
+                  onChange={(e) => setBillingNotesValue(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                  placeholder="הערות חיוב, תנאים מיוחדים..."
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={savingBillingNotes}
+                    onClick={async () => {
+                      setSavingBillingNotes(true);
+                      try { await updateCustomer(customer.id, { billingNotes: billingNotesValue }); setEditingBillingNotes(false); }
+                      finally { setSavingBillingNotes(false); }
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {savingBillingNotes ? "שומר..." : "שמור"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingBillingNotes(false)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    ביטול
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p className={`text-sm ${customer.billingNotes ? "text-gray-600" : "text-gray-300 italic"}`}>
+                {customer.billingNotes || "אין הערות חיוב"}
               </p>
             )}
           </div>
