@@ -1016,7 +1016,7 @@ export function AgentCommandCenter() {
         </div>
 
         {/* Action buttons row — wraps on mobile */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap mb-4">
           <button
             onClick={refresh}
             disabled={loading}

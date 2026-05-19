@@ -880,7 +880,7 @@ export function DigitalHQ({
 
       {/* Responsive layout: single column on mobile, 3-column on large screens */}
       <div
-        className="flex flex-col lg:grid lg:gap-0"
+        className="flex flex-col lg:grid lg:gap-0 lg:h-[calc(100vh-360px)] lg:min-h-[420px]"
         style={{ gridTemplateColumns: "minmax(180px, 210px) 1fr minmax(220px, 250px)" }}
       >
 
@@ -899,7 +899,7 @@ export function DigitalHQ({
         </div>
 
         {/* CENTER: Hierarchy — middle on mobile, center column on desktop */}
-        <div className="p-4 flex flex-col gap-3 min-w-0">
+        <div className="p-4 flex flex-col gap-3 min-w-0 lg:overflow-y-auto lg:min-h-0">
 
           {/* 1. Executive card */}
           <ExecutiveControlCard
@@ -957,7 +957,7 @@ export function DigitalHQ({
 
         {/* Activity Feed — bottom on mobile, right column on desktop */}
         <div
-          className="p-4 border-t border-white/[0.07] lg:border-t-0 max-h-[55vh] overflow-y-auto lg:max-h-none lg:overflow-y-auto lg:min-h-0"
+          className="p-4 border-t border-white/[0.07] lg:border-t-0 max-h-[55vh] overflow-y-auto lg:max-h-full lg:overflow-y-auto lg:min-h-0"
           style={{ borderRight: "1px solid rgba(255,255,255,0.07)" }}
         >
           <ActivityFeedSidebar events={feedEvents} loading={loading} />
