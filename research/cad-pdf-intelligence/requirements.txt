@@ -1,0 +1,21 @@
+# CAD PDF Intelligence POC — isolated research dependencies
+# Install: .venv/bin/pip install -r requirements.txt
+
+# Core — required for all stages
+PyMuPDF>=1.26.0       # PDF parsing, vector extraction, page rendering
+pdfplumber>=0.11.0    # char-level text extraction, supplemental analysis
+Pillow>=10.0.0        # image handling, PNG I/O
+
+# Stage 4 — symbol clustering
+numpy>=1.24.0         # array operations, centroid matrix
+scipy>=1.10.0         # DBSCAN clustering
+
+# Stage 5 — debug overlay
+# SVG written directly (no extra dep). Pillow handles PNG.
+
+# Stage E — sign template matching (installed)
+opencv-python-headless>=4.8.0
+
+# Optional — future stages
+# ezdxf>=1.0.0                  # Stage F: DXF export
+# svgwrite>=1.4.3                # alternative SVG generation
