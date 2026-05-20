@@ -1008,9 +1008,10 @@ def build_html(dash: Dict) -> str:
   <strong>Research entry point:</strong>
   <a href="plan_scanner_workspace.html" style="color:#1565c0;font-weight:700;margin-left:8px">Plan Scanner Workspace (S13) →</a><br>
   <strong>To start teaching loop:</strong><br>
-  1. Open <a href="teaching_loop_answer_pack.html" style="color:#1565c0;font-weight:600">Teaching Loop Answer Pack (S12)</a> — all {teach['n_pending_questions']} questions structured by priority<br>
-  2. Copy <code>outputs/human_review_answers.template.json</code> → <code>outputs/human_review_answers.json</code> and fill in answers<br>
-  3. Run &nbsp;<code>.venv/bin/python3 23_human_review_writeback.py</code>
+  1. Open <a href="static_review_form.html" style="color:#1565c0;font-weight:700">Guided Review Form (S14)</a> — browser form, fill &amp; download answers<br>
+  2. Or open <a href="teaching_loop_answer_pack.html" style="color:#1565c0;font-weight:600">Answer Pack (S12)</a> — all {teach['n_pending_questions']} questions with schemas<br>
+  3. Save downloaded JSON as <code>outputs/human_review_answers.json</code><br>
+  4. Run &nbsp;<code>.venv/bin/python3 23_human_review_writeback.py</code>
 </div>
 </div>
 

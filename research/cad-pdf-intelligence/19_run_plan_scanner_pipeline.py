@@ -532,6 +532,43 @@ def check_s11_dashboard() -> Dict:
     }
 
 
+def check_s14_review_form() -> Dict:
+    """S14: Static Review Form — reads outputs from 27_static_review_form_generator.py."""
+    t0 = time.time()
+    f_html = OUT_DIR / 'static_review_form.html'
+    f_json = OUT_DIR / 'static_review_form.json'
+    f_md   = OUT_DIR / 'static_review_form_report.md'
+
+    data = load_json(f_json)
+    warnings: List[str] = []
+    metrics: Dict = {}
+
+    if data is None:
+        st = 'missing'
+        warnings.append('Run 27_static_review_form_generator.py to generate the review form.')
+    else:
+        qs = data.get('questions', {})
+        metrics = {
+            'total_questions': qs.get('total', 0),
+            'writeback_supported': qs.get('writeback_supported', 0),
+            'pending_extension': qs.get('pending_writeback_extension', 0),
+        }
+        st = 'ok'
+
+    return {
+        'stage_id':    'S14',
+        'name':        'Review Form',
+        'description': '27: static HTML guided review form — browser-fillable, download JSON',
+        'script':      '27_static_review_form_generator.py',
+        'status':      st,
+        'outputs':     [file_meta(f_html), file_meta(f_json), file_meta(f_md)],
+        'metrics':     metrics,
+        'warnings':    warnings,
+        'human_validations': [],
+        'elapsed_s':   round(time.time() - t0, 3),
+    }
+
+
 def check_s13_workspace() -> Dict:
     """S13: Plan Scanner Workspace — reads outputs from 26_plan_scanner_workspace.py."""
     t0 = time.time()
@@ -1446,6 +1483,9 @@ def main():
     print('  S13: Plan Scanner Workspace ...')
     stages.append(check_s13_workspace())
 
+    print('  S14: Static Review Form ...')
+    stages.append(check_s14_review_form())
+
     elapsed = time.time() - t0
 
     print('\n[Analyze] Deriving recommendations ...')
@@ -1491,6 +1531,7 @@ PIPELINE RUN COMPLETE
   Dashboard [S11]   : open outputs/master_dashboard.html
   Answer Pack [S12] : open outputs/teaching_loop_answer_pack.html
   Workspace  [S13]  : open outputs/plan_scanner_workspace.html
+  Form       [S14]  : open outputs/static_review_form.html
   Total linear (m)  : {bq['total_linear_m']:.1f}m  (scale: {bq['scale_status']})
   Taxonomy cands.   : {bq['n_taxonomy_candidates']}  high-impact: {bq['n_high_impact_unknowns']}
 

@@ -104,7 +104,7 @@ ARTIFACTS = [
     {
         'id': 'pipeline',
         'title': 'Pipeline Report',
-        'subtitle': '12/12 stages OK',
+        'subtitle': '14/14 stages OK',
         'file': 'pipeline_run_report.html',
         'icon': '⚙️',
         'color': '#37474f',
@@ -117,6 +117,15 @@ ARTIFACTS = [
         'file': 'human_review_application_report.html',
         'icon': '✏️',
         'color': '#6a1b9a',
+        'section': 'nav',
+    },
+    {
+        'id': 'review_form',
+        'title': 'Review Form',
+        'subtitle': 'S14 — fill & download answers',
+        'file': 'static_review_form.html',
+        'icon': '📝',
+        'color': '#0277bd',
         'section': 'nav',
     },
 ]
