@@ -489,6 +489,52 @@ def check_s7_boq(refresh: bool = True) -> Dict:
         'elapsed_s':  round(time.time()-t0, 3),
     }
 
+def check_s15_demo() -> Dict:
+    """S15: Teaching Loop Demo — reads outputs from 28_teaching_loop_demo.py."""
+    t0 = time.time()
+    f_app  = OUT_DIR / 'teaching_loop_demo_application.json'
+    f_md   = OUT_DIR / 'teaching_loop_demo_report.md'
+    f_html = OUT_DIR / 'teaching_loop_demo_report.html'
+    f_ans  = OUT_DIR / 'human_review_answers.demo.json'
+
+    data = load_json(f_app)
+    warnings: List[str] = []
+    metrics: Dict = {}
+
+    if data is None:
+        st = 'missing'
+        warnings.append('Run 28_teaching_loop_demo.py to generate the teaching loop demo.')
+    else:
+        meta = data.get('meta', {})
+        metrics = {
+            'n_demo_answers':         meta.get('n_demo_answers', 0),
+            'n_applied':              meta.get('n_applied', 0),
+            'n_skipped':              meta.get('n_skipped', 0),
+            'n_errors':               meta.get('n_errors', 0),
+            'boq_approval_violations': meta.get('boq_approval_violations', 0),
+            'originals_clean':        meta.get('originals_clean', False),
+            'answer_types_tested':    meta.get('answer_types_tested', []),
+        }
+        if meta.get('boq_approval_violations', 0) > 0:
+            warnings.append('BOQ approval violation detected in demo — investigate immediately.')
+        if not meta.get('originals_clean', True):
+            warnings.append('Original files were modified during demo — isolation failure.')
+        st = 'ok' if f_app.exists() else 'missing'
+
+    return {
+        'stage_id':   'S15',
+        'name':       'Teaching Loop Demo',
+        'description': '28: end-to-end demo of human-teaching loop (demo/seeded answers only)',
+        'script':     '28_teaching_loop_demo.py',
+        'status':     st,
+        'outputs':    [file_meta(f_app), file_meta(f_md), file_meta(f_html), file_meta(f_ans)],
+        'metrics':    metrics,
+        'warnings':   warnings,
+        'human_validations': [],
+        'elapsed_s':  round(time.time() - t0, 3),
+    }
+
+
 def check_s11_dashboard() -> Dict:
     """S11: Master Research Dashboard — reads outputs from 24_master_research_dashboard.py."""
     t0 = time.time()
@@ -1485,6 +1531,7 @@ def main():
 
     print('  S14: Static Review Form ...')
     stages.append(check_s14_review_form())
+    stages.append(check_s15_demo())
 
     elapsed = time.time() - t0
 
@@ -1532,6 +1579,7 @@ PIPELINE RUN COMPLETE
   Answer Pack [S12] : open outputs/teaching_loop_answer_pack.html
   Workspace  [S13]  : open outputs/plan_scanner_workspace.html
   Form       [S14]  : open outputs/static_review_form.html
+  Demo       [S15]  : open outputs/teaching_loop_demo_report.html
   Total linear (m)  : {bq['total_linear_m']:.1f}m  (scale: {bq['scale_status']})
   Taxonomy cands.   : {bq['n_taxonomy_candidates']}  high-impact: {bq['n_high_impact_unknowns']}
 

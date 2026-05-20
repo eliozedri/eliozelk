@@ -104,7 +104,7 @@ ARTIFACTS = [
     {
         'id': 'pipeline',
         'title': 'Pipeline Report',
-        'subtitle': '14/14 stages OK',
+        'subtitle': '15/15 stages OK',
         'file': 'pipeline_run_report.html',
         'icon': '⚙️',
         'color': '#37474f',
@@ -126,6 +126,15 @@ ARTIFACTS = [
         'file': 'static_review_form.html',
         'icon': '📝',
         'color': '#0277bd',
+        'section': 'nav',
+    },
+    {
+        'id': 'demo',
+        'title': 'Teaching Loop Demo',
+        'subtitle': 'S15 — end-to-end demo (seeded answers)',
+        'file': 'teaching_loop_demo_report.html',
+        'icon': '🧪',
+        'color': '#00695c',
         'section': 'nav',
     },
 ]
