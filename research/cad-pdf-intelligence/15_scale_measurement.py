@@ -69,21 +69,27 @@ DEDUP_X0_TOL  = 35.0    # start-x within 35 pt
 DEDUP_Y0_TOL  = 35.0    # start-y within 35 pt
 
 # ── Element color taxonomy ────────────────────────────────────────────────────
-# Derived from RGB frequency analysis of 50-448-02-400.pdf.
-# NOT confirmed against plan legend. All entries: confidence='unverified'.
+# v1 (original): Derived from RGB frequency analysis.
+# v2 addition: red_element + marking_vermilion confirmed in legend rows 0-2, 7, 9
+#              by POC C (16_legend_color_match.py).
+# All entries: color_taxonomy_confidence='unverified' until legend labels confirmed.
 ELEMENT_TYPES: Dict[Tuple, Dict] = {
-    (1.0,    1.0,    0.0   ): {'type': 'guardrail',       'he': 'מעקה',              'boq_category': 'guardrail', 'rgb8': (255, 255,   0)},
-    (1.0,    0.702,  0.6   ): {'type': 'barrier_pink',    'he': 'גדר/מחסום ורוד',   'boq_category': 'barrier',   'rgb8': (255, 179, 153)},
-    (0.0,    0.0,    1.0   ): {'type': 'road_marking',    'he': 'סימון כביש כחול',  'boq_category': 'marking',   'rgb8': (  0,   0, 255)},
-    (0.498,  1.0,    0.498 ): {'type': 'fence_green',     'he': 'גדר ירוקה',         'boq_category': 'fence',     'rgb8': (127, 255, 127)},
-    (1.0,    0.6,    0.2   ): {'type': 'marking_orange',  'he': 'סימון כתום',        'boq_category': 'marking',   'rgb8': (255, 153,  51)},
-    (0.0,    0.498,  1.0   ): {'type': 'marking_mid_blue','he': 'סימון כחול בינוני', 'boq_category': 'marking',   'rgb8': (  0, 127, 255)},
-    (0.8,    0.6,    1.0   ): {'type': 'marking_purple',  'he': 'סימון סגול',        'boq_category': 'other',     'rgb8': (204, 153, 255)},
-    (1.0,    0.749,  0.0   ): {'type': 'marking_amber',   'he': 'סימון ענבר',        'boq_category': 'marking',   'rgb8': (255, 191,   0)},
-    (0.0,    0.216,  0.867 ): {'type': 'marking_royal',   'he': 'סימון כחול כהה',   'boq_category': 'marking',   'rgb8': (  0,  55, 221)},
+    # ── v1 — frequency-derived ─────────────────────────────────────────────────
+    (1.0,    1.0,    0.0   ): {'type': 'guardrail',          'he': 'מעקה',                'boq_category': 'guardrail', 'rgb8': (255, 255,   0), 'taxonomy_source': 'frequency_analysis'},
+    (1.0,    0.702,  0.6   ): {'type': 'barrier_pink',       'he': 'גדר/מחסום ורוד',     'boq_category': 'barrier',   'rgb8': (255, 179, 153), 'taxonomy_source': 'frequency_analysis'},
+    (0.0,    0.0,    1.0   ): {'type': 'road_marking',       'he': 'סימון כביש כחול',    'boq_category': 'marking',   'rgb8': (  0,   0, 255), 'taxonomy_source': 'frequency_analysis'},
+    (0.498,  1.0,    0.498 ): {'type': 'fence_green',        'he': 'גדר ירוקה',           'boq_category': 'fence',     'rgb8': (127, 255, 127), 'taxonomy_source': 'frequency_analysis'},
+    (1.0,    0.6,    0.2   ): {'type': 'marking_orange',     'he': 'סימון כתום',          'boq_category': 'marking',   'rgb8': (255, 153,  51), 'taxonomy_source': 'frequency_analysis'},
+    (0.0,    0.498,  1.0   ): {'type': 'marking_mid_blue',   'he': 'סימון כחול בינוני',  'boq_category': 'marking',   'rgb8': (  0, 127, 255), 'taxonomy_source': 'frequency_analysis'},
+    (0.8,    0.6,    1.0   ): {'type': 'marking_purple',     'he': 'סימון סגול',          'boq_category': 'other',     'rgb8': (204, 153, 255), 'taxonomy_source': 'frequency_analysis'},
+    (1.0,    0.749,  0.0   ): {'type': 'marking_amber',      'he': 'סימון ענבר',          'boq_category': 'marking',   'rgb8': (255, 191,   0), 'taxonomy_source': 'frequency_analysis'},
+    (0.0,    0.216,  0.867 ): {'type': 'marking_royal',      'he': 'סימון כחול כהה',     'boq_category': 'marking',   'rgb8': (  0,  55, 221), 'taxonomy_source': 'frequency_analysis'},
+    # ── v2 — legend-derived (POC C, 16_legend_color_match.py) ─────────────────
+    (1.0,    0.0,    0.0   ): {'type': 'red_element',        'he': 'סימון אדום (לא מזוהה)', 'boq_category': 'marking', 'rgb8': (255,   0,   0), 'taxonomy_source': 'legend_icon_rows_0_1_2'},
+    (1.0,    0.247,  0.0   ): {'type': 'marking_vermilion',  'he': 'סימון ורמיליון',      'boq_category': 'marking',   'rgb8': (255,  63,   0), 'taxonomy_source': 'legend_icon_rows_7_9'},
 }
 
-COLOR_TOL   = 0.012
+COLOR_TOL   = 0.015   # slightly wider to catch 0.247 vs 0.25 edge cases
 
 # ── Render settings ───────────────────────────────────────────────────────────
 RENDER_DPI = 36
