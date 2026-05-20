@@ -1,0 +1,17 @@
+-- Migration: safety_specs_migration
+-- Adds structured specs data (material, dimensions, is_solar, is_electric, is_reflective,
+-- catalog_page, readiness_status, confidence, notes) to the metadata.specs JSONB sub-object
+-- for all 37 safety accessories in catalog_items.
+--
+-- Applied via Node.js migration script (verify_elkayam.mjs / migrate_safety_specs.mjs)
+-- on 2026-05-20. Each row was updated with:
+--   SET metadata = jsonb_set(metadata, '{specs}', '<specs_json>'::jsonb, true)
+-- The jsonb_set(..., true) call creates the 'specs' key if it did not exist.
+-- Existing metadata fields (safety_ref_id, orderable, sources) were NOT touched.
+--
+-- Verification: all 37 items with safety_ref_id now have metadata->>'specs' populated.
+-- No rows were inserted; no rows were deleted; no existing fields were overwritten.
+
+-- This file is a record of the applied change only.
+-- The update has already been applied to the live database.
+-- Do NOT re-run this file as the data is already present.

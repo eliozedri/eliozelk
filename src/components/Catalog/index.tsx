@@ -1,13 +1,10 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
 import { useCatalogContext } from "@/context/CatalogContext";
-import type { CatalogFormState, CatalogItemType, LinkedProductEntry } from "@/types/catalog";
+import type { CatalogItem, CatalogFormState, CatalogItemType, LinkedProductEntry } from "@/types/catalog";
 import { TYPE_LABELS, TYPE_COLORS, UNIT_OPTIONS, DIMENSION_UNIT_OPTIONS, LENGTH_UNITS, AREA_UNITS, NO_DIMENSION_UNITS } from "@/types/catalog";
-import { SAFETY_ACCESSORIES } from "@/data/safetyAccessories";
 import { getSupabase } from "@/lib/supabase/client";
-import { SafetyAccessoriesPage } from "@/components/SafetyAccessories";
 
 function getSourceLabel(metadata: Record<string, unknown> | undefined): string | null {
   const sources = metadata?.sources as Array<{ type: string }> | undefined;
@@ -33,7 +30,6 @@ const emptyForm: CatalogFormState = {
   description: "",
 };
 
-// Units that imply a time/labor conversion
 const UNIT_HINTS: Record<string, string> = {
   "יום": "1 יום = 8 שעות · מלא כמות ימים × מספר עובדים",
   "משמרת": "1 משמרת = 12 שעות · מלא כמות משמרות × מספר עובדים",
@@ -64,6 +60,109 @@ function PencilIcon() {
       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
     </svg>
+  );
+}
+
+// ── Item card (cards view) ────────────────────────────────────────────────────
+
+function ItemCard({ item, onEdit, onToggle, onDelete }: {
+  item: CatalogItem;
+  onEdit: (id: string) => void;
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const specs = item.metadata?.specs as Record<string, unknown> | undefined;
+  const isSolar = specs?.is_solar as boolean | undefined;
+  const isElectric = specs?.is_electric as boolean | undefined;
+  const isReflective = specs?.is_reflective as boolean | undefined;
+  const specDimensions = specs?.dimensions as string | undefined;
+  const safetyRefId = item.metadata?.safety_ref_id as string | undefined;
+  const sourceLabel = getSourceLabel(item.metadata);
+
+  return (
+    <div className={`bg-white border rounded-xl p-4 flex flex-col gap-2.5 hover:shadow-sm transition-all ${!item.isActive ? "opacity-55 border-gray-100" : "border-gray-200 hover:border-gray-300"}`}>
+      {/* Name + actions */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-gray-900 text-sm leading-snug">{item.name}</p>
+          <p className="text-[11px] text-gray-400 mt-0.5 truncate">{item.category || "ללא קטגוריה"}</p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0 -mt-0.5">
+          <button
+            type="button"
+            onClick={() => onEdit(item.id)}
+            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+            title="ערוך"
+          >
+            <PencilIcon />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(item.id)}
+            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+            title="מחק"
+          >
+            <TrashIcon />
+          </button>
+        </div>
+      </div>
+
+      {/* Type + property badges */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${TYPE_COLORS[item.type]}`}>
+          {TYPE_LABELS[item.type]}
+        </span>
+        {isSolar && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">☀ סולארי</span>
+        )}
+        {isElectric && !isSolar && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">⚡ חשמלי</span>
+        )}
+        {isReflective && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">◈ רפלקטיבי</span>
+        )}
+        {safetyRefId && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">🛡 בטיחות</span>
+        )}
+        {sourceLabel && !safetyRefId && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400">{sourceLabel}</span>
+        )}
+        {(item.linkedProducts?.length ?? 0) > 0 && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+            {item.linkedProducts!.length} נלווים
+          </span>
+        )}
+      </div>
+
+      {/* Description */}
+      {item.description && (
+        <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{item.description}</p>
+      )}
+
+      {/* Dimensions from specs */}
+      {specDimensions && (
+        <p className="text-[11px] text-gray-400 font-mono" dir="ltr">{specDimensions}</p>
+      )}
+
+      {/* Footer: price + active toggle */}
+      <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-100">
+        <div dir="ltr" className="text-sm font-semibold text-gray-700">
+          {item.defaultPrice !== null
+            ? <>₪{item.defaultPrice.toLocaleString()} <span className="text-xs font-normal text-gray-400">/ {item.unitOfMeasure}</span></>
+            : <span className="text-gray-300 font-normal text-xs">ללא מחיר</span>
+          }
+        </div>
+        <button
+          type="button"
+          onClick={() => onToggle(item.id)}
+          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
+            item.isActive ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+          }`}
+        >
+          {item.isActive ? "פעיל" : "לא פעיל"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -464,54 +563,18 @@ function AddItemForm({ onAdd, onCreateAndLink, categories, allItems }: AddItemFo
   );
 }
 
-// ── Safety accessories import ─────────────────────────────────────────────────
-
-function useSafetyImport(existingNames: Set<string>, onAdd: (form: CatalogFormState, links: LinkedProductEntry[]) => void) {
-  const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-
-  function importSafetyAccessories() {
-    setImporting(true);
-    let added = 0;
-    let skipped = 0;
-    for (const item of SAFETY_ACCESSORIES) {
-      if (existingNames.has(item.name.toLowerCase())) { skipped++; continue; }
-      onAdd({
-        name: item.name,
-        type: "product",
-        category: `אביזרי בטיחות — ${item.subcategory}`,
-        unitOfMeasure: item.unitOfMeasure ?? "יחידה",
-        dimensionValue: item.dimensions ?? "",
-        dimensionUnit: "",
-        defaultPrice: "",
-        costPrice: "",
-        description: [item.description, item.material ? `חומר: ${item.material}` : "", item.intendedUse ? `שימוש: ${item.intendedUse}` : ""].filter(Boolean).join(" · "),
-      }, []);
-      added++;
-    }
-    setResult(`יובאו ${added} פריטים · דולגו ${skipped} כפולים`);
-    setImporting(false);
-    setTimeout(() => setResult(null), 5000);
-  }
-
-  return { importing, result, importSafetyAccessories };
-}
-
 // ── Main page ─────────────────────────────────────────────────────────────────
-
-type CatalogTab = "catalog" | "safety";
 
 export function CatalogPage() {
   const { items, addItem, updateItem, toggleActive, deleteItem, updateStockConfig, updateCostPrice } = useCatalogContext();
-  const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<CatalogTab>(
-    () => searchParams.get("tab") === "safety" ? "safety" : "catalog"
-  );
 
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<CatalogItemType | "all">("all");
   const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
   const [filterMissingCost, setFilterMissingCost] = useState(false);
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CatalogFormState>(emptyForm);
   const [editLinked, setEditLinked] = useState<LinkedProductEntry[]>([]);
@@ -531,7 +594,6 @@ export function CatalogPage() {
     return Array.from(cats).sort((a, b) => a.localeCompare(b, "he"));
   }, [items]);
 
-  const existingNames = useMemo(() => new Set(items.map((i) => i.name.toLowerCase())), [items]);
   const allItemRefs = useMemo(() => items.map((i) => ({ id: i.id, name: i.name })), [items]);
 
   function handleAdd(form: CatalogFormState, links: LinkedProductEntry[]) {
@@ -551,14 +613,15 @@ export function CatalogPage() {
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return items.filter((item) => {
-      if (q && !item.name.toLowerCase().includes(q) && !item.category.toLowerCase().includes(q)) return false;
+      if (q && !item.name.toLowerCase().includes(q) && !item.category.toLowerCase().includes(q) && !(item.description ?? "").toLowerCase().includes(q)) return false;
       if (filterType !== "all" && item.type !== filterType) return false;
       if (filterActive === "active" && !item.isActive) return false;
       if (filterActive === "inactive" && item.isActive) return false;
       if (filterMissingCost && !(["material", "product"].includes(item.type) && item.costPrice == null)) return false;
+      if (filterCategory !== "all" && item.category !== filterCategory) return false;
       return true;
     });
-  }, [items, search, filterType, filterActive, filterMissingCost]);
+  }, [items, search, filterType, filterActive, filterMissingCost, filterCategory]);
 
   const stats = useMemo(() => {
     const activeCount = items.filter((i) => i.isActive).length;
@@ -583,6 +646,7 @@ export function CatalogPage() {
     setEditMinQty(item.minimumQuantity > 0 ? String(item.minimumQuantity) : "");
     setEditSupplierId(item.supplierId ?? "");
     setEditingId(id);
+    setViewMode("table");
   }
 
   function saveEdit(id: string) {
@@ -603,243 +667,245 @@ export function CatalogPage() {
     setEditForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  const { importing, result: importResult, importSafetyAccessories } = useSafetyImport(existingNames, handleAdd);
-
   return (
     <div className="min-h-screen bg-surface">
 
-      {/* ── Unified header + tab bar ──────────────────────────────────────── */}
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-4 pt-6 pb-0">
+        <div className="max-w-6xl mx-auto px-4 pt-6 pb-5">
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold text-gray-900">קטלוג מוצרים ופריטים</h1>
+            <h1 className="text-2xl font-bold text-gray-900">ניהול קטלוג</h1>
             <CatalogIcon />
           </div>
-          <p className="text-sm text-gray-500 mb-4">ניהול קטלוג · מוצרים · שירותים · עיון אביזרי בטיחות</p>
-
-          <nav className="flex gap-0 -mb-px" aria-label="catalog tabs">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "catalog"}
-              onClick={() => setActiveTab("catalog")}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === "catalog"
-                  ? "border-blue-600 text-blue-700"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              ניהול קטלוג
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "safety"}
-              onClick={() => setActiveTab("safety")}
-              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === "safety"
-                  ? "border-blue-600 text-blue-700"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              עיון — אביזרי בטיחות
-            </button>
-          </nav>
+          <div className="flex items-center gap-3 flex-wrap mt-3">
+            <span className="px-3 py-1 rounded-full bg-white border border-gray-200 text-sm font-medium text-gray-700 shadow-sm">סה״כ {stats.total} פריטים</span>
+            <span className="px-3 py-1 rounded-full bg-green-50 border border-green-200 text-sm font-medium text-green-700 shadow-sm">{stats.active} פעילים</span>
+            {stats.categories > 0 && (
+              <span className="px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-sm font-medium text-blue-700 shadow-sm">{stats.categories} קטגוריות</span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── Safety reference tab ──────────────────────────────────────────── */}
-      {activeTab === "safety" && <SafetyAccessoriesPage />}
-
-      {/* ── Catalog management tab ───────────────────────────────────────── */}
-      {activeTab === "catalog" && (
       <div className="py-6 px-4">
-      <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto">
 
-        <div className="flex items-center gap-3 mb-5 flex-wrap">
-          <span className="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm font-medium text-gray-700 shadow-sm">סה״כ {stats.total} פריטים</span>
-          <span className="px-3 py-1.5 rounded-full bg-green-50 border border-green-200 text-sm font-medium text-green-700 shadow-sm">{stats.active} פעילים</span>
-          {stats.categories > 0 && (
-            <span className="px-3 py-1.5 rounded-full bg-blue-50 border border-blue-200 text-sm font-medium text-blue-700 shadow-sm">{stats.categories} קטגוריות</span>
-          )}
-          <div className="mr-auto flex items-center gap-2 flex-wrap">
-            {importResult && (
-              <span className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-full px-3 py-1">{importResult}</span>
-            )}
-            <button
-              type="button"
-              onClick={importSafetyAccessories}
-              disabled={importing}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-teal-400 text-teal-700 text-xs font-medium hover:bg-teal-50 transition-colors disabled:opacity-50"
-            >
-              {importing ? "מייבא..." : "☑ ייבא אביזרי בטיחות"}
-            </button>
+          {/* ── Add item + filter bar ────────────────────────────────────────── */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-5">
+            <AddItemForm onAdd={handleAdd} onCreateAndLink={handleCreateAndLink} categories={categories} allItems={allItemRefs} />
+
+            <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100 flex-wrap">
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="חיפוש לפי שם, קטגוריה, תיאור..."
+                className="flex-1 min-w-36 px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400"
+              />
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 max-w-[180px]"
+              >
+                <option value="all">כל הקטגוריות</option>
+                {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value as CatalogItemType | "all")}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value="all">כל הסוגים</option>
+                {(Object.entries(TYPE_LABELS) as [CatalogItemType, string][]).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+              </select>
+              <select
+                value={filterActive}
+                onChange={(e) => setFilterActive(e.target.value as "all" | "active" | "inactive")}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value="all">פעיל / לא פעיל</option>
+                <option value="active">פעילים בלבד</option>
+                <option value="inactive">לא פעילים</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => setFilterMissingCost(v => !v)}
+                className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors whitespace-nowrap ${
+                  filterMissingCost
+                    ? "border-orange-400 bg-orange-50 text-orange-700"
+                    : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {filterMissingCost ? `✕ חסרי עלות (${filtered.length})` : `חסרי עלות${missingCostCount > 0 ? ` (${missingCostCount})` : ""}`}
+              </button>
+
+              {/* View toggle */}
+              <div className="mr-auto flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("cards")}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${viewMode === "cards" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                  כרטיסים
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("table")}
+                  className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${viewMode === "table" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                  טבלה
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <AddItemForm onAdd={handleAdd} onCreateAndLink={handleCreateAndLink} categories={categories} allItems={allItemRefs} />
-
-          <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100 bg-gray-50 flex-wrap">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="חיפוש לפי שם או קטגוריה..."
-              className="flex-1 min-w-40 px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400"
-            />
-            <select value={filterType} onChange={(e) => setFilterType(e.target.value as CatalogItemType | "all")} className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
-              <option value="all">כל הסוגים</option>
-              {(Object.entries(TYPE_LABELS) as [CatalogItemType, string][]).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-            </select>
-            <select value={filterActive} onChange={(e) => setFilterActive(e.target.value as "all" | "active" | "inactive")} className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400">
-              <option value="all">פעיל / לא פעיל</option>
-              <option value="active">פעילים בלבד</option>
-              <option value="inactive">לא פעילים</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => setFilterMissingCost(v => !v)}
-              className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors whitespace-nowrap ${
-                filterMissingCost
-                  ? "border-orange-400 bg-orange-50 text-orange-700"
-                  : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {filterMissingCost ? `✕ חסרי עלות (${filtered.length})` : `חסרי מחיר עלות${missingCostCount > 0 ? ` (${missingCostCount})` : ""}`}
-            </button>
-          </div>
-
-          {filtered.length === 0 ? (
-            <div className="py-16 text-center">
+          {/* ── Empty state ──────────────────────────────────────────────────── */}
+          {filtered.length === 0 && (
+            <div className="py-16 text-center bg-white rounded-xl border border-gray-200">
               <div className="text-gray-300 mb-3">
                 <svg className="w-12 h-12 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" /><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" /></svg>
               </div>
               <p className="text-gray-500 font-medium">{items.length === 0 ? "הקטלוג ריק" : "לא נמצאו פריטים תואמים"}</p>
               <p className="text-sm text-gray-400 mt-1">{items.length === 0 ? "הוסף פריטים כדי שיופיעו כאן ובטפסי ההזמנה" : "נסה לשנות את הסינון"}</p>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">שם פריט</th>
-                    <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">סוג</th>
-                    <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-28">קטגוריה</th>
-                    <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-20">יחידה</th>
-                    <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">מידה</th>
-                    <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">מחיר</th>
-                    <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">תיאור</th>
-                    <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-20">סטטוס</th>
-                    <th className="w-24 px-4 py-2.5"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((item) =>
-                    editingId === item.id ? (
-                      <tr key={item.id} className="border-b border-gray-100 bg-blue-50/30">
-                        <td colSpan={9} className="px-4 py-3">
-                          <FormFields
-                            form={editForm}
-                            update={updateEditForm}
-                            categories={categories}
-                            linkedProducts={editLinked}
-                            onLinkedProductsChange={setEditLinked}
-                            onCreateLinked={handleCreateAndLink}
-                            allItems={allItemRefs}
-                            itemId={item.id}
-                            compact
-                          />
-                          {/* Stock config — minimum qty + supplier */}
-                          <div className="mt-3 pt-3 border-t border-blue-100">
-                            <p className="text-xs font-semibold text-gray-600 mb-2">הגדרות מלאי</p>
-                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                              <div>
-                                <label className="block text-xs text-gray-500 mb-1">כמות מינימום (לרכש)</label>
-                                <input type="number" min="0" step="0.01" value={editMinQty}
-                                  onChange={e => setEditMinQty(e.target.value)}
-                                  placeholder="0"
-                                  className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-500 mb-1">ספק מועדף</label>
-                                <select value={editSupplierId} onChange={e => setEditSupplierId(e.target.value)}
-                                  className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
-                                  <option value="">— ללא ספק —</option>
-                                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                </select>
-                              </div>
-                              <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2 self-end">
-                                <div>נוכחי: <strong>{item.currentQuantity}</strong></div>
-                                <div>שמור: <strong className="text-amber-600">{item.reservedQuantity}</strong></div>
-                                <div>זמין: <strong>{item.currentQuantity - item.reservedQuantity}</strong></div>
+          )}
+
+          {/* ── Cards view ───────────────────────────────────────────────────── */}
+          {filtered.length > 0 && viewMode === "cards" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {filtered.map((item) => (
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  onEdit={startEdit}
+                  onToggle={toggleActive}
+                  onDelete={deleteItem}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Table view ───────────────────────────────────────────────────── */}
+          {filtered.length > 0 && viewMode === "table" && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">שם פריט</th>
+                      <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">סוג</th>
+                      <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-28">קטגוריה</th>
+                      <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-20">יחידה</th>
+                      <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">מידה</th>
+                      <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">מחיר</th>
+                      <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">תיאור</th>
+                      <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-center w-20">סטטוס</th>
+                      <th className="w-24 px-4 py-2.5"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item) =>
+                      editingId === item.id ? (
+                        <tr key={item.id} className="border-b border-gray-100 bg-blue-50/30">
+                          <td colSpan={9} className="px-4 py-3">
+                            <FormFields
+                              form={editForm}
+                              update={updateEditForm}
+                              categories={categories}
+                              linkedProducts={editLinked}
+                              onLinkedProductsChange={setEditLinked}
+                              onCreateLinked={handleCreateAndLink}
+                              allItems={allItemRefs}
+                              itemId={item.id}
+                              compact
+                            />
+                            {/* Stock config */}
+                            <div className="mt-3 pt-3 border-t border-blue-100">
+                              <p className="text-xs font-semibold text-gray-600 mb-2">הגדרות מלאי</p>
+                              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                <div>
+                                  <label className="block text-xs text-gray-500 mb-1">כמות מינימום (לרכש)</label>
+                                  <input type="number" min="0" step="0.01" value={editMinQty}
+                                    onChange={e => setEditMinQty(e.target.value)}
+                                    placeholder="0"
+                                    className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-gray-500 mb-1">ספק מועדף</label>
+                                  <select value={editSupplierId} onChange={e => setEditSupplierId(e.target.value)}
+                                    className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+                                    <option value="">— ללא ספק —</option>
+                                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                  </select>
+                                </div>
+                                <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2 self-end">
+                                  <div>נוכחי: <strong>{item.currentQuantity}</strong></div>
+                                  <div>שמור: <strong className="text-amber-600">{item.reservedQuantity}</strong></div>
+                                  <div>זמין: <strong>{item.currentQuantity - item.reservedQuantity}</strong></div>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="flex items-center justify-end gap-2 mt-3">
-                            <button type="button" onClick={() => saveEdit(item.id)} className="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors">שמור</button>
-                            <button type="button" onClick={cancelEdit} className="px-3 py-1 rounded-lg border border-gray-300 text-xs text-gray-600 hover:bg-gray-50 transition-colors">ביטול</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={item.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${!item.isActive ? "opacity-50" : ""}`}>
-                        <td className="px-4 py-3 font-medium text-gray-900">
-                          <span className="flex items-center gap-1.5 flex-wrap">
-                            {item.name}
-                            {(item.linkedProducts?.length ?? 0) > 0 && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-                                {item.linkedProducts!.length} נלווים
-                              </span>
-                            )}
-                            {getSourceLabel(item.metadata) && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-normal">
-                                {getSourceLabel(item.metadata)}
-                              </span>
-                            )}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[item.type]}`}>{TYPE_LABELS[item.type]}</span>
-                        </td>
-                        <td className="px-4 py-3 text-gray-500 text-xs">{item.category || "—"}</td>
-                        <td className="px-4 py-3 text-gray-600 text-xs">{item.unitOfMeasure}</td>
-                        <td className="px-4 py-3 text-gray-600 text-xs" dir="ltr">
-                          {item.dimensionValue && item.dimensionUnit ? `${item.dimensionValue} ${item.dimensionUnit}` : item.dimensionValue || "—"}
-                        </td>
-                        <td className="px-4 py-3 text-gray-600 text-xs" dir="ltr">
-                          {item.defaultPrice !== null ? `₪${item.defaultPrice.toLocaleString()}` : "—"}
-                        </td>
-                        <td className="px-4 py-3 text-gray-400 text-xs max-w-xs truncate">{item.description || "—"}</td>
-                        <td className="px-4 py-3 text-center">
-                          <button type="button" onClick={() => toggleActive(item.id)} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${item.isActive ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
-                            {item.isActive ? "פעיל" : "לא פעיל"}
-                          </button>
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-1 justify-end">
-                            <button type="button" onClick={() => startEdit(item.id)} className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="ערוך"><PencilIcon /></button>
-                            <button type="button" onClick={() => deleteItem(item.id)} className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="מחק"><TrashIcon /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  )}
-                </tbody>
-              </table>
+                            <div className="flex items-center justify-end gap-2 mt-3">
+                              <button type="button" onClick={() => saveEdit(item.id)} className="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors">שמור</button>
+                              <button type="button" onClick={cancelEdit} className="px-3 py-1 rounded-lg border border-gray-300 text-xs text-gray-600 hover:bg-gray-50 transition-colors">ביטול</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={item.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${!item.isActive ? "opacity-50" : ""}`}>
+                          <td className="px-4 py-3 font-medium text-gray-900">
+                            <span className="flex items-center gap-1.5 flex-wrap">
+                              {item.name}
+                              {(item.linkedProducts?.length ?? 0) > 0 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                                  {item.linkedProducts!.length} נלווים
+                                </span>
+                              )}
+                              {getSourceLabel(item.metadata) && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-normal">
+                                  {getSourceLabel(item.metadata)}
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[item.type]}`}>{TYPE_LABELS[item.type]}</span>
+                          </td>
+                          <td className="px-4 py-3 text-gray-500 text-xs">{item.category || "—"}</td>
+                          <td className="px-4 py-3 text-gray-600 text-xs">{item.unitOfMeasure}</td>
+                          <td className="px-4 py-3 text-gray-600 text-xs" dir="ltr">
+                            {item.dimensionValue && item.dimensionUnit ? `${item.dimensionValue} ${item.dimensionUnit}` : item.dimensionValue || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-gray-600 text-xs" dir="ltr">
+                            {item.defaultPrice !== null ? `₪${item.defaultPrice.toLocaleString()}` : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-gray-400 text-xs max-w-xs truncate">{item.description || "—"}</td>
+                          <td className="px-4 py-3 text-center">
+                            <button type="button" onClick={() => toggleActive(item.id)} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${item.isActive ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                              {item.isActive ? "פעיל" : "לא פעיל"}
+                            </button>
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-1 justify-end">
+                              <button type="button" onClick={() => startEdit(item.id)} className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="ערוך"><PencilIcon /></button>
+                              <button type="button" onClick={() => deleteItem(item.id)} className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="מחק"><TrashIcon /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="px-5 py-2.5 border-t border-gray-100 text-xs text-gray-400 text-right">
+                מוצגים {filtered.length} מתוך {items.length} פריטים
+              </div>
             </div>
           )}
 
-          {filtered.length > 0 && (
-            <div className="px-5 py-2.5 border-t border-gray-100 text-xs text-gray-400 text-right">
-              מוצגים {filtered.length} מתוך {items.length} פריטים
-            </div>
-          )}
         </div>
       </div>
-      </div>
-      )}
-
     </div>
   );
 }
