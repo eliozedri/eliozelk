@@ -1,5 +1,5 @@
-import { SafetyAccessoriesPage } from "@/components/SafetyAccessories";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <SafetyAccessoriesPage />;
+  redirect("/catalog?tab=safety");
 }

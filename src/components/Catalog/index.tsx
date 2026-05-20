@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useCatalogContext } from "@/context/CatalogContext";
 import type { CatalogFormState, CatalogItemType, LinkedProductEntry } from "@/types/catalog";
 import { TYPE_LABELS, TYPE_COLORS, UNIT_OPTIONS, DIMENSION_UNIT_OPTIONS, LENGTH_UNITS, AREA_UNITS, NO_DIMENSION_UNITS } from "@/types/catalog";
 import { SAFETY_ACCESSORIES } from "@/data/safetyAccessories";
 import { getSupabase } from "@/lib/supabase/client";
+import { SafetyAccessoriesPage } from "@/components/SafetyAccessories";
 
 function getSourceLabel(metadata: Record<string, unknown> | undefined): string | null {
   const sources = metadata?.sources as Array<{ type: string }> | undefined;
@@ -497,8 +499,14 @@ function useSafetyImport(existingNames: Set<string>, onAdd: (form: CatalogFormSt
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+type CatalogTab = "catalog" | "safety";
+
 export function CatalogPage() {
   const { items, addItem, updateItem, toggleActive, deleteItem, updateStockConfig, updateCostPrice } = useCatalogContext();
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<CatalogTab>(
+    () => searchParams.get("tab") === "safety" ? "safety" : "catalog"
+  );
 
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<CatalogItemType | "all">("all");
@@ -598,13 +606,55 @@ export function CatalogPage() {
   const { importing, result: importResult, importSafetyAccessories } = useSafetyImport(existingNames, handleAdd);
 
   return (
-    <div className="min-h-screen bg-surface py-6 px-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center gap-2 mb-2">
-          <h1 className="text-2xl font-bold text-gray-900">מוצרים ושירותים</h1>
-          <CatalogIcon />
+    <div className="min-h-screen bg-surface">
+
+      {/* ── Unified header + tab bar ──────────────────────────────────────── */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-6xl mx-auto px-4 pt-6 pb-0">
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl font-bold text-gray-900">קטלוג מוצרים ופריטים</h1>
+            <CatalogIcon />
+          </div>
+          <p className="text-sm text-gray-500 mb-4">ניהול קטלוג · מוצרים · שירותים · עיון אביזרי בטיחות</p>
+
+          <nav className="flex gap-0 -mb-px" aria-label="catalog tabs">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "catalog"}
+              onClick={() => setActiveTab("catalog")}
+              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === "catalog"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              ניהול קטלוג
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "safety"}
+              onClick={() => setActiveTab("safety")}
+              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === "safety"
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              עיון — אביזרי בטיחות
+            </button>
+          </nav>
         </div>
-        <p className="text-sm text-gray-500 mb-5">ניהול קטלוג מוצרים, שירותים ופריטים להזמנות</p>
+      </div>
+
+      {/* ── Safety reference tab ──────────────────────────────────────────── */}
+      {activeTab === "safety" && <SafetyAccessoriesPage />}
+
+      {/* ── Catalog management tab ───────────────────────────────────────── */}
+      {activeTab === "catalog" && (
+      <div className="py-6 px-4">
+      <div className="max-w-6xl mx-auto">
 
         <div className="flex items-center gap-3 mb-5 flex-wrap">
           <span className="px-3 py-1.5 rounded-full bg-white border border-gray-200 text-sm font-medium text-gray-700 shadow-sm">סה״כ {stats.total} פריטים</span>
@@ -787,6 +837,9 @@ export function CatalogPage() {
           )}
         </div>
       </div>
+      </div>
+      )}
+
     </div>
   );
 }
