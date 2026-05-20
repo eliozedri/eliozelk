@@ -19,6 +19,7 @@ Research-only. No approved BOQ output.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import time
@@ -26,8 +27,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
+from plan_run_context import PlanRunContext
+
 # ── Paths ──────────────────────────────────────────────────────────────────────
 ROOT        = Path(__file__).parent
+# CATALOG_DIR and SIGN_INDEX are plan-independent read-only references — stay global
 CATALOG_DIR = ROOT / 'sign_catalog'
 SIGN_INDEX  = ROOT.parent.parent / 'מקורות מידע' / 'Sign' / 'knowledge-base' / 'SIGN_INDEX.md'
 OUTPUTS     = ROOT / 'outputs'
@@ -809,4 +813,25 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Sign Plausibility Validation Layer (Stage S8)')
+    parser.add_argument(
+        '--plan-run-dir', default=None,
+        help='Path to a plan-scoped run directory (created by 31_upload_intake_wrapper.py). '
+             'If omitted, runs in legacy mode against outputs/',
+    )
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=ROOT)
+    if _ctx.is_plan_scoped:
+        # CATALOG_DIR and SIGN_INDEX remain global read-only shared references
+        OUTPUTS      = _ctx.outputs_dir                             # type: ignore[assignment]
+        REVIEW_QUEUE = OUTPUTS / 'review_queue.json'
+        OUT_JSON     = OUTPUTS / 'validation_results.json'
+        OUT_MD       = OUTPUTS / 'validation_report.md'
+        OUT_HTML     = OUTPUTS / 'validation_report.html'
+        if not REVIEW_QUEUE.exists():
+            print('[WARN] Plan-scoped mode: missing required input in run outputs dir:')
+            print(f'  MISSING (required): {REVIEW_QUEUE}')
+            print('  Run 14_build_review_queue.py --plan-run-dir first.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
     main()

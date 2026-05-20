@@ -44,9 +44,11 @@ Modified in-place (only when real answers exist and apply):
 Research-only. approved_for_boq: false on ALL items always.
 """
 from __future__ import annotations
-import json, time
+import argparse, json, time
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
+
+from plan_run_context import PlanRunContext
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent
@@ -1330,4 +1332,40 @@ S10 COMPLETE
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Human Review Write-Back (Stage S10)')
+    parser.add_argument(
+        '--plan-run-dir', default=None,
+        help='Path to a plan-scoped run directory (created by 31_upload_intake_wrapper.py). '
+             'If omitted, runs in legacy mode against outputs/',
+    )
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+    if _ctx.is_plan_scoped:
+        OUT_DIR    = _ctx.outputs_dir                               # type: ignore[assignment]
+        # ── Answer source: ONLY the current run's answers file ──────────────────
+        # NEVER fall back to global outputs/human_review_answers.json.
+        # Applying answers from a different plan run would corrupt this plan's data.
+        IN_ANSWERS  = OUT_DIR / 'human_review_answers.json'
+        # ── Writeback outputs ───────────────────────────────────────────────────
+        OUT_EXAMPLE = OUT_DIR / 'human_review_answers.example.json'
+        OUT_LOG     = OUT_DIR / 'human_review_application.json'
+        OUT_MD      = OUT_DIR / 'human_review_application_report.md'
+        OUT_HTML    = OUT_DIR / 'human_review_application_report.html'
+        # ── In-place annotation targets: all must point to this run ─────────────
+        F_PARTIAL      = OUT_DIR / 'partial_code_resolution.json'
+        F_ELEMENTS     = OUT_DIR / 'element_groups.json'
+        F_BOQ          = OUT_DIR / 'boq_unified_draft.json'
+        F_QUEUE        = OUT_DIR / 'review_queue.json'
+        F_VALIDATION   = OUT_DIR / 'validation_results.json'
+        F_LEGEND_ROWS  = OUT_DIR / 'legend_rows.json'
+        F_LEGEND_VOCAB = OUT_DIR / 'legend_vocabulary.json'
+        # ── Human answer safety check ───────────────────────────────────────────
+        if not IN_ANSWERS.exists():
+            print('[INFO] Plan-scoped mode: no human_review_answers.json in run outputs dir.')
+            print(f'  Expected: {IN_ANSWERS}')
+            print('  0 real answers will be applied. Example/template will be generated.')
+            print('  Do NOT copy global outputs/human_review_answers.json here — that belongs')
+            print('  to a different plan run and must not be applied to this one.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
     main()

@@ -36,35 +36,36 @@ REGISTRY: List[Dict] = [
     {'file': '25_teaching_loop_answer_pack.py',   'desc': 'Teaching loop answer pack (S12)',            'batch': 2, 'type': 'report'},
     {'file': '27_static_review_form_generator.py','desc': 'Static review form HTML (S14)',              'batch': 2, 'type': 'report'},
     {'file': '29_plan_scanner_prototype_shell.py','desc': 'Plan scanner prototype HTML (S16)',          'batch': 2, 'type': 'report'},
-    # ── Not yet parameterized — detection / heavy scripts ────────────────────
+    # ── Batch 3 converted ────────────────────────────────────────────────────
+    {'file': '20_validation_layer.py',            'desc': 'Validation layer (S8) — sign plausibility', 'batch': 3, 'type': 'analysis'},
+    {'file': '22_partial_code_resolver.py',       'desc': 'Partial code resolver (S9)',                'batch': 3, 'type': 'analysis'},
+    {'file': '23_human_review_writeback.py',      'desc': 'Human review writeback (S10)',              'batch': 3, 'type': 'writeback'},
+    {'file': '28_teaching_loop_demo.py',          'desc': 'Teaching loop demo (S15)',                  'batch': 3, 'type': 'demo'},
+    # ── Not yet parameterized — Batch 4 targets (heavy detection scripts) ───
     {'file': '06_match_signs.py',                 'desc': 'Sign detection — Branch A (expensive)',      'batch': None, 'type': 'detection'},
     {'file': '07_extract_legend.py',              'desc': 'Legend extraction',                          'batch': None, 'type': 'detection'},
-    {'file': '18_element_decomposition.py',       'desc': 'Element decomposition — Branch C (main)',   'batch': None, 'type': 'detection'},
     {'file': '13_vector_glyph_recognition.py',    'desc': 'Vector glyph / sign code recognition (S4)', 'batch': None, 'type': 'detection'},
     {'file': '15_scale_measurement.py',           'desc': 'Scale measurement — Branch B (expensive)',  'batch': None, 'type': 'detection'},
     {'file': '16_legend_color_match.py',          'desc': 'Legend color match / taxonomy',             'batch': None, 'type': 'detection'},
-    {'file': '20_validation_layer.py',             'desc': 'Validation layer (S8) — sign plausibility', 'batch': None, 'type': 'analysis'},
-    # ── Support / util scripts (parameterization varies) ────────────────────
-    {'file': '22_partial_code_resolver.py',       'desc': 'Partial code resolver (S9)',                'batch': None, 'type': 'analysis'},
-    {'file': '23_human_review_writeback.py',      'desc': 'Human review writeback (S10)',              'batch': None, 'type': 'writeback'},
-    {'file': '28_teaching_loop_demo.py',          'desc': 'Teaching loop demo (S15)',                  'batch': None, 'type': 'demo'},
+    {'file': '18_element_decomposition.py',       'desc': 'Element decomposition — Branch C (main)',   'batch': None, 'type': 'detection'},
+    # ── Support / intake ─────────────────────────────────────────────────────
     {'file': '31_upload_intake_wrapper.py',       'desc': 'Upload / intake wrapper (S18)',             'batch': 'helper', 'type': 'intake'},
     {'file': 'plan_run_context.py',               'desc': 'Shared plan run context helper',            'batch': 'helper', 'type': 'helper'},
 ]
 
-BATCH3_RECOMMENDATIONS = [
-    ('22_partial_code_resolver.py',   'Reads partial_code_resolution.json; outputs updated JSON. Medium effort.'),
-    ('23_human_review_writeback.py',  'Reads/writes human_review_answers.json + pipeline JSONs. Medium effort. Critical for multi-plan review loop.'),
-    ('28_teaching_loop_demo.py',      'Demo-only; low priority but straightforward to parameterize.'),
+BATCH4_RECOMMENDATIONS = [
+    ('06_match_signs.py',          'Sign detection (Branch A). Reads source PDF directly. High effort — needs --pdf-path + --plan-run-dir.'),
+    ('07_extract_legend.py',       'Legend extraction. Reads source PDF. High effort.'),
+    ('18_element_decomposition.py','Element decomposition (Branch C / main path). High effort — largest detection script.'),
+    ('13_vector_glyph_recognition.py', 'Vector glyph recognition. Medium effort once PDF path is parameterized.'),
+    ('15_scale_measurement.py',    'Scale measurement. Also needs per-plan calibration_template.json.'),
+    ('16_legend_color_match.py',   'Legend color match. Medium effort.'),
 ]
 
 BLOCKERS = [
     ('Heavy detection scripts not parameterized',
-     '06, 07, 10, 13, 15, 16, 18 read the source PDF directly and write to outputs/. '
+     '06, 07, 13, 15, 16, 18 read the source PDF directly and write to outputs/. '
      'These need --plan-run-dir support before a full end-to-end plan-scoped run is possible.'),
-    ('23_human_review_writeback.py not parameterized',
-     'The writeback script applies human answers to pipeline outputs. Until parameterized, '
-     'answers submitted in plan-scoped mode cannot be applied without touching global outputs.'),
     ('Source PDF copy not linked to pipeline',
      'The intake wrapper (31) copies the PDF to runs/<slug>/source/. '
      'Detection scripts still read from a hardcoded path. '
@@ -98,6 +99,7 @@ def scan_scripts() -> List[Dict]:
 def build_md(scripts: List[Dict], ts: str) -> str:
     batch1   = [s for s in scripts if s['batch'] == 1]
     batch2   = [s for s in scripts if s['batch'] == 2]
+    batch3   = [s for s in scripts if s['batch'] == 3]
     hardcoded= [s for s in scripts if s['batch'] is None]
     helpers  = [s for s in scripts if s['batch'] == 'helper']
 
@@ -117,7 +119,8 @@ def build_md(scripts: List[Dict], ts: str) -> str:
         '|---|---|',
         f'| Batch 1 | {len(batch1)} scripts |',
         f'| Batch 2 | {len(batch2)} scripts |',
-        f'| Not yet parameterized | {len(hardcoded)} scripts |',
+        f'| Batch 3 | {len(batch3)} scripts |',
+        f'| Not yet parameterized (Batch 4) | {len(hardcoded)} scripts |',
         f'| Helper / intake | {len(helpers)} scripts |',
         '',
         '---',
@@ -137,7 +140,7 @@ def build_md(scripts: List[Dict], ts: str) -> str:
         '| Script | Description | Note |',
         '|---|---|---|',
     ]
-    notes = {
+    b2_notes = {
         '14_build_review_queue.py':  'Fixed module-level `ITEMS.mkdir()` + added `OUT`/`ITEMS` override',
         '17_boq_aggregator.py':      'Fixed bare `Path("outputs/...")` → `SCRIPT_DIR`-relative paths',
         '25_teaching_loop_answer_pack.py': 'Overrides `OUT_DIR`, all `F_*` inputs/outputs, `PIPELINE_PATHS`',
@@ -145,7 +148,24 @@ def build_md(scripts: List[Dict], ts: str) -> str:
         '29_plan_scanner_prototype_shell.py': 'Overrides `OUT_DIR`, output files',
     }
     for s in batch2:
-        note = notes.get(s['file'], '')
+        note = b2_notes.get(s['file'], '')
+        lines.append(f'| `{s["file"]}` | {s["desc"]} | {note} |')
+
+    lines += [
+        '',
+        '## Batch 3 — Converted',
+        '',
+        '| Script | Description | Note |',
+        '|---|---|---|',
+    ]
+    b3_notes = {
+        '20_validation_layer.py':     'Overrides `OUTPUTS`, `REVIEW_QUEUE`, output files; `CATALOG_DIR`/`SIGN_INDEX` kept global',
+        '22_partial_code_resolver.py':'Overrides `OUT_DIR`, `IN_VALIDATION`, `IN_LEGEND`, output files; `SIGN_INDEX`/`CATALOG_DIR` kept global',
+        '23_human_review_writeback.py':'Overrides all paths; human answer safety: ONLY reads from run\'s `outputs/human_review_answers.json`',
+        '28_teaching_loop_demo.py':   'Overrides `OUT_DIR`, all `F_*` source + `OUT_DEMO_*` paths; optional-input info logged',
+    }
+    for s in batch3:
+        note = b3_notes.get(s['file'], '')
         lines.append(f'| `{s["file"]}` | {s["desc"]} | {note} |')
 
     lines += [
@@ -160,7 +180,7 @@ def build_md(scripts: List[Dict], ts: str) -> str:
 
     lines += [
         '',
-        '## Not Yet Parameterized',
+        '## Not Yet Parameterized (Batch 4 targets)',
         '',
         '| Script | Description | Type |',
         '|---|---|---|',
@@ -180,14 +200,19 @@ def build_md(scripts: List[Dict], ts: str) -> str:
         '   # → creates runs/<plan_slug>/ with plan_config.json',
         '   ```',
         '',
-        '2. Run any Batch 1 or Batch 2 script against that directory:',
+        '2. Run any Batch 1–3 script against that directory:',
         '   ```bash',
         '   RUN=runs/poc_plan_50_448_02_400_20260520_223259',
-        '   .venv/bin/python3 25_teaching_loop_answer_pack.py --plan-run-dir $RUN',
-        '   .venv/bin/python3 27_static_review_form_generator.py --plan-run-dir $RUN',
-        '   .venv/bin/python3 29_plan_scanner_prototype_shell.py --plan-run-dir $RUN',
-        '   .venv/bin/python3 17_boq_aggregator.py --plan-run-dir $RUN',
-        '   .venv/bin/python3 30_local_json_persistence_flow.py --plan-run-dir $RUN',
+        '   .venv/bin/python3 14_build_review_queue.py               --plan-run-dir $RUN',
+        '   .venv/bin/python3 17_boq_aggregator.py                   --plan-run-dir $RUN',
+        '   .venv/bin/python3 20_validation_layer.py                 --plan-run-dir $RUN',
+        '   .venv/bin/python3 22_partial_code_resolver.py            --plan-run-dir $RUN',
+        '   .venv/bin/python3 23_human_review_writeback.py           --plan-run-dir $RUN',
+        '   .venv/bin/python3 25_teaching_loop_answer_pack.py        --plan-run-dir $RUN',
+        '   .venv/bin/python3 27_static_review_form_generator.py     --plan-run-dir $RUN',
+        '   .venv/bin/python3 28_teaching_loop_demo.py               --plan-run-dir $RUN',
+        '   .venv/bin/python3 29_plan_scanner_prototype_shell.py     --plan-run-dir $RUN',
+        '   .venv/bin/python3 30_local_json_persistence_flow.py      --plan-run-dir $RUN',
         '   ```',
         '',
         '3. All outputs land under `runs/<plan_slug>/outputs/`. The global `outputs/`',
@@ -209,12 +234,12 @@ def build_md(scripts: List[Dict], ts: str) -> str:
     lines += [
         '---',
         '',
-        '## Recommended Batch 3 Targets',
+        '## Recommended Batch 4 Targets (Heavy Detection Scripts)',
         '',
         '| Script | Reason |',
         '|---|---|',
     ]
-    for file, reason in BATCH3_RECOMMENDATIONS:
+    for file, reason in BATCH4_RECOMMENDATIONS:
         lines.append(f'| `{file}` | {reason} |')
 
     lines += [
@@ -229,9 +254,10 @@ def build_md(scripts: List[Dict], ts: str) -> str:
 def build_html(scripts: List[Dict], ts: str, md: str) -> str:
     batch1   = [s for s in scripts if s['batch'] == 1]
     batch2   = [s for s in scripts if s['batch'] == 2]
+    batch3   = [s for s in scripts if s['batch'] == 3]
     hardcoded= [s for s in scripts if s['batch'] is None]
     helpers  = [s for s in scripts if s['batch'] == 'helper']
-    total_done = len(batch1) + len(batch2)
+    total_done = len(batch1) + len(batch2) + len(batch3)
     total_todo = len(hardcoded)
 
     def script_rows(items: List[Dict]) -> str:
@@ -246,18 +272,35 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
             )
         return '\n'.join(rows)
 
-    notes_map = {
+    b2_notes_map = {
         '14_build_review_queue.py':           'Fixed module-level mkdir; overrides OUT + ITEMS',
         '17_boq_aggregator.py':               'Fixed bare Path("outputs/…") → SCRIPT_DIR-relative',
         '25_teaching_loop_answer_pack.py':    'Overrides OUT_DIR, all F_* inputs/outputs, PIPELINE_PATHS',
         '27_static_review_form_generator.py': 'Overrides OUT_DIR, F_PACK, output files',
         '29_plan_scanner_prototype_shell.py': 'Overrides OUT_DIR, output files',
     }
+    b3_notes_map = {
+        '20_validation_layer.py':      'Overrides OUTPUTS, REVIEW_QUEUE, output files; CATALOG_DIR/SIGN_INDEX kept global',
+        '22_partial_code_resolver.py': 'Overrides OUT_DIR, IN_VALIDATION, IN_LEGEND, output files; SIGN_INDEX/CATALOG_DIR kept global',
+        '23_human_review_writeback.py':'Overrides all paths; human answer safety: ONLY reads from run\'s human_review_answers.json',
+        '28_teaching_loop_demo.py':    'Overrides OUT_DIR, all F_* source + OUT_DEMO_* paths; optional-input info logged',
+    }
 
     def b2_rows() -> str:
         rows = []
         for s in batch2:
-            note = notes_map.get(s['file'], '')
+            note = b2_notes_map.get(s['file'], '')
+            rows.append(
+                f'<tr><td><code>{s["file"]}</code></td>'
+                f'<td>{s["desc"]}</td>'
+                f'<td style="font-size:0.85em;color:#555">{note}</td></tr>'
+            )
+        return '\n'.join(rows)
+
+    def b3_rows_html() -> str:
+        rows = []
+        for s in batch3:
+            note = b3_notes_map.get(s['file'], '')
             rows.append(
                 f'<tr><td><code>{s["file"]}</code></td>'
                 f'<td>{s["desc"]}</td>'
@@ -274,9 +317,9 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
             )
         return '\n'.join(rows)
 
-    def b3_rows() -> str:
+    def b4_rows() -> str:
         rows = []
-        for file, reason in BATCH3_RECOMMENDATIONS:
+        for file, reason in BATCH4_RECOMMENDATIONS:
             rows.append(f'<tr><td><code>{file}</code></td><td>{reason}</td></tr>')
         return '\n'.join(rows)
 
@@ -309,8 +352,9 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
 <p style="color:#555">Generated: {ts} &nbsp;|&nbsp; Scope: <code>research/cad-pdf-intelligence/</code></p>
 
 <div>
-  <div class="stat-box"><div class="stat-num">{len(batch1)}</div><div class="stat-lbl">Batch 1 scripts</div></div>
-  <div class="stat-box"><div class="stat-num">{len(batch2)}</div><div class="stat-lbl">Batch 2 scripts</div></div>
+  <div class="stat-box"><div class="stat-num">{len(batch1)}</div><div class="stat-lbl">Batch 1</div></div>
+  <div class="stat-box"><div class="stat-num">{len(batch2)}</div><div class="stat-lbl">Batch 2</div></div>
+  <div class="stat-box"><div class="stat-num">{len(batch3)}</div><div class="stat-lbl">Batch 3</div></div>
   <div class="stat-box"><div class="stat-num">{total_done}</div><div class="stat-lbl">Total converted</div></div>
   <div class="stat-box"><div class="stat-num">{total_todo}</div><div class="stat-lbl">Still hardcoded</div></div>
 </div>
@@ -327,13 +371,19 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
 {b2_rows()}
 </table>
 
+<h2>Batch 3 — Converted</h2>
+<table>
+<tr><th>Script</th><th>Description</th><th>Implementation note</th></tr>
+{b3_rows_html()}
+</table>
+
 <h2>Helpers / Intake</h2>
 <table>
 <tr><th>Script</th><th>Description</th><th>--plan-run-dir</th></tr>
 {script_rows(helpers)}
 </table>
 
-<h2>Not Yet Parameterized</h2>
+<h2>Not Yet Parameterized (Batch 4 targets)</h2>
 <table>
 <tr><th>Script</th><th>Description</th><th>Type</th></tr>
 {''.join(f'<tr><td><code>{s["file"]}</code></td><td>{s["desc"]}</td><td><span class="badge-no">{s["type"]}</span></td></tr>' for s in hardcoded)}
@@ -343,13 +393,18 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
 <p>1. Create a plan-scoped run directory:</p>
 <pre>.venv/bin/python3 31_upload_intake_wrapper.py /path/to/plan.pdf
 # → creates runs/&lt;plan_slug&gt;/ with plan_config.json</pre>
-<p>2. Run parameterized scripts against that directory:</p>
+<p>2. Run Batch 1–3 scripts against that directory:</p>
 <pre>RUN=runs/poc_plan_50_448_02_400_20260520_223259
-.venv/bin/python3 25_teaching_loop_answer_pack.py   --plan-run-dir $RUN
-.venv/bin/python3 27_static_review_form_generator.py --plan-run-dir $RUN
-.venv/bin/python3 29_plan_scanner_prototype_shell.py --plan-run-dir $RUN
-.venv/bin/python3 17_boq_aggregator.py               --plan-run-dir $RUN
-.venv/bin/python3 30_local_json_persistence_flow.py  --plan-run-dir $RUN</pre>
+.venv/bin/python3 14_build_review_queue.py               --plan-run-dir $RUN
+.venv/bin/python3 17_boq_aggregator.py                   --plan-run-dir $RUN
+.venv/bin/python3 20_validation_layer.py                 --plan-run-dir $RUN
+.venv/bin/python3 22_partial_code_resolver.py            --plan-run-dir $RUN
+.venv/bin/python3 23_human_review_writeback.py           --plan-run-dir $RUN
+.venv/bin/python3 25_teaching_loop_answer_pack.py        --plan-run-dir $RUN
+.venv/bin/python3 27_static_review_form_generator.py     --plan-run-dir $RUN
+.venv/bin/python3 28_teaching_loop_demo.py               --plan-run-dir $RUN
+.venv/bin/python3 29_plan_scanner_prototype_shell.py     --plan-run-dir $RUN
+.venv/bin/python3 30_local_json_persistence_flow.py      --plan-run-dir $RUN</pre>
 <p>3. Outputs land under <code>runs/&lt;plan_slug&gt;/outputs/</code>. Global <code>outputs/</code> is untouched.</p>
 <p>4. Legacy mode (no flag) still works unchanged.</p>
 
@@ -359,10 +414,10 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
 {blocker_rows()}
 </table>
 
-<h2>Recommended Batch 3 Targets</h2>
+<h2>Recommended Batch 4 Targets (Heavy Detection Scripts)</h2>
 <table>
 <tr><th>Script</th><th>Reason</th></tr>
-{b3_rows()}
+{b4_rows()}
 </table>
 
 <footer>Research-only. No production DB or UI modified. approved_for_boq: false on all items.</footer>
@@ -394,10 +449,12 @@ def main() -> None:
 
     batch1 = [s for s in scripts if s['batch'] == 1]
     batch2 = [s for s in scripts if s['batch'] == 2]
+    batch3 = [s for s in scripts if s['batch'] == 3]
     hard   = [s for s in scripts if s['batch'] is None]
     print()
     print(f'Batch 1 converted  : {len(batch1)}')
     print(f'Batch 2 converted  : {len(batch2)}')
+    print(f'Batch 3 converted  : {len(batch3)}')
     print(f'Still hardcoded    : {len(hard)}')
     print()
     print(f'Report: {OUT_HTML}')

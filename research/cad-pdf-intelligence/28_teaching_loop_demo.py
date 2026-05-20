@@ -27,16 +27,18 @@ No BOQ item is ever set to approved_for_boq=true.
 No paid API. No production changes. No DB changes. Research-only.
 """
 from __future__ import annotations
-import copy, json, time
+import argparse, copy, json, time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+from plan_run_context import PlanRunContext
 
 # ── Config ──────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent
 OUT_DIR    = SCRIPT_DIR / 'outputs'
 
-# Source files (read-only)
+# Source files (read-only — deep copy in memory, originals never written)
 F_PARTIAL      = OUT_DIR / 'partial_code_resolution.json'
 F_ELEMENTS     = OUT_DIR / 'element_groups.json'
 F_BOQ          = OUT_DIR / 'boq_unified_draft.json'
@@ -44,7 +46,7 @@ F_QUEUE        = OUT_DIR / 'review_queue.json'
 F_LEGEND_ROWS  = OUT_DIR / 'legend_rows.json'
 F_LEGEND_VOCAB = OUT_DIR / 'legend_vocabulary.json'
 
-# Demo outputs only
+# Demo outputs only (all marked demo=true, not_for_operational_use=true)
 OUT_DEMO_ANSWERS = OUT_DIR / 'human_review_answers.demo.json'
 OUT_DEMO_APP     = OUT_DIR / 'teaching_loop_demo_application.json'
 OUT_DEMO_MD      = OUT_DIR / 'teaching_loop_demo_report.md'
@@ -984,4 +986,47 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Teaching Loop Demo — Seeded Answer Flow (Stage S15)')
+    parser.add_argument(
+        '--plan-run-dir', default=None,
+        metavar='DIR',
+        help='Path to an isolated plan run directory (runs/<plan_slug>/). '
+             'When supplied, all I/O is scoped to that run\'s outputs/ dir. '
+             'Omit to use the legacy global outputs/ directory.')
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+
+    if _ctx.is_plan_scoped:
+        OUT_DIR          = _ctx.outputs_dir
+        # Source files (read-only — all optional; missing ones are skipped gracefully)
+        F_PARTIAL        = OUT_DIR / 'partial_code_resolution.json'
+        F_ELEMENTS       = OUT_DIR / 'element_groups.json'
+        F_BOQ            = OUT_DIR / 'boq_unified_draft.json'
+        F_QUEUE          = OUT_DIR / 'review_queue.json'
+        F_LEGEND_ROWS    = OUT_DIR / 'legend_rows.json'
+        F_LEGEND_VOCAB   = OUT_DIR / 'legend_vocabulary.json'
+        # Demo outputs — scoped to this run; never written to global outputs/
+        OUT_DEMO_ANSWERS = OUT_DIR / 'human_review_answers.demo.json'
+        OUT_DEMO_APP     = OUT_DIR / 'teaching_loop_demo_application.json'
+        OUT_DEMO_MD      = OUT_DIR / 'teaching_loop_demo_report.md'
+        OUT_DEMO_HTML    = OUT_DIR / 'teaching_loop_demo_report.html'
+
+        _optional_inputs = [
+            (F_PARTIAL,      'partial_code_resolution.json', '22_partial_code_resolver.py'),
+            (F_ELEMENTS,     'element_groups.json',          '18_element_decomposition.py'),
+            (F_BOQ,          'boq_unified_draft.json',       '17_boq_aggregator.py'),
+            (F_QUEUE,        'review_queue.json',            '14_build_review_queue.py'),
+            (F_LEGEND_ROWS,  'legend_rows.json',             '07_extract_legend.py'),
+            (F_LEGEND_VOCAB, 'legend_vocabulary.json',       '07_extract_legend.py'),
+        ]
+        _missing = [(n, p) for path, n, p in _optional_inputs if not path.exists()]
+        if _missing:
+            print('[INFO] Plan-scoped mode: the following source files are not yet present in the run outputs dir.')
+            print('       Demo will run with reduced coverage — missing files are skipped gracefully.')
+            for _name, _producer in _missing:
+                print(f'  MISSING (optional): {_name}  — run {_producer} --plan-run-dir first.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
+
     main()

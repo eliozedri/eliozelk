@@ -32,13 +32,16 @@ Research-only. approved_for_boq: false on ALL items always.
 No image comparison in this step. No vision API. Do not overclaim.
 """
 from __future__ import annotations
-import json, re, time
+import argparse, json, re, time
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Any
+
+from plan_run_context import PlanRunContext
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR  = Path(__file__).parent
 OUT_DIR     = SCRIPT_DIR / 'outputs'
+# SIGN_INDEX and CATALOG_DIR are plan-independent read-only references — stay global
 SIGN_INDEX  = SCRIPT_DIR.parent.parent / 'מקורות מידע' / 'Sign' / 'knowledge-base' / 'SIGN_INDEX.md'
 CATALOG_DIR = SCRIPT_DIR / 'sign_catalog'
 
@@ -756,4 +759,26 @@ S9 COMPLETE
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Partial Code Resolver (Stage S9)')
+    parser.add_argument(
+        '--plan-run-dir', default=None,
+        help='Path to a plan-scoped run directory (created by 31_upload_intake_wrapper.py). '
+             'If omitted, runs in legacy mode against outputs/',
+    )
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+    if _ctx.is_plan_scoped:
+        # SIGN_INDEX and CATALOG_DIR remain global read-only shared references
+        OUT_DIR       = _ctx.outputs_dir                            # type: ignore[assignment]
+        IN_VALIDATION = OUT_DIR / 'validation_results.json'
+        IN_LEGEND     = OUT_DIR / 'legend_vocabulary.json'
+        OUT_JSON      = OUT_DIR / 'partial_code_resolution.json'
+        OUT_MD        = OUT_DIR / 'partial_code_resolution_report.md'
+        OUT_HTML      = OUT_DIR / 'partial_code_resolution_report.html'
+        if not IN_VALIDATION.exists():
+            print('[WARN] Plan-scoped mode: missing required input in run outputs dir:')
+            print(f'  MISSING (required): {IN_VALIDATION}')
+            print('  Run 20_validation_layer.py --plan-run-dir first.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
     main()
