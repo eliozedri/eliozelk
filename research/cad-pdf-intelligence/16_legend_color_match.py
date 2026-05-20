@@ -17,7 +17,7 @@ All outputs: requires_review=True, approved_for_boq=False.
 """
 
 from __future__ import annotations
-import json, math, re, time
+import argparse, json, math, re, time
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -27,14 +27,17 @@ import cv2
 import pdfplumber
 import fitz
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
-PDF_PATH     = Path('/Users/eliozedri/Downloads/50-448-02-400.pdf')
-LEGEND_JSON  = Path('outputs/legend_rows.json')
-MEAS_JSON    = Path('outputs/scale_measurement/results.json')
-BOQ_JSON     = Path('outputs/scale_measurement/boq_draft.json')
+from plan_run_context import PlanRunContext
 
-OUT          = Path('outputs/legend_color_match')
-OUT.mkdir(parents=True, exist_ok=True)
+# ── Paths ─────────────────────────────────────────────────────────────────────
+SCRIPT_DIR   = Path(__file__).parent
+PDF_PATH     = Path('/Users/eliozedri/Downloads/50-448-02-400.pdf')
+LEGEND_JSON  = SCRIPT_DIR / 'outputs' / 'legend_rows.json'
+MEAS_JSON    = SCRIPT_DIR / 'outputs' / 'scale_measurement' / 'results.json'
+BOQ_JSON     = SCRIPT_DIR / 'outputs' / 'scale_measurement' / 'boq_draft.json'
+
+OUT          = SCRIPT_DIR / 'outputs' / 'legend_color_match'
+# Note: OUT.mkdir() moved into main() so plan-scoped overrides take effect first.
 
 OUT_TAX      = OUT / 'color_taxonomy_candidates.json'
 OUT_CAL_TPL  = OUT / 'calibration_template.json'
@@ -795,6 +798,9 @@ calibrated measurements.</p>
 
 def main() -> None:
     t0 = time.time()
+
+    OUT.mkdir(parents=True, exist_ok=True)
+
     print('=' * 60)
     print('POC C (Stage I) — Legend Color Match + Scale Calibration')
     print('16_legend_color_match.py')
@@ -957,4 +963,38 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Legend Color Match + Scale Calibration — POC C (Stage I)')
+    parser.add_argument(
+        '--plan-run-dir', default=None, metavar='DIR',
+        help='Path to an isolated plan run directory (runs/<plan_slug>/). '
+             'When supplied, all I/O is scoped to that run. '
+             'Omit to use the legacy global outputs/ directory.')
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+
+    if _ctx.is_plan_scoped:
+        PDF_PATH     = _ctx.source_pdf_path
+        LEGEND_JSON  = _ctx.outputs_dir / 'legend_rows.json'
+        MEAS_JSON    = _ctx.outputs_dir / 'scale_measurement' / 'results.json'
+        BOQ_JSON     = _ctx.outputs_dir / 'scale_measurement' / 'boq_draft.json'
+        OUT          = _ctx.outputs_dir / 'legend_color_match'
+        OUT_TAX      = OUT / 'color_taxonomy_candidates.json'
+        OUT_CAL_TPL  = OUT / 'calibration_template.json'
+        OUT_CAL_RES  = OUT / 'calibration_result.json'
+        OUT_REPORT   = OUT / 'report.md'
+        OUT_HTML     = OUT / 'report.html'
+        OUT_DBG_LEG  = OUT / 'legend_debug.png'
+        OUT_DBG_PLAN = OUT / 'scale_bar_debug.png'
+
+        if not PDF_PATH.exists():
+            print(f'[WARN] Plan-scoped mode: source PDF not found: {PDF_PATH}')
+            print('  Run 31_upload_intake_wrapper.py first to register the source PDF.')
+        if not LEGEND_JSON.exists():
+            print(f'[WARN] Plan-scoped mode: missing required input in run outputs dir:')
+            print(f'  MISSING (required): {LEGEND_JSON}')
+            print('  Run 07_extract_legend.py --plan-run-dir first.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
+
     main()

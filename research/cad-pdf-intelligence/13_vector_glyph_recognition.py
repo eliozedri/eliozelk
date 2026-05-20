@@ -13,6 +13,7 @@ Human label injection: outputs/vector_glyph_human_labels.json (optional).
 Run: .venv/bin/python3 13_vector_glyph_recognition.py
 """
 
+import argparse
 import json
 import sys
 import time
@@ -28,6 +29,8 @@ from PIL import Image, ImageDraw
 import pytesseract
 from scipy.cluster.hierarchy import fcluster, linkage
 from scipy.spatial.distance import cdist, squareform
+
+from plan_run_context import PlanRunContext
 
 warnings.filterwarnings("ignore")
 
@@ -1835,4 +1838,42 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description='Vector Glyph Recognition — POC 3 v2 (Stage G)')
+    parser.add_argument(
+        '--plan-run-dir', default=None, metavar='DIR',
+        help='Path to an isolated plan run directory (runs/<plan_slug>/). '
+             'When supplied, all I/O is scoped to that run. '
+             'Omit to use the legacy global outputs/ directory.')
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=BASE)
+
+    if _ctx.is_plan_scoped:
+        OUT                  = _ctx.outputs_dir
+        PDF_PATH             = str(_ctx.source_pdf_path)
+        INV_JSON             = OUT / 'sign_inventory.json'
+        POC1_JSON            = OUT / 'tight_numeric_crop_results.json'
+        POC2_JSON            = OUT / 'digit_template_results.json'
+        DBG_DIR              = OUT / 'vector_glyph_debug'
+        OUT_JSON             = OUT / 'vector_glyph_results.json'
+        REPORT               = OUT / 'vector_glyph_report.md'
+        HUMAN_LABELS_JSON    = OUT / 'vector_glyph_human_labels.json'
+        HUMAN_LABELS_EXAMPLE = OUT / 'vector_glyph_human_labels.example.json'
+
+        if not Path(PDF_PATH).exists():
+            print(f'[WARN] Plan-scoped mode: source PDF not found: {PDF_PATH}')
+            print('  Run 31_upload_intake_wrapper.py first to register the source PDF.')
+        _optional = [
+            (INV_JSON,  'sign_inventory.json',              '06_match_signs.py or earlier stage'),
+            (POC1_JSON, 'tight_numeric_crop_results.json',  'earlier POC stage'),
+            (POC2_JSON, 'digit_template_results.json',       'earlier POC stage'),
+        ]
+        _missing = [(n, p) for path, n, p in _optional if not path.exists()]
+        if _missing:
+            print('[INFO] Plan-scoped mode: optional source files not yet present in run:')
+            for _n, _p in _missing:
+                print(f'  MISSING (optional): {_n}  — run {_p} --plan-run-dir first.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
+
     main()

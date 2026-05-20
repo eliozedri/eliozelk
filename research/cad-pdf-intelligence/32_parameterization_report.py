@@ -41,38 +41,43 @@ REGISTRY: List[Dict] = [
     {'file': '22_partial_code_resolver.py',       'desc': 'Partial code resolver (S9)',                'batch': 3, 'type': 'analysis'},
     {'file': '23_human_review_writeback.py',      'desc': 'Human review writeback (S10)',              'batch': 3, 'type': 'writeback'},
     {'file': '28_teaching_loop_demo.py',          'desc': 'Teaching loop demo (S15)',                  'batch': 3, 'type': 'demo'},
-    # ── Not yet parameterized — Batch 4 targets (heavy detection scripts) ───
-    {'file': '06_match_signs.py',                 'desc': 'Sign detection — Branch A (expensive)',      'batch': None, 'type': 'detection'},
-    {'file': '07_extract_legend.py',              'desc': 'Legend extraction',                          'batch': None, 'type': 'detection'},
-    {'file': '13_vector_glyph_recognition.py',    'desc': 'Vector glyph / sign code recognition (S4)', 'batch': None, 'type': 'detection'},
-    {'file': '15_scale_measurement.py',           'desc': 'Scale measurement — Branch B (expensive)',  'batch': None, 'type': 'detection'},
-    {'file': '16_legend_color_match.py',          'desc': 'Legend color match / taxonomy',             'batch': None, 'type': 'detection'},
-    {'file': '18_element_decomposition.py',       'desc': 'Element decomposition — Branch C (main)',   'batch': None, 'type': 'detection'},
+    # ── Batch 4 converted ────────────────────────────────────────────────────
+    {'file': '06_match_signs.py',                 'desc': 'Sign detection — Branch A (expensive)',      'batch': 4, 'type': 'detection'},
+    {'file': '07_extract_legend.py',              'desc': 'Legend extraction (Stage F)',                'batch': 4, 'type': 'detection'},
+    {'file': '13_vector_glyph_recognition.py',    'desc': 'Vector glyph / sign code recognition',      'batch': 4, 'type': 'detection'},
+    {'file': '15_scale_measurement.py',           'desc': 'Scale measurement — Branch B',              'batch': 4, 'type': 'detection'},
+    {'file': '16_legend_color_match.py',          'desc': 'Legend color match / taxonomy',             'batch': 4, 'type': 'detection'},
+    {'file': '18_element_decomposition.py',       'desc': 'Element decomposition — Branch C (main)',   'batch': 4, 'type': 'detection'},
     # ── Support / intake ─────────────────────────────────────────────────────
     {'file': '31_upload_intake_wrapper.py',       'desc': 'Upload / intake wrapper (S18)',             'batch': 'helper', 'type': 'intake'},
     {'file': 'plan_run_context.py',               'desc': 'Shared plan run context helper',            'batch': 'helper', 'type': 'helper'},
 ]
 
-BATCH4_RECOMMENDATIONS = [
-    ('06_match_signs.py',          'Sign detection (Branch A). Reads source PDF directly. High effort — needs --pdf-path + --plan-run-dir.'),
-    ('07_extract_legend.py',       'Legend extraction. Reads source PDF. High effort.'),
-    ('18_element_decomposition.py','Element decomposition (Branch C / main path). High effort — largest detection script.'),
-    ('13_vector_glyph_recognition.py', 'Vector glyph recognition. Medium effort once PDF path is parameterized.'),
-    ('15_scale_measurement.py',    'Scale measurement. Also needs per-plan calibration_template.json.'),
-    ('16_legend_color_match.py',   'Legend color match. Medium effort.'),
+NEXT_STEPS = [
+    ('End-to-end plan-scoped pipeline run',
+     'All 19 pipeline scripts now support --plan-run-dir. '
+     'Run the full pipeline against a real plan using the run directory to validate the complete chain.'),
+    ('Scale calibration per-plan',
+     'calibration_template.json is written to runs/<slug>/outputs/legend_color_match/. '
+     'User must fill in two known-distance points per plan to get verified measurements.'),
+    ('Production sidebar integration',
+     'The Plan Scanner UI (sidebar → סורק תוכניות) can now be wired to invoke '
+     '31_upload_intake_wrapper.py → detection pipeline → review form → export. '
+     'This is a separate implementation phase.'),
+    ('BOQ approval workflow',
+     '0 / 47+ BOQ items are approved. An approval interface must be built before BOQ data '
+     'is safe for procurement or field use.'),
 ]
 
 BLOCKERS = [
-    ('Heavy detection scripts not parameterized',
-     '06, 07, 13, 15, 16, 18 read the source PDF directly and write to outputs/. '
-     'These need --plan-run-dir support before a full end-to-end plan-scoped run is possible.'),
-    ('Source PDF copy not linked to pipeline',
-     'The intake wrapper (31) copies the PDF to runs/<slug>/source/. '
-     'Detection scripts still read from a hardcoded path. '
-     'Plan-scoped detection requires passing --pdf-path through the detection scripts.'),
-    ('Scale calibration still global',
-     'calibration_template.json is read from global outputs/. '
-     'Each plan needs its own calibration data under its run directory.'),
+    ('Source PDF must be in runs/<slug>/source/',
+     'Detection scripts read source_pdf_path from plan_config.json via PlanRunContext. '
+     'The intake wrapper (31_upload_intake_wrapper.py) must be run first to register the PDF. '
+     'The PDF itself must exist at the registered path when detection scripts run.'),
+    ('Scale calibration still requires manual user input per plan',
+     'calibration_template.json is written to the run\'s legend_color_match/ subdir. '
+     'Each plan needs its own calibration data (two known-distance points). '
+     'No automatic scale detection is available yet — 1:500 fallback used until calibrated.'),
 ]
 
 
@@ -100,6 +105,7 @@ def build_md(scripts: List[Dict], ts: str) -> str:
     batch1   = [s for s in scripts if s['batch'] == 1]
     batch2   = [s for s in scripts if s['batch'] == 2]
     batch3   = [s for s in scripts if s['batch'] == 3]
+    batch4   = [s for s in scripts if s['batch'] == 4]
     hardcoded= [s for s in scripts if s['batch'] is None]
     helpers  = [s for s in scripts if s['batch'] == 'helper']
 
@@ -120,7 +126,8 @@ def build_md(scripts: List[Dict], ts: str) -> str:
         f'| Batch 1 | {len(batch1)} scripts |',
         f'| Batch 2 | {len(batch2)} scripts |',
         f'| Batch 3 | {len(batch3)} scripts |',
-        f'| Not yet parameterized (Batch 4) | {len(hardcoded)} scripts |',
+        f'| Batch 4 | {len(batch4)} scripts |',
+        f'| Not yet parameterized | {len(hardcoded)} scripts |',
         f'| Helper / intake | {len(helpers)} scripts |',
         '',
         '---',
@@ -170,6 +177,25 @@ def build_md(scripts: List[Dict], ts: str) -> str:
 
     lines += [
         '',
+        '## Batch 4 — Converted (Heavy Detection Scripts)',
+        '',
+        '| Script | Description | Note |',
+        '|---|---|---|',
+    ]
+    b4_notes = {
+        '06_match_signs.py':              'Pattern A: overrides `cad_utils.OUTPUTS` + `DEFAULT_PDF`; reads PDF from `plan_config.json`',
+        '07_extract_legend.py':           'Pattern A: overrides `cad_utils.OUTPUTS` + `DEFAULT_PDF`; all legend/icon outputs plan-scoped',
+        '13_vector_glyph_recognition.py': 'Pattern C: overrides `OUT`, `PDF_PATH`, all derived paths incl. per-plan `HUMAN_LABELS_JSON`',
+        '15_scale_measurement.py':        'Pattern B+C: fixed bare paths; moved module-level mkdir into main(); overrides `OUT` + all outputs',
+        '16_legend_color_match.py':       'Pattern B+C: fixed bare paths; moved module-level mkdir into main(); overrides all inputs + outputs',
+        '18_element_decomposition.py':    'Pattern B+C: fixed bare paths; overrides `PDF_PATH`, `OUT_DIR`, `OUT_JSON`, `OUT_MD`, `OUT_HTML`',
+    }
+    for s in batch4:
+        note = b4_notes.get(s['file'], '')
+        lines.append(f'| `{s["file"]}` | {s["desc"]} | {note} |')
+
+    lines += [
+        '',
         '## Helpers / Intake',
         '',
         '| Script | Description |',
@@ -178,31 +204,42 @@ def build_md(scripts: List[Dict], ts: str) -> str:
     for s in helpers:
         lines.append(f'| `{s["file"]}` | {s["desc"]} |')
 
-    lines += [
-        '',
-        '## Not Yet Parameterized (Batch 4 targets)',
-        '',
-        '| Script | Description | Type |',
-        '|---|---|---|',
-    ]
-    for s in hardcoded:
-        lines.append(f'| `{s["file"]}` | {s["desc"]} | {s["type"]} |')
+    if hardcoded:
+        lines += [
+            '',
+            '## Not Yet Parameterized',
+            '',
+            '| Script | Description | Type |',
+            '|---|---|---|',
+        ]
+        for s in hardcoded:
+            lines.append(f'| `{s["file"]}` | {s["desc"]} | {s["type"]} |')
 
     lines += [
         '',
         '---',
         '',
-        '## How to Run with `--plan-run-dir`',
+        '## How to Run a Full Plan-Scoped Pipeline',
         '',
-        '1. Create a plan-scoped run directory first:',
+        '1. Register the plan (creates run directory + plan_config.json):',
         '   ```bash',
         '   .venv/bin/python3 31_upload_intake_wrapper.py /path/to/plan.pdf',
         '   # → creates runs/<plan_slug>/ with plan_config.json',
         '   ```',
         '',
-        '2. Run any Batch 1–3 script against that directory:',
+        '2. Run detection scripts (source PDF read from plan_config.json):',
         '   ```bash',
-        '   RUN=runs/poc_plan_50_448_02_400_20260520_223259',
+        '   RUN=runs/<plan_slug>',
+        '   .venv/bin/python3 18_element_decomposition.py    --plan-run-dir $RUN',
+        '   .venv/bin/python3 15_scale_measurement.py        --plan-run-dir $RUN',
+        '   .venv/bin/python3 07_extract_legend.py           --plan-run-dir $RUN',
+        '   .venv/bin/python3 16_legend_color_match.py       --plan-run-dir $RUN',
+        '   .venv/bin/python3 13_vector_glyph_recognition.py --plan-run-dir $RUN',
+        '   .venv/bin/python3 06_match_signs.py              --plan-run-dir $RUN',
+        '   ```',
+        '',
+        '3. Run analysis + review scripts:',
+        '   ```bash',
         '   .venv/bin/python3 14_build_review_queue.py               --plan-run-dir $RUN',
         '   .venv/bin/python3 17_boq_aggregator.py                   --plan-run-dir $RUN',
         '   .venv/bin/python3 20_validation_layer.py                 --plan-run-dir $RUN',
@@ -215,17 +252,14 @@ def build_md(scripts: List[Dict], ts: str) -> str:
         '   .venv/bin/python3 30_local_json_persistence_flow.py      --plan-run-dir $RUN',
         '   ```',
         '',
-        '3. All outputs land under `runs/<plan_slug>/outputs/`. The global `outputs/`',
+        '4. All outputs land under `runs/<plan_slug>/outputs/`. The global `outputs/`',
         '   directory is NOT touched.',
         '',
-        '4. Legacy mode (no flag) still works unchanged:',
-        '   ```bash',
-        '   .venv/bin/python3 25_teaching_loop_answer_pack.py   # legacy',
-        '   ```',
+        '5. Legacy mode (no flag) still works unchanged for all scripts.',
         '',
         '---',
         '',
-        '## Blockers for Full Multi-Plan Execution',
+        '## Remaining Blockers',
         '',
     ]
     for i, (title, desc) in enumerate(BLOCKERS, 1):
@@ -234,13 +268,13 @@ def build_md(scripts: List[Dict], ts: str) -> str:
     lines += [
         '---',
         '',
-        '## Recommended Batch 4 Targets (Heavy Detection Scripts)',
+        '## Next Steps Toward Production',
         '',
-        '| Script | Reason |',
+        '| Priority | Next Step |',
         '|---|---|',
     ]
-    for file, reason in BATCH4_RECOMMENDATIONS:
-        lines.append(f'| `{file}` | {reason} |')
+    for title, desc in NEXT_STEPS:
+        lines.append(f'| — | **{title}**: {desc} |')
 
     lines += [
         '',
@@ -255,9 +289,10 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
     batch1   = [s for s in scripts if s['batch'] == 1]
     batch2   = [s for s in scripts if s['batch'] == 2]
     batch3   = [s for s in scripts if s['batch'] == 3]
+    batch4   = [s for s in scripts if s['batch'] == 4]
     hardcoded= [s for s in scripts if s['batch'] is None]
     helpers  = [s for s in scripts if s['batch'] == 'helper']
-    total_done = len(batch1) + len(batch2) + len(batch3)
+    total_done = len(batch1) + len(batch2) + len(batch3) + len(batch4)
     total_todo = len(hardcoded)
 
     def script_rows(items: List[Dict]) -> str:
@@ -285,6 +320,14 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
         '23_human_review_writeback.py':'Overrides all paths; human answer safety: ONLY reads from run\'s human_review_answers.json',
         '28_teaching_loop_demo.py':    'Overrides OUT_DIR, all F_* source + OUT_DEMO_* paths; optional-input info logged',
     }
+    b4_notes_map = {
+        '06_match_signs.py':              'Pattern A: overrides cad_utils.OUTPUTS + DEFAULT_PDF; reads PDF from plan_config.json',
+        '07_extract_legend.py':           'Pattern A: overrides cad_utils.OUTPUTS + DEFAULT_PDF; all legend/icon outputs plan-scoped',
+        '13_vector_glyph_recognition.py': 'Pattern C: overrides OUT, PDF_PATH, all derived paths incl. per-plan HUMAN_LABELS_JSON',
+        '15_scale_measurement.py':        'Pattern B+C: fixed bare paths; moved module-level mkdir into main(); overrides OUT + all outputs',
+        '16_legend_color_match.py':       'Pattern B+C: fixed bare paths; moved module-level mkdir into main(); overrides all inputs + outputs',
+        '18_element_decomposition.py':    'Pattern B+C: fixed bare paths; overrides PDF_PATH, OUT_DIR, OUT_JSON, OUT_MD, OUT_HTML',
+    }
 
     def b2_rows() -> str:
         rows = []
@@ -308,6 +351,17 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
             )
         return '\n'.join(rows)
 
+    def b4_rows_html() -> str:
+        rows = []
+        for s in batch4:
+            note = b4_notes_map.get(s['file'], '')
+            rows.append(
+                f'<tr><td><code>{s["file"]}</code></td>'
+                f'<td>{s["desc"]}</td>'
+                f'<td style="font-size:0.85em;color:#555">{note}</td></tr>'
+            )
+        return '\n'.join(rows)
+
     def blocker_rows() -> str:
         rows = []
         for i, (title, desc) in enumerate(BLOCKERS, 1):
@@ -317,10 +371,10 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
             )
         return '\n'.join(rows)
 
-    def b4_rows() -> str:
+    def next_step_rows() -> str:
         rows = []
-        for file, reason in BATCH4_RECOMMENDATIONS:
-            rows.append(f'<tr><td><code>{file}</code></td><td>{reason}</td></tr>')
+        for title, desc in NEXT_STEPS:
+            rows.append(f'<tr><td style="font-weight:bold">{title}</td><td style="font-size:0.85em;color:#555">{desc}</td></tr>')
         return '\n'.join(rows)
 
     return f"""<!DOCTYPE html>
@@ -355,7 +409,8 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
   <div class="stat-box"><div class="stat-num">{len(batch1)}</div><div class="stat-lbl">Batch 1</div></div>
   <div class="stat-box"><div class="stat-num">{len(batch2)}</div><div class="stat-lbl">Batch 2</div></div>
   <div class="stat-box"><div class="stat-num">{len(batch3)}</div><div class="stat-lbl">Batch 3</div></div>
-  <div class="stat-box"><div class="stat-num">{total_done}</div><div class="stat-lbl">Total converted</div></div>
+  <div class="stat-box"><div class="stat-num">{len(batch4)}</div><div class="stat-lbl">Batch 4</div></div>
+  <div class="stat-box"><div class="stat-num" style="color:#1a7f37">{total_done}</div><div class="stat-lbl">Total converted</div></div>
   <div class="stat-box"><div class="stat-num">{total_todo}</div><div class="stat-lbl">Still hardcoded</div></div>
 </div>
 
@@ -377,47 +432,53 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
 {b3_rows_html()}
 </table>
 
+<h2>Batch 4 — Converted (Heavy Detection)</h2>
+<table>
+<tr><th>Script</th><th>Description</th><th>Implementation note</th></tr>
+{b4_rows_html()}
+</table>
+
 <h2>Helpers / Intake</h2>
 <table>
 <tr><th>Script</th><th>Description</th><th>--plan-run-dir</th></tr>
 {script_rows(helpers)}
 </table>
 
-<h2>Not Yet Parameterized (Batch 4 targets)</h2>
-<table>
-<tr><th>Script</th><th>Description</th><th>Type</th></tr>
-{''.join(f'<tr><td><code>{s["file"]}</code></td><td>{s["desc"]}</td><td><span class="badge-no">{s["type"]}</span></td></tr>' for s in hardcoded)}
-</table>
+{'<h2>Not Yet Parameterized</h2><table><tr><th>Script</th><th>Description</th><th>Type</th></tr>' + "".join(f'<tr><td><code>{s["file"]}</code></td><td>{s["desc"]}</td><td><span class="badge-no">{s["type"]}</span></td></tr>' for s in hardcoded) + "</table>" if hardcoded else '<p style="color:#1a7f37;font-weight:600">✓ All pipeline scripts now support --plan-run-dir.</p>'}
 
-<h2>How to Run with <code>--plan-run-dir</code></h2>
-<p>1. Create a plan-scoped run directory:</p>
-<pre>.venv/bin/python3 31_upload_intake_wrapper.py /path/to/plan.pdf
-# → creates runs/&lt;plan_slug&gt;/ with plan_config.json</pre>
-<p>2. Run Batch 1–3 scripts against that directory:</p>
-<pre>RUN=runs/poc_plan_50_448_02_400_20260520_223259
-.venv/bin/python3 14_build_review_queue.py               --plan-run-dir $RUN
-.venv/bin/python3 17_boq_aggregator.py                   --plan-run-dir $RUN
-.venv/bin/python3 20_validation_layer.py                 --plan-run-dir $RUN
-.venv/bin/python3 22_partial_code_resolver.py            --plan-run-dir $RUN
-.venv/bin/python3 23_human_review_writeback.py           --plan-run-dir $RUN
-.venv/bin/python3 25_teaching_loop_answer_pack.py        --plan-run-dir $RUN
-.venv/bin/python3 27_static_review_form_generator.py     --plan-run-dir $RUN
-.venv/bin/python3 28_teaching_loop_demo.py               --plan-run-dir $RUN
-.venv/bin/python3 29_plan_scanner_prototype_shell.py     --plan-run-dir $RUN
-.venv/bin/python3 30_local_json_persistence_flow.py      --plan-run-dir $RUN</pre>
-<p>3. Outputs land under <code>runs/&lt;plan_slug&gt;/outputs/</code>. Global <code>outputs/</code> is untouched.</p>
-<p>4. Legacy mode (no flag) still works unchanged.</p>
+<h2>Full Plan-Scoped Pipeline</h2>
+<p>1. Register the plan:</p>
+<pre>.venv/bin/python3 31_upload_intake_wrapper.py /path/to/plan.pdf</pre>
+<p>2. Run detection (Batch 4):</p>
+<pre>RUN=runs/&lt;plan_slug&gt;
+.venv/bin/python3 18_element_decomposition.py    --plan-run-dir $RUN
+.venv/bin/python3 15_scale_measurement.py        --plan-run-dir $RUN
+.venv/bin/python3 07_extract_legend.py           --plan-run-dir $RUN
+.venv/bin/python3 16_legend_color_match.py       --plan-run-dir $RUN
+.venv/bin/python3 13_vector_glyph_recognition.py --plan-run-dir $RUN
+.venv/bin/python3 06_match_signs.py              --plan-run-dir $RUN</pre>
+<p>3. Run analysis + review (Batches 1–3):</p>
+<pre>.venv/bin/python3 14_build_review_queue.py       --plan-run-dir $RUN
+.venv/bin/python3 17_boq_aggregator.py           --plan-run-dir $RUN
+.venv/bin/python3 20_validation_layer.py         --plan-run-dir $RUN
+.venv/bin/python3 22_partial_code_resolver.py    --plan-run-dir $RUN
+.venv/bin/python3 23_human_review_writeback.py   --plan-run-dir $RUN
+.venv/bin/python3 25_teaching_loop_answer_pack.py --plan-run-dir $RUN
+.venv/bin/python3 27_static_review_form_generator.py --plan-run-dir $RUN
+.venv/bin/python3 29_plan_scanner_prototype_shell.py --plan-run-dir $RUN
+.venv/bin/python3 30_local_json_persistence_flow.py  --plan-run-dir $RUN</pre>
+<p>All outputs land under <code>runs/&lt;plan_slug&gt;/outputs/</code>. Global <code>outputs/</code> is untouched.</p>
 
-<h2>Blockers for Full Multi-Plan Execution</h2>
+<h2>Remaining Blockers</h2>
 <table>
 <tr><th>#</th><th>Blocker</th><th>Description</th></tr>
 {blocker_rows()}
 </table>
 
-<h2>Recommended Batch 4 Targets (Heavy Detection Scripts)</h2>
+<h2>Next Steps Toward Production</h2>
 <table>
-<tr><th>Script</th><th>Reason</th></tr>
-{b4_rows()}
+<tr><th>Next Step</th><th>Description</th></tr>
+{next_step_rows()}
 </table>
 
 <footer>Research-only. No production DB or UI modified. approved_for_boq: false on all items.</footer>
@@ -450,11 +511,13 @@ def main() -> None:
     batch1 = [s for s in scripts if s['batch'] == 1]
     batch2 = [s for s in scripts if s['batch'] == 2]
     batch3 = [s for s in scripts if s['batch'] == 3]
+    batch4 = [s for s in scripts if s['batch'] == 4]
     hard   = [s for s in scripts if s['batch'] is None]
     print()
     print(f'Batch 1 converted  : {len(batch1)}')
     print(f'Batch 2 converted  : {len(batch2)}')
     print(f'Batch 3 converted  : {len(batch3)}')
+    print(f'Batch 4 converted  : {len(batch4)}')
     print(f'Still hardcoded    : {len(hard)}')
     print()
     print(f'Report: {OUT_HTML}')

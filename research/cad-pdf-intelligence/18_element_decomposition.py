@@ -15,18 +15,21 @@ Outputs (all research-only, approved_for_boq: false):
   outputs/element_decomposition/overlay_classified.png
 """
 from __future__ import annotations
-import json, time, math
+import argparse, json, time, math
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import pdfplumber
 
+from plan_run_context import PlanRunContext
+
 # ── Config ────────────────────────────────────────────────────────────────
+SCRIPT_DIR = Path(__file__).parent
 PDF_PATH   = Path('/Users/eliozedri/Downloads/50-448-02-400.pdf')
 PAGE_IDX   = 0
-OUT_DIR    = Path('outputs/element_decomposition')
-OUT_JSON   = Path('outputs/element_groups.json')
-OUT_MD     = Path('outputs/element_groups_report.md')
-OUT_HTML   = Path('outputs/element_groups_report.html')
+OUT_DIR    = SCRIPT_DIR / 'outputs' / 'element_decomposition'
+OUT_JSON   = SCRIPT_DIR / 'outputs' / 'element_groups.json'
+OUT_MD     = SCRIPT_DIR / 'outputs' / 'element_groups_report.md'
+OUT_HTML   = SCRIPT_DIR / 'outputs' / 'element_groups_report.html'
 
 DRAW_X_MAX  = 3900.0     # x >= this → title block zone
 COLOR_TOL   = 0.015      # taxonomy matching tolerance
@@ -622,4 +625,27 @@ POC E COMPLETE — Plan Decomposition
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Element Decomposition — POC E (Stage K)')
+    parser.add_argument(
+        '--plan-run-dir', default=None, metavar='DIR',
+        help='Path to an isolated plan run directory (runs/<plan_slug>/). '
+             'When supplied, all I/O is scoped to that run. '
+             'Omit to use the legacy global outputs/ directory.')
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+
+    if _ctx.is_plan_scoped:
+        PDF_PATH = _ctx.source_pdf_path
+        OUT_DIR  = _ctx.outputs_dir / 'element_decomposition'
+        OUT_JSON = _ctx.outputs_dir / 'element_groups.json'
+        OUT_MD   = _ctx.outputs_dir / 'element_groups_report.md'
+        OUT_HTML = _ctx.outputs_dir / 'element_groups_report.html'
+
+        if not PDF_PATH.exists():
+            print(f'[WARN] Plan-scoped mode: source PDF not found: {PDF_PATH}')
+            print('  Run 31_upload_intake_wrapper.py first to register the source PDF.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
+
     main()

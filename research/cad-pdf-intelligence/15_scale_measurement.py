@@ -26,7 +26,7 @@ Not approved BOQ data.
 """
 
 from __future__ import annotations
-import json, math, re, time
+import argparse, json, math, re, time
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -36,11 +36,13 @@ import cv2
 import pdfplumber
 import fitz  # pymupdf
 
+from plan_run_context import PlanRunContext
+
 # ── Paths ─────────────────────────────────────────────────────────────────────
-PDF_PATH = Path('/Users/eliozedri/Downloads/50-448-02-400.pdf')
-OUT      = Path('outputs/scale_measurement')
-OUT.mkdir(parents=True, exist_ok=True)
-(OUT / 'by_type').mkdir(exist_ok=True)
+SCRIPT_DIR    = Path(__file__).parent
+PDF_PATH      = Path('/Users/eliozedri/Downloads/50-448-02-400.pdf')
+OUT           = SCRIPT_DIR / 'outputs' / 'scale_measurement'
+# Note: OUT.mkdir() moved into main() so plan-scoped overrides take effect first.
 
 OUT_JSON      = OUT / 'results.json'
 OUT_BOQ       = OUT / 'boq_draft.json'
@@ -1024,6 +1026,9 @@ False negative: {dedup_audit["risks"]["false_negative"]}</p>
 def main() -> None:
     t0 = time.time()
 
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / 'by_type').mkdir(exist_ok=True)
+
     print('=' * 60)
     print('POC B v2 (Stage H) — Scale Measurement')
     print('15_scale_measurement.py')
@@ -1164,4 +1169,30 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Scale Measurement — POC B v2 (Stage H)')
+    parser.add_argument(
+        '--plan-run-dir', default=None, metavar='DIR',
+        help='Path to an isolated plan run directory (runs/<plan_slug>/). '
+             'When supplied, all I/O is scoped to that run. '
+             'Omit to use the legacy global outputs/ directory.')
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+
+    if _ctx.is_plan_scoped:
+        PDF_PATH      = _ctx.source_pdf_path
+        OUT           = _ctx.outputs_dir / 'scale_measurement'
+        OUT_JSON      = OUT / 'results.json'
+        OUT_BOQ       = OUT / 'boq_draft.json'
+        OUT_HTML      = OUT / 'report.html'
+        OUT_REPORT    = OUT / 'report.md'
+        OUT_OVERVIEW  = OUT / 'overview.png'
+        OUT_DEDUP_DBG = OUT / 'dedup_audit.png'
+
+        if not PDF_PATH.exists():
+            print(f'[WARN] Plan-scoped mode: source PDF not found: {PDF_PATH}')
+            print('  Run 31_upload_intake_wrapper.py first to register the source PDF.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
+
     main()

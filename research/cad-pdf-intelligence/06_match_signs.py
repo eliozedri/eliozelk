@@ -15,6 +15,7 @@ Outputs:
   outputs/sign_recognition_debug_overlay.png — page with recognition annotations
 """
 
+import argparse
 import sys
 import json
 import time
@@ -26,7 +27,9 @@ import numpy as np
 import cv2
 import fitz  # PyMuPDF
 
+import cad_utils
 from cad_utils import output_path, load_json
+from plan_run_context import PlanRunContext
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
@@ -528,4 +531,31 @@ def main():
 
 
 if __name__ == "__main__":
+    _script_dir = Path(__file__).parent
+    parser = argparse.ArgumentParser(
+        description='Sign Template Matching — Stage E')
+    parser.add_argument(
+        '--plan-run-dir', default=None, metavar='DIR',
+        help='Path to an isolated plan run directory (runs/<plan_slug>/). '
+             'When supplied, all I/O is scoped to that run. '
+             'Omit to use the legacy global outputs/ directory.')
+    _args, _ = parser.parse_known_args()  # ignore extra args (e.g. positional PDF path in legacy mode)
+    _ctx = PlanRunContext.from_args(_args, script_dir=_script_dir)
+
+    if _ctx.is_plan_scoped:
+        cad_utils.OUTPUTS = _ctx.outputs_dir
+        DEFAULT_PDF       = str(_ctx.source_pdf_path)
+        sys.argv          = [sys.argv[0]]  # strip --plan-run-dir; main() reads sys.argv[1]
+
+        if not _ctx.source_pdf_path.exists():
+            print(f'[WARN] Plan-scoped mode: source PDF not found: {_ctx.source_pdf_path}')
+            print('  Run 31_upload_intake_wrapper.py first to register the source PDF.')
+        _cluster_json = _ctx.outputs_dir / 'symbol_clusters.json'
+        if not _cluster_json.exists():
+            print('[WARN] Plan-scoped mode: missing required input in run outputs dir:')
+            print(f'  MISSING (required): symbol_clusters.json')
+            print('  Run 04_cluster_symbols.py --plan-run-dir first.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
+
     main()
