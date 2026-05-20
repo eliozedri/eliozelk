@@ -101,18 +101,24 @@ VALID_HUMAN_LABELS = DIGIT_LABELS | NEGATIVE_LABELS | NEUTRAL_LABELS
 # HUMAN LABEL I/O
 # ═════════════════════════════════════════════════════════════════
 
-def load_human_labels() -> Dict[str, str]:
+def load_human_labels() -> tuple:
     """
     Load human label file if it exists.
     Supports digit labels ("0"-"9") and negative labels (not_digit, noise, ignore).
-    Returns {cluster_id -> label_string} for non-null entries only.
+    Keys starting with '_' are metadata — skipped from cluster labels.
+    Supports optional '_conditional_rules' block:
+      {"CL-00": {"by_n_items": {"28": "8"}, "note": "..."}}
+    Returns (labels_dict, conditional_rules_dict).
     """
     if not HUMAN_LABELS_JSON.exists():
-        return {}
+        return {}, {}
     with open(HUMAN_LABELS_JSON, encoding="utf-8") as f:
         raw = json.load(f)
+    conditional_rules: Dict[str, Dict] = raw.get("_conditional_rules", {})
     result: Dict[str, str] = {}
     for cid, lbl in raw.items():
+        if cid.startswith("_"):
+            continue  # skip metadata/conditional blocks
         if lbl is None:
             continue
         if lbl not in VALID_HUMAN_LABELS:
@@ -123,7 +129,40 @@ def load_human_labels() -> Dict[str, str]:
         print(f"[Human] Loaded {len(result)} human labels "
               f"({sum(1 for v in result.values() if v in DIGIT_LABELS)} digit, "
               f"{sum(1 for v in result.values() if v in NEGATIVE_LABELS)} negative)")
-    return result
+    if conditional_rules:
+        for cl_id, rule in conditional_rules.items():
+            by_n = rule.get("by_n_items", {})
+            note = rule.get("note", "")
+            print(f"[Human] Conditional rule: {cl_id} n_items→label {by_n}"
+                  + (f"  ({note})" if note else ""))
+    return result, conditional_rules
+
+
+def apply_conditional_path_rules(paths: List[Dict],
+                                  conditional_rules: Dict[str, Dict]) -> int:
+    """
+    Apply per-path conditional label overrides after cluster_glyphs().
+    Example: CL-00 paths with n=28 → label='8' (visually confirmed 9/9 samples).
+    The cluster-level label stays unchanged (CL-00 remains 'unknown');
+    only individual matching paths get the conditional digit label.
+    Returns count of paths updated.
+    """
+    n_applied = 0
+    for p in paths:
+        cl_id = p.get('cluster')
+        if not cl_id or cl_id not in conditional_rules:
+            continue
+        rule  = conditional_rules[cl_id]
+        by_n  = rule.get("by_n_items", {})
+        n_key = str(p['n'])
+        if n_key in by_n:
+            new_label = by_n[n_key]
+            if new_label in DIGIT_LABELS:
+                p['label']         = new_label
+                p['label_src']     = "conditional_rule"
+                p['label_trusted'] = True
+                n_applied         += 1
+    return n_applied
 
 
 def write_human_labels_example(cluster_ids: List[str]) -> None:
@@ -587,6 +626,8 @@ def _glyph_confidence(group: List[Dict]) -> float:
             scores.append(0.0)    # negative-labeled: not a digit
         elif src == 'human_label_mapping' and p.get('label') in DIGIT_LABELS:
             scores.append(1.00)
+        elif src == 'conditional_rule' and p.get('label') in DIGIT_LABELS:
+            scores.append(0.90)   # n_items sub-rule: high but not same as direct label
         elif src == 'tess_auxiliary' and p.get('label_trusted'):
             scores.append(0.75)
         elif src == 'tess_auxiliary':
@@ -1592,7 +1633,7 @@ def main() -> None:
         print(f"[Load] POC 2 results: {len(poc2_results)} records")
 
     # ── Human labels ──
-    human_labels = load_human_labels()
+    human_labels, conditional_rules = load_human_labels()
 
     # ── Hidden structure investigation ──
     print("\n[Structure] Investigating PDF hidden/structural properties ...")
@@ -1613,6 +1654,12 @@ def main() -> None:
     n_negative_cl = sum(1 for cl in clusters.values() if cl.get('is_negative'))
     print(f"[Cluster] Clusters: {len(clusters)}  "
           f"digit-labeled: {n_labeled_cl}  negative: {n_negative_cl}")
+
+    # Apply per-path conditional rules (e.g. CL-00 n=28 → '8')
+    if conditional_rules:
+        n_cond = apply_conditional_path_rules(digit_paths, conditional_rules)
+        if n_cond:
+            print(f"[Conditional] Applied {n_cond} path-level conditional rules")
 
     # Write human label example template
     OUT.mkdir(parents=True, exist_ok=True)
