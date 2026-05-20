@@ -532,6 +532,52 @@ def check_s11_dashboard() -> Dict:
     }
 
 
+def check_s12_answer_pack() -> Dict:
+    """S12: Teaching Loop Answer Pack — reads outputs from 25_teaching_loop_answer_pack.py."""
+    t0 = time.time()
+    f_json = OUT_DIR / 'teaching_loop_answer_pack.json'
+    f_md   = OUT_DIR / 'teaching_loop_answer_pack.md'
+    f_html = OUT_DIR / 'teaching_loop_answer_pack.html'
+    f_tmpl = OUT_DIR / 'human_review_answers.template.json'
+
+    data = load_json(f_json)
+    warnings: List[str] = []
+    metrics: Dict = {}
+
+    if data is None:
+        st = 'missing'
+        warnings.append('Run 25_teaching_loop_answer_pack.py to generate the answer pack.')
+    else:
+        meta = data.get('meta', {})
+        by_priority = meta.get('by_priority', {})
+        n_total = meta.get('total_questions', 0)
+        n_critical = by_priority.get('critical', 0)
+        metrics = {
+            'total_questions': n_total,
+            'n_critical': n_critical,
+            'n_high': by_priority.get('high', 0),
+            'n_medium': by_priority.get('medium', 0),
+            'n_low': by_priority.get('low', 0),
+            'generated_at': meta.get('generated_at', ''),
+        }
+        if n_critical > 0:
+            warnings.append(f'{n_critical} CRITICAL question(s) require human input before BOQ can be validated.')
+        st = 'ok'
+
+    return {
+        'stage_id':   'S12',
+        'name':       'Answer Pack',
+        'description': '25: teaching loop question consolidator — structured human input workflow',
+        'script':     '25_teaching_loop_answer_pack.py',
+        'status':     st,
+        'outputs':    [file_meta(f_json), file_meta(f_md), file_meta(f_html), file_meta(f_tmpl)],
+        'metrics':    metrics,
+        'warnings':   warnings,
+        'human_validations': [],
+        'elapsed_s':  round(time.time() - t0, 3),
+    }
+
+
 def check_s10_human_review() -> Dict:
     """S10: Human Review Write-Back — reads outputs from 23_human_review_writeback.py."""
     t0 = time.time()
@@ -1353,6 +1399,9 @@ def main():
     print('  S11: Master Research Dashboard ...')
     stages.append(check_s11_dashboard())
 
+    print('  S12: Teaching Loop Answer Pack ...')
+    stages.append(check_s12_answer_pack())
+
     elapsed = time.time() - t0
 
     print('\n[Analyze] Deriving recommendations ...')
@@ -1396,6 +1445,7 @@ PIPELINE RUN COMPLETE
   Resolution [S9]   : ambiguous={rs['n_ambiguous']} resolved_med={rs['n_resolved_medium']} invalid={rs['n_invalid_partial']}
   Teaching [S10]    : answers={'found' if tl['answers_file_exists'] else 'none'} applied={tl['n_applied']} pending={tl['n_pending_questions']}
   Dashboard [S11]   : open outputs/master_dashboard.html
+  Answer Pack [S12] : open outputs/teaching_loop_answer_pack.html
   Total linear (m)  : {bq['total_linear_m']:.1f}m  (scale: {bq['scale_status']})
   Taxonomy cands.   : {bq['n_taxonomy_candidates']}  high-impact: {bq['n_high_impact_unknowns']}
 

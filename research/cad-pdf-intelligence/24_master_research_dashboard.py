@@ -1006,9 +1006,9 @@ def build_html(dash: Dict) -> str:
 </div>
 <div style="background:#f0f9ff;border:2px solid #bae6fd;border-radius:6px;padding:10px 14px;font-size:13px;margin-top:8px">
   <strong>To start teaching loop:</strong><br>
-  <code>cp outputs/human_review_answers.example.json outputs/human_review_answers.json</code><br>
-  Fill in real answers &nbsp;→&nbsp;
-  <code>.venv/bin/python3 23_human_review_writeback.py</code>
+  1. Open <a href="teaching_loop_answer_pack.html" style="color:#1565c0;font-weight:600">Teaching Loop Answer Pack (S12)</a> — all {teach['n_pending_questions']} questions structured by priority<br>
+  2. Copy <code>outputs/human_review_answers.template.json</code> → <code>outputs/human_review_answers.json</code> and fill in answers<br>
+  3. Run &nbsp;<code>.venv/bin/python3 23_human_review_writeback.py</code>
 </div>
 </div>
 
