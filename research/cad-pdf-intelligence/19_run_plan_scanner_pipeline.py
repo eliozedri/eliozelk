@@ -40,6 +40,9 @@ OUT_HTML   = OUT_DIR / 'pipeline_run_report.html'
 BOQ_AGGREGATOR = SCRIPT_DIR / '17_boq_aggregator.py'
 PYTHON_BIN     = SCRIPT_DIR / '.venv/bin/python3'
 
+# Set by __main__ in plan-scoped mode; forwarded to sub-process invocations
+_PLAN_RUN_DIR: Optional[Path] = None
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def load_json(path: Path, default: Any = None) -> Any:
@@ -379,10 +382,13 @@ def check_s6_decomposition() -> Dict:
 def run_boq_aggregator() -> Tuple[bool, str, float]:
     """Re-run 17_boq_aggregator.py and return (success, output, elapsed_s)."""
     py = PYTHON_BIN if PYTHON_BIN.exists() else Path(sys.executable)
+    cmd = [str(py), str(BOQ_AGGREGATOR)]
+    if _PLAN_RUN_DIR is not None:
+        cmd += ['--plan-run-dir', str(_PLAN_RUN_DIR)]
     t0 = time.time()
     try:
         r = subprocess.run(
-            [str(py), str(BOQ_AGGREGATOR)],
+            cmd,
             capture_output=True, text=True, timeout=30,
             cwd=str(SCRIPT_DIR),
         )
@@ -1763,11 +1769,12 @@ if __name__ == '__main__':
     _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
     if _ctx.is_plan_scoped:
         # Override module-level globals so all check_s*() functions use the run dir
-        PDF_PATH = _ctx.source_pdf_path or PDF_PATH  # type: ignore[assignment]
-        OUT_DIR  = _ctx.outputs_dir                   # type: ignore[assignment]
-        OUT_JSON = OUT_DIR / 'pipeline_run_summary.json'
-        OUT_MD   = OUT_DIR / 'pipeline_run_report.md'
-        OUT_HTML = OUT_DIR / 'pipeline_run_report.html'
+        PDF_PATH      = _ctx.source_pdf_path or PDF_PATH  # type: ignore[assignment]
+        OUT_DIR       = _ctx.outputs_dir                   # type: ignore[assignment]
+        OUT_JSON      = OUT_DIR / 'pipeline_run_summary.json'
+        OUT_MD        = OUT_DIR / 'pipeline_run_report.md'
+        OUT_HTML      = OUT_DIR / 'pipeline_run_report.html'
+        _PLAN_RUN_DIR = _ctx.plan_run_dir                  # type: ignore[assignment]
         _ctx.ensure_dirs()
         print(_ctx.describe())
     main()

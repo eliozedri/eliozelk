@@ -54,9 +54,13 @@ REGISTRY: List[Dict] = [
 ]
 
 NEXT_STEPS = [
-    ('End-to-end plan-scoped pipeline run',
-     'All 19 pipeline scripts now support --plan-run-dir. '
-     'Run the full pipeline against a real plan using the run directory to validate the complete chain.'),
+    ('Parameterize early detection scripts (Batch 5)',
+     'Scripts 04_cluster_symbols.py and 09_stage_g_inventory.py do not yet support --plan-run-dir. '
+     'Adding parameterization will unblock S3 (sign detection) in plan-scoped mode, '
+     'enabling review queue items and sign code candidates for real plans.'),
+    ('Worker/Operations PDF + Excel Export Generator',
+     'Consume boq_unified_draft.json from a run directory and generate a human-readable '
+     'PDF and/or Excel export scoped to the plan, ready for field review once sign codes are confirmed.'),
     ('Scale calibration per-plan',
      'calibration_template.json is written to runs/<slug>/outputs/legend_color_match/. '
      'User must fill in two known-distance points per plan to get verified measurements.'),
