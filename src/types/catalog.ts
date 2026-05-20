@@ -32,6 +32,7 @@ export interface CatalogItem {
   reservedQuantity: number;   // units reserved by open orders
   supplierId?: string;        // preferred supplier
   costPrice?: number | null;  // purchase/cost price for CFO profitability calculations
+  metadata?: Record<string, unknown>; // {images, specs, sources, aliases, fleet_only, fleet_managed}
   createdAt: string;
   updatedAt: string;
 }

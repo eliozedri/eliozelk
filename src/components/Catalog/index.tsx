@@ -7,6 +7,15 @@ import { TYPE_LABELS, TYPE_COLORS, UNIT_OPTIONS, DIMENSION_UNIT_OPTIONS, LENGTH_
 import { SAFETY_ACCESSORIES } from "@/data/safetyAccessories";
 import { getSupabase } from "@/lib/supabase/client";
 
+function getSourceLabel(metadata: Record<string, unknown> | undefined): string | null {
+  const sources = metadata?.sources as Array<{ type: string }> | undefined;
+  const first = sources?.[0]?.type;
+  if (first === "website") return "אתר";
+  if (first === "company_profile") return "פרופיל";
+  if (first === "seed") return "בטיחות";
+  return null;
+}
+
 const inputCls =
   "w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 transition-all";
 
@@ -726,12 +735,19 @@ export function CatalogPage() {
                     ) : (
                       <tr key={item.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${!item.isActive ? "opacity-50" : ""}`}>
                         <td className="px-4 py-3 font-medium text-gray-900">
-                          {item.name}
-                          {(item.linkedProducts?.length ?? 0) > 0 && (
-                            <span className="mr-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-                              {item.linkedProducts!.length} נלווים
-                            </span>
-                          )}
+                          <span className="flex items-center gap-1.5 flex-wrap">
+                            {item.name}
+                            {(item.linkedProducts?.length ?? 0) > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                                {item.linkedProducts!.length} נלווים
+                              </span>
+                            )}
+                            {getSourceLabel(item.metadata) && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-normal">
+                                {getSourceLabel(item.metadata)}
+                              </span>
+                            )}
+                          </span>
                         </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[item.type]}`}>{TYPE_LABELS[item.type]}</span>

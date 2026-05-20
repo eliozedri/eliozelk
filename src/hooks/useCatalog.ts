@@ -24,6 +24,7 @@ function fromRow(r: Record<string, unknown>): CatalogItem {
     minimumQuantity: r.minimum_quantity != null ? Number(r.minimum_quantity) : 0,
     reservedQuantity: r.reserved_quantity != null ? Number(r.reserved_quantity) : 0,
     supplierId: r.supplier_id as string | undefined,
+    metadata: r.metadata as Record<string, unknown> | undefined,
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
@@ -48,6 +49,7 @@ function toRow(item: CatalogItem) {
     minimum_quantity: item.minimumQuantity,
     reserved_quantity: item.reservedQuantity,
     supplier_id: item.supplierId ?? null,
+    metadata: item.metadata ?? {},
     created_at: item.createdAt,
     updated_at: item.updatedAt,
   };

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import type { MiscRow } from "@/types/order";
 import { useCatalogContext } from "@/context/CatalogContext";
 import type { CatalogItemType } from "@/types/catalog";
@@ -53,6 +53,7 @@ export function MiscSection({
   alwaysShowDimensions = false,
 }: Props) {
   const { items: catalogItems } = useCatalogContext();
+  const catalogIds = useMemo(() => new Set(catalogItems.map((c) => c.id)), [catalogItems]);
   const [openSuggestRowId, setOpenSuggestRowId] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -152,7 +153,8 @@ export function MiscSection({
         <tbody>
           {rows.map((row) => {
             const suggestions = openSuggestRowId === row.id ? getSuggestions(row.description) : [];
-            const isLinked = Boolean(row.catalogItemId);
+            const isLinked = Boolean(row.catalogItemId) && catalogIds.has(row.catalogItemId!);
+            const isStale  = Boolean(row.catalogItemId) && !catalogIds.has(row.catalogItemId!);
             const isDimRow = alwaysShowDimensions || (showDimensionRows && isCustomDimensionRow(row));
 
             return (
@@ -178,6 +180,25 @@ export function MiscSection({
                           {row.catalogItemUnit && (
                             <span className="text-xs text-gray-400 whitespace-nowrap">{row.catalogItemUnit}</span>
                           )}
+                        </div>
+                      ) : isStale ? (
+                        <div className="flex items-center gap-2">
+                          <span className="flex-1 px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-sm text-amber-800 font-medium">
+                            {row.description}
+                          </span>
+                          <span
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-medium whitespace-nowrap"
+                            title="הפריט הוסר מהקטלוג — ניתן לנתק ולקשר מחדש"
+                          >
+                            ⚠ קישור פג תוקף
+                            <button
+                              type="button"
+                              onClick={() => handleUnlink(row.id, row.description)}
+                              className="hover:text-amber-900 transition-colors"
+                            >
+                              <XIcon />
+                            </button>
+                          </span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">

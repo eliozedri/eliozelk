@@ -76,7 +76,7 @@ TESS_PSM10   = "--psm 10 --oem 3 -c tessedit_char_whitelist=0123456789"
 # DESCRIPTOR + CLUSTERING
 # ─────────────────────────────────────────────────────────────────
 DESC_SIZE           = 32         # rasterize to 32×32 for Hu moments
-CLUSTER_DIST_THRESH = 0.15       # cosine distance threshold for cluster cut
+CLUSTER_DIST_THRESH = 0.05       # cosine distance threshold for cluster cut
 DESC_HU_W           = 0.70       # weight of Hu moments in combined descriptor
 DESC_STRUCT_W       = 0.15       # weight of n_items + AR
 DESC_HIST_W         = 0.15       # weight of angle histogram

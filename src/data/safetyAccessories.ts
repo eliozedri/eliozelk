@@ -1,3 +1,8 @@
+// MIGRATION SOURCE ONLY — do not add new UI consumers to this file.
+// All items here have been migrated to catalog_items (Supabase) via
+// migration 20260520120000_catalog_safety_accessories.sql.
+// The /safety page reads from this constant temporarily (Phase 1).
+// Phase 2: refactor /safety to read from useCatalogContext() instead.
 import type { SafetyAccessoryItem } from "@/types/safetyAccessory";
 
 const D = "2026-05-12T00:00:00.000Z";
