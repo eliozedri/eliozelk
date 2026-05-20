@@ -18,6 +18,7 @@ Output: outputs/symbol_clusters.json
         outputs/eps_comparison.md  (with --compare)
 """
 
+import argparse
 import sys
 import json
 from pathlib import Path
@@ -27,8 +28,11 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 from scipy.cluster.hierarchy import fclusterdata
 
+import cad_utils
 from cad_utils import bucket_color, SEMANTIC_HINT, save_json, load_json
+from plan_run_context import PlanRunContext
 
+SCRIPT_DIR = Path(__file__).parent
 
 DEFAULT_PDF = "/Users/eliozedri/Downloads/50-448-02-400.pdf"
 
@@ -349,5 +353,32 @@ def main():
                   f"type={cl['cluster_type']}")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Stage 4 — Symbol Clustering (DBSCAN)')
+    parser.add_argument(
+        '--plan-run-dir', default=None, metavar='DIR',
+        help='Path to a plan-scoped run directory. '
+             'If omitted, runs in legacy mode against outputs/')
+    parser.add_argument(
+        '--compare', action='store_true',
+        help='Compare eps=20/25/35 and save report (legacy mode only)')
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+
+    if _ctx.is_plan_scoped:
+        cad_utils.OUTPUTS = _ctx.outputs_dir
+        sys.argv          = [sys.argv[0]]  # strip --plan-run-dir; main() reads sys.argv[1] for pdf
+
+        _vec_json = _ctx.outputs_dir / 'vector_objects.json'
+        if not _vec_json.exists():
+            print('[WARN] Plan-scoped mode: required input missing in run outputs dir:')
+            print(f'  MISSING (required): vector_objects.json')
+            print('  Cause: 02_extract_vectors.py does not yet support --plan-run-dir.')
+            print('  To seed manually (operator action — not a silent fallback):')
+            print(f'    cp outputs/vector_objects.json {_ctx.outputs_dir}/')
+            print('  Then re-run this script with --plan-run-dir.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
+
     main()

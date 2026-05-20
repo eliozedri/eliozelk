@@ -48,19 +48,20 @@ REGISTRY: List[Dict] = [
     {'file': '15_scale_measurement.py',           'desc': 'Scale measurement — Branch B',              'batch': 4, 'type': 'detection'},
     {'file': '16_legend_color_match.py',          'desc': 'Legend color match / taxonomy',             'batch': 4, 'type': 'detection'},
     {'file': '18_element_decomposition.py',       'desc': 'Element decomposition — Branch C (main)',   'batch': 4, 'type': 'detection'},
+    # ── Batch 5 converted ────────────────────────────────────────────────────
+    {'file': '04_cluster_symbols.py',             'desc': 'Symbol clustering DBSCAN (S3 prerequisite)', 'batch': 5, 'type': 'detection'},
+    {'file': '09_stage_g_inventory.py',           'desc': 'Stage G sign inventory + pole grouping (S3)','batch': 5, 'type': 'detection'},
     # ── Support / intake ─────────────────────────────────────────────────────
     {'file': '31_upload_intake_wrapper.py',       'desc': 'Upload / intake wrapper (S18)',             'batch': 'helper', 'type': 'intake'},
     {'file': 'plan_run_context.py',               'desc': 'Shared plan run context helper',            'batch': 'helper', 'type': 'helper'},
 ]
 
 NEXT_STEPS = [
-    ('Parameterize early detection scripts (Batch 5)',
-     'Scripts 04_cluster_symbols.py and 09_stage_g_inventory.py do not yet support --plan-run-dir. '
-     'Adding parameterization will unblock S3 (sign detection) in plan-scoped mode, '
-     'enabling review queue items and sign code candidates for real plans.'),
     ('Worker/Operations PDF + Excel Export Generator',
-     'Consume boq_unified_draft.json from a run directory and generate a human-readable '
-     'PDF and/or Excel export scoped to the plan, ready for field review once sign codes are confirmed.'),
+     'Batch 5 complete: 23/23 pipeline scripts now support --plan-run-dir. '
+     'S3 (sign detection) is unblocked — 177 occurrences, 119 pole groups produced in plan-scoped mode. '
+     'Next step: consume boq_unified_draft.json + sign_inventory.json from a run directory and generate '
+     'a human-readable PDF and/or Excel export scoped to the plan.'),
     ('Scale calibration per-plan',
      'calibration_template.json is written to runs/<slug>/outputs/legend_color_match/. '
      'User must fill in two known-distance points per plan to get verified measurements.'),
@@ -74,6 +75,11 @@ NEXT_STEPS = [
 ]
 
 BLOCKERS = [
+    ('vector_objects.json requires explicit seeding until 02_extract_vectors.py is parameterized',
+     '04_cluster_symbols.py (Batch 5) needs vector_objects.json in the run outputs dir. '
+     'Script 02 does not yet support --plan-run-dir. Operator must explicitly copy: '
+     'cp outputs/vector_objects.json runs/<slug>/outputs/. '
+     'This is a documented operator action — no silent fallback occurs.'),
     ('Source PDF must be in runs/<slug>/source/',
      'Detection scripts read source_pdf_path from plan_config.json via PlanRunContext. '
      'The intake wrapper (31_upload_intake_wrapper.py) must be run first to register the PDF. '
@@ -110,6 +116,7 @@ def build_md(scripts: List[Dict], ts: str) -> str:
     batch2   = [s for s in scripts if s['batch'] == 2]
     batch3   = [s for s in scripts if s['batch'] == 3]
     batch4   = [s for s in scripts if s['batch'] == 4]
+    batch5   = [s for s in scripts if s['batch'] == 5]
     hardcoded= [s for s in scripts if s['batch'] is None]
     helpers  = [s for s in scripts if s['batch'] == 'helper']
 
@@ -131,6 +138,7 @@ def build_md(scripts: List[Dict], ts: str) -> str:
         f'| Batch 2 | {len(batch2)} scripts |',
         f'| Batch 3 | {len(batch3)} scripts |',
         f'| Batch 4 | {len(batch4)} scripts |',
+        f'| Batch 5 | {len(batch5)} scripts |',
         f'| Not yet parameterized | {len(hardcoded)} scripts |',
         f'| Helper / intake | {len(helpers)} scripts |',
         '',
@@ -196,6 +204,21 @@ def build_md(scripts: List[Dict], ts: str) -> str:
     }
     for s in batch4:
         note = b4_notes.get(s['file'], '')
+        lines.append(f'| `{s["file"]}` | {s["desc"]} | {note} |')
+
+    lines += [
+        '',
+        '## Batch 5 — Converted (S3 Sign Detection Prerequisites)',
+        '',
+        '| Script | Description | Note |',
+        '|---|---|---|',
+    ]
+    b5_notes = {
+        '04_cluster_symbols.py':   'Pattern A: overrides `cad_utils.OUTPUTS`; warns if vector_objects.json missing (requires explicit seed from 02)',
+        '09_stage_g_inventory.py': 'Pattern A: overrides `cad_utils.OUTPUTS` + `DEFAULT_PDF`; Vision API gated (no paid API call without ANTHROPIC_API_KEY)',
+    }
+    for s in batch5:
+        note = b5_notes.get(s['file'], '')
         lines.append(f'| `{s["file"]}` | {s["desc"]} | {note} |')
 
     lines += [
@@ -294,9 +317,10 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
     batch2   = [s for s in scripts if s['batch'] == 2]
     batch3   = [s for s in scripts if s['batch'] == 3]
     batch4   = [s for s in scripts if s['batch'] == 4]
+    batch5   = [s for s in scripts if s['batch'] == 5]
     hardcoded= [s for s in scripts if s['batch'] is None]
     helpers  = [s for s in scripts if s['batch'] == 'helper']
-    total_done = len(batch1) + len(batch2) + len(batch3) + len(batch4)
+    total_done = len(batch1) + len(batch2) + len(batch3) + len(batch4) + len(batch5)
     total_todo = len(hardcoded)
 
     def script_rows(items: List[Dict]) -> str:
@@ -331,6 +355,10 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
         '15_scale_measurement.py':        'Pattern B+C: fixed bare paths; moved module-level mkdir into main(); overrides OUT + all outputs',
         '16_legend_color_match.py':       'Pattern B+C: fixed bare paths; moved module-level mkdir into main(); overrides all inputs + outputs',
         '18_element_decomposition.py':    'Pattern B+C: fixed bare paths; overrides PDF_PATH, OUT_DIR, OUT_JSON, OUT_MD, OUT_HTML',
+    }
+    b5_notes_map = {
+        '04_cluster_symbols.py':   'Pattern A: overrides cad_utils.OUTPUTS; warns if vector_objects.json missing (explicit seed required from 02)',
+        '09_stage_g_inventory.py': 'Pattern A: overrides cad_utils.OUTPUTS + DEFAULT_PDF; Vision API gated (no paid API call without ANTHROPIC_API_KEY)',
     }
 
     def b2_rows() -> str:
@@ -414,6 +442,7 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
   <div class="stat-box"><div class="stat-num">{len(batch2)}</div><div class="stat-lbl">Batch 2</div></div>
   <div class="stat-box"><div class="stat-num">{len(batch3)}</div><div class="stat-lbl">Batch 3</div></div>
   <div class="stat-box"><div class="stat-num">{len(batch4)}</div><div class="stat-lbl">Batch 4</div></div>
+  <div class="stat-box"><div class="stat-num">{len(batch5)}</div><div class="stat-lbl">Batch 5</div></div>
   <div class="stat-box"><div class="stat-num" style="color:#1a7f37">{total_done}</div><div class="stat-lbl">Total converted</div></div>
   <div class="stat-box"><div class="stat-num">{total_todo}</div><div class="stat-lbl">Still hardcoded</div></div>
 </div>
@@ -442,6 +471,12 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
 {b4_rows_html()}
 </table>
 
+<h2>Batch 5 — Converted (S3 Sign Detection Prerequisites)</h2>
+<table>
+<tr><th>Script</th><th>Description</th><th>Implementation note</th></tr>
+{''.join(f"<tr><td><code>{s['file']}</code></td><td>{s['desc']}</td><td style='font-size:0.85em;color:#555'>{b5_notes_map.get(s['file'],'')}</td></tr>" for s in batch5)}
+</table>
+
 <h2>Helpers / Intake</h2>
 <table>
 <tr><th>Script</th><th>Description</th><th>--plan-run-dir</th></tr>
@@ -453,11 +488,14 @@ def build_html(scripts: List[Dict], ts: str, md: str) -> str:
 <h2>Full Plan-Scoped Pipeline</h2>
 <p>1. Register the plan:</p>
 <pre>.venv/bin/python3 31_upload_intake_wrapper.py /path/to/plan.pdf</pre>
-<p>2. Run detection (Batch 4):</p>
+<p>2. Run detection (Batches 4+5) — seed vector_objects.json first (explicit operator action until 02 is parameterized):</p>
 <pre>RUN=runs/&lt;plan_slug&gt;
+cp outputs/vector_objects.json $RUN/outputs/  # seed until 02_extract_vectors.py is parameterized
+.venv/bin/python3 04_cluster_symbols.py          --plan-run-dir $RUN
 .venv/bin/python3 18_element_decomposition.py    --plan-run-dir $RUN
 .venv/bin/python3 15_scale_measurement.py        --plan-run-dir $RUN
 .venv/bin/python3 07_extract_legend.py           --plan-run-dir $RUN
+.venv/bin/python3 09_stage_g_inventory.py        --plan-run-dir $RUN
 .venv/bin/python3 16_legend_color_match.py       --plan-run-dir $RUN
 .venv/bin/python3 13_vector_glyph_recognition.py --plan-run-dir $RUN
 .venv/bin/python3 06_match_signs.py              --plan-run-dir $RUN</pre>
@@ -516,12 +554,14 @@ def main() -> None:
     batch2 = [s for s in scripts if s['batch'] == 2]
     batch3 = [s for s in scripts if s['batch'] == 3]
     batch4 = [s for s in scripts if s['batch'] == 4]
+    batch5 = [s for s in scripts if s['batch'] == 5]
     hard   = [s for s in scripts if s['batch'] is None]
     print()
     print(f'Batch 1 converted  : {len(batch1)}')
     print(f'Batch 2 converted  : {len(batch2)}')
     print(f'Batch 3 converted  : {len(batch3)}')
     print(f'Batch 4 converted  : {len(batch4)}')
+    print(f'Batch 5 converted  : {len(batch5)}')
     print(f'Still hardcoded    : {len(hard)}')
     print()
     print(f'Report: {OUT_HTML}')

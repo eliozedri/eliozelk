@@ -585,12 +585,14 @@ def check_s16_prototype() -> Dict:
 
 def check_s17_local_persistence() -> Dict:
     """S17: Local JSON Persistence Flow — reads outputs from 30_local_json_persistence_flow.py."""
-    t0     = time.time()
-    f_state = OUT_DIR / 'local_state' / 'plan_scan_state.json'
-    f_audit = OUT_DIR / 'local_state' / 'audit_log.json'
-    f_boq   = OUT_DIR / 'local_state' / 'current_boq_state.json'
-    f_html  = OUT_DIR / 'local_state' / 'local_persistence_report.html'
-    f_md    = OUT_DIR / 'local_state' / 'local_persistence_report.md'
+    t0 = time.time()
+    # In plan-scoped mode script 30 writes to <run>/state/; legacy mode uses outputs/local_state/
+    _state_base = (_PLAN_RUN_DIR / 'state') if _PLAN_RUN_DIR is not None else (OUT_DIR / 'local_state')
+    f_state = _state_base / 'plan_scan_state.json'
+    f_audit = _state_base / 'audit_log.json'
+    f_boq   = _state_base / 'current_boq_state.json'
+    f_html  = _state_base / 'local_persistence_report.html'
+    f_md    = _state_base / 'local_persistence_report.md'
 
     data = load_json(f_state)
     warnings: List[str] = []

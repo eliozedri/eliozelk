@@ -30,6 +30,7 @@ Outputs:
   outputs/stage_g_code_crops/occ_NNNN.png
 """
 
+import argparse
 import sys
 import os
 import re
@@ -45,7 +46,11 @@ import numpy as np
 import cv2
 import fitz  # PyMuPDF
 
+import cad_utils
 from cad_utils import output_path, load_json
+from plan_run_context import PlanRunContext
+
+SCRIPT_DIR = Path(__file__).parent
 
 # ── Global configuration ───────────────────────────────────────────────────────
 
@@ -1123,5 +1128,47 @@ def main():
         print(f"  NOTE: Set ANTHROPIC_API_KEY and re-run to extract sign codes from map crops")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Stage G v1 — Sign Inventory + Pole Assembly Grouping')
+    parser.add_argument(
+        '--plan-run-dir', default=None, metavar='DIR',
+        help='Path to a plan-scoped run directory. '
+             'If omitted, runs in legacy mode against outputs/')
+    _args, _ = parser.parse_known_args()  # ignore positional pdf_path in legacy mode
+    _ctx      = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+
+    if _ctx.is_plan_scoped:
+        cad_utils.OUTPUTS = _ctx.outputs_dir
+        DEFAULT_PDF       = str(_ctx.source_pdf_path)
+        sys.argv          = [sys.argv[0]]  # strip --plan-run-dir; main() reads sys.argv[1] for pdf
+
+        _required = [
+            (_ctx.outputs_dir / 'symbol_clusters.json',   'symbol_clusters.json',   '04_cluster_symbols.py'),
+            (_ctx.outputs_dir / 'legend_rows.json',       'legend_rows.json',       '07_extract_legend.py'),
+            (_ctx.outputs_dir / 'legend_vocabulary.json', 'legend_vocabulary.json', '07_extract_legend.py'),
+        ]
+        _icons_dir = _ctx.outputs_dir / 'legend_icons'
+        _optional  = [
+            (_ctx.outputs_dir / 'legend_region_detection.json',
+             'legend_region_detection.json', '07_extract_legend.py'),
+        ]
+        _missing_r = [(n, p) for path, n, p in _required if not path.exists()]
+        _missing_o = [(n, p) for path, n, p in _optional if not path.exists()]
+        if _missing_r:
+            print('[WARN] Plan-scoped mode: missing REQUIRED inputs in run outputs dir:')
+            for _n, _p in _missing_r:
+                print(f'  MISSING (required): {_n}  — run {_p} --plan-run-dir first.')
+        if not _icons_dir.exists() or not any(_icons_dir.glob('row_*.png')):
+            print('[WARN] Plan-scoped mode: legend_icons/ missing or empty — '
+                  'run 07_extract_legend.py --plan-run-dir first.')
+        if _missing_o:
+            print('[WARN] Plan-scoped mode: missing optional inputs:')
+            for _n, _p in _missing_o:
+                print(f'  MISSING (optional): {_n}  — run {_p} --plan-run-dir first.')
+        if not _ctx.source_pdf_path.exists():
+            print(f'[WARN] Plan-scoped mode: source PDF not found: {_ctx.source_pdf_path}')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
+
     main()
