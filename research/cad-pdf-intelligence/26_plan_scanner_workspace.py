@@ -104,7 +104,7 @@ ARTIFACTS = [
     {
         'id': 'pipeline',
         'title': 'Pipeline Report',
-        'subtitle': '17/17 stages OK',
+        'subtitle': '18/18 stages OK',
         'file': 'pipeline_run_report.html',
         'icon': '⚙️',
         'color': '#37474f',
@@ -153,6 +153,15 @@ ARTIFACTS = [
         'file': 'local_state/local_persistence_report.html',
         'icon': '🗄',
         'color': '#4527a0',
+        'section': 'nav',
+    },
+    {
+        'id': 'intake',
+        'title': 'Intake Wrapper',
+        'subtitle': 'S18 — multi-plan intake (plan-scoped runs/)',
+        'file': 'upload_intake_wrapper_report.html',
+        'icon': '📥',
+        'color': '#37474f',
         'section': 'nav',
     },
 ]

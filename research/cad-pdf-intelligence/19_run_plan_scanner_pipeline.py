@@ -489,6 +489,49 @@ def check_s7_boq(refresh: bool = True) -> Dict:
         'elapsed_s':  round(time.time()-t0, 3),
     }
 
+def check_s18_intake_wrapper() -> Dict:
+    """S18: Upload / Intake Wrapper — reads outputs from 31_upload_intake_wrapper.py."""
+    t0         = time.time()
+    runs_dir   = SCRIPT_DIR / 'runs'
+    runs_index = runs_dir / 'runs_index.json'
+    f_report   = OUT_DIR / 'upload_intake_wrapper_report.html'
+    f_md       = OUT_DIR / 'upload_intake_wrapper_report.md'
+
+    data = load_json(runs_index)
+    warnings: List[str] = []
+    metrics: Dict = {}
+
+    if data is None:
+        st = 'missing'
+        warnings.append('Run 31_upload_intake_wrapper.py <pdf_path> to create a plan-scoped intake.')
+    else:
+        runs    = data.get('runs', [])
+        real    = [r for r in runs if not r.get('dry_run')]
+        dry     = [r for r in runs if r.get('dry_run')]
+        metrics = {
+            'total_runs':          len(runs),
+            'real_runs':           len(real),
+            'dry_run_only':        len(dry),
+            'pipeline_parameterized': False,   # hardcoded — parameterization is not yet complete
+        }
+        if not real:
+            warnings.append('Only dry-run intake records found. Run without --dry-run to create a real run directory.')
+        st = 'ok' if f_report.exists() else 'partial'
+
+    return {
+        'stage_id':    'S18',
+        'name':        'Intake Wrapper',
+        'description': '31: local upload/intake wrapper — plan-scoped run directories',
+        'script':      '31_upload_intake_wrapper.py',
+        'status':      st,
+        'outputs':     [file_meta(runs_index), file_meta(f_report), file_meta(f_md)],
+        'metrics':     metrics,
+        'warnings':    warnings,
+        'human_validations': [],
+        'elapsed_s':   round(time.time() - t0, 3),
+    }
+
+
 def check_s16_prototype() -> Dict:
     """S16: Plan Scanner Prototype Shell — reads outputs from 29_plan_scanner_prototype_shell.py."""
     t0 = time.time()
@@ -1634,6 +1677,9 @@ def main():
 
     print('  S17: Local JSON Persistence Flow ...')
     stages.append(check_s17_local_persistence())
+
+    print('  S18: Upload / Intake Wrapper ...')
+    stages.append(check_s18_intake_wrapper())
 
     elapsed = time.time() - t0
 
