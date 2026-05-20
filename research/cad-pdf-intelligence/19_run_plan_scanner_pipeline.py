@@ -532,6 +532,47 @@ def check_s11_dashboard() -> Dict:
     }
 
 
+def check_s13_workspace() -> Dict:
+    """S13: Plan Scanner Workspace — reads outputs from 26_plan_scanner_workspace.py."""
+    t0 = time.time()
+    f_html = OUT_DIR / 'plan_scanner_workspace.html'
+    f_json = OUT_DIR / 'plan_scanner_workspace.json'
+    f_md   = OUT_DIR / 'plan_scanner_workspace_report.md'
+
+    data = load_json(f_json)
+    warnings: List[str] = []
+    metrics: Dict = {}
+
+    if data is None:
+        st = 'missing'
+        warnings.append('Run 26_plan_scanner_workspace.py to generate the workspace.')
+    else:
+        boq = data.get('boq', {})
+        tlp = data.get('answer_pack', {})
+        arts = data.get('artifacts', [])
+        n_present = sum(1 for a in arts if a.get('exists'))
+        metrics = {
+            'artifacts_present': n_present,
+            'artifacts_total': len(arts),
+            'total_questions': tlp.get('total_questions', 0),
+            'boq_approved': boq.get('approved_for_boq', 0),
+        }
+        st = 'ok'
+
+    return {
+        'stage_id':    'S13',
+        'name':        'Workspace',
+        'description': '26: local research home page — navigation, status, next actions',
+        'script':      '26_plan_scanner_workspace.py',
+        'status':      st,
+        'outputs':     [file_meta(f_html), file_meta(f_json), file_meta(f_md)],
+        'metrics':     metrics,
+        'warnings':    warnings,
+        'human_validations': [],
+        'elapsed_s':   round(time.time() - t0, 3),
+    }
+
+
 def check_s12_answer_pack() -> Dict:
     """S12: Teaching Loop Answer Pack — reads outputs from 25_teaching_loop_answer_pack.py."""
     t0 = time.time()
@@ -1402,6 +1443,9 @@ def main():
     print('  S12: Teaching Loop Answer Pack ...')
     stages.append(check_s12_answer_pack())
 
+    print('  S13: Plan Scanner Workspace ...')
+    stages.append(check_s13_workspace())
+
     elapsed = time.time() - t0
 
     print('\n[Analyze] Deriving recommendations ...')
@@ -1446,6 +1490,7 @@ PIPELINE RUN COMPLETE
   Teaching [S10]    : answers={'found' if tl['answers_file_exists'] else 'none'} applied={tl['n_applied']} pending={tl['n_pending_questions']}
   Dashboard [S11]   : open outputs/master_dashboard.html
   Answer Pack [S12] : open outputs/teaching_loop_answer_pack.html
+  Workspace  [S13]  : open outputs/plan_scanner_workspace.html
   Total linear (m)  : {bq['total_linear_m']:.1f}m  (scale: {bq['scale_status']})
   Taxonomy cands.   : {bq['n_taxonomy_candidates']}  high-impact: {bq['n_high_impact_unknowns']}
 

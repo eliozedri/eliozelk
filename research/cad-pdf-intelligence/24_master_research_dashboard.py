@@ -1005,6 +1005,8 @@ def build_html(dash: Dict) -> str:
   <div style="margin-top:4px">{type_chips}</div>
 </div>
 <div style="background:#f0f9ff;border:2px solid #bae6fd;border-radius:6px;padding:10px 14px;font-size:13px;margin-top:8px">
+  <strong>Research entry point:</strong>
+  <a href="plan_scanner_workspace.html" style="color:#1565c0;font-weight:700;margin-left:8px">Plan Scanner Workspace (S13) →</a><br>
   <strong>To start teaching loop:</strong><br>
   1. Open <a href="teaching_loop_answer_pack.html" style="color:#1565c0;font-weight:600">Teaching Loop Answer Pack (S12)</a> — all {teach['n_pending_questions']} questions structured by priority<br>
   2. Copy <code>outputs/human_review_answers.template.json</code> → <code>outputs/human_review_answers.json</code> and fill in answers<br>
