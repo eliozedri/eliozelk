@@ -489,6 +489,49 @@ def check_s7_boq(refresh: bool = True) -> Dict:
         'elapsed_s':  round(time.time()-t0, 3),
     }
 
+def check_s11_dashboard() -> Dict:
+    """S11: Master Research Dashboard — reads outputs from 24_master_research_dashboard.py."""
+    t0 = time.time()
+    f_json = OUT_DIR / 'master_dashboard.json'
+    f_md   = OUT_DIR / 'master_dashboard_report.md'
+    f_html = OUT_DIR / 'master_dashboard.html'
+
+    data = load_json(f_json)
+    warnings: List[str] = []
+    metrics: Dict = {}
+
+    if data is None:
+        st = 'missing'
+        warnings.append('Run 24_master_research_dashboard.py to generate the master dashboard.')
+    else:
+        meta  = data.get('meta', {})
+        flags = data.get('red_flags', [])
+        from collections import Counter
+        fc = Counter(f['severity'] for f in flags)
+        metrics = {
+            'n_critical':   fc.get('CRITICAL', 0),
+            'n_warning':    fc.get('WARNING', 0),
+            'n_info':       fc.get('INFO', 0),
+            'generated_at': meta.get('generated_at', ''),
+        }
+        if fc.get('CRITICAL', 0) > 0:
+            warnings.append(f'{fc["CRITICAL"]} CRITICAL red flag(s) in master dashboard.')
+        st = 'ok' if f_json.exists() else 'missing'
+
+    return {
+        'stage_id':   'S11',
+        'name':       'Master Dashboard',
+        'description':'24: consolidated research control center for סורק תוכניות',
+        'script':     '24_master_research_dashboard.py',
+        'status':     st,
+        'outputs':    [file_meta(f_json), file_meta(f_md), file_meta(f_html)],
+        'metrics':    metrics,
+        'warnings':   warnings,
+        'human_validations': [],
+        'elapsed_s':  round(time.time() - t0, 3),
+    }
+
+
 def check_s10_human_review() -> Dict:
     """S10: Human Review Write-Back — reads outputs from 23_human_review_writeback.py."""
     t0 = time.time()
@@ -1065,6 +1108,8 @@ def build_html(summary: Dict) -> str:
             has_ans = '✅' if m.get('answers_file_exists') else '❌'
             snippet = (f"{has_ans} answers · applied={m.get('n_applied',0)} "
                        f"pending={m.get('n_pending_questions',0)}")
+        elif s['stage_id'] == 'S11':
+            snippet = (f"🚨{m.get('n_critical',0)} ⚠️{m.get('n_warning',0)} ℹ️{m.get('n_info',0)} red flags")
         elif s['stage_id'] == 'S1':
             snippet = f"{m.get('size_mb',0):.1f} MB" if m.get('size_mb') else 'FILE MISSING'
         elif s['stage_id'] == 'S2':
@@ -1305,6 +1350,9 @@ def main():
     print('  S10: Human Review Write-Back ...')
     stages.append(check_s10_human_review())
 
+    print('  S11: Master Research Dashboard ...')
+    stages.append(check_s11_dashboard())
+
     elapsed = time.time() - t0
 
     print('\n[Analyze] Deriving recommendations ...')
@@ -1347,6 +1395,7 @@ PIPELINE RUN COMPLETE
   Validation [S8]   : valid={vs['n_valid']} partial={vs['n_partial_match']} suspicious={vs['n_suspicious']}
   Resolution [S9]   : ambiguous={rs['n_ambiguous']} resolved_med={rs['n_resolved_medium']} invalid={rs['n_invalid_partial']}
   Teaching [S10]    : answers={'found' if tl['answers_file_exists'] else 'none'} applied={tl['n_applied']} pending={tl['n_pending_questions']}
+  Dashboard [S11]   : open outputs/master_dashboard.html
   Total linear (m)  : {bq['total_linear_m']:.1f}m  (scale: {bq['scale_status']})
   Taxonomy cands.   : {bq['n_taxonomy_candidates']}  high-impact: {bq['n_high_impact_unknowns']}
 
