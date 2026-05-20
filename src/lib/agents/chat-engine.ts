@@ -1467,11 +1467,10 @@ export async function runChatEngine(
         { pattern: /שטח|יומנים/,        labelHe: "יומני שטח",     path: "/work-diary" },
         { pattern: /כספים|הנהח/,        labelHe: "הנה\"ח",        path: "/accounting" },
         { pattern: /לקוחות/,            labelHe: "לקוחות",        path: "/customers" },
-        { pattern: /קטלוג|תמחור/,       labelHe: "קטלוג ותמחור", path: "/catalog" },
+        { pattern: /קטלוג|תמחור|בטיחות/, labelHe: "קטלוג ותמחור", path: "/catalog" },
         { pattern: /סוכנים|פיקוד/,      labelHe: "מרכז הפיקוד",  path: "/agents" },
         { pattern: /רווחיות/,           labelHe: "רווחיות",       path: "/profitability" },
         { pattern: /לוח זמנים/,         labelHe: "לוח זמנים",     path: "/schedule" },
-        { pattern: /בטיחות/,            labelHe: "בטיחות",        path: "/safety" },
       ];
       const lowerNav = message.toLowerCase();
       const navHit = NAV_MAP2.find(n => n.pattern.test(lowerNav));

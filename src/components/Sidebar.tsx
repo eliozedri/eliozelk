@@ -80,7 +80,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "בנוסף",
     items: [
-      { tabId: "catalog", href: "/catalog", label: "קטלוג מוצרים ופריטים", icon: <Database className={ICON_CLS} />, matchFn: (p) => p.startsWith("/catalog") || p.startsWith("/safety") },
+      { tabId: "catalog", href: "/catalog", label: "קטלוג מוצרים ופריטים", icon: <Database className={ICON_CLS} />, matchFn: (p) => p.startsWith("/catalog") },
     ],
   },
   {
