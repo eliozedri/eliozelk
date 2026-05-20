@@ -489,6 +489,66 @@ def check_s7_boq(refresh: bool = True) -> Dict:
         'elapsed_s':  round(time.time()-t0, 3),
     }
 
+def check_s9_partial_resolver() -> Dict:
+    """S9: Partial Code Resolution — reads outputs from 22_partial_code_resolver.py."""
+    t0 = time.time()
+    f_json = OUT_DIR / 'partial_code_resolution.json'
+    f_md   = OUT_DIR / 'partial_code_resolution_report.md'
+    f_html = OUT_DIR / 'partial_code_resolution_report.html'
+
+    data = load_json(f_json)
+    warnings: List[str] = []
+    metrics: Dict = {}
+
+    if data is None:
+        st = 'missing'
+        warnings.append('Run 22_partial_code_resolver.py to generate partial-code resolution outputs.')
+    else:
+        meta    = data.get('meta', {})
+        groups  = data.get('suffix_groups', {})
+        results = data.get('results', [])
+
+        from collections import Counter
+        rc = meta.get('resolution_counts', {})
+        n_ambiguous       = rc.get('ambiguous', 0)
+        n_resolved_high   = rc.get('resolved_high', 0)
+        n_resolved_medium = rc.get('resolved_medium', 0)
+        n_invalid         = rc.get('invalid_partial', 0)
+
+        metrics = {
+            'n_processed':       meta.get('n_processed', 0),
+            'n_suffix_groups':   meta.get('n_suffix_groups', len(groups)),
+            'n_ambiguous':       n_ambiguous,
+            'n_resolved_high':   n_resolved_high,
+            'n_resolved_medium': n_resolved_medium,
+            'n_invalid_partial': n_invalid,
+            'legend_status':     meta.get('legend_status', 'unknown'),
+        }
+        if n_ambiguous > 0:
+            warnings.append(
+                f'{n_ambiguous} OCC(s) remain ambiguous — human review required to resolve partial codes.'
+            )
+        if n_invalid > 0:
+            warnings.append(
+                f'{n_invalid} OCC(s) have invalid partial codes with no valid expansion in any sign series.'
+            )
+
+        st = 'ok' if f_json.exists() else 'missing'
+
+    return {
+        'stage_id':   'S9',
+        'name':       'Partial Code Resolution',
+        'description':'22: resolve partial (2-digit) codes via T1–T4 evidence hierarchy',
+        'script':     '22_partial_code_resolver.py',
+        'status':     st,
+        'outputs':    [file_meta(f_json), file_meta(f_md), file_meta(f_html)],
+        'metrics':    metrics,
+        'warnings':   warnings,
+        'human_validations': [],
+        'elapsed_s':  round(time.time() - t0, 3),
+    }
+
+
 def check_s8_validation() -> Dict:
     """S8: Sign Plausibility Validation — reads outputs from 20_validation_layer.py."""
     t0 = time.time()
@@ -561,11 +621,13 @@ def derive_next_step(stages: List[Dict]) -> Dict:
     s6 = next((s for s in stages if s['stage_id'] == 'S6'), {})
     s7 = next((s for s in stages if s['stage_id'] == 'S7'), {})
     s8 = next((s for s in stages if s['stage_id'] == 'S8'), {})
+    s9 = next((s for s in stages if s['stage_id'] == 'S9'), {})
 
     m5 = s5.get('metrics', {})
     m6 = s6.get('metrics', {})
     m7 = s7.get('metrics', {})
     m8 = s8.get('metrics', {})
+    m9 = s9.get('metrics', {})
 
     # Priority 1: missing critical outputs
     for s in stages:
@@ -623,13 +685,28 @@ def derive_next_step(stages: List[Dict]) -> Dict:
             'file':     'outputs/validation_report.html',
         }
     if n_partial > 0:
+        # Check if S9 has run; if so, defer to S9 step
+        if s9.get('status') == 'missing':
+            return {
+                'priority': 'MEDIUM',
+                'step':     'Run 22_partial_code_resolver.py — partial code resolution (S9)',
+                'reason':   (f'S8 found {n_partial} OCCs with partial 2-digit codes. '
+                             f'S9 resolves these using catalog + evidence hierarchy (no image matching).'),
+                'command':  '.venv/bin/python3 22_partial_code_resolver.py',
+                'file':     None,
+            }
+
+    # Priority 4b: S9 ambiguous codes need human input
+    n_ambiguous = m9.get('n_ambiguous', 0)
+    n_invalid   = m9.get('n_invalid_partial', 0)
+    if s9.get('status') == 'ok' and n_ambiguous > 0:
         return {
             'priority': 'MEDIUM',
-            'step':     f'Resolve {n_partial} partial-code OCC(s) — extend POC 3 to triplet detection',
-            'reason':   (f'S8 found {n_partial} OCCs with 2-digit codes that match valid sign series expansions '
-                         f'(e.g. "33" → 133/433/633/933). Human resolution or triplet fix in POC 3 required.'),
+            'step':     f'Human review: resolve {n_ambiguous} ambiguous partial-code group(s) in S9 output',
+            'reason':   (f'S9 found {n_ambiguous} OCCs where the partial code is ambiguous (multiple valid '
+                         f'expansions, no T1/T2 evidence). Human review of plan PDF required to confirm code.'),
             'command':  None,
-            'file':     'outputs/validation_report.html',
+            'file':     'outputs/partial_code_resolution_report.html',
         }
 
     # Priority 5: sign code validation (original fallback)
@@ -675,6 +752,7 @@ def build_summary(stages: List[Dict], next_step: Dict, hvs: List[Dict],
 
     s7m = next((s['metrics'] for s in stages if s['stage_id'] == 'S7'), {})
     s8m = next((s['metrics'] for s in stages if s['stage_id'] == 'S8'), {})
+    s9m = next((s['metrics'] for s in stages if s['stage_id'] == 'S9'), {})
 
     all_warnings = [
         {'stage': s['stage_id'], 'stage_name': s['name'], 'msg': w}
@@ -720,6 +798,15 @@ def build_summary(stages: List[Dict], next_step: Dict, hvs: List[Dict],
             'n_suspicious':          s8m.get('n_suspicious', 0),
             'n_confidence_decreased': s8m.get('n_confidence_decreased', 0),
             'structural_finding':    s8m.get('structural_finding', ''),
+        },
+        'resolution_summary': {
+            'n_processed':       s9m.get('n_processed', 0),
+            'n_suffix_groups':   s9m.get('n_suffix_groups', 0),
+            'n_ambiguous':       s9m.get('n_ambiguous', 0),
+            'n_resolved_high':   s9m.get('n_resolved_high', 0),
+            'n_resolved_medium': s9m.get('n_resolved_medium', 0),
+            'n_invalid_partial': s9m.get('n_invalid_partial', 0),
+            'legend_status':     s9m.get('legend_status', 'not_run'),
         },
         'stages':              stages,
         'all_warnings':        all_warnings,
@@ -890,6 +977,9 @@ def build_html(summary: Dict) -> str:
         elif s['stage_id'] == 'S8':
             snippet = (f"valid={m.get('n_valid',0)} partial={m.get('n_partial_match',0)} "
                        f"suspicious={m.get('n_suspicious',0)}")
+        elif s['stage_id'] == 'S9':
+            snippet = (f"ambiguous={m.get('n_ambiguous',0)} resolved_med={m.get('n_resolved_medium',0)} "
+                       f"invalid={m.get('n_invalid_partial',0)}")
         elif s['stage_id'] == 'S1':
             snippet = f"{m.get('size_mb',0):.1f} MB" if m.get('size_mb') else 'FILE MISSING'
         elif s['stage_id'] == 'S2':
@@ -1124,6 +1214,9 @@ def main():
     print('  S8: Sign Plausibility Validation ...')
     stages.append(check_s8_validation())
 
+    print('  S9: Partial Code Resolution ...')
+    stages.append(check_s9_partial_resolver())
+
     elapsed = time.time() - t0
 
     print('\n[Analyze] Deriving recommendations ...')
@@ -1147,6 +1240,7 @@ def main():
     ps  = summary['pipeline_status']
     bq  = summary['boq_summary']
     vs  = summary['validation_summary']
+    rs  = summary['resolution_summary']
     ns  = summary['recommended_next_step']
 
     print(f"""
@@ -1162,6 +1256,7 @@ PIPELINE RUN COMPLETE
   Pole locations    : {bq['pole_locations']}
   Sign plates       : {bq['sign_plates']}
   Validation [S8]   : valid={vs['n_valid']} partial={vs['n_partial_match']} suspicious={vs['n_suspicious']}
+  Resolution [S9]   : ambiguous={rs['n_ambiguous']} resolved_med={rs['n_resolved_medium']} invalid={rs['n_invalid_partial']}
   Total linear (m)  : {bq['total_linear_m']:.1f}m  (scale: {bq['scale_status']})
   Taxonomy cands.   : {bq['n_taxonomy_candidates']}  high-impact: {bq['n_high_impact_unknowns']}
 
