@@ -489,6 +489,56 @@ def check_s7_boq(refresh: bool = True) -> Dict:
         'elapsed_s':  round(time.time()-t0, 3),
     }
 
+def check_s10_human_review() -> Dict:
+    """S10: Human Review Write-Back — reads outputs from 23_human_review_writeback.py."""
+    t0 = time.time()
+    f_log  = OUT_DIR / 'human_review_application.json'
+    f_md   = OUT_DIR / 'human_review_application_report.md'
+    f_html = OUT_DIR / 'human_review_application_report.html'
+    f_ex   = OUT_DIR / 'human_review_answers.example.json'
+    f_ans  = OUT_DIR / 'human_review_answers.json'
+
+    data = load_json(f_log)
+    warnings: List[str] = []
+    metrics: Dict = {}
+
+    if data is None:
+        st = 'missing'
+        warnings.append('Run 23_human_review_writeback.py to generate teaching-loop outputs.')
+    else:
+        meta = data.get('meta', {})
+        metrics = {
+            'answers_file_exists':  meta.get('answers_file_exists', False),
+            'n_answers_loaded':     meta.get('n_answers_loaded', 0),
+            'n_applied':            meta.get('n_applied', 0),
+            'n_skipped':            meta.get('n_skipped', 0),
+            'n_contradictions':     meta.get('n_contradictions', 0),
+            'n_pending_questions':  meta.get('n_pending_questions', 0),
+        }
+        if meta.get('n_contradictions', 0) > 0:
+            warnings.append(
+                f'{meta["n_contradictions"]} contradiction(s) detected — human answers conflict with existing data.'
+            )
+        if not meta.get('answers_file_exists'):
+            warnings.append('No real answers file found — teaching loop not yet started.')
+
+        st = 'ok' if f_log.exists() else 'missing'
+
+    return {
+        'stage_id':   'S10',
+        'name':       'Human Review Write-Back',
+        'description':'23: apply human answers to pipeline outputs (תרגול ולמידה)',
+        'script':     '23_human_review_writeback.py',
+        'status':     st,
+        'outputs':    [file_meta(f_log), file_meta(f_md), file_meta(f_html),
+                       file_meta(f_ex), file_meta(f_ans)],
+        'metrics':    metrics,
+        'warnings':   warnings,
+        'human_validations': [],
+        'elapsed_s':  round(time.time() - t0, 3),
+    }
+
+
 def check_s9_partial_resolver() -> Dict:
     """S9: Partial Code Resolution — reads outputs from 22_partial_code_resolver.py."""
     t0 = time.time()
@@ -620,14 +670,16 @@ def derive_next_step(stages: List[Dict]) -> Dict:
     s5 = next((s for s in stages if s['stage_id'] == 'S5'), {})
     s6 = next((s for s in stages if s['stage_id'] == 'S6'), {})
     s7 = next((s for s in stages if s['stage_id'] == 'S7'), {})
-    s8 = next((s for s in stages if s['stage_id'] == 'S8'), {})
-    s9 = next((s for s in stages if s['stage_id'] == 'S9'), {})
+    s8  = next((s for s in stages if s['stage_id'] == 'S8'), {})
+    s9  = next((s for s in stages if s['stage_id'] == 'S9'), {})
+    s10 = next((s for s in stages if s['stage_id'] == 'S10'), {})
 
-    m5 = s5.get('metrics', {})
-    m6 = s6.get('metrics', {})
-    m7 = s7.get('metrics', {})
-    m8 = s8.get('metrics', {})
-    m9 = s9.get('metrics', {})
+    m5  = s5.get('metrics', {})
+    m6  = s6.get('metrics', {})
+    m7  = s7.get('metrics', {})
+    m8  = s8.get('metrics', {})
+    m9  = s9.get('metrics', {})
+    m10 = s10.get('metrics', {})
 
     # Priority 1: missing critical outputs
     for s in stages:
@@ -700,13 +752,34 @@ def derive_next_step(stages: List[Dict]) -> Dict:
     n_ambiguous = m9.get('n_ambiguous', 0)
     n_invalid   = m9.get('n_invalid_partial', 0)
     if s9.get('status') == 'ok' and n_ambiguous > 0:
+        # Check if S10 has been run and answers file exists
+        if s10.get('status') == 'missing':
+            return {
+                'priority': 'MEDIUM',
+                'step':     'Run 23_human_review_writeback.py — human review write-back (S10)',
+                'reason':   f'S10 (Human Review Write-Back) has not been run. Initialises the teaching loop and writes example answers template.',
+                'command':  '.venv/bin/python3 23_human_review_writeback.py',
+                'file':     None,
+            }
+        if not m10.get('answers_file_exists'):
+            return {
+                'priority': 'MEDIUM',
+                'step':     f'Answer review questions — {n_ambiguous} ambiguous partial-code group(s) pending',
+                'reason':   (f'S9 found {n_ambiguous} partial-code OCCs that need human confirmation. '
+                             f'Copy outputs/human_review_answers.example.json → outputs/human_review_answers.json, '
+                             f'answer the review questions (see partial_code_resolution_report.html), then re-run S10.'),
+                'command':  None,
+                'file':     'outputs/partial_code_resolution_report.html',
+            }
+
+    # Priority 4c: S10 contradictions need review
+    if m10.get('n_contradictions', 0) > 0:
         return {
-            'priority': 'MEDIUM',
-            'step':     f'Human review: resolve {n_ambiguous} ambiguous partial-code group(s) in S9 output',
-            'reason':   (f'S9 found {n_ambiguous} OCCs where the partial code is ambiguous (multiple valid '
-                         f'expansions, no T1/T2 evidence). Human review of plan PDF required to confirm code.'),
+            'priority': 'HIGH',
+            'step':     f'Resolve {m10["n_contradictions"]} contradiction(s) in human review write-back (S10)',
+            'reason':   'Human answers conflict with existing data. Review human_review_application_report.html.',
             'command':  None,
-            'file':     'outputs/partial_code_resolution_report.html',
+            'file':     'outputs/human_review_application_report.html',
         }
 
     # Priority 5: sign code validation (original fallback)
@@ -750,9 +823,10 @@ def build_summary(stages: List[Dict], next_step: Dict, hvs: List[Dict],
     n_missing = sum(1 for s in stages if s['status'] == 'missing')
     n_error   = sum(1 for s in stages if s['status'] == 'error')
 
-    s7m = next((s['metrics'] for s in stages if s['stage_id'] == 'S7'), {})
-    s8m = next((s['metrics'] for s in stages if s['stage_id'] == 'S8'), {})
-    s9m = next((s['metrics'] for s in stages if s['stage_id'] == 'S9'), {})
+    s7m  = next((s['metrics'] for s in stages if s['stage_id'] == 'S7'), {})
+    s8m  = next((s['metrics'] for s in stages if s['stage_id'] == 'S8'), {})
+    s9m  = next((s['metrics'] for s in stages if s['stage_id'] == 'S9'), {})
+    s10m = next((s['metrics'] for s in stages if s['stage_id'] == 'S10'), {})
 
     all_warnings = [
         {'stage': s['stage_id'], 'stage_name': s['name'], 'msg': w}
@@ -807,6 +881,13 @@ def build_summary(stages: List[Dict], next_step: Dict, hvs: List[Dict],
             'n_resolved_medium': s9m.get('n_resolved_medium', 0),
             'n_invalid_partial': s9m.get('n_invalid_partial', 0),
             'legend_status':     s9m.get('legend_status', 'not_run'),
+        },
+        'teaching_loop_summary': {
+            'answers_file_exists':  s10m.get('answers_file_exists', False),
+            'n_answers_loaded':     s10m.get('n_answers_loaded', 0),
+            'n_applied':            s10m.get('n_applied', 0),
+            'n_contradictions':     s10m.get('n_contradictions', 0),
+            'n_pending_questions':  s10m.get('n_pending_questions', 0),
         },
         'stages':              stages,
         'all_warnings':        all_warnings,
@@ -980,6 +1061,10 @@ def build_html(summary: Dict) -> str:
         elif s['stage_id'] == 'S9':
             snippet = (f"ambiguous={m.get('n_ambiguous',0)} resolved_med={m.get('n_resolved_medium',0)} "
                        f"invalid={m.get('n_invalid_partial',0)}")
+        elif s['stage_id'] == 'S10':
+            has_ans = '✅' if m.get('answers_file_exists') else '❌'
+            snippet = (f"{has_ans} answers · applied={m.get('n_applied',0)} "
+                       f"pending={m.get('n_pending_questions',0)}")
         elif s['stage_id'] == 'S1':
             snippet = f"{m.get('size_mb',0):.1f} MB" if m.get('size_mb') else 'FILE MISSING'
         elif s['stage_id'] == 'S2':
@@ -1217,6 +1302,9 @@ def main():
     print('  S9: Partial Code Resolution ...')
     stages.append(check_s9_partial_resolver())
 
+    print('  S10: Human Review Write-Back ...')
+    stages.append(check_s10_human_review())
+
     elapsed = time.time() - t0
 
     print('\n[Analyze] Deriving recommendations ...')
@@ -1241,6 +1329,7 @@ def main():
     bq  = summary['boq_summary']
     vs  = summary['validation_summary']
     rs  = summary['resolution_summary']
+    tl  = summary['teaching_loop_summary']
     ns  = summary['recommended_next_step']
 
     print(f"""
@@ -1257,6 +1346,7 @@ PIPELINE RUN COMPLETE
   Sign plates       : {bq['sign_plates']}
   Validation [S8]   : valid={vs['n_valid']} partial={vs['n_partial_match']} suspicious={vs['n_suspicious']}
   Resolution [S9]   : ambiguous={rs['n_ambiguous']} resolved_med={rs['n_resolved_medium']} invalid={rs['n_invalid_partial']}
+  Teaching [S10]    : answers={'found' if tl['answers_file_exists'] else 'none'} applied={tl['n_applied']} pending={tl['n_pending_questions']}
   Total linear (m)  : {bq['total_linear_m']:.1f}m  (scale: {bq['scale_status']})
   Taxonomy cands.   : {bq['n_taxonomy_candidates']}  high-impact: {bq['n_high_impact_unknowns']}
 
