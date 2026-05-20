@@ -489,6 +489,70 @@ def check_s7_boq(refresh: bool = True) -> Dict:
         'elapsed_s':  round(time.time()-t0, 3),
     }
 
+def check_s8_validation() -> Dict:
+    """S8: Sign Plausibility Validation — reads outputs from 20_validation_layer.py."""
+    t0 = time.time()
+    f_json = OUT_DIR / 'validation_results.json'
+    f_md   = OUT_DIR / 'validation_report.md'
+    f_html = OUT_DIR / 'validation_report.html'
+
+    data = load_json(f_json)
+    warnings: List[str] = []
+    metrics: Dict = {}
+
+    if data is None:
+        st = 'missing'
+        warnings.append('Run 20_validation_layer.py to generate validation outputs.')
+    else:
+        meta    = data.get('meta', {})
+        results = data.get('results', [])
+
+        from collections import Counter
+        status_counts = Counter(r.get('validation_status') for r in results)
+        conf_counts   = Counter(r.get('confidence_change') for r in results)
+
+        n_suspicious  = status_counts.get('suspicious', 0)
+        n_partial     = status_counts.get('partial_match', 0)
+        n_no_code     = status_counts.get('no_code_candidate', 0)
+        n_valid       = status_counts.get('valid', 0)
+        n_decreased   = conf_counts.get('decreased', 0)
+        structural    = meta.get('structural_finding', '')
+
+        metrics = {
+            'n_candidates':         meta.get('n_candidates', 0),
+            'n_with_code':          meta.get('n_with_code', 0),
+            'n_no_code':            meta.get('n_no_code', 0),
+            'n_valid':              n_valid,
+            'n_partial_match':      n_partial,
+            'n_suspicious':         n_suspicious,
+            'n_confidence_decreased': n_decreased,
+            'kb_code_count':        meta.get('kb_code_count', 0),
+            'catalog_code_count':   meta.get('catalog_code_count', 0),
+            'structural_finding':   structural,
+        }
+        if n_suspicious > 0:
+            warnings.append(
+                f'{n_suspicious} OCC(s) produced suspicious codes with no valid expansion in any sign series.'
+            )
+        if structural:
+            warnings.append('Structural: ' + structural[:120] + '...')
+
+        st = 'ok' if f_json.exists() else 'missing'
+
+    return {
+        'stage_id':   'S8',
+        'name':       'Sign Plausibility Validation',
+        'description':'20: cross-check MEDIUM code candidates against catalog + SIGN_INDEX.md',
+        'script':     '20_validation_layer.py',
+        'status':     st,
+        'outputs':    [file_meta(f_json), file_meta(f_md), file_meta(f_html)],
+        'metrics':    metrics,
+        'warnings':   warnings,
+        'human_validations': [],
+        'elapsed_s':  round(time.time() - t0, 3),
+    }
+
+
 # ── Recommended next step ──────────────────────────────────────────────────────
 
 def derive_next_step(stages: List[Dict]) -> Dict:
@@ -496,10 +560,12 @@ def derive_next_step(stages: List[Dict]) -> Dict:
     s5 = next((s for s in stages if s['stage_id'] == 'S5'), {})
     s6 = next((s for s in stages if s['stage_id'] == 'S6'), {})
     s7 = next((s for s in stages if s['stage_id'] == 'S7'), {})
+    s8 = next((s for s in stages if s['stage_id'] == 'S8'), {})
 
     m5 = s5.get('metrics', {})
     m6 = s6.get('metrics', {})
     m7 = s7.get('metrics', {})
+    m8 = s8.get('metrics', {})
 
     # Priority 1: missing critical outputs
     for s in stages:
@@ -535,7 +601,38 @@ def derive_next_step(stages: List[Dict]) -> Dict:
             'file':     'outputs/element_groups_report.html',
         }
 
-    # Priority 4: sign code validation
+    # Priority 4: S8 structural finding — POC 3 adjacency limitation
+    n_suspicious = m8.get('n_suspicious', 0)
+    n_partial    = m8.get('n_partial_match', 0)
+    if s8.get('status') == 'missing':
+        return {
+            'priority': 'HIGH',
+            'step':     'Run 20_validation_layer.py to validate MEDIUM sign-code candidates',
+            'reason':   'Sign plausibility validation (S8) has not been run. Validation surfaces structural POC 3 limitations.',
+            'command':  '.venv/bin/python3 20_validation_layer.py',
+            'file':     None,
+        }
+    if n_suspicious > 0:
+        return {
+            'priority': 'HIGH',
+            'step':     f'Investigate {n_suspicious} suspicious code(s) — extend POC 3 to triplet detection',
+            'reason':   (f'S8 found {n_suspicious} OCCs with codes that have NO valid 3-digit expansion in any '
+                         f'Israeli sign series. Root cause: POC 3 captures digit-path PAIRS (2-digit), not triplets. '
+                         f'Fix: extend adjacency detection in 13_vector_glyph_recognition.py to groups of 3.'),
+            'command':  None,
+            'file':     'outputs/validation_report.html',
+        }
+    if n_partial > 0:
+        return {
+            'priority': 'MEDIUM',
+            'step':     f'Resolve {n_partial} partial-code OCC(s) — extend POC 3 to triplet detection',
+            'reason':   (f'S8 found {n_partial} OCCs with 2-digit codes that match valid sign series expansions '
+                         f'(e.g. "33" → 133/433/633/933). Human resolution or triplet fix in POC 3 required.'),
+            'command':  None,
+            'file':     'outputs/validation_report.html',
+        }
+
+    # Priority 5: sign code validation (original fallback)
     n_codes = m7.get('sign_code_candidates', 0)
     if n_codes > 0:
         return {
@@ -577,6 +674,7 @@ def build_summary(stages: List[Dict], next_step: Dict, hvs: List[Dict],
     n_error   = sum(1 for s in stages if s['status'] == 'error')
 
     s7m = next((s['metrics'] for s in stages if s['stage_id'] == 'S7'), {})
+    s8m = next((s['metrics'] for s in stages if s['stage_id'] == 'S8'), {})
 
     all_warnings = [
         {'stage': s['stage_id'], 'stage_name': s['name'], 'msg': w}
@@ -613,6 +711,15 @@ def build_summary(stages: List[Dict], next_step: Dict, hvs: List[Dict],
             'n_element_group_items':  s7m.get('n_element_group_items', 0),
             'n_taxonomy_candidates':  s7m.get('n_taxonomy_candidates', 0),
             'n_high_impact_unknowns': s7m.get('n_high_impact_unknowns', 0),
+        },
+        'validation_summary': {
+            'n_candidates':          s8m.get('n_candidates', 0),
+            'n_with_code':           s8m.get('n_with_code', 0),
+            'n_valid':               s8m.get('n_valid', 0),
+            'n_partial_match':       s8m.get('n_partial_match', 0),
+            'n_suspicious':          s8m.get('n_suspicious', 0),
+            'n_confidence_decreased': s8m.get('n_confidence_decreased', 0),
+            'structural_finding':    s8m.get('structural_finding', ''),
         },
         'stages':              stages,
         'all_warnings':        all_warnings,
@@ -780,6 +887,9 @@ def build_html(summary: Dict) -> str:
             snippet = f"{m.get('total_groups',0)} groups · {m.get('high_impact_unknowns',0)} high-impact"
         elif s['stage_id'] == 'S7':
             snippet = f"{m.get('total_boq_items',0)} items · {m.get('approved_for_boq',0)} approved"
+        elif s['stage_id'] == 'S8':
+            snippet = (f"valid={m.get('n_valid',0)} partial={m.get('n_partial_match',0)} "
+                       f"suspicious={m.get('n_suspicious',0)}")
         elif s['stage_id'] == 'S1':
             snippet = f"{m.get('size_mb',0):.1f} MB" if m.get('size_mb') else 'FILE MISSING'
         elif s['stage_id'] == 'S2':
@@ -1011,6 +1121,9 @@ def main():
     print('  S7: Unified BOQ (refreshing ...) ...')
     stages.append(check_s7_boq(refresh=True))
 
+    print('  S8: Sign Plausibility Validation ...')
+    stages.append(check_s8_validation())
+
     elapsed = time.time() - t0
 
     print('\n[Analyze] Deriving recommendations ...')
@@ -1033,6 +1146,7 @@ def main():
     elapsed_total = time.time() - t0
     ps  = summary['pipeline_status']
     bq  = summary['boq_summary']
+    vs  = summary['validation_summary']
     ns  = summary['recommended_next_step']
 
     print(f"""
@@ -1047,6 +1161,7 @@ PIPELINE RUN COMPLETE
   BOQ items         : {bq['total_boq_items']}  (approved: {bq['approved_for_boq']})
   Pole locations    : {bq['pole_locations']}
   Sign plates       : {bq['sign_plates']}
+  Validation [S8]   : valid={vs['n_valid']} partial={vs['n_partial_match']} suspicious={vs['n_suspicious']}
   Total linear (m)  : {bq['total_linear_m']:.1f}m  (scale: {bq['scale_status']})
   Taxonomy cands.   : {bq['n_taxonomy_candidates']}  high-impact: {bq['n_high_impact_unknowns']}
 
