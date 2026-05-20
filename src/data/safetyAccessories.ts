@@ -1,8 +1,10 @@
-// MIGRATION SOURCE ONLY — do not add new UI consumers to this file.
-// All items here have been migrated to catalog_items (Supabase) via
-// migration 20260520120000_catalog_safety_accessories.sql.
-// The /safety page reads from this constant temporarily (Phase 1).
-// Phase 2: refactor /safety to read from useCatalogContext() instead.
+// REFERENCE CATALOG VIEWER SOURCE — consumed exclusively by /safety page (SafetyAccessoriesPage).
+// This file holds rich product data (materials, dimensions, variants, images, readiness status)
+// extracted from the Elkayam physical catalog PDF (pages 7-20). It is NOT a management layer.
+// The operational/orderable versions of these items live in catalog_items (Supabase) with
+// metadata.sources[{type:"seed"}] — those are managed via the Catalog tab, not here.
+// Do NOT add new management UI consumers to this file; do NOT replace /safety with useCatalogContext()
+// — the /safety page is a product reference viewer, not an operational catalog.
 import type { SafetyAccessoryItem } from "@/types/safetyAccessory";
 
 const D = "2026-05-12T00:00:00.000Z";
