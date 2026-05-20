@@ -27,9 +27,11 @@ Outputs:
 Research-only. approved_for_boq: false. Static HTML, no server required.
 """
 from __future__ import annotations
-import json, time
+import argparse, json, time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from plan_run_context import PlanRunContext
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent
@@ -1143,4 +1145,30 @@ S11 MASTER DASHBOARD COMPLETE
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Plan Scanner Master Research Dashboard')
+    parser.add_argument(
+        '--plan-run-dir', default=None,
+        help='Path to a plan-scoped run directory (created by 31_upload_intake_wrapper.py). '
+             'If omitted, runs in legacy mode against outputs/',
+    )
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+    if _ctx.is_plan_scoped:
+        OUT_DIR      = _ctx.outputs_dir  # type: ignore[assignment]
+        OUT_JSON     = OUT_DIR / 'master_dashboard.json'
+        OUT_HTML     = OUT_DIR / 'master_dashboard.html'
+        OUT_MD       = OUT_DIR / 'master_dashboard_report.md'
+        F_PIPELINE   = OUT_DIR / 'pipeline_run_summary.json'
+        F_BOQ        = OUT_DIR / 'boq_unified_draft.json'
+        F_ELEMENTS   = OUT_DIR / 'element_groups.json'
+        F_INVENTORY  = OUT_DIR / 'sign_inventory.json'
+        F_QUEUE      = OUT_DIR / 'review_queue.json'
+        F_VALIDATION = OUT_DIR / 'validation_results.json'
+        F_PARTIAL    = OUT_DIR / 'partial_code_resolution.json'
+        F_LEGEND     = OUT_DIR / 'legend_vocabulary.json'
+        F_TEACHING   = OUT_DIR / 'human_review_application.json'
+        F_ANSWERS    = OUT_DIR / 'human_review_answers.json'
+        F_SCALE      = OUT_DIR / 'scale_measurement' / 'results.json'
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
     main()

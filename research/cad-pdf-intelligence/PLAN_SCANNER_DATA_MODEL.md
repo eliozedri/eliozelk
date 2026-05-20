@@ -11,6 +11,9 @@
 
 ## Design Principles
 
+- **Scanner, not archive.** The Plan Scanner is a scan-and-export tool. The source PDF is a temporary working input, not a permanent archive asset. The valuable outputs are the scan results (BOQ draft, measurements, review questions, report). Source files carry a retention policy and may be deleted after scan completion. The DB record and all scan results persist even after the source file is deleted.
+- **Ephemeral source, durable results.** Default retention policy is `keep_outputs_only`: scan outputs are kept indefinitely; the source PDF is held only until export/download. Long-term source archival must be explicitly opted into.
+- **Run directory is temporary.** Each scan run gets a plan-scoped directory (`runs/<plan_slug>/`). This directory has a lifecycle: `created → scanning → outputs_generated → exported → cleanup_pending → source_deleted → archived_if_requested`. It is not a permanent document archive by default.
 - **Never auto-approve for BOQ.** `approved_for_boq` is always `false` by default and can only be set by a human gate, not by any pipeline stage or API route.
 - **Human review ≠ BOQ approval.** These are separate states with separate actors and timestamps.
 - **Preserve originals.** Every human correction preserves the original auto-detected value alongside it.
@@ -60,7 +63,28 @@ CREATE TABLE plan_files (
   checksum_sha256 TEXT,                                  -- for deduplication
   revision_label  TEXT,                                  -- e.g. "Rev-3", "2026-05-20"
   uploaded_by     UUID REFERENCES auth.users(id),
-  uploaded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  uploaded_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- ── Scanner-not-archive: source file retention lifecycle ──────────────────
+  retention_policy TEXT NOT NULL DEFAULT 'keep_outputs_only'
+                   CHECK (retention_policy IN (
+                     'ephemeral_scan_only',              -- auto-delete after scan completes
+                     'keep_outputs_only',                -- DEFAULT: keep results, delete source after export
+                     'keep_source_until_export',         -- keep source until user downloads results
+                     'keep_source_for_project_archive',  -- explicit long-term retention (user opt-in)
+                     'manual_delete_after_scan'          -- user decides when to delete
+                   )),
+  storage_status   TEXT NOT NULL DEFAULT 'temporary'
+                   CHECK (storage_status IN (
+                     'temporary',    -- file is in temporary storage, may be deleted
+                     'retained',     -- user explicitly chose to keep this file
+                     'deleted',      -- source file deleted; DB record and scan results remain
+                     'export_only'   -- file exists only in export package, not in primary storage
+                   )),
+  expires_at       TIMESTAMPTZ,                          -- NULL = no auto-expiry; set per retention_policy
+  deleted_at       TIMESTAMPTZ                           -- set when source file deleted; record stays
+  -- NOTE: deleting a plan_file row is NOT the same as deleting the scan results.
+  -- scan results (plan_boq_items, plan_sign_occurrences, etc.) are never cascade-deleted
+  -- when a plan_file is deleted. Only the source file reference is removed.
 );
 ```
 
@@ -518,21 +542,43 @@ CREATE TABLE plan_artifacts (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   plan_id           UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
   scan_run_id       UUID REFERENCES plan_scan_runs(id),
+  -- ── Artifact classification (scanner-not-archive principle) ───────────────
   artifact_type     TEXT NOT NULL
                     CHECK (artifact_type IN (
-                      'pdf_source','legend_crop','sign_crop','overlay',
-                      'html_report','json_output','boq_report','boq_csv',
-                      'calibration','pipeline_summary','evidence_panel'
+                      -- Source files (may be temporary)
+                      'source_upload',                   -- original uploaded plan PDF
+                      'temporary_working_file',          -- intermediate processing file (auto-delete after scan)
+                      -- Generated outputs (durable — the valuable product of the scan)
+                      'generated_output',                -- scan result JSON / data file
+                      'printable_report',                -- user-facing HTML or PDF report
+                      'boq_report',                      -- BOQ draft report (HTML/PDF)
+                      'boq_csv',                         -- BOQ export CSV
+                      -- Evidence / debug (retain with scan result; deletable if storage constrained)
+                      'evidence_artifact',               -- crop image, overlay, debug visual
+                      'pipeline_summary',                -- pipeline run summary JSON
+                      'calibration'                      -- calibration reference data
                     )),
-  stage_id          TEXT,                                 -- S1..S16
+  stage_id          TEXT,                                 -- S1..S18
   file_name         TEXT NOT NULL,
   storage_bucket    TEXT,
   storage_path      TEXT,
   file_size_bytes   BIGINT,
   mime_type         TEXT,
   checksum_sha256   TEXT,
+  -- ── Storage lifecycle ─────────────────────────────────────────────────────
+  storage_status    TEXT NOT NULL DEFAULT 'temporary'
+                    CHECK (storage_status IN (
+                      'temporary',    -- working file; auto-delete eligible
+                      'retained',     -- durable output; keep indefinitely
+                      'deleted',      -- file deleted; record remains for audit
+                      'export_only'   -- lives in export package only
+                    )),
+  expires_at        TIMESTAMPTZ,                          -- NULL = no auto-expiry
+  deleted_at        TIMESTAMPTZ,                          -- set when file is deleted; record stays
   artifact_metadata JSONB DEFAULT '{}',                   -- stage-specific metadata
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  -- NOTE: source_upload and temporary_working_file artifacts default to storage_status='temporary'.
+  -- generated_output, printable_report, boq_report, boq_csv default to storage_status='retained'.
 );
 ```
 

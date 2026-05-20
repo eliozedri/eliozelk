@@ -23,9 +23,11 @@ Outputs:
 Research-only. Not approved BOQ data.
 """
 from __future__ import annotations
-import json, time, subprocess, sys, os
+import argparse, json, time, subprocess, sys, os
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+
+from plan_run_context import PlanRunContext
 
 # ── Config ────────────────────────────────────────────────────────────────────
 PDF_PATH   = Path('/Users/eliozedri/Downloads/50-448-02-400.pdf')
@@ -1751,4 +1753,21 @@ PIPELINE RUN COMPLETE
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Plan Scanner Pipeline Orchestrator')
+    parser.add_argument(
+        '--plan-run-dir', default=None,
+        help='Path to a plan-scoped run directory (created by 31_upload_intake_wrapper.py). '
+             'If omitted, runs in legacy mode against outputs/',
+    )
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+    if _ctx.is_plan_scoped:
+        # Override module-level globals so all check_s*() functions use the run dir
+        PDF_PATH = _ctx.source_pdf_path or PDF_PATH  # type: ignore[assignment]
+        OUT_DIR  = _ctx.outputs_dir                   # type: ignore[assignment]
+        OUT_JSON = OUT_DIR / 'pipeline_run_summary.json'
+        OUT_MD   = OUT_DIR / 'pipeline_run_report.md'
+        OUT_HTML = OUT_DIR / 'pipeline_run_report.html'
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
     main()

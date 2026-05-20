@@ -187,6 +187,52 @@ The DB constraint prevents the worst case (approval without an approver ID), but
 
 ---
 
+## Scanner-not-archive: retention lifecycle fields NOT YET in this SQL draft
+
+**Post-draft addition (2026-05-20):** After the SQL draft was written, the product design was updated to enforce the "scanner, not archive" principle. The following fields were added to `PLAN_SCANNER_DATA_MODEL.md` but are **not yet present in `001_plan_scanner_schema.sql`**:
+
+### `plan_files` — missing retention lifecycle columns
+
+```sql
+  retention_policy TEXT NOT NULL DEFAULT 'keep_outputs_only'
+                   CHECK (retention_policy IN (
+                     'ephemeral_scan_only',
+                     'keep_outputs_only',
+                     'keep_source_until_export',
+                     'keep_source_for_project_archive',
+                     'manual_delete_after_scan'
+                   )),
+  storage_status   TEXT NOT NULL DEFAULT 'temporary'
+                   CHECK (storage_status IN (
+                     'temporary', 'retained', 'deleted', 'export_only'
+                   )),
+  expires_at       TIMESTAMPTZ,
+  deleted_at       TIMESTAMPTZ
+```
+
+### `plan_artifacts` — missing storage lifecycle columns and updated artifact_type values
+
+The current SQL draft uses a narrower `artifact_type` CHECK. The updated set is:
+
+```sql
+  artifact_type TEXT NOT NULL CHECK (artifact_type IN (
+    'source_upload', 'temporary_working_file',
+    'generated_output', 'printable_report',
+    'boq_report', 'boq_csv',
+    'evidence_artifact', 'pipeline_summary', 'calibration'
+  )),
+  storage_status TEXT NOT NULL DEFAULT 'temporary'
+                 CHECK (storage_status IN ('temporary','retained','deleted','export_only')),
+  expires_at TIMESTAMPTZ,
+  deleted_at TIMESTAMPTZ,
+```
+
+**Before applying this migration:** update the SQL draft to include these columns. The `plans` table name does NOT imply that plans are permanently archived — the `plan_files` record persists but the source PDF may be deleted according to the retention policy.
+
+**Design rule:** the DB record, all BOQ items, all audit events, and all generated outputs must persist permanently even when the source PDF file is deleted. Only `plan_files.storage_status` changes to `deleted` and `deleted_at` is populated — no cascade delete affects the scan results.
+
+---
+
 ## Why this should not be applied yet
 
 1. **Open questions 1–11 above are unresolved.** Applying an incomplete schema creates migration debt that is expensive to unwind.
@@ -201,24 +247,28 @@ The DB constraint prevents the worst case (approval without an approver ID), but
 
 6. **Storage buckets do not exist.** `plan_files` and `plan_artifacts` Supabase Storage buckets must be created before any file-linked rows can be inserted.
 
-7. **The productization roadmap prescribes a strict sequence.** Per `PLAN_SCANNER_PRODUCTION_READINESS_AUDIT.md`, Steps A→E: this migration (Step A) must be reviewed and approved before Step B (upload/intake wrapper). Steps B and C must complete before Step D (production UI spec). Only after all four steps should this migration be applied in a preview environment (Step E).
+7. **Retention lifecycle fields are missing from the current SQL draft.** See the "Scanner-not-archive" section above — `plan_files` and `plan_artifacts` must be updated before the migration is applied.
+
+8. **The productization roadmap prescribes a strict sequence.** Per `PLAN_SCANNER_PRODUCTION_READINESS_AUDIT.md`, Steps A→E: this migration (Step A) must be reviewed and approved before Step B (upload/intake wrapper). Steps B and C must complete before Step D (production UI spec). Only after all four steps should this migration be applied in a preview environment (Step E).
 
 ---
 
 ## Recommended review process before applying
 
 1. [ ] Resolve open questions 1–11 above
-2. [ ] Add `ENABLE ROW LEVEL SECURITY` for all 16 tables
-3. [ ] Write `CREATE POLICY` statements (at minimum: plans, plan_boq_items, plan_human_answers, plan_audit_events)
-4. [ ] Add `updated_at` trigger function and triggers for all tables with `updated_at`
-5. [ ] Add BOQ state machine enforcement function (optional but recommended)
-6. [ ] Create Supabase Storage buckets `plan-files` and `plan-artifacts`
-7. [ ] Apply migration to a Supabase **preview** project first
-8. [ ] Seed with research POC data (S17 local state → DB rows)
-9. [ ] Verify `boq_no_auto_approval` constraint rejects the right inputs
-10. [ ] Verify `plan_audit_events` rejects UPDATE and DELETE at the policy level
-11. [ ] Get sign-off from team lead
-12. [ ] Apply to production (main Supabase project) only after preview is confirmed
+2. [ ] **Add retention lifecycle fields** to `plan_files` and `plan_artifacts` in the SQL draft (see Scanner-not-archive section above)
+3. [ ] Add `ENABLE ROW LEVEL SECURITY` for all 16 tables
+4. [ ] Write `CREATE POLICY` statements (at minimum: plans, plan_boq_items, plan_human_answers, plan_audit_events)
+5. [ ] Add `updated_at` trigger function and triggers for all tables with `updated_at`
+6. [ ] Add BOQ state machine enforcement function (optional but recommended)
+7. [ ] Create Supabase Storage buckets `plan-files` and `plan-artifacts` with lifecycle rules honouring retention policy
+8. [ ] Apply migration to a Supabase **preview** project first
+9. [ ] Seed with research POC data (S17 local state → DB rows)
+10. [ ] Verify `boq_no_auto_approval` constraint rejects the right inputs
+11. [ ] Verify `plan_audit_events` rejects UPDATE and DELETE at the policy level
+12. [ ] Verify `plan_files.storage_status` transitions correctly (temporary → deleted) without cascading to BOQ or audit rows
+13. [ ] Get sign-off from team lead
+14. [ ] Apply to production (main Supabase project) only after preview is confirmed
 
 ---
 

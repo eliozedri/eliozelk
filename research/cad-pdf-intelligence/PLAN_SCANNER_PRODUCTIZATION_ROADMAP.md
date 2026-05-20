@@ -8,6 +8,62 @@
 
 ---
 
+## 0. Core Product Principle: Scanner, Not Archive
+
+**The Plan Scanner is a scan-and-export tool — not a document archive.**
+
+This distinction drives every storage, retention, and UX decision for the product:
+
+### What the scanner does
+1. **Accepts a PDF upload** (temporary working input)
+2. **Runs the analysis pipeline** (vector extraction, sign detection, measurement, BOQ draft)
+3. **Generates structured scan outputs** (BOQ draft, measurements, review questions, report)
+4. **Presents outputs for human review and approval**
+5. **Exports the approved BOQ** to operations (order management)
+
+After step 5, the original uploaded PDF is **not necessarily retained**. The valuable product of the scanner is the scan result — not the source file.
+
+### Source file retention policy
+
+The product must always carry an explicit retention policy per uploaded file. Five policies are supported:
+
+| Policy | Meaning |
+|---|---|
+| `ephemeral_scan_only` | PDF is deleted immediately after pipeline completes |
+| `keep_outputs_only` *(default)* | Scan outputs kept indefinitely; source PDF held only until export/download |
+| `keep_source_until_export` | Source PDF held until the BOQ has been exported to operations, then deleted |
+| `keep_source_for_project_archive` | Source PDF kept as part of a long-term project archive (explicit opt-in) |
+| `manual_delete_after_scan` | Human must explicitly trigger deletion after reviewing the scan |
+
+**Default behavior is `keep_outputs_only`.** Storing source PDFs permanently is an explicit opt-in, not the default.
+
+### Why this matters for architecture
+
+- **Supabase Storage** must not be designed as a permanent document archive for PDF files. Buckets should have lifecycle rules that honour the retention policy.
+- **`plan_files` table** tracks storage status (`temporary`, `retained`, `deleted`, `export_only`) and expiry timestamps. The DB record and all scan results persist even after the source file is deleted.
+- **`plan_artifacts` table** distinguishes between `source_upload` / `temporary_working_file` (ephemeral) and `generated_output` / `boq_report` / `printable_report` (durable).
+- **The run directory** (`runs/<plan_slug>/`) has a defined lifecycle: `created → scanning → outputs_generated → exported → cleanup_pending → source_deleted → archived_if_requested`. It is not a permanent document folder by default.
+
+### What persists permanently (even after source file deletion)
+
+- The `plans` DB record (plan_id, metadata, status)
+- All `plan_scan_runs` records
+- All `plan_boq_items` (with full audit trail)
+- All `plan_review_questions` and `plan_human_answers`
+- All `plan_audit_events` (immutable, append-only)
+- Generated outputs: BOQ report, printable report, measurements, review questions
+
+### Access control / rollout
+
+The Plan Scanner must be **admin-only or engineering/planning role** when first introduced to production. It must never be visible to all authenticated users:
+
+- Gate behind a `plan_scanner` feature flag or permission
+- Roles: `plan_uploader` (submit plan), `plan_reviewer` (answer questions), `plan_boq_approver` (approve BOQ)
+- `plan_rule_admin` for company-wide teaching rule management
+- No self-service plan upload by field workers without approval
+
+---
+
 ## 1. Current Research System Status
 
 ### Pipeline
@@ -303,6 +359,8 @@ These actions must not be taken before the blockers in Section 4 are cleared:
 | **Convert research outputs directly into operational quantities** | Skips the approval gate; any quantities used without sign-off are unverified |
 | **Delete or overwrite the existing pipeline outputs** | They are the audit record of what was found; deletions destroy the research baseline |
 | **Ship a human review UI without the full audit trail** | Who answered what and when must be recorded before any answer affects BOQ |
+| **Design storage as a permanent PDF archive** | The scanner is a scan-and-export tool; source files carry a retention policy and must not be assumed to be permanent |
+| **Allow self-service plan upload by all users** | The plan scanner must be admin/engineering-role only; gate behind a permission flag before any sidebar integration |
 
 ---
 

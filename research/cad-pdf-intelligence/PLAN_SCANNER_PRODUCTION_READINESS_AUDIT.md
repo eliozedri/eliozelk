@@ -179,7 +179,7 @@ These actions are safe, reversible, and keep all changes in the research domain.
 
 ### Safe
 - **Draft Supabase schema SQL file** — create a `.sql` migration file in `research/cad-pdf-intelligence/` only. Do not apply it to Supabase. Review it against `PLAN_SCANNER_DATA_MODEL.md` for completeness. This costs nothing and produces an artifact that can be reviewed before any DB change.
-- **Build a local prototype upload/intake wrapper** — write a small Python script under `research/` that accepts a new PDF path, copies it to a plan-scoped output directory, and runs the pipeline against it. This stays entirely local and does not touch production.
+- **Build a local prototype upload/intake wrapper** — write a small Python script under `research/` that accepts a new PDF path, copies it to a plan-scoped run directory (`runs/<plan_slug>/`), and runs the pipeline against it. Plan-scoped directories have explicit retention lifecycles; source PDFs are not assumed to be permanent. This stays entirely local and does not touch production.
 - **Submit one real/safe answer** — identify one low-risk question (e.g. confirm a sign code that has only one plausible candidate), submit a real answer JSON, run the writeback (S10), and re-run the local persistence flow (S30) to validate the full round-trip. This is research-only and reversible.
 - **Artifact storage design** — design the storage path convention, file naming, and presigned URL approach for Supabase Storage. Document only; do not configure.
 - **Production UI design mockup (Figma / wireframe only)** — design the sidebar feature, review workflow, and BOQ approval screen. Design artifacts only; do not add any route, component, or DB call to the production codebase.
@@ -198,14 +198,15 @@ These actions must not be taken until the blockers in Section 3 are resolved.
 
 | Action | Reason |
 |---|---|
-| Integrate into production sidebar | DB schema not applied; permissions not designed; BOQ approval not implemented; multi-plan not supported |
-| Apply DB migrations | Schema not reviewed in context of full Supabase project; RLS policies not designed; migration must be done on a branch, not main |
+| Integrate into production sidebar | DB schema not applied; permissions not designed; BOQ approval not implemented; multi-plan not supported; feature flag not implemented |
+| Apply DB migrations | Schema not reviewed in context of full Supabase project; RLS policies not designed; retention lifecycle fields not yet in SQL draft; migration must be done on a branch, not main |
 | Approve BOQ automatically | 45/47 items require review; scale unvalidated; sign codes unresolved; Blocker 7 is intentional |
 | Use research quantities operationally | All linear measurements are provisional (Blocker 1); sign counts unconfirmed (Blocker 3) |
 | Treat current sign-code outputs as final | 0/177 confirmed codes; partial codes unresolved; legend labels missing |
 | Rely on one sample plan as universal | The pipeline is tuned to one PDF. Color taxonomy, scale, legend format, and element geometry will differ on other plans. Results may degrade significantly on a different plan. |
 | Use demo answers as real answers | `human_review_answers.demo.json` carries `demo: true, not_for_operational_use: true`. It must never be renamed or copied to `human_review_answers.json`. |
 | Skip the approval gate for any BOQ item | `approved_for_boq: false` is the invariant. It must not be set to `true` without a named approver, a review session, and a DB constraint enforcing it. |
+| Design Supabase Storage as a permanent PDF archive | The scanner is a scan-and-export tool; source files carry a retention policy. The storage design must honour `keep_outputs_only` as the default — not permanent storage. |
 
 ---
 
@@ -271,10 +272,15 @@ The following conditions must ALL be true before building the production sidebar
 - [ ] `boq_no_auto_approval` CHECK constraint included and verified in migration
 - [ ] `plan_audit_events` table enforced as append-only (no UPDATE/DELETE triggers or RLS that allow modification)
 
-### Storage & Artifacts
+### Storage & Artifacts (Scanner, Not Archive)
 - [ ] Artifact storage path convention agreed (Supabase Storage bucket, folder structure)
 - [ ] Presigned URL strategy defined for PDF source files and scan outputs
 - [ ] Evidence crops and overlay images linked to `plan_artifacts` table rows
+- [ ] **Retention policy designed and enforced:** default `keep_outputs_only`; source PDF is temporary by default — not permanently stored
+- [ ] **`plan_files.storage_status`** column tracks `temporary → retained / deleted / export_only`; `expires_at` and `deleted_at` are populated per policy
+- [ ] **`plan_artifacts.artifact_type`** distinguishes `source_upload` / `temporary_working_file` (ephemeral) from `generated_output` / `boq_report` / `printable_report` (durable)
+- [ ] Supabase Storage bucket lifecycle rules honour the retention policy (auto-expiry for `ephemeral_scan_only`)
+- [ ] DB records, BOQ items, audit trail, and generated outputs persist permanently even when the source PDF is deleted
 
 ### Scan Run Lifecycle
 - [ ] Scan run can be triggered by plan_id (not hardcoded PDF path)
@@ -299,10 +305,13 @@ The following conditions must ALL be true before building the production sidebar
 - [ ] A plan with a corrupted or unreadable PDF produces a graceful error, not a crash
 - [ ] Partial runs (e.g. scale calibration pending) display clearly as incomplete, not as complete
 
-### Permissions / Roles
-- [ ] At minimum three roles are defined: `operator` (submit plan), `reviewer` (answer questions), `approver` (approve BOQ)
-- [ ] No user with only `operator` or `reviewer` role can trigger BOQ approval
+### Permissions / Roles (Scanner, not archive — access control)
+- [ ] At minimum three roles are defined: `plan_uploader` (submit plan), `plan_reviewer` (answer questions), `plan_boq_approver` (approve BOQ)
+- [ ] `plan_rule_admin` role exists for company-wide teaching rule management
+- [ ] No user with only `plan_uploader` or `plan_reviewer` role can trigger BOQ approval
 - [ ] Audit events record the user identity for every state change
+- [ ] **Feature flag / permission gate:** plan scanner is NOT visible to all authenticated users — gated behind `plan_scanner` permission or admin role
+- [ ] Field workers have NO access to the plan scanner sidebar entry — engineering/planning role only
 
 ### Validation
 - [ ] At least one full real plan (not the research POC PDF) has been run through the pipeline and reviewed end-to-end

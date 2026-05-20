@@ -27,6 +27,7 @@ OUTPUTS:
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import subprocess
@@ -34,6 +35,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from plan_run_context import PlanRunContext
 
 # ── Paths ───────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent
@@ -1095,4 +1098,43 @@ def main() -> None:
     print(f'Report: outputs/local_state/local_persistence_report.html')
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Plan Scanner Local JSON Persistence Flow (Stage S17)')
+    parser.add_argument(
+        '--plan-run-dir', default=None,
+        help='Path to a plan-scoped run directory (created by 31_upload_intake_wrapper.py). '
+             'If omitted, runs in legacy mode: reads from outputs/, writes to outputs/local_state/',
+    )
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+    if _ctx.is_plan_scoped:
+        # Override module-level path globals; state writes under run's state/ dir
+        OUT_DIR      = _ctx.outputs_dir                        # type: ignore[assignment]
+        STATE_DIR    = _ctx.state_dir                          # type: ignore[assignment]
+        PLAN_ID      = _ctx.plan_id                            # type: ignore[assignment]
+        RUN_ID       = _ctx.run_id                             # type: ignore[assignment]
+        F_PIPELINE   = OUT_DIR / 'pipeline_run_summary.json'
+        F_BOQ        = OUT_DIR / 'boq_unified_draft.json'
+        F_REVIEW_Q   = OUT_DIR / 'review_queue.json'
+        F_ELEMENTS   = OUT_DIR / 'element_groups.json'
+        F_PARTIAL    = OUT_DIR / 'partial_code_resolution.json'
+        F_VALIDATION = OUT_DIR / 'validation_results.json'
+        F_LEGEND_ROWS = OUT_DIR / 'legend_rows.json'
+        F_LEGEND_VOC = OUT_DIR / 'legend_vocabulary.json'
+        F_HRA        = OUT_DIR / 'human_review_application.json'
+        F_ANSWERS    = OUT_DIR / 'human_review_answers.json'
+        F_ANSWERS_T  = OUT_DIR / 'human_review_answers.template.json'
+        F_TL_PACK    = OUT_DIR / 'teaching_loop_answer_pack.json'
+        F_DASHBOARD  = OUT_DIR / 'master_dashboard.json'
+        F_PROTOTYPE  = OUT_DIR / 'plan_scanner_prototype.json'
+        F_SCALE      = OUT_DIR / 'scale_measurement' / 'results.json'
+        F_WORKSPACE  = OUT_DIR / 'plan_scanner_workspace.json'
+        O_STATE      = STATE_DIR / 'plan_scan_state.json'
+        O_QUESTIONS  = STATE_DIR / 'current_review_questions.json'
+        O_BOQ        = STATE_DIR / 'current_boq_state.json'
+        O_ARTIFACTS  = STATE_DIR / 'current_artifacts_index.json'
+        O_AUDIT      = STATE_DIR / 'audit_log.json'
+        O_REPORT_MD  = STATE_DIR / 'local_persistence_report.md'
+        O_REPORT_HTML = STATE_DIR / 'local_persistence_report.html'
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
     main()
