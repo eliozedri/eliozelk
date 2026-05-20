@@ -17,11 +17,33 @@ This distinction drives every storage, retention, and UX decision for the produc
 ### What the scanner does
 1. **Accepts a PDF upload** (temporary working input)
 2. **Runs the analysis pipeline** (vector extraction, sign detection, measurement, BOQ draft)
-3. **Generates structured scan outputs** (BOQ draft, measurements, review questions, report)
+3. **Generates structured scan outputs** — the practical operations report (see below)
 4. **Presents outputs for human review and approval**
-5. **Exports the approved BOQ** to operations (order management)
+5. **Exports the approved report as PDF and/or Excel** — for field, warehouse, and operations teams
 
-After step 5, the original uploaded PDF is **not necessarily retained**. The valuable product of the scanner is the scan result — not the source file.
+After step 5, the original uploaded PDF is **not necessarily retained**. The valuable product of the scanner is the generated operations report — not the source file.
+
+### The scan output: practical operations report
+
+The generated report is the product. It covers the full scope needed by field workers, warehouse, and project management:
+
+| Section | Hebrew | Content |
+|---|---|---|
+| **BOQ / Bill of Quantities** | כתב כמויות | Full itemised quantity list with codes, descriptions, units |
+| **Sign quantities** | כמויות תמרורים | Count per sign code, with location references |
+| **Pole quantities** | כמויות עמודים | Pole count and type breakdown |
+| **Assemblies** | מכלולים | Sign + pole assembly combinations |
+| **Guardrail lengths** | אורכי גארדריל | Linear quantities per section, total |
+| **Road marking lengths** | אורכי סימון כביש | Linear quantities per marking type, total |
+| **Barriers and fences** | מחסומים וגדרות | Linear and unit quantities |
+| **Review notes** | הערות סקירה | Unresolved items, partial codes, manual confirmations needed |
+| **Preparation list** | רשימת הכנה | Actionable checklist for field / warehouse / operations |
+
+**Export formats:**
+- **PDF** — printable report for field use, site supervision, and filing
+- **Excel** — structured workbook for operations, procurement, and billing
+
+The PDF and Excel exports are `storage_status = 'retained'` artifacts — they persist as long as the scan result exists, regardless of whether the source PDF has been deleted.
 
 ### Source file retention policy
 
@@ -41,7 +63,7 @@ The product must always carry an explicit retention policy per uploaded file. Fi
 
 - **Supabase Storage** must not be designed as a permanent document archive for PDF files. Buckets should have lifecycle rules that honour the retention policy.
 - **`plan_files` table** tracks storage status (`temporary`, `retained`, `deleted`, `export_only`) and expiry timestamps. The DB record and all scan results persist even after the source file is deleted.
-- **`plan_artifacts` table** distinguishes between `source_upload` / `temporary_working_file` (ephemeral) and `generated_output` / `boq_report` / `printable_report` (durable).
+- **`plan_artifacts` table** distinguishes between `source_upload` / `temporary_working_file` (ephemeral) and durable report artifacts (`boq_report_pdf`, `boq_excel`, `operations_report_pdf`, `operations_report_excel`, `preparation_list_pdf`, `preparation_list_excel`).
 - **The run directory** (`runs/<plan_slug>/`) has a defined lifecycle: `created → scanning → outputs_generated → exported → cleanup_pending → source_deleted → archived_if_requested`. It is not a permanent document folder by default.
 
 ### What persists permanently (even after source file deletion)
@@ -51,7 +73,9 @@ The product must always carry an explicit retention policy per uploaded file. Fi
 - All `plan_boq_items` (with full audit trail)
 - All `plan_review_questions` and `plan_human_answers`
 - All `plan_audit_events` (immutable, append-only)
-- Generated outputs: BOQ report, printable report, measurements, review questions
+- Generated report exports: BOQ PDF, BOQ Excel, operations report PDF, operations report Excel, preparation list PDF/Excel
+- Structured scan data: measurements, review questions, sign inventory, element groups
+- All `plan_boq_items` rows with full audit trail
 
 ### Access control / rollout
 

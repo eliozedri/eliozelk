@@ -212,20 +212,34 @@ The DB constraint prevents the worst case (approval without an approver ID), but
 
 ### `plan_artifacts` — missing storage lifecycle columns and updated artifact_type values
 
-The current SQL draft uses a narrower `artifact_type` CHECK. The updated set is:
+The current SQL draft uses a narrower `artifact_type` CHECK. The updated set (including practical operations report exports) is:
 
 ```sql
   artifact_type TEXT NOT NULL CHECK (artifact_type IN (
+    -- Source files (ephemeral by default)
     'source_upload', 'temporary_working_file',
-    'generated_output', 'printable_report',
-    'boq_report', 'boq_csv',
-    'evidence_artifact', 'pipeline_summary', 'calibration'
+    -- Structured scan data (retained)
+    'generated_output', 'pipeline_summary', 'calibration', 'evidence_artifact',
+    -- Operations report exports — PDF (durable, retained)
+    'boq_report_pdf',          -- BOQ / כתב כמויות printable PDF
+    'operations_report_pdf',   -- full ops report: signs, poles, assemblies,
+                               --   guardrails, markings, barriers, review notes,
+                               --   preparation list
+    'preparation_list_pdf',    -- field/warehouse/operations preparation list (PDF)
+    -- Operations report exports — Excel (durable, retained)
+    'boq_excel',               -- BOQ / כתב כמויות Excel workbook
+    'operations_report_excel', -- full operations report Excel
+    'preparation_list_excel',  -- preparation list Excel
+    -- HTML (research / review use)
+    'boq_report_html'          -- interactive HTML BOQ dashboard
   )),
   storage_status TEXT NOT NULL DEFAULT 'temporary'
                  CHECK (storage_status IN ('temporary','retained','deleted','export_only')),
   expires_at TIMESTAMPTZ,
   deleted_at TIMESTAMPTZ,
 ```
+
+**Retention rule:** `source_upload` and `temporary_working_file` → `storage_status='temporary'`. All operations report exports → `storage_status='retained'`. The exports are the product; they must persist even after the source PDF is deleted.
 
 **Before applying this migration:** update the SQL draft to include these columns. The `plans` table name does NOT imply that plans are permanently archived — the `plan_files` record persists but the source PDF may be deleted according to the retention policy.
 

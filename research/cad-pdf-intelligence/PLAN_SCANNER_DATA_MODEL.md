@@ -545,18 +545,29 @@ CREATE TABLE plan_artifacts (
   -- ── Artifact classification (scanner-not-archive principle) ───────────────
   artifact_type     TEXT NOT NULL
                     CHECK (artifact_type IN (
-                      -- Source files (may be temporary)
-                      'source_upload',                   -- original uploaded plan PDF
+                      -- ── Source files (ephemeral by default) ─────────────────
+                      'source_upload',                   -- original uploaded plan PDF (may be deleted after scan)
                       'temporary_working_file',          -- intermediate processing file (auto-delete after scan)
-                      -- Generated outputs (durable — the valuable product of the scan)
+                      -- ── Structured scan data (retained) ────────────────────
                       'generated_output',                -- scan result JSON / data file
-                      'printable_report',                -- user-facing HTML or PDF report
-                      'boq_report',                      -- BOQ draft report (HTML/PDF)
-                      'boq_csv',                         -- BOQ export CSV
-                      -- Evidence / debug (retain with scan result; deletable if storage constrained)
-                      'evidence_artifact',               -- crop image, overlay, debug visual
                       'pipeline_summary',                -- pipeline run summary JSON
-                      'calibration'                      -- calibration reference data
+                      'calibration',                     -- calibration reference data
+                      'evidence_artifact',               -- crop image, overlay, debug visual
+                      -- ── Operations report exports (durable — the product) ──
+                      -- These are the practical worker/operations outputs.
+                      -- They persist permanently; storage_status = 'retained' by default.
+                      -- PDF exports — printable, for field / site / filing
+                      'boq_report_pdf',                  -- BOQ / כתב כמויות as printable PDF
+                      'operations_report_pdf',           -- full operations report PDF (signs, poles, assemblies,
+                                                         --   guardrails, markings, barriers, review notes,
+                                                         --   preparation list)
+                      'preparation_list_pdf',            -- preparation list for field/warehouse/operations (PDF)
+                      -- Excel exports — structured, for operations / procurement / billing
+                      'boq_excel',                       -- BOQ / כתב כמויות as Excel workbook
+                      'operations_report_excel',         -- full operations report Excel (all sections)
+                      'preparation_list_excel',          -- preparation list as Excel
+                      -- Legacy / HTML (research phase)
+                      'boq_report_html'                  -- interactive HTML BOQ dashboard (research/review use)
                     )),
   stage_id          TEXT,                                 -- S1..S18
   file_name         TEXT NOT NULL,
@@ -577,8 +588,10 @@ CREATE TABLE plan_artifacts (
   deleted_at        TIMESTAMPTZ,                          -- set when file is deleted; record stays
   artifact_metadata JSONB DEFAULT '{}',                   -- stage-specific metadata
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  -- NOTE: source_upload and temporary_working_file artifacts default to storage_status='temporary'.
-  -- generated_output, printable_report, boq_report, boq_csv default to storage_status='retained'.
+  -- NOTE: source_upload and temporary_working_file → storage_status='temporary' (auto-delete eligible).
+  -- All operations report exports (boq_report_pdf, boq_excel, operations_report_pdf,
+  -- operations_report_excel, preparation_list_pdf, preparation_list_excel, boq_report_html)
+  -- → storage_status='retained' by default. They are the durable product of the scan.
 );
 ```
 
