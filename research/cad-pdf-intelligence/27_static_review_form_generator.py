@@ -13,10 +13,13 @@ Outputs:
 
 from __future__ import annotations
 
+import argparse
 import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from plan_run_context import PlanRunContext
 
 SCRIPT_DIR = Path(__file__).parent
 OUT_DIR    = SCRIPT_DIR / 'outputs'
@@ -903,4 +906,25 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Static Guided Review Form Generator (Stage S14)')
+    parser.add_argument(
+        '--plan-run-dir', default=None,
+        help='Path to a plan-scoped run directory (created by 31_upload_intake_wrapper.py). '
+             'If omitted, runs in legacy mode against outputs/',
+    )
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+    if _ctx.is_plan_scoped:
+        OUT_DIR    = _ctx.outputs_dir                               # type: ignore[assignment]
+        OUT_HTML   = OUT_DIR / 'static_review_form.html'
+        OUT_JSON   = OUT_DIR / 'static_review_form.json'
+        OUT_MD     = OUT_DIR / 'static_review_form_report.md'
+        F_PACK     = OUT_DIR / 'teaching_loop_answer_pack.json'
+        F_TEMPLATE = OUT_DIR / 'human_review_answers.template.json'
+        if not F_PACK.exists():
+            print('[WARN] Plan-scoped mode: teaching_loop_answer_pack.json not found in run outputs dir:')
+            print(f'  MISSING (required): {F_PACK}')
+            print('  Run 25_teaching_loop_answer_pack.py --plan-run-dir first.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
     main()

@@ -12,12 +12,15 @@ Outputs:
 
 from __future__ import annotations
 
+import argparse
 import json
 import math
 import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from plan_run_context import PlanRunContext
 
 SCRIPT_DIR = Path(__file__).parent
 OUT_DIR = SCRIPT_DIR / 'outputs'
@@ -1473,4 +1476,49 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Teaching Loop Answer Pack (Stage S12)')
+    parser.add_argument(
+        '--plan-run-dir', default=None,
+        help='Path to a plan-scoped run directory (created by 31_upload_intake_wrapper.py). '
+             'If omitted, runs in legacy mode against outputs/',
+    )
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+    if _ctx.is_plan_scoped:
+        OUT_DIR          = _ctx.outputs_dir                         # type: ignore[assignment]
+        F_PARTIAL        = OUT_DIR / 'partial_code_resolution.json'
+        F_ELEMENT_GROUPS = OUT_DIR / 'element_groups.json'
+        F_LEGEND_ROWS    = OUT_DIR / 'legend_rows.json'
+        F_REVIEW_QUEUE   = OUT_DIR / 'review_queue.json'
+        F_BOQ            = OUT_DIR / 'boq_unified_draft.json'
+        F_SCALE          = OUT_DIR / 'scale_measurement' / 'results.json'
+        F_VALIDATION     = OUT_DIR / 'validation_results.json'
+        F_JSON           = OUT_DIR / 'teaching_loop_answer_pack.json'
+        F_MD             = OUT_DIR / 'teaching_loop_answer_pack.md'
+        F_HTML           = OUT_DIR / 'teaching_loop_answer_pack.html'
+        F_TEMPLATE       = OUT_DIR / 'human_review_answers.template.json'
+        PIPELINE_PATHS   = {                                         # type: ignore[assignment]
+            'partial_code_resolution.json': str(F_PARTIAL),
+            'element_groups.json':          str(F_ELEMENT_GROUPS),
+            'legend_rows.json':             str(F_LEGEND_ROWS),
+            'review_queue.json':            str(F_REVIEW_QUEUE),
+            'boq_unified_draft.json':       str(F_BOQ),
+            'scale_measurement/results.json': str(F_SCALE),
+            'validation_results.json':      str(F_VALIDATION),
+        }
+        _required = [F_REVIEW_QUEUE, F_BOQ]
+        _optional = [F_PARTIAL, F_ELEMENT_GROUPS, F_LEGEND_ROWS, F_SCALE, F_VALIDATION]
+        _missing_r = [p for p in _required if not p.exists()]
+        _missing_o = [p for p in _optional if not p.exists()]
+        if _missing_r:
+            print('[WARN] Plan-scoped mode: missing REQUIRED inputs in run outputs dir:')
+            for _p in _missing_r:
+                print(f'  MISSING (required): {_p}')
+            print('  Run 14_build_review_queue.py and 17_boq_aggregator.py first.')
+        if _missing_o:
+            print('[INFO] Plan-scoped mode: optional inputs absent (answer pack will be partial):')
+            for _p in _missing_o:
+                print(f'  MISSING (optional): {_p}')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
     main()

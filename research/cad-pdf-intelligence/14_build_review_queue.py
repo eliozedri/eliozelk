@@ -14,6 +14,7 @@ RESEARCH ONLY. No output is approved BOQ data.
 All items require human validation before operational use.
 """
 
+import argparse
 import json
 import sys
 import time
@@ -25,13 +26,15 @@ from typing import Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
+from plan_run_context import PlanRunContext
+
 # ─────────────────────────────────────────────────────────────────────────────
 # PATHS
 # ─────────────────────────────────────────────────────────────────────────────
 BASE    = Path(__file__).parent
 OUT     = BASE / "outputs"
 ITEMS   = OUT / "review_items"
-ITEMS.mkdir(parents=True, exist_ok=True)
+# Note: ITEMS.mkdir() moved into main() so plan-scoped mode creates the right dir
 
 OUT_JSON   = OUT / "review_queue.json"
 OUT_HTML   = OUT / "review_queue.html"
@@ -843,6 +846,10 @@ def main():
     print("=" * 60)
     print()
 
+    # Create output directories (after any plan-scoped overrides in __main__)
+    ITEMS.mkdir(parents=True, exist_ok=True)
+    OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+
     # ── Load inputs ──────────────────────────────────────────────
     print("[Load] Reading pipeline outputs ...")
     poc3_list = _load_json(POC3_JSON)
@@ -932,4 +939,39 @@ def main():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Research Review Queue Generator')
+    parser.add_argument(
+        '--plan-run-dir', default=None,
+        help='Path to a plan-scoped run directory (created by 31_upload_intake_wrapper.py). '
+             'If omitted, runs in legacy mode against outputs/',
+    )
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=BASE)
+    if _ctx.is_plan_scoped:
+        OUT        = _ctx.outputs_dir                               # type: ignore[assignment]
+        ITEMS      = OUT / 'review_items'                           # type: ignore[assignment]
+        OUT_JSON   = OUT / 'review_queue.json'
+        OUT_HTML   = OUT / 'review_queue.html'
+        OUT_REPORT = OUT / 'review_queue_report.md'
+        POC3_JSON  = OUT / 'vector_glyph_results.json'
+        POC1_JSON  = OUT / 'tight_numeric_crop_results.json'
+        POC2_JSON  = OUT / 'digit_template_results.json'
+        LEG_JSON   = OUT / 'legend_vocabulary.json'
+        INV_JSON   = OUT / 'sign_inventory.json'
+        _required = [INV_JSON]
+        _optional = [POC3_JSON, POC1_JSON, POC2_JSON, LEG_JSON]
+        _missing_r = [p for p in _required if not p.exists()]
+        _missing_o = [p for p in _optional if not p.exists()]
+        if _missing_r:
+            print('[WARN] Plan-scoped mode: missing REQUIRED inputs in run outputs dir:')
+            for _p in _missing_r:
+                print(f'  MISSING (required): {_p}')
+        if _missing_o:
+            print('[WARN] Plan-scoped mode: missing optional inputs (queue will be partial):')
+            for _p in _missing_o:
+                print(f'  MISSING (optional): {_p}')
+        if _missing_r or _missing_o:
+            print('  Run sign detection stages (06, 09, 13) with --plan-run-dir first.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
     main()

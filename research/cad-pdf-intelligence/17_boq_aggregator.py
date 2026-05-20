@@ -18,22 +18,26 @@ This is NOT an approved operational BOQ.
 """
 
 from __future__ import annotations
-import json, time
+import argparse, json, time
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
+from plan_run_context import PlanRunContext
+
+SCRIPT_DIR  = Path(__file__).parent
+
 # ── Input paths ───────────────────────────────────────────────────────────────
-SIGN_INV    = Path('outputs/sign_inventory.json')
-REVIEW_Q    = Path('outputs/review_queue.json')
-MEAS_JSON   = Path('outputs/scale_measurement/results.json')
-MEAS_BOQ    = Path('outputs/scale_measurement/boq_draft.json')
-TAXONOMY_J  = Path('outputs/legend_color_match/color_taxonomy_candidates.json')
-CAL_TMPL    = Path('outputs/legend_color_match/calibration_template.json')
-ELEMENT_GRP = Path('outputs/element_groups.json')
+SIGN_INV    = SCRIPT_DIR / 'outputs/sign_inventory.json'
+REVIEW_Q    = SCRIPT_DIR / 'outputs/review_queue.json'
+MEAS_JSON   = SCRIPT_DIR / 'outputs/scale_measurement/results.json'
+MEAS_BOQ    = SCRIPT_DIR / 'outputs/scale_measurement/boq_draft.json'
+TAXONOMY_J  = SCRIPT_DIR / 'outputs/legend_color_match/color_taxonomy_candidates.json'
+CAL_TMPL    = SCRIPT_DIR / 'outputs/legend_color_match/calibration_template.json'
+ELEMENT_GRP = SCRIPT_DIR / 'outputs/element_groups.json'
 
 # ── Output paths ──────────────────────────────────────────────────────────────
-OUT = Path('outputs')
+OUT         = SCRIPT_DIR / 'outputs'
 OUT_JSON    = OUT / 'boq_unified_draft.json'
 OUT_REPORT  = OUT / 'boq_unified_report.md'
 OUT_HTML    = OUT / 'boq_unified_report.html'
@@ -1231,4 +1235,33 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Unified BOQ Aggregator (Stage J)')
+    parser.add_argument(
+        '--plan-run-dir', default=None,
+        help='Path to a plan-scoped run directory (created by 31_upload_intake_wrapper.py). '
+             'If omitted, runs in legacy mode against outputs/',
+    )
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+    if _ctx.is_plan_scoped:
+        OUT        = _ctx.outputs_dir                                    # type: ignore[assignment]
+        OUT_JSON   = OUT / 'boq_unified_draft.json'
+        OUT_REPORT = OUT / 'boq_unified_report.md'
+        OUT_HTML   = OUT / 'boq_unified_report.html'
+        SIGN_INV   = OUT / 'sign_inventory.json'
+        REVIEW_Q   = OUT / 'review_queue.json'
+        MEAS_JSON  = OUT / 'scale_measurement' / 'results.json'
+        MEAS_BOQ   = OUT / 'scale_measurement' / 'boq_draft.json'
+        TAXONOMY_J = OUT / 'legend_color_match' / 'color_taxonomy_candidates.json'
+        CAL_TMPL   = OUT / 'legend_color_match' / 'calibration_template.json'
+        ELEMENT_GRP = OUT / 'element_groups.json'
+        _required = [SIGN_INV, REVIEW_Q]
+        _missing  = [p for p in _required if not p.exists()]
+        if _missing:
+            print('[WARN] Plan-scoped mode: missing required inputs in run outputs dir:')
+            for _p in _missing:
+                print(f'  MISSING: {_p}')
+            print('  Run sign detection (06/09/13) and review queue (14) stages first.')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
     main()

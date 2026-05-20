@@ -26,10 +26,12 @@ Sections:
   9. Next Actions
 """
 from __future__ import annotations
-import json, time
+import argparse, json, time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from plan_run_context import PlanRunContext
 
 # ── Config ──────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent
@@ -793,4 +795,30 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Plan Scanner Prototype Shell (Stage S16)')
+    parser.add_argument(
+        '--plan-run-dir', default=None,
+        help='Path to a plan-scoped run directory (created by 31_upload_intake_wrapper.py). '
+             'If omitted, runs in legacy mode against outputs/',
+    )
+    _args = parser.parse_args()
+    _ctx  = PlanRunContext.from_args(_args, script_dir=SCRIPT_DIR)
+    if _ctx.is_plan_scoped:
+        OUT_DIR  = _ctx.outputs_dir                                 # type: ignore[assignment]
+        OUT_HTML = OUT_DIR / 'plan_scanner_prototype.html'
+        OUT_JSON = OUT_DIR / 'plan_scanner_prototype.json'
+        OUT_MD   = OUT_DIR / 'plan_scanner_prototype_report.md'
+        _optional = [
+            OUT_DIR / 'pipeline_run_summary.json',
+            OUT_DIR / 'boq_unified_draft.json',
+            OUT_DIR / 'review_queue.json',
+            OUT_DIR / 'master_dashboard.json',
+        ]
+        _missing_o = [p for p in _optional if not p.exists()]
+        if _missing_o:
+            print('[INFO] Plan-scoped mode: some inputs absent (prototype will show partial data):')
+            for _p in _missing_o:
+                print(f'  MISSING (optional): {_p}')
+        _ctx.ensure_dirs()
+        print(_ctx.describe())
     main()
