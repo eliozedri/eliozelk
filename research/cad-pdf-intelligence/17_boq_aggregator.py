@@ -30,6 +30,7 @@ MEAS_JSON   = Path('outputs/scale_measurement/results.json')
 MEAS_BOQ    = Path('outputs/scale_measurement/boq_draft.json')
 TAXONOMY_J  = Path('outputs/legend_color_match/color_taxonomy_candidates.json')
 CAL_TMPL    = Path('outputs/legend_color_match/calibration_template.json')
+ELEMENT_GRP = Path('outputs/element_groups.json')
 
 # ── Output paths ──────────────────────────────────────────────────────────────
 OUT = Path('outputs')
@@ -38,11 +39,18 @@ OUT_REPORT  = OUT / 'boq_unified_report.md'
 OUT_HTML    = OUT / 'boq_unified_report.html'
 
 # ── BOQ category constants ─────────────────────────────────────────────────────
-CAT_COUNTED  = 'counted'
-CAT_LINEAR   = 'measured_linear'
-CAT_AREA     = 'measured_area'
-CAT_REVIEW   = 'review_item'
+CAT_COUNTED     = 'counted'
+CAT_LINEAR      = 'measured_linear'
+CAT_AREA        = 'measured_area'
+CAT_REVIEW      = 'review_item'
 CAT_PLACEHOLDER = 'placeholder'
+# Branch C: element decomposition categories
+CAT_EG_REVIEW   = 'element_group_review'    # review group needing classification
+CAT_TAX_CAND    = 'taxonomy_candidate'       # high-impact unidentified color
+CAT_IGNORED_BG  = 'ignored_background'       # confirmed background/noise
+CAT_LIN_CAND    = 'measured_linear_candidate'# include group not yet in Branch B
+
+HIGH_IMPACT_PT  = 1000   # drawing_area_paths >= this → high-impact
 
 # ── Measurement display names (he/en) ────────────────────────────────────────
 TYPE_LABELS = {
@@ -58,6 +66,8 @@ TYPE_LABELS = {
     'marking_mid_blue': ('סימון כחול בינוני','Marking (mid-blue)'),
     'marking_vermilion':('סימון ורמיליון',  'Marking (vermilion)'),
 }
+# Element types already covered by Branch B — don't create duplicate BOQ items
+_BRANCH_B_TYPES = set(TYPE_LABELS.keys())
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -558,6 +568,121 @@ def build_system_flags(meas_data: Dict, tax_data: Optional[Dict],
     return items
 
 
+# ── Branch C: Element decomposition items ─────────────────────────────────────
+
+def build_element_group_items(eg_data: Optional[Dict]) -> List[Dict]:
+    """
+    Build BOQ items from 18_element_decomposition.py outputs.
+
+    Creates one item per element group, categorised as:
+      taxonomy_candidate      — review group with drawing_area_paths ≥ HIGH_IMPACT_PT
+      element_group_review    — review group (smaller impact)
+      ignored_background      — ignore group (white fill, road background)
+      measured_linear_candidate — include group NOT already in Branch B (sign_glyph)
+
+    Include groups already in Branch B (guardrail, road_marking, …) are skipped
+    to avoid duplication with BOQ-LIN-* items.
+    """
+    if not eg_data:
+        return []
+
+    groups = eg_data.get('groups', [])
+    items: List[Dict] = []
+    n = 1
+
+    # Suggested human action by scenario
+    def _action(cls: str, src: str, n_draw: int) -> str:
+        if cls == 'ignore':
+            return 'confirm_ignore'
+        if cls == 'include':
+            return 'map_to_existing_taxonomy'
+        if src == 'black_stroke_heuristic':
+            return 'confirm_ignore' if n_draw < 5000 else 'assign_element_type'
+        if n_draw >= HIGH_IMPACT_PT:
+            return 'create_new_taxonomy_rule'
+        return 'assign_element_type'
+
+    for g in groups:
+        cls   = g['classification']
+        etype = g['element_type']
+        n_draw  = g['drawing_area_paths']
+        n_total = g['n_paths']
+        rgb8    = g['color_rgb8']
+
+        # Skip include groups already covered by Branch B linear measurements
+        if cls == 'include' and etype in _BRANCH_B_TYPES:
+            continue
+
+        # Determine item category
+        if cls == 'ignore':
+            item_cat = CAT_IGNORED_BG
+        elif cls == 'include':
+            # sign_glyph — include but not in Branch B
+            item_cat = CAT_LIN_CAND
+        elif n_draw >= HIGH_IMPACT_PT:
+            item_cat = CAT_TAX_CAND
+        else:
+            item_cat = CAT_EG_REVIEW
+
+        action = _action(cls, g['classification_source'], n_draw)
+
+        audit = g['notes']
+        if item_cat == CAT_TAX_CAND:
+            audit = (
+                f"HIGH-IMPACT: {n_draw:,} drawing-area paths. "
+                f"Large enough to materially affect BOQ quantities if classified. "
+                + g['notes']
+            )
+        if etype == 'sign_glyph':
+            audit = (
+                f"Gray hairline paths: total {n_total:,} paths. "
+                f"Includes sign codes AND drawing annotations, dimension lines, text. "
+                f"POC 3 confirmed only 165 digit-candidate paths in this color. "
+                f"Spatial filtering needed to isolate actual sign codes."
+            )
+
+        items.append({
+            'boq_item_id':                f'BOQ-EG-{n:03d}',
+            'item_category':              item_cat,
+            'item_type':                  f'element_group_{etype}',
+            'group_id':                   g['group_id'],
+            'color_key':                  g['color_key'],
+            'color_rgb8':                 rgb8,
+            'element_type':               etype,
+            'description_he':             g['description_he'],
+            'description_en':             g['description_en'],
+            'source_branch':              'element_decomposition',
+            'quantity':                   n_draw,
+            'unit':                       'path',
+            'page_number':                0,
+            'n_paths_total':              n_total,
+            'n_paths_drawing':            n_draw,
+            'n_paths_title_block':        g['title_block_paths'],
+            'classification':             cls,
+            'classification_source':      g['classification_source'],
+            'boq_category_from_taxonomy': g.get('boq_category'),
+            'confidence':                 g['confidence'],
+            'is_high_impact':             (cls != 'ignore') and (n_draw >= HIGH_IMPACT_PT),
+            'suggested_human_action':     action,
+            'requires_review':            g['requires_review'],
+            'approved_for_boq':           False,
+            'review_reason': (
+                f"Element group classification is provisional. "
+                f"Source: 18_element_decomposition.py ({g['classification_source']}). "
+                f"Needs human validation before BOQ inclusion."
+            ),
+            'audit_notes':  audit,
+            'evidence_paths': [
+                'outputs/element_groups.json',
+                'outputs/element_groups_report.html',
+                'outputs/element_decomposition/overlay_classified.png',
+            ],
+        })
+        n += 1
+
+    return items
+
+
 # ── Totals summary ────────────────────────────────────────────────────────────
 
 def compute_totals(items: List[Dict]) -> Dict:
@@ -578,6 +703,10 @@ def compute_totals(items: List[Dict]) -> Dict:
     total_linear_m   = sum(i.get('quantity', 0) or 0
                           for i in items if i['item_category'] == CAT_LINEAR)
 
+    eg_items = [i for i in items if i.get('source_branch') == 'element_decomposition']
+    tax_cands = [i for i in eg_items if i['item_category'] == CAT_TAX_CAND]
+    high_imp  = [i for i in eg_items if i.get('is_high_impact')]
+
     return {
         'by_category':    {k: dict(v) for k, v in by_cat.items()},
         'total_pole_locations':   total_poles,
@@ -587,6 +716,12 @@ def compute_totals(items: List[Dict]) -> Dict:
         'total_linear_m':         round(total_linear_m, 1),
         'total_boq_items':        len(items),
         'approved_for_boq_count': sum(1 for i in items if i.get('approved_for_boq')),
+        # Branch C element decomposition stats
+        'n_element_group_items':  len(eg_items),
+        'n_taxonomy_candidates':  len(tax_cands),
+        'n_high_impact_unknowns': len(high_imp),
+        'taxonomy_candidate_ids': [i['group_id'] for i in tax_cands],
+        'high_impact_types':      [i['element_type'] for i in high_imp],
     }
 
 
@@ -615,13 +750,15 @@ def build_report(items: List[Dict], totals: Dict,
             )
         return '\n'.join(lines)
 
-    counted  = [i for i in items if i['item_category'] == CAT_COUNTED]
-    linear   = [i for i in items if i['item_category'] == CAT_LINEAR]
-    area     = [i for i in items if i['item_category'] == CAT_AREA]
-    review   = [i for i in items if i['item_category'] == CAT_REVIEW]
-    flagged  = [i for i in items if i['item_type'].startswith(('missing_', 'unconfirmed_',
-                'legend_', 'dedup_', 'red_element'))]
-    placeholder = [i for i in items if i['item_category'] == CAT_PLACEHOLDER]
+    counted      = [i for i in items if i['item_category'] == CAT_COUNTED]
+    linear       = [i for i in items if i['item_category'] == CAT_LINEAR]
+    area         = [i for i in items if i['item_category'] == CAT_AREA]
+    review       = [i for i in items if i['item_category'] == CAT_REVIEW]
+    placeholder  = [i for i in items if i['item_category'] == CAT_PLACEHOLDER]
+    eg_review    = [i for i in items if i['item_category'] == CAT_EG_REVIEW]
+    tax_cands    = [i for i in items if i['item_category'] == CAT_TAX_CAND]
+    lin_cands    = [i for i in items if i['item_category'] == CAT_LIN_CAND]
+    ignored_bg   = [i for i in items if i['item_category'] == CAT_IGNORED_BG]
 
     lines = [
         '# Unified BOQ Draft — כתב כמויות ראשוני (מחקר בלבד)',
@@ -641,10 +778,11 @@ def build_report(items: List[Dict], totals: Dict,
         '| Category | BOQ Items | Key Quantity |',
         '|----------|-----------|--------------|',
         f'| Counted (signs/poles) | {len(counted)} | {totals["total_sign_plates"]} plates, {totals["total_pole_locations"]} poles, {totals["total_assemblies"]} assemblies |',
-        f'| Measured linear | {len(linear)} | {totals["total_linear_m"]:.1f} m total |',
+        f'| Measured linear (Branch B) | {len(linear)} | {totals["total_linear_m"]:.1f} m total |',
         f'| Measured area | {len(area)} | (placeholders) |',
         f'| Review / uncertainty | {len(review)} | {sum(i.get("quantity",0) or 0 for i in review):.0f} items |',
         f'| Placeholder | {len(placeholder)} | — |',
+        f'| **Element group review (Branch C)** | **{len(eg_review)+len(tax_cands)+len(lin_cands)+len(ignored_bg)}** | {totals["n_taxonomy_candidates"]} taxonomy candidates, {totals["n_high_impact_unknowns"]} high-impact |',
         f'| **TOTAL** | **{totals["total_boq_items"]}** | **approved_for_boq: {totals["approved_for_boq_count"]}** |',
         '',
         '---',
@@ -722,13 +860,36 @@ def build_report(items: List[Dict], totals: Dict,
         '5. Area measurements (not yet implemented)',
         '6. Engineering review of element classification',
         '',
+        '## 5B · Element Group Review Items (Branch C)',
+        '',
+        '### High-Impact Taxonomy Candidates',
+        '',
+        section_table(tax_cands) if tax_cands else '*No taxonomy candidates.*',
+        '',
+        '### Element Group Review (lower impact)',
+        '',
+        section_table(eg_review) if eg_review else '*None.*',
+        '',
+        '### Measured Linear Candidates (include groups not in Branch B)',
+        '',
+        section_table(lin_cands) if lin_cands else '*None.*',
+        '',
+        '### Ignored / Background Groups',
+        '',
+        section_table(ignored_bg) if ignored_bg else '*None.*',
+        '',
+        '---',
+        '',
         '## 10 · How This Advances the Plan Scanner',
         '',
-        '- First unified draft joining the sign branch and measurement branch.',
-        '- Every future confirmation (scale, color, code) directly updates this file.',
+        '- First unified draft joining sign, measurement, AND element decomposition branches.',
+        '- Element decomposition (Branch C) surfaces 31 color groups — including high-impact',
+        '  unknowns that could represent missing BOQ categories.',
+        f'- {totals["n_taxonomy_candidates"]} taxonomy candidates flagged for human classification.',
+        f'- {totals["n_high_impact_unknowns"]} high-impact groups have ≥{HIGH_IMPACT_PT} drawing-area paths.',
+        '- Every future confirmation (scale, color, code, group type) directly updates this file.',
         '- The schema is the target state for the full BOQ approval workflow.',
-        '- Recommended next: scale calibration POC (user-provides two known points → '
-        '  all measurements auto-recalculate and confidence rises from very_low to medium).',
+        '- Recommended next: human classification of high-impact unknown groups → expand taxonomy.',
         '',
         f'*Elapsed: {elapsed:.1f}s*',
         '',
@@ -779,11 +940,15 @@ def build_html(items: List[Dict], totals: Dict,
             )
         return rows
 
-    counted  = [i for i in items if i['item_category'] == CAT_COUNTED]
-    linear   = [i for i in items if i['item_category'] == CAT_LINEAR]
-    area     = [i for i in items if i['item_category'] == CAT_AREA]
-    review   = [i for i in items if i['item_category'] == CAT_REVIEW]
+    counted     = [i for i in items if i['item_category'] == CAT_COUNTED]
+    linear      = [i for i in items if i['item_category'] == CAT_LINEAR]
+    area        = [i for i in items if i['item_category'] == CAT_AREA]
+    review      = [i for i in items if i['item_category'] == CAT_REVIEW]
     placeholder = [i for i in items if i['item_category'] == CAT_PLACEHOLDER]
+    eg_review   = [i for i in items if i['item_category'] == CAT_EG_REVIEW]
+    tax_cands   = [i for i in items if i['item_category'] == CAT_TAX_CAND]
+    lin_cands   = [i for i in items if i['item_category'] == CAT_LIN_CAND]
+    ignored_bg  = [i for i in items if i['item_category'] == CAT_IGNORED_BG]
 
     def summary_card(label: str, value: str, color: str = '#2c7') -> str:
         return (f'<div style="display:inline-block;background:#fff;border:2px solid {color};'
@@ -833,6 +998,8 @@ code{{background:#f3f3f3;padding:1px 5px;border-radius:3px;font-size:.83em}}
 {summary_card("Assemblies", str(totals["total_assemblies"]), "#2980b9")}
 {summary_card("Code candidates", str(totals["sign_code_candidates"]), "#f39c12")}
 {summary_card("Linear (m)", f'{totals["total_linear_m"]:.0f}m', "#27ae60")}
+{summary_card("BOQ items", str(totals["total_boq_items"]), "#8e44ad")}
+{summary_card("Taxonomy cands.", str(totals["n_taxonomy_candidates"]), "#c0392b")}
 {summary_card("Approved", str(totals["approved_for_boq_count"]), "#e74c3c")}
 </div>
 
@@ -842,7 +1009,10 @@ code{{background:#f3f3f3;padding:1px 5px;border-radius:3px;font-size:.83em}}
 <a href="#linear">2 · Linear Measurements</a>
 <a href="#area">3 · Area Measurements</a>
 <a href="#review">4 · Review Items</a>
-<a href="#status">5 · Status Summary</a>
+<a href="#taxonomy">5 · Taxonomy Candidates</a>
+<a href="#eg-review">6 · Element Group Review</a>
+<a href="#ignored">7 · Ignored Groups</a>
+<a href="#status">8 · Status Summary</a>
 </div>
 
 <h2 id="counted">1 · Counted Quantities — Signs / Poles</h2>
@@ -872,7 +1042,47 @@ code{{background:#f3f3f3;padding:1px 5px;border-radius:3px;font-size:.83em}}
 {make_rows(review)}
 </table>
 
-<h2 id="status">5 · Status Summary</h2>
+{'<h2 id="taxonomy">5 · High-Impact Taxonomy Candidates (Branch C)</h2>' if tax_cands else ''}
+<p style="color:#7f2020;font-size:13px">
+  These color groups have ≥{HIGH_IMPACT_PT} drawing-area paths. They are large enough to materially
+  affect BOQ quantities if classified. <strong>Do not assign types without human confirmation.</strong>
+</p>
+{'<table><tr><th>BOQ ID</th><th>Group</th><th>Description (HE)</th><th>Description (EN)</th><th>Drawing Paths</th><th>RGB</th><th>Suggested Action</th></tr>' + ''.join(
+    f'<tr style="background:#fff8f0"><td><code>{i["boq_item_id"]}</code></td>'
+    f'<td>{i["group_id"]}</td><td>{i["description_he"]}</td><td>{i["description_en"]}</td>'
+    f'<td><strong>{i["n_paths_drawing"]:,}</strong></td>'
+    f'<td><span style="display:inline-block;width:16px;height:16px;background:rgb({i["color_rgb8"][0]},{i["color_rgb8"][1]},{i["color_rgb8"][2]});border:1px solid #aaa;vertical-align:middle"></span> {i["color_rgb8"]}</td>'
+    f'<td><code>{i["suggested_human_action"]}</code></td></tr>'
+    for i in tax_cands
+) + '</table>' if tax_cands else '<p><em>No taxonomy candidates.</em></p>'}
+
+<h2 id="eg-review">6 · Element Group Review Items (Branch C)</h2>
+<p style="color:#555;font-size:13px">
+  Smaller unidentified groups. May represent noise, construction details, or legend decorations.
+</p>
+{'<table><tr><th>BOQ ID</th><th>Group</th><th>Description (HE)</th><th>Description (EN)</th><th>Drawing Paths</th><th>RGB</th><th>Action</th></tr>' + ''.join(
+    f'<tr style="background:#fffbf0"><td><code>{i["boq_item_id"]}</code></td>'
+    f'<td>{i["group_id"]}</td><td>{i["description_he"]}</td><td>{i["description_en"]}</td>'
+    f'<td>{i["n_paths_drawing"]:,}</td>'
+    f'<td><span style="display:inline-block;width:14px;height:14px;background:rgb({i["color_rgb8"][0]},{i["color_rgb8"][1]},{i["color_rgb8"][2]});border:1px solid #aaa;vertical-align:middle"></span></td>'
+    f'<td><code>{i["suggested_human_action"]}</code></td></tr>'
+    for i in eg_review + lin_cands
+) + '</table>' if (eg_review or lin_cands) else '<p><em>None.</em></p>'}
+
+<h2 id="ignored">7 · Ignored / Background Groups</h2>
+<p style="color:#555;font-size:13px">
+  Classified as background, noise, or title block. Excluded from BOQ quantities.
+  Confirm these are not construction-relevant before accepting.
+</p>
+{'<table><tr><th>BOQ ID</th><th>Group</th><th>Type</th><th>Description</th><th>Drawing Paths</th><th>Action</th></tr>' + ''.join(
+    f'<tr style="background:#f5f5f5"><td><code>{i["boq_item_id"]}</code></td>'
+    f'<td>{i["group_id"]}</td><td><code>{i["element_type"]}</code></td>'
+    f'<td>{i["description_en"]}</td><td>{i["n_paths_drawing"]:,}</td>'
+    f'<td><code>{i["suggested_human_action"]}</code></td></tr>'
+    for i in ignored_bg
+) + '</table>' if ignored_bg else '<p><em>None.</em></p>'}
+
+<h2 id="status">8 · Status Summary</h2>
 <table>
 <tr><th>What is available now</th><th>Status</th></tr>
 <tr><td>Physical pole count</td><td>{totals["total_pole_locations"]} units — unverified</td></tr>
@@ -916,11 +1126,20 @@ def main() -> None:
     meas_data   = load_json(MEAS_JSON, {})
     tax_data    = load_json(TAXONOMY_J, None)
     cal_tmpl    = load_json(CAL_TMPL, None)
+    eg_data     = load_json(ELEMENT_GRP, None)
 
     print(f'  sign_inventory: {len(sign_inv.get("occurrences",[]))} OCCs')
     print(f'  review_queue:   {len(review_q)} items')
     print(f'  measurement:    {len(meas_data.get("elements",[]))} elements, '
           f'{len(meas_data.get("runs",[]))} runs')
+    if eg_data:
+        eg_tot = eg_data.get('totals', {})
+        print(f'  element_groups: {eg_tot.get("total_groups",0)} groups  '
+              f'(include={eg_tot.get("n_include_groups",0)}, '
+              f'review={eg_tot.get("n_review_groups",0)}, '
+              f'ignore={eg_tot.get("n_ignore_groups",0)})')
+    else:
+        print('  element_groups: NOT FOUND — run 18_element_decomposition.py first')
 
     # Build BOQ items
     print('\n[Build] Building BOQ items ...')
@@ -937,7 +1156,13 @@ def main() -> None:
     flags = build_system_flags(meas_data, tax_data, cal_tmpl)
     print(f'  System flags:   {len(flags)} items')
 
-    all_items = counted + linear + area + flags
+    eg_items = build_element_group_items(eg_data)
+    n_tax    = sum(1 for i in eg_items if i['item_category'] == CAT_TAX_CAND)
+    n_hi     = sum(1 for i in eg_items if i.get('is_high_impact'))
+    print(f'  Element groups: {len(eg_items)} items  '
+          f'(taxonomy_candidates={n_tax}, high_impact={n_hi})')
+
+    all_items = counted + linear + area + flags + eg_items
     totals    = compute_totals(all_items)
     print(f'  Total:          {totals["total_boq_items"]} BOQ items')
     print(f'  Approved:       {totals["approved_for_boq_count"]}')
@@ -947,7 +1172,7 @@ def main() -> None:
     output = {
         'meta': {
             'pipeline':          '17_boq_aggregator.py',
-            'branches_merged':   ['sign_review', 'measurement'],
+            'branches_merged':   ['sign_review', 'measurement', 'element_decomposition'],
             'n_items':           len(all_items),
             'approved_for_boq':  False,
             'requires_review':   True,
@@ -987,6 +1212,9 @@ def main() -> None:
     print(f'    Total linear (m)  : {totals["total_linear_m"]:.1f}m (scale unverified)')
     print(f'  Area/placeholder    : {len(area)}')
     print(f'  System flags        : {len(flags)}')
+    print(f'  Element groups      : {len(eg_items)}')
+    print(f'    Taxonomy cands.   : {totals["n_taxonomy_candidates"]}')
+    print(f'    High-impact       : {totals["n_high_impact_unknowns"]}')
     print(f'  Approved for BOQ    : {totals["approved_for_boq_count"]}')
     print()
     print(f'  → {OUT_JSON}')
