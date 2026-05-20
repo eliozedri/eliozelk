@@ -1008,7 +1008,9 @@ def build_html(dash: Dict) -> str:
 </div>
 <div style="background:#f0f9ff;border:2px solid #bae6fd;border-radius:6px;padding:10px 14px;font-size:13px;margin-top:8px">
   <strong>Research entry point:</strong>
-  <a href="plan_scanner_workspace.html" style="color:#1565c0;font-weight:700;margin-left:8px">Plan Scanner Workspace (S13) →</a><br>
+  <a href="plan_scanner_workspace.html" style="color:#1565c0;font-weight:700;margin-left:8px">Plan Scanner Workspace (S13) →</a>
+  &nbsp;&nbsp;
+  <a href="plan_scanner_prototype.html" style="color:#1565c0;font-weight:700">Prototype Shell (S16) →</a><br>
   <strong>To start teaching loop:</strong><br>
   1. Open <a href="static_review_form.html" style="color:#1565c0;font-weight:700">Guided Review Form (S14)</a> — browser form, fill &amp; download answers<br>
   2. Or open <a href="teaching_loop_answer_pack.html" style="color:#1565c0;font-weight:600">Answer Pack (S12)</a> — all {teach['n_pending_questions']} questions with schemas<br>

@@ -489,6 +489,49 @@ def check_s7_boq(refresh: bool = True) -> Dict:
         'elapsed_s':  round(time.time()-t0, 3),
     }
 
+def check_s16_prototype() -> Dict:
+    """S16: Plan Scanner Prototype Shell — reads outputs from 29_plan_scanner_prototype_shell.py."""
+    t0 = time.time()
+    f_html = OUT_DIR / 'plan_scanner_prototype.html'
+    f_json = OUT_DIR / 'plan_scanner_prototype.json'
+    f_md   = OUT_DIR / 'plan_scanner_prototype_report.md'
+
+    data = load_json(f_json)
+    warnings: List[str] = []
+    metrics: Dict = {}
+
+    if data is None:
+        st = 'missing'
+        warnings.append('Run 29_plan_scanner_prototype_shell.py to generate the prototype shell.')
+    else:
+        meta = data.get('meta', {})
+        bd   = data.get('boq_draft', {})
+        pi   = data.get('plan_intake', {})
+        metrics = {
+            'sections':        9,
+            'artifacts_linked': len(data.get('evidence_audit', {}).get('artifacts', [])),
+            'boq_approved':    bd.get('approved', 0),
+            'stages_ok':       pi.get('stages_ok', 0),
+            'production_modified': meta.get('production_modified', False),
+        }
+        if bd.get('approved', 0) > 0:
+            warnings.append('BOQ approved count > 0 in prototype — investigate.')
+        st = 'ok' if f_html.exists() else 'missing'
+
+    return {
+        'stage_id':   'S16',
+        'name':       'Prototype Shell',
+        'description': '29: local research prototype preview of future סורק תוכניות module',
+        'script':     '29_plan_scanner_prototype_shell.py',
+        'status':     st,
+        'outputs':    [file_meta(f_html), file_meta(f_json), file_meta(f_md)],
+        'metrics':    metrics,
+        'warnings':   warnings,
+        'human_validations': [],
+        'elapsed_s':  round(time.time() - t0, 3),
+    }
+
+
 def check_s15_demo() -> Dict:
     """S15: Teaching Loop Demo — reads outputs from 28_teaching_loop_demo.py."""
     t0 = time.time()
@@ -1532,6 +1575,7 @@ def main():
     print('  S14: Static Review Form ...')
     stages.append(check_s14_review_form())
     stages.append(check_s15_demo())
+    stages.append(check_s16_prototype())
 
     elapsed = time.time() - t0
 
@@ -1580,6 +1624,7 @@ PIPELINE RUN COMPLETE
   Workspace  [S13]  : open outputs/plan_scanner_workspace.html
   Form       [S14]  : open outputs/static_review_form.html
   Demo       [S15]  : open outputs/teaching_loop_demo_report.html
+  Prototype  [S16]  : open outputs/plan_scanner_prototype.html
   Total linear (m)  : {bq['total_linear_m']:.1f}m  (scale: {bq['scale_status']})
   Taxonomy cands.   : {bq['n_taxonomy_candidates']}  high-impact: {bq['n_high_impact_unknowns']}
 
