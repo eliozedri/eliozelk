@@ -104,7 +104,7 @@ ARTIFACTS = [
     {
         'id': 'pipeline',
         'title': 'Pipeline Report',
-        'subtitle': '16/16 stages OK',
+        'subtitle': '17/17 stages OK',
         'file': 'pipeline_run_report.html',
         'icon': '⚙️',
         'color': '#37474f',
@@ -144,6 +144,15 @@ ARTIFACTS = [
         'file': 'plan_scanner_prototype.html',
         'icon': '🖥',
         'color': '#1565c0',
+        'section': 'nav',
+    },
+    {
+        'id': 'local_state',
+        'title': 'Local State',
+        'subtitle': 'S17 — JSON persistence flow (14 entity families)',
+        'file': 'local_state/local_persistence_report.html',
+        'icon': '🗄',
+        'color': '#4527a0',
         'section': 'nav',
     },
 ]

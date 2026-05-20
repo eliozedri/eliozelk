@@ -532,6 +532,61 @@ def check_s16_prototype() -> Dict:
     }
 
 
+def check_s17_local_persistence() -> Dict:
+    """S17: Local JSON Persistence Flow — reads outputs from 30_local_json_persistence_flow.py."""
+    t0     = time.time()
+    f_state = OUT_DIR / 'local_state' / 'plan_scan_state.json'
+    f_audit = OUT_DIR / 'local_state' / 'audit_log.json'
+    f_boq   = OUT_DIR / 'local_state' / 'current_boq_state.json'
+    f_html  = OUT_DIR / 'local_state' / 'local_persistence_report.html'
+    f_md    = OUT_DIR / 'local_state' / 'local_persistence_report.md'
+
+    data = load_json(f_state)
+    warnings: List[str] = []
+    metrics: Dict = {}
+
+    if data is None:
+        st = 'missing'
+        warnings.append('Run 30_local_json_persistence_flow.py to generate local state.')
+    else:
+        s = data.get('summary', {})
+        ai = data.get('answer_ingestion', {})
+        metrics = {
+            'boq_items':         s.get('boq_items', 0),
+            'review_questions':  s.get('review_questions', 0),
+            'human_answers':     s.get('human_answers', 0),
+            'artifacts_indexed': s.get('artifacts', 0),
+            'audit_events':      s.get('audit_events', 0),
+            'answers_file_present': ai.get('answers_file_present', False),
+            'answers_valid':     ai.get('answers_valid', False),
+            'production_modified': data.get('meta', {}).get('production_modified', False),
+            'db_migrations':     data.get('meta', {}).get('db_migrations_applied', False),
+        }
+        if metrics['db_migrations']:
+            warnings.append('DB migrations applied — this should be False in research mode.')
+        if metrics['production_modified']:
+            warnings.append('production_modified=True — investigate.')
+        boq_state = load_json(f_boq)
+        if boq_state:
+            approved = boq_state.get('totals', {}).get('approved', 0)
+            if approved > 0:
+                warnings.append(f'BOQ approved count={approved} in local state — must be 0.')
+        st = 'ok' if f_html.exists() else 'missing'
+
+    return {
+        'stage_id':    'S17',
+        'name':        'Local Persistence',
+        'description': '30: local JSON state model mirroring future DB entities',
+        'script':      '30_local_json_persistence_flow.py',
+        'status':      st,
+        'outputs':     [file_meta(f_state), file_meta(f_audit), file_meta(f_boq), file_meta(f_html), file_meta(f_md)],
+        'metrics':     metrics,
+        'warnings':    warnings,
+        'human_validations': [],
+        'elapsed_s':   round(time.time() - t0, 3),
+    }
+
+
 def check_s15_demo() -> Dict:
     """S15: Teaching Loop Demo — reads outputs from 28_teaching_loop_demo.py."""
     t0 = time.time()
@@ -1576,6 +1631,9 @@ def main():
     stages.append(check_s14_review_form())
     stages.append(check_s15_demo())
     stages.append(check_s16_prototype())
+
+    print('  S17: Local JSON Persistence Flow ...')
+    stages.append(check_s17_local_persistence())
 
     elapsed = time.time() - t0
 
