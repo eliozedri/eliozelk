@@ -351,6 +351,8 @@ def build_teaching_section() -> Dict:
             'color_taxonomy_rule',
             'sign_code_confirmation',
             'ignore_rule',
+            'legend_label',
+            'boq_review',
         ],
         'loop_ready': not has_file,  # ready to start — just needs answers file
         'teaching_instruction': (

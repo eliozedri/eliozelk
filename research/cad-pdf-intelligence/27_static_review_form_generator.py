@@ -36,6 +36,8 @@ WRITEBACK_SUPPORTED = {
     'color_taxonomy_rule',
     'sign_code_confirmation',
     'ignore_rule',
+    'legend_label',
+    'boq_review',
 }
 
 # Valid values from writeback
@@ -75,7 +77,7 @@ def build_summary(questions: List[Dict]) -> Dict:
             'pending_writeback_extension': len([q for q in questions if q['question_type'] not in WRITEBACK_SUPPORTED]),
         },
         'writeback_supported_types': sorted(WRITEBACK_SUPPORTED),
-        'pending_extension_types': ['legend_label', 'boq_review'],
+        'pending_extension_types': [],
         'output_compatible_with': '23_human_review_writeback.py',
     }
 
@@ -140,7 +142,8 @@ const TYPE_LABEL = {
 };
 const WRITEBACK_SUPPORTED = new Set([
   'partial_code_resolution','element_group_classification','scale_calibration',
-  'color_taxonomy_rule','sign_code_confirmation','ignore_rule'
+  'color_taxonomy_rule','sign_code_confirmation','ignore_rule',
+  'legend_label','boq_review'
 ]);
 const ELEMENT_CLASSIFICATIONS = [
   'work_zone','guardrail','barrier','marking','pavement_marking',
@@ -296,7 +299,6 @@ function buildFields(q) {
   if (t === 'legend_label') {
     const ri = ctx.row_index ?? '';
     return `
-      <div class="hint warn-hint">⚠ legend_label answers are captured here but require a future writeback extension to apply automatically. They will be included in the downloaded JSON with <code>_requires_writeback_extension: true</code>.</div>
       ${row('Row index (read-only)', `<input type="text" class="f-inp f-ro" value="${esc(ri)}" readonly>`)}
       ${row('Hebrew label', inp('text','hebrew_label','','e.g. תמרור אזהרה'), true)}
       ${row('English label', inp('text','english_label','','e.g. Warning sign'))}
@@ -310,8 +312,7 @@ function buildFields(q) {
     const boqIds = ctx.boq_item_ids || [];
     if (boqIds.length === 0) return '<div class="hint">No BOQ item IDs in context.</div>';
     const blocker = ctx.blocked_by ? `<div class="hint warn-hint">⚠ This question is blocked by ${esc(ctx.blocked_by)} — answer that first.</div>` : '';
-    const ext = `<div class="hint warn-hint">⚠ boq_review answers are captured but require a future writeback extension. Included in JSON with <code>_requires_writeback_extension: true</code>. <strong>approved_for_boq remains false.</strong></div>`;
-    return blocker + ext + boqIds.map((bid, i) => `
+    return blocker + boqIds.map((bid, i) => `
       <div class="sub-row" id="sub-${esc(q.question_id)}-${i}">
         <div class="sub-label">BOQ item: <code>${esc(bid)}</code></div>
         ${row('Review decision',
@@ -554,7 +555,6 @@ function collectAnswersForQuestion(q) {
     return [{
       answer_id: baseId,
       answer_type: 'legend_label',
-      _requires_writeback_extension: true,
       row_index: ctx.row_index,
       hebrew_label: getFormVal(form,'hebrew_label'),
       english_label: getFormVal(form,'english_label'),
@@ -574,7 +574,6 @@ function collectAnswersForQuestion(q) {
       return {
         answer_id: `${baseId}-${i}`,
         answer_type: 'boq_review',
-        _requires_writeback_extension: true,
         boq_item_id: bid,
         review_decision: dec,
         override_quantity: getFormNum(form, `override_qty_${i}`),
@@ -887,16 +886,12 @@ def main() -> None:
     qs = summary['questions']
     print()
     print(f'Questions in form:    {qs["total"]}')
-    print(f'Writeback-supported:  {qs["writeback_supported"]} questions (6 types)')
-    print(f'Pending extension:    {qs["pending_writeback_extension"]} questions (legend_label, boq_review)')
+    print(f'Writeback-supported:  {qs["writeback_supported"]} questions (8 types)')
+    print(f'Pending extension:    {qs["pending_writeback_extension"]} questions')
     print()
     print('Answer types with full writeback support:')
     for t in sorted(WRITEBACK_SUPPORTED):
         print(f'  ✓ {t}')
-    print()
-    print('Answer types captured but needing future writeback extension:')
-    print('  ⚠ legend_label')
-    print('  ⚠ boq_review')
     print()
     print('Workflow:')
     print('  1. open outputs/static_review_form.html')

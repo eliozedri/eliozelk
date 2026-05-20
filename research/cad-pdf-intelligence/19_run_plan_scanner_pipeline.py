@@ -694,7 +694,7 @@ def check_s10_human_review() -> Dict:
     return {
         'stage_id':   'S10',
         'name':       'Human Review Write-Back',
-        'description':'23: apply human answers to pipeline outputs (תרגול ולמידה)',
+        'description':'23: apply human answers to pipeline outputs — 8 types supported (תרגול ולמידה)',
         'script':     '23_human_review_writeback.py',
         'status':     st,
         'outputs':    [file_meta(f_log), file_meta(f_md), file_meta(f_html),

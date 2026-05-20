@@ -14,12 +14,14 @@ Rules:
   • Do not apply example answers as real answers
 
 Supported answer types:
-  1. partial_code_resolution   — suffix "33" → 433
+  1. partial_code_resolution      — suffix "33" → 433
   2. element_group_classification — G-005 → work_zone
-  3. scale_calibration         — two-point distance → scale
-  4. color_taxonomy_rule       — color → element_type + action_type
-  5. sign_code_confirmation    — OCC-XXXX → confirmed code
-  6. ignore_rule               — group / color / region → ignore
+  3. scale_calibration            — two-point distance → scale
+  4. color_taxonomy_rule          — color → element_type + action_type
+  5. sign_code_confirmation       — OCC-XXXX → confirmed code
+  6. ignore_rule                  — group / color / region → ignore
+  7. legend_label                 — row_index → hebrew_label + sign_code
+  8. boq_review                   — boq_item_id → review_status (draft only, never auto-approved)
 
 Inputs:
   outputs/human_review_answers.json       (real answers — optional)
@@ -36,6 +38,8 @@ Modified in-place (only when real answers exist and apply):
   outputs/boq_unified_draft.json
   outputs/review_queue.json
   outputs/validation_results.json
+  outputs/legend_rows.json
+  outputs/legend_vocabulary.json
 
 Research-only. approved_for_boq: false on ALL items always.
 """
@@ -56,19 +60,23 @@ OUT_MD      = OUT_DIR / 'human_review_application_report.md'
 OUT_HTML    = OUT_DIR / 'human_review_application_report.html'
 
 # Files that may be annotated in-place
-F_PARTIAL    = OUT_DIR / 'partial_code_resolution.json'
-F_ELEMENTS   = OUT_DIR / 'element_groups.json'
-F_BOQ        = OUT_DIR / 'boq_unified_draft.json'
-F_QUEUE      = OUT_DIR / 'review_queue.json'
-F_VALIDATION = OUT_DIR / 'validation_results.json'
+F_PARTIAL      = OUT_DIR / 'partial_code_resolution.json'
+F_ELEMENTS     = OUT_DIR / 'element_groups.json'
+F_BOQ          = OUT_DIR / 'boq_unified_draft.json'
+F_QUEUE        = OUT_DIR / 'review_queue.json'
+F_VALIDATION   = OUT_DIR / 'validation_results.json'
+F_LEGEND_ROWS  = OUT_DIR / 'legend_rows.json'
+F_LEGEND_VOCAB = OUT_DIR / 'legend_vocabulary.json'
 
 REQUIRED_FIELDS: Dict[str, List[str]] = {
-    'partial_code_resolution':    ['answer_id', 'question_id', 'partial_code', 'resolved_full_code', 'scope'],
-    'element_group_classification':['answer_id', 'group_id', 'classification', 'include_in_boq', 'scope'],
-    'scale_calibration':           ['answer_id', 'calibration_id', 'point_a', 'point_b', 'real_world_distance_m'],
-    'color_taxonomy_rule':         ['answer_id', 'color', 'element_type', 'action_type', 'scope'],
-    'sign_code_confirmation':      ['answer_id', 'occurrence_id', 'confirmed_code', 'source'],
-    'ignore_rule':                 ['answer_id', 'target_type', 'target_id', 'reason', 'scope'],
+    'partial_code_resolution':      ['answer_id', 'question_id', 'partial_code', 'resolved_full_code', 'scope'],
+    'element_group_classification': ['answer_id', 'group_id', 'classification', 'include_in_boq', 'scope'],
+    'scale_calibration':            ['answer_id', 'calibration_id', 'point_a', 'point_b', 'real_world_distance_m'],
+    'color_taxonomy_rule':          ['answer_id', 'color', 'element_type', 'action_type', 'scope'],
+    'sign_code_confirmation':       ['answer_id', 'occurrence_id', 'confirmed_code', 'source'],
+    'ignore_rule':                  ['answer_id', 'target_type', 'target_id', 'reason', 'scope'],
+    'legend_label':                 ['answer_id', 'row_index', 'hebrew_label'],
+    'boq_review':                   ['answer_id', 'boq_item_id'],
 }
 
 VALID_SCOPES = {'current_plan_only', 'project_rule', 'company_rule_candidate'}
@@ -78,6 +86,13 @@ VALID_ELEMENT_CLASSIFICATIONS = {
     'road_edge', 'drainage', 'signage', 'background', 'noise', 'unknown',
 }
 VALID_ACTION_TYPES = {'existing', 'new', 'remove', 'cover', 'temporary', 'permanent', 'unknown'}
+VALID_REVIEW_STATUSES = {'accepted_for_draft', 'rejected', 'needs_more_info', 'corrected', 'defer'}
+# Map static form values → canonical review_status
+REVIEW_DECISION_MAP = {
+    'accept_quantity':      'accepted_for_draft',
+    'reject_quantity':      'rejected',
+    'flag_for_site_survey': 'needs_more_info',
+}
 
 # ── I/O helpers ─────────────────────────────────────────────────────────────────
 
@@ -141,6 +156,18 @@ def validate_answer(answer: Dict) -> Tuple[bool, str]:
     if atype == 'ignore_rule':
         if answer.get('target_type') not in VALID_TARGET_TYPES:
             return False, f'Invalid target_type "{answer.get("target_type")}"'
+
+    if atype == 'legend_label':
+        if answer.get('row_index') is None:
+            return False, 'row_index is required for legend_label'
+        if not answer.get('hebrew_label'):
+            return False, 'hebrew_label must be a non-empty string'
+
+    if atype == 'boq_review':
+        # accept either review_status (spec) or review_decision (form output)
+        rs = answer.get('review_status') or REVIEW_DECISION_MAP.get(answer.get('review_decision', ''))
+        if rs and rs not in VALID_REVIEW_STATUSES:
+            return False, f'Invalid review_status "{rs}" — must be one of {sorted(VALID_REVIEW_STATUSES)}'
 
     return True, ''
 
@@ -648,15 +675,233 @@ def apply_ignore_rule(answer: Dict, ts: str) -> List[Dict]:
     return entries
 
 
+def apply_legend_label(answer: Dict, ts: str) -> List[Dict]:
+    """
+    Applies a legend_label answer.
+    Annotates the matching row in legend_rows.json and legend_vocabulary.json.
+    Preserves all original geometric data. Never deletes. Never sets approved_for_boq.
+    """
+    entries = []
+    row_index    = answer['row_index']
+    hebrew_label = answer['hebrew_label']
+    english_label = answer.get('english_label')
+    sign_code    = answer.get('sign_code')
+    quantity     = answer.get('quantity')
+    action_type  = answer.get('action_type')
+    include_boq  = answer.get('include_in_boq')
+    scope        = answer.get('scope', 'current_plan_only')
+    notes        = answer.get('notes', '')
+
+    def _annotate_row(row: Dict) -> Dict:
+        """Return dict of changes applied to row (for audit prev/new)."""
+        prev = {
+            'hebrew_label': row.get('hebrew_label'),
+            'english_label': row.get('english_label'),
+            'sign_code': row.get('sign_code'),
+            'quantity': row.get('quantity'),
+        }
+        # Preserve originals if they already exist from auto-detection
+        if row.get('hebrew_label') and not row.get('original_auto_hebrew_label'):
+            row['original_auto_hebrew_label'] = row['hebrew_label']
+        if row.get('english_label') and not row.get('original_auto_english_label'):
+            row['original_auto_english_label'] = row['english_label']
+        if row.get('sign_code') is not None and row.get('original_auto_sign_code') is None:
+            row['original_auto_sign_code'] = row['sign_code']
+
+        row['hebrew_label']           = hebrew_label
+        row['english_label']          = english_label
+        row['sign_code']              = sign_code
+        row['quantity']               = quantity
+        row['label_source']           = 'human_review'
+        row['human_action_type']      = action_type
+        row['human_include_in_boq']   = include_boq
+        row['human_answer_scope']     = scope
+        row['human_answer_timestamp'] = ts
+        row['human_answer_notes']     = notes
+        row['approved_for_boq']       = False
+        row['still_requires_boq_approval'] = True
+
+        conflict = prev.get('hebrew_label') and prev['hebrew_label'] != hebrew_label
+        if conflict:
+            row['contradiction_detected'] = True
+            row['requires_review']        = True
+
+        new = {
+            'hebrew_label': hebrew_label,
+            'english_label': english_label,
+            'sign_code': sign_code,
+            'label_source': 'human_review',
+        }
+        return prev, new, conflict
+
+    # ── legend_rows.json ──────────────────────────────────────────────────────
+    lr_data = load_json(F_LEGEND_ROWS)
+    if lr_data is None:
+        entries.append(_audit(answer, 'skipped', 'legend_rows.json',
+                              f'row:{row_index}', {}, {},
+                              'legend_rows.json not found', ts))
+    else:
+        rows = lr_data if isinstance(lr_data, list) else lr_data.get('rows', [])
+        matched = [r for r in rows if r.get('row_index') == row_index]
+        if not matched:
+            entries.append(_audit(answer, 'skipped', 'legend_rows.json',
+                                  f'row:{row_index}', {}, {},
+                                  f'Row index {row_index} not found in legend_rows.json', ts))
+        else:
+            prev, new, conflict = _annotate_row(matched[0])
+            status = 'contradiction' if conflict else 'applied'
+            save_json(F_LEGEND_ROWS, lr_data)
+            entries.append(_audit(answer, status, 'legend_rows.json',
+                                  f'legend_row:{row_index}', prev, new,
+                                  f'Legend row {row_index} labeled "{hebrew_label}" (scope={scope})', ts))
+
+    # ── legend_vocabulary.json ────────────────────────────────────────────────
+    lv_data = load_json(F_LEGEND_VOCAB)
+    if lv_data is not None:
+        vocab_rows = lv_data if isinstance(lv_data, list) else lv_data.get('rows', [])
+        matched_v = [r for r in vocab_rows if r.get('row_index') == row_index]
+        if matched_v:
+            prev_v, new_v, conflict_v = _annotate_row(matched_v[0])
+            status_v = 'contradiction' if conflict_v else 'applied'
+            save_json(F_LEGEND_VOCAB, lv_data)
+            entries.append(_audit(answer, status_v, 'legend_vocabulary.json',
+                                  f'legend_row:{row_index}', prev_v, new_v,
+                                  f'Legend vocabulary row {row_index} updated', ts))
+
+    if not entries:
+        entries.append(_audit(answer, 'skipped', 'legend_rows.json',
+                              f'row:{row_index}', {}, {},
+                              'No matching row found in any legend file', ts))
+    return entries
+
+
+def apply_boq_review(answer: Dict, ts: str) -> List[Dict]:
+    """
+    Applies a boq_review answer to boq_unified_draft.json.
+    Marks human_reviewed=True but never sets approved_for_boq=True.
+    Preserves original auto values alongside corrected human values.
+    """
+    entries = []
+    boq_item_id = answer['boq_item_id']
+
+    # Normalize review_status: accept both 'review_status' (spec) and 'review_decision' (form)
+    review_status = (
+        answer.get('review_status')
+        or REVIEW_DECISION_MAP.get(answer.get('review_decision', ''))
+        or 'needs_more_info'
+    )
+    corrected_qty   = answer.get('corrected_quantity') or answer.get('override_quantity')
+    corrected_unit  = answer.get('corrected_unit')
+    corrected_desc_he = answer.get('corrected_description_he')
+    corrected_desc_en = answer.get('corrected_description_en')
+    corrected_type  = answer.get('corrected_item_type')
+    scope           = answer.get('scope', 'current_plan_only')
+    notes           = answer.get('notes', '')
+
+    boq_data = load_json(F_BOQ)
+    if boq_data is None:
+        entries.append(_audit(answer, 'skipped', 'boq_unified_draft.json',
+                              boq_item_id, {}, {},
+                              'boq_unified_draft.json not found', ts))
+        return entries
+
+    items = boq_data.get('items', [])
+    matched = [i for i in items if i.get('boq_item_id') == boq_item_id]
+
+    if not matched:
+        entries.append(_audit(answer, 'skipped', 'boq_unified_draft.json',
+                              boq_item_id, {}, {},
+                              f'BOQ item "{boq_item_id}" not found', ts))
+        return entries
+
+    item = matched[0]
+    prev = {
+        'quantity':       item.get('quantity'),
+        'description_he': item.get('description_he'),
+        'description_en': item.get('description_en'),
+        'item_type':      item.get('item_type'),
+        'requires_review':item.get('requires_review'),
+        'approved_for_boq':item.get('approved_for_boq'),
+    }
+
+    # Detect contradiction: already human-reviewed with a different status
+    conflict = (
+        item.get('human_reviewed') and
+        item.get('human_review_status') and
+        item.get('human_review_status') != review_status
+    )
+
+    if conflict:
+        item['contradiction_detected'] = True
+        item['requires_review']        = True
+        entries.append(_audit(answer, 'contradiction', 'boq_unified_draft.json',
+                              boq_item_id, prev,
+                              {'human_review_status': review_status},
+                              f'Conflicts with existing human_review_status={item.get("human_review_status")}', ts))
+    else:
+        # Apply human review fields
+        item['human_reviewed']          = True
+        item['human_review_status']     = review_status
+        item['human_review_timestamp']  = ts
+        item['human_review_scope']      = scope
+        item['human_review_notes']      = notes
+        item['approved_for_boq']        = False   # always false
+        item['still_requires_boq_approval'] = True
+
+        # Corrections — preserve originals
+        new_fields: Dict = {'human_review_status': review_status}
+
+        if corrected_qty is not None:
+            item['original_auto_quantity'] = item.get('quantity')
+            item['human_corrected_quantity'] = corrected_qty
+            new_fields['human_corrected_quantity'] = corrected_qty
+
+        if corrected_unit:
+            item['original_auto_unit'] = item.get('unit')
+            item['human_corrected_unit'] = corrected_unit
+            new_fields['human_corrected_unit'] = corrected_unit
+
+        if corrected_desc_he:
+            item['original_auto_description_he'] = item.get('description_he')
+            item['human_corrected_description_he'] = corrected_desc_he
+            new_fields['human_corrected_description_he'] = corrected_desc_he
+
+        if corrected_desc_en:
+            item['original_auto_description_en'] = item.get('description_en')
+            item['human_corrected_description_en'] = corrected_desc_en
+
+        if corrected_type:
+            item['original_auto_item_type'] = item.get('item_type')
+            item['human_corrected_item_type'] = corrected_type
+
+        # Status-specific flags
+        if review_status == 'rejected':
+            item['human_rejected']  = True
+            item['requires_review'] = True   # still needs review (excluded from BOQ)
+        elif review_status == 'accepted_for_draft':
+            item['requires_review'] = True   # still True — BOQ approval is a separate gate
+        elif review_status in ('corrected', 'needs_more_info', 'defer'):
+            item['requires_review'] = True
+
+        save_json(F_BOQ, boq_data)
+        entries.append(_audit(answer, 'applied', 'boq_unified_draft.json',
+                              boq_item_id, prev, new_fields,
+                              f'BOQ item reviewed: status={review_status}, approved_for_boq=false (scope={scope})', ts))
+
+    return entries
+
+
 # ── Dispatcher ─────────────────────────────────────────────────────────────────
 
 APPLIERS = {
-    'partial_code_resolution':     apply_partial_code_resolution,
-    'element_group_classification':apply_element_group_classification,
-    'scale_calibration':           apply_scale_calibration,
-    'color_taxonomy_rule':         apply_color_taxonomy_rule,
-    'sign_code_confirmation':      apply_sign_code_confirmation,
-    'ignore_rule':                 apply_ignore_rule,
+    'partial_code_resolution':      apply_partial_code_resolution,
+    'element_group_classification': apply_element_group_classification,
+    'scale_calibration':            apply_scale_calibration,
+    'color_taxonomy_rule':          apply_color_taxonomy_rule,
+    'sign_code_confirmation':       apply_sign_code_confirmation,
+    'ignore_rule':                  apply_ignore_rule,
+    'legend_label':                 apply_legend_label,
+    'boq_review':                   apply_boq_review,
 }
 
 
@@ -745,6 +990,28 @@ def build_example_json() -> Dict:
                 "reason": "Title block and border lines — background noise, not road infrastructure",
                 "scope": "current_plan_only",
                 "notes": ""
+            },
+            {
+                "answer_id": "A-007",
+                "answer_type": "legend_label",
+                "row_index": 0,
+                "hebrew_label": "תמרור אזהרה",
+                "english_label": "Warning sign",
+                "sign_code": 133,
+                "quantity": 6,
+                "action_type": "existing",
+                "include_in_boq": True,
+                "scope": "current_plan_only",
+                "notes": "First legend row — warning triangle sign"
+            },
+            {
+                "answer_id": "A-008",
+                "answer_type": "boq_review",
+                "boq_item_id": "BOQ-CNT-002",
+                "review_status": "accepted_for_draft",
+                "corrected_quantity": None,
+                "notes": "177 sign plates count matches field survey estimate",
+                "scope": "current_plan_only"
             }
         ]
     }
@@ -821,8 +1088,9 @@ def build_md(summary: Dict) -> str:
         '## Next Steps',
         '',
         '- Run `19_run_plan_scanner_pipeline.py` to refresh pipeline status',
-        '- Pending: legend label extraction (requires ANTHROPIC_API_KEY)',
-        '- Pending: BOQ approval workflow (separate human gate)',
+        '- All 8 answer types are now writeback-supported: partial_code_resolution, element_group_classification,',
+        '  scale_calibration, color_taxonomy_rule, sign_code_confirmation, ignore_rule, legend_label, boq_review',
+        '- BOQ approval is still a separate human gate — approved_for_boq remains false on all items',
         '',
         '---',
         '*Research output. Not approved for construction, procurement, billing, or execution.*',
@@ -928,10 +1196,13 @@ def build_html(summary: Dict) -> str:
 <div class="teaching-box">
   <h3 style="margin:0 0 8px">Teaching Loop — תרגול ולמידה</h3>
   <strong>Pending questions:</strong> {meta.get("n_pending_questions", 0)}<br>
-  <strong>How to resolve:</strong> Copy <code>outputs/human_review_answers.example.json</code> →
-  <code>outputs/human_review_answers.json</code>, fill in real answers, re-run this script.<br>
-  <strong>Scope model:</strong> <code>current_plan_only</code> (default) →
-  <code>project_rule</code> → <code>company_rule_candidate</code>
+  <strong>How to resolve:</strong> Open <a href="static_review_form.html">Guided Review Form</a>,
+  fill answers, download as <code>outputs/human_review_answers.json</code>, re-run this script.<br>
+  <strong>Supported types (8):</strong> partial_code_resolution · element_group_classification ·
+  scale_calibration · color_taxonomy_rule · sign_code_confirmation · ignore_rule ·
+  <strong>legend_label</strong> · <strong>boq_review</strong><br>
+  <strong>Scope model:</strong> <code>current_plan_only</code> → <code>project_rule</code> →
+  <code>company_rule_candidate</code>
 </div>
 
 <hr style="margin-top:32px">
