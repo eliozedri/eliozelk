@@ -1,0 +1,26 @@
+-- Migration: safety_images_migration
+-- Adds image paths (product thumbnail + catalog page) to metadata.images for all 37
+-- safety accessories in catalog_items.
+--
+-- Applied via Node.js inline script on 2026-05-20.
+-- Each row was updated with:
+--   SET metadata = metadata || jsonb_build_object(
+--     'images', jsonb_build_object('product', '<path>', 'page', '<path>')
+--   )
+-- Image paths point to static assets in public/catalog/safety/:
+--   product: /catalog/safety/products/pXX-XX.jpg  (individual product photo)
+--   page:    /catalog/safety/pages/page-XX.jpg    (full catalog page for context)
+--
+-- The || merge operator is used — no existing metadata fields were overwritten.
+-- Match was made via metadata->>'safety_ref_id' = 'sa-XXX'.
+-- 37 rows updated, 0 rows inserted, 0 rows deleted.
+--
+-- After this migration the following source files were deleted (they were dead code):
+--   src/components/SafetyAccessories/index.tsx
+--   src/data/safetyAccessories.ts
+--   src/data/safetyAccessoryImages.ts
+--   src/types/safetyAccessory.ts
+-- The physical image assets in public/catalog/safety/ are KEPT and now referenced
+-- exclusively from catalog_items.metadata.images.
+--
+-- Do NOT re-run this file. Images are already present in the live database.
