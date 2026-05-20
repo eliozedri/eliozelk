@@ -59,12 +59,15 @@ GRAY_TOL        = 0.03
 # ─────────────────────────────────────────────────────────────────
 # ADJACENCY / OCC SEARCH
 # ─────────────────────────────────────────────────────────────────
-GAP_MAX  = 7.0
-Y_TOL    = 3.0
-H_RATIO  = 1.40
-X_MARGIN = 65.0
-Y_BELOW  = 100.0
-Y_ABOVE  = 40.0
+GAP_MAX   = 7.0
+Y_TOL     = 3.0
+H_RATIO   = 1.40
+X_MARGIN  = 65.0
+Y_BELOW   = 100.0
+Y_ABOVE   = 40.0
+# Maximum realistic x-span for a digit group (4 glyphs × W_MAX + 3 gaps × GAP_MAX).
+# Groups wider than this are geometric artifacts, not real sign codes.
+MAX_X_SPAN = 80.0
 
 # ─────────────────────────────────────────────────────────────────
 # RASTERIZATION
@@ -490,9 +493,22 @@ def cluster_glyphs(paths: List[Dict], page: fitz.Page,
 # ═════════════════════════════════════════════════════════════════
 
 def detect_adjacent_groups(paths: List[Dict]) -> List[List[Dict]]:
-    """Find groups of 2–4 adjacent glyph paths (same y-level, small x-gap)."""
+    """
+    Find groups of 2–4 adjacent glyph paths (same y-level, left-to-right, small x-gap).
+
+    Bug fix (v2): gap must be non-negative (0 ≤ gap ≤ GAP_MAX).
+    Previously, gap <= GAP_MAX accepted negative gaps (path to the LEFT of prev),
+    creating false groups like [CL-00@x=1977, CL-17@x=777, CL-00@x=766] with
+    x_span = -1204pt.  Negative gaps indicate backward/out-of-order paths and are
+    never valid digit adjacency.
+
+    Secondary guard: x_span of the formed group must be ≤ MAX_X_SPAN (80pt).
+    Any group wider than this is a geometric artifact regardless of individual gaps.
+    """
     sorted_paths = sorted(paths, key=lambda p: (round(p['y0'] / 2) * 2, p['x0']))
-    groups = []
+    groups: List[List[Dict]] = []
+    n_rejected_neg_gap  = 0
+    n_rejected_span     = 0
     i = 0
     while i < len(sorted_paths):
         group = [sorted_paths[i]]
@@ -504,16 +520,28 @@ def detect_adjacent_groups(paths: List[Dict]) -> List[List[Dict]]:
             y_diff = abs(nxt['y0'] - prev['y0'])
             h_ratio = (max(prev['h'], nxt['h']) /
                        max(min(prev['h'], nxt['h']), 0.001))
-            if gap <= GAP_MAX and y_diff <= Y_TOL and h_ratio <= H_RATIO:
+            # gap must be forward (non-negative) and within threshold
+            if 0 <= gap <= GAP_MAX and y_diff <= Y_TOL and h_ratio <= H_RATIO:
                 group.append(nxt)
                 j += 1
             else:
+                if gap < 0:
+                    n_rejected_neg_gap += 1
                 break
         if 2 <= len(group) <= 4:
-            groups.append(group)
-            i = j
+            x_span = group[-1]['x1'] - group[0]['x0']
+            if x_span <= MAX_X_SPAN:
+                groups.append(group)
+                i = j
+            else:
+                n_rejected_span += 1
+                i += 1
         else:
             i += 1
+
+    if n_rejected_neg_gap or n_rejected_span:
+        print(f"  [AdjFix] Rejected due to negative gap: {n_rejected_neg_gap} paths  "
+              f"| span overflow: {n_rejected_span} groups")
     return groups
 
 
@@ -1314,6 +1342,8 @@ def write_report(results: List[Dict], clusters: Dict,
     n_with_seq = sum(1 for r in results if r.get('display_sequence'))
     n_valid   = sum(1 for r in results if r.get('valid_sign_code_candidates'))
     n_review  = sum(1 for r in results if r.get('requires_review'))
+    n_false_adj = sum(1 for r in results
+                      if r.get('artifact_flags', {}).get('false_adjacency_artifact_removed'))
 
     n_cl_total      = len(clusters)
     n_cl_digit      = sum(1 for cl in clusters.values()
@@ -1366,6 +1396,22 @@ def write_report(results: List[Dict], clusters: Dict,
         f"| Valid 3-digit code candidates | {n_valid} | "
         f"{100*n_valid//max(total,1)}% |",
         f"| Requires review | {n_review} | {100*n_review//max(total,1)}% |",
+        f"| False adjacency artifact removed | {n_false_adj} | — |",
+        "",
+        "## Adjacency Fix (v2)",
+        "",
+        "**Root cause fixed:** `detect_adjacent_groups()` previously accepted negative x-gaps "
+        "(`gap <= GAP_MAX` where GAP_MAX=7.0 also matched negative values). "
+        "This caused paths to the LEFT of the current path to be accepted as 'adjacent', "
+        "creating false groups spanning 1000+ pt across the page.",
+        "",
+        f"**Fix applied:** Gap must now satisfy `0 ≤ gap ≤ GAP_MAX`. "
+        f"Secondary guard: group x_span must not exceed {MAX_X_SPAN}pt.",
+        "",
+        f"**Impact:** {n_false_adj} OCC(s) previously matched a false-adjacency group "
+        "and now have no valid group (`false_adjacency_artifact_removed=True`). "
+        "Their `confidence_tier` is FAILED and `_fail_reason` is "
+        "`no_adjacent_group__false_group_removed_by_gap_fix`.",
         "",
         "## Vector Path Inventory",
         "",
@@ -1373,7 +1419,8 @@ def write_report(results: List[Dict], clusters: Dict,
         f"  (gray stroke-only, line segments, h={H_MIN}–{H_MAX}pt, "
         f"w={W_MIN}–{W_MAX}pt, n={N_MIN}–{N_MAX} items)",
         f"- **Adjacent groups detected:** {len(adj_groups)}",
-        f"  (2–4 adjacent paths, gap <{GAP_MAX}pt, same y-level)",
+        f"  (2–4 adjacent paths, 0 ≤ gap ≤ {GAP_MAX}pt left-to-right, "
+        f"x_span ≤ {MAX_X_SPAN}pt, same y-level)",
         f"- **Clusters formed:** {n_cl_total}  (dist_thresh={CLUSTER_DIST_THRESH})",
         f"  - Human-labeled: {n_cl_human} "
         f"({sum(1 for v in human_labels.values() if v in DIGIT_LABELS)} digit, "
@@ -1684,12 +1731,29 @@ def main() -> None:
     n_matched  = sum(1 for v in occ_groups.values() if v)
     print(f"[Map] OCCs matched: {n_matched}/{len(occ_map)}")
 
+    # ── Load previous results for false-adjacency comparison ──
+    prev_tiers: Dict[str, str] = {}
+    if OUT_JSON.exists():
+        try:
+            with open(OUT_JSON, encoding="utf-8") as _f:
+                for _r in json.load(_f):
+                    prev_tiers[_r['occurrence_id']] = _r.get('confidence_tier', '')
+        except Exception:
+            pass
+
     # ── Process each OCC ──
     print(f"\n[Process] Building results for {len(occ_map)} OCCs ...")
     results = []
     for occ_id, occ in occ_map.items():
         matched = occ_groups.get(occ_id, [])
-        results.append(process_occ(occ_id, occ, matched, poc1_map))
+        rec = process_occ(occ_id, occ, matched, poc1_map)
+        # Flag OCCs that dropped from a non-FAILED tier to FAILED after the adjacency fix
+        if (rec['confidence_tier'] == 'FAILED'
+                and prev_tiers.get(occ_id, '') not in ('', 'FAILED')):
+            rec['artifact_flags']['false_adjacency_artifact_removed'] = True
+            rec['_fail_reason'] = 'no_adjacent_group__false_group_removed_by_gap_fix'
+            rec['requires_review'] = True
+        results.append(rec)
 
     # ── Feasibility simulation ──
     print("[Feasibility] Computing teaching-loop simulation ...")
