@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { useCatalogContext } from "@/context/CatalogContext";
 import type { CatalogItem, CatalogFormState, CatalogItemType, LinkedProductEntry } from "@/types/catalog";
 import { TYPE_LABELS, TYPE_COLORS, UNIT_OPTIONS, DIMENSION_UNIT_OPTIONS, LENGTH_UNITS, AREA_UNITS, NO_DIMENSION_UNITS } from "@/types/catalog";
@@ -60,6 +60,187 @@ function PencilIcon() {
       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
     </svg>
+  );
+}
+
+function ChevronDownIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+      viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+// ── Inline detail panel (table view expand) ───────────────────────────────────
+
+function CatalogItemDetailPanel({ item, onEdit, onToggle }: {
+  item: CatalogItem;
+  onEdit: (id: string) => void;
+  onToggle: (id: string) => void;
+}) {
+  const specs   = item.metadata?.specs   as Record<string, unknown> | undefined;
+  const images  = item.metadata?.images  as { product?: string; page?: string } | undefined;
+  const safetyRefId     = item.metadata?.safety_ref_id as string  | undefined;
+  const isFleetManaged  = item.metadata?.fleet_managed  as boolean | undefined;
+  const sourceLabel     = getSourceLabel(item.metadata);
+
+  const hasMaterial    = specs?.material    as string  | undefined;
+  const specDimensions = specs?.dimensions  as string  | undefined;
+  const isSolar        = specs?.is_solar    as boolean | undefined;
+  const isElectric     = specs?.is_electric as boolean | undefined;
+  const isReflective   = specs?.is_reflective as boolean | undefined;
+  const catalogPage    = specs?.catalog_page  as number | undefined;
+  const readiness      = specs?.readiness_status as string | undefined;
+  const confidence     = specs?.confidence     as string | undefined;
+  const specNotes      = specs?.notes          as string | undefined;
+
+  const hasSpecs  = !!(hasMaterial || specDimensions || isSolar || isElectric || isReflective || catalogPage);
+  const hasLinked = (item.linkedProducts?.length ?? 0) > 0;
+
+  const readinessLabel: Record<string, string> = { ready: "מוכן", missing_data: "חסרים נתונים", needs_review: "לבדיקה" };
+  const readinessColor: Record<string, string> = { ready: "text-green-700", missing_data: "text-amber-700", needs_review: "text-orange-700" };
+  const confidenceLabel: Record<string, string> = { high: "גבוה", medium: "בינוני", low: "נמוך" };
+
+  return (
+    <tr>
+      <td colSpan={9} className="p-0 border-b border-blue-100">
+        <div className="px-6 py-4 bg-blue-50/25">
+          <div className="flex gap-5">
+
+            {/* Thumbnail */}
+            {images?.product && (
+              <div className="shrink-0">
+                <img
+                  src={images.product}
+                  alt={item.name}
+                  className="w-20 h-20 object-cover rounded-lg border border-gray-200 bg-white shadow-sm"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                />
+              </div>
+            )}
+
+            <div className="flex-1 min-w-0 space-y-3">
+
+              {/* Header: name + badges + actions */}
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <p className="font-semibold text-gray-900 text-sm">{item.name}</p>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${TYPE_COLORS[item.type]}`}>{TYPE_LABELS[item.type]}</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${item.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                      {item.isActive ? "פעיל" : "לא פעיל"}
+                    </span>
+                    {safetyRefId && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">🛡 בטיחות</span>}
+                    {isFleetManaged && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">צי</span>}
+                    {sourceLabel && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400">{sourceLabel}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onToggle(item.id); }}
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    {item.isActive ? "השבת" : "הפעל"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onEdit(item.id); }}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  >
+                    <PencilIcon />
+                    ערוך
+                  </button>
+                </div>
+              </div>
+
+              {/* Description */}
+              {item.description && (
+                <p className="text-xs text-gray-600 leading-relaxed">{item.description}</p>
+              )}
+
+              {/* Core fields grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-2 text-xs">
+                {item.category && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">קטגוריה</p>
+                    <p className="text-gray-700">{item.category}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">יחידה</p>
+                  <p className="text-gray-700">{item.unitOfMeasure}</p>
+                </div>
+                {item.defaultPrice !== null && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">מחיר מכירה</p>
+                    <p className="font-semibold text-gray-800" dir="ltr">₪{item.defaultPrice.toLocaleString()}</p>
+                  </div>
+                )}
+                {item.costPrice != null && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">מחיר עלות</p>
+                    <p className="text-gray-700" dir="ltr">₪{item.costPrice.toLocaleString()}</p>
+                  </div>
+                )}
+                {item.dimensionValue && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">מידה</p>
+                    <p className="text-gray-700" dir="ltr">{item.dimensionValue}{item.dimensionUnit ? ` ${item.dimensionUnit}` : ""}</p>
+                  </div>
+                )}
+                {(item.currentQuantity > 0 || item.minimumQuantity > 0) && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">מלאי</p>
+                    <p className="text-gray-700">
+                      {item.currentQuantity - item.reservedQuantity} זמין
+                      {item.reservedQuantity > 0 && <span className="text-amber-600"> · {item.reservedQuantity} שמור</span>}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Technical specs (safety items) */}
+              {hasSpecs && (
+                <div className="bg-white rounded-lg border border-gray-100 px-4 py-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">מפרט טכני</p>
+                  <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+                    {hasMaterial && <span><span className="text-gray-400">חומר: </span><span className="text-gray-700">{hasMaterial}</span></span>}
+                    {specDimensions && !item.dimensionValue && <span><span className="text-gray-400">מידות: </span><span className="text-gray-700">{specDimensions}</span></span>}
+                    {isSolar && <span className="text-amber-700 font-medium">☀ סולארי</span>}
+                    {isElectric && !isSolar && <span className="text-yellow-700 font-medium">⚡ חשמלי</span>}
+                    {isReflective && <span className="text-purple-700 font-medium">◈ רפלקטיבי</span>}
+                    {catalogPage && <span><span className="text-gray-400">עמוד: </span><span className="text-gray-700">{catalogPage}</span></span>}
+                    {readiness && (
+                      <span>
+                        <span className="text-gray-400">סטטוס: </span>
+                        <span className={`font-medium ${readinessColor[readiness] ?? "text-gray-700"}`}>{readinessLabel[readiness] ?? readiness}</span>
+                      </span>
+                    )}
+                    {confidence && <span><span className="text-gray-400">ביטחון: </span><span className="text-gray-700">{confidenceLabel[confidence] ?? confidence}</span></span>}
+                  </div>
+                  {specNotes && <p className="text-[11px] text-gray-500 italic mt-1.5">{specNotes}</p>}
+                </div>
+              )}
+
+              {/* Linked products */}
+              {hasLinked && (
+                <p className="text-xs text-gray-600">
+                  <span className="text-gray-400">נלווים: </span>
+                  {item.linkedProducts!.map((lp, i) => (
+                    <span key={lp.id}>{i > 0 && " · "}{lp.name} ×{lp.qty}{lp.required ? " (חובה)" : ""}</span>
+                  ))}
+                </p>
+              )}
+
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -576,6 +757,7 @@ export function CatalogPage() {
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<CatalogFormState>(emptyForm);
   const [editLinked, setEditLinked] = useState<LinkedProductEntry[]>([]);
   const [editMinQty, setEditMinQty] = useState("");
@@ -645,6 +827,7 @@ export function CatalogPage() {
     setEditLinked(item.linkedProducts ?? []);
     setEditMinQty(item.minimumQuantity > 0 ? String(item.minimumQuantity) : "");
     setEditSupplierId(item.supplierId ?? "");
+    setExpandedId(null);
     setEditingId(id);
     setViewMode("table");
   }
@@ -804,96 +987,131 @@ export function CatalogPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((item) =>
-                      editingId === item.id ? (
-                        <tr key={item.id} className="border-b border-gray-100 bg-blue-50/30">
-                          <td colSpan={9} className="px-4 py-3">
-                            <FormFields
-                              form={editForm}
-                              update={updateEditForm}
-                              categories={categories}
-                              linkedProducts={editLinked}
-                              onLinkedProductsChange={setEditLinked}
-                              onCreateLinked={handleCreateAndLink}
-                              allItems={allItemRefs}
-                              itemId={item.id}
-                              compact
+                    {filtered.map((item) => {
+                      const isEditing  = editingId  === item.id;
+                      const isExpanded = expandedId === item.id && !isEditing;
+                      return (
+                        <Fragment key={item.id}>
+                          {isEditing ? (
+                            <tr className="border-b border-gray-100 bg-blue-50/30">
+                              <td colSpan={9} className="px-4 py-3">
+                                <FormFields
+                                  form={editForm}
+                                  update={updateEditForm}
+                                  categories={categories}
+                                  linkedProducts={editLinked}
+                                  onLinkedProductsChange={setEditLinked}
+                                  onCreateLinked={handleCreateAndLink}
+                                  allItems={allItemRefs}
+                                  itemId={item.id}
+                                  compact
+                                />
+                                {/* Stock config */}
+                                <div className="mt-3 pt-3 border-t border-blue-100">
+                                  <p className="text-xs font-semibold text-gray-600 mb-2">הגדרות מלאי</p>
+                                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">כמות מינימום (לרכש)</label>
+                                      <input type="number" min="0" step="0.01" value={editMinQty}
+                                        onChange={e => setEditMinQty(e.target.value)}
+                                        placeholder="0"
+                                        className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs text-gray-500 mb-1">ספק מועדף</label>
+                                      <select value={editSupplierId} onChange={e => setEditSupplierId(e.target.value)}
+                                        className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+                                        <option value="">— ללא ספק —</option>
+                                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                      </select>
+                                    </div>
+                                    <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2 self-end">
+                                      <div>נוכחי: <strong>{item.currentQuantity}</strong></div>
+                                      <div>שמור: <strong className="text-amber-600">{item.reservedQuantity}</strong></div>
+                                      <div>זמין: <strong>{item.currentQuantity - item.reservedQuantity}</strong></div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-end gap-2 mt-3">
+                                  <button type="button" onClick={() => saveEdit(item.id)} className="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors">שמור</button>
+                                  <button type="button" onClick={cancelEdit} className="px-3 py-1 rounded-lg border border-gray-300 text-xs text-gray-600 hover:bg-gray-50 transition-colors">ביטול</button>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : (
+                            <tr
+                              className={`border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${!item.isActive ? "opacity-50" : ""} ${isExpanded ? "bg-blue-50/20" : ""}`}
+                              onClick={() => setExpandedId(prev => prev === item.id ? null : item.id)}
+                            >
+                              <td className="px-4 py-3 font-medium text-gray-900">
+                                <span className="flex items-center gap-1.5 flex-wrap">
+                                  {item.name}
+                                  {(item.linkedProducts?.length ?? 0) > 0 && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                                      {item.linkedProducts!.length} נלווים
+                                    </span>
+                                  )}
+                                  {getSourceLabel(item.metadata) && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-normal">
+                                      {getSourceLabel(item.metadata)}
+                                    </span>
+                                  )}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[item.type]}`}>{TYPE_LABELS[item.type]}</span>
+                              </td>
+                              <td className="px-4 py-3 text-gray-500 text-xs">{item.category || "—"}</td>
+                              <td className="px-4 py-3 text-gray-600 text-xs">{item.unitOfMeasure}</td>
+                              <td className="px-4 py-3 text-gray-600 text-xs" dir="ltr">
+                                {item.dimensionValue && item.dimensionUnit ? `${item.dimensionValue} ${item.dimensionUnit}` : item.dimensionValue || "—"}
+                              </td>
+                              <td className="px-4 py-3 text-gray-600 text-xs" dir="ltr">
+                                {item.defaultPrice !== null ? `₪${item.defaultPrice.toLocaleString()}` : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-gray-400 text-xs max-w-xs truncate">{item.description || "—"}</td>
+                              <td className="px-4 py-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); toggleActive(item.id); }}
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${item.isActive ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                                >
+                                  {item.isActive ? "פעיל" : "לא פעיל"}
+                                </button>
+                              </td>
+                              <td className="px-3 py-3">
+                                <div className="flex items-center gap-1 justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); startEdit(item.id); }}
+                                    className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                    title="ערוך"
+                                  >
+                                    <PencilIcon />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
+                                    className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                    title="מחק"
+                                  >
+                                    <TrashIcon />
+                                  </button>
+                                  <ChevronDownIcon open={isExpanded} />
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          {isExpanded && (
+                            <CatalogItemDetailPanel
+                              item={item}
+                              onEdit={startEdit}
+                              onToggle={toggleActive}
                             />
-                            {/* Stock config */}
-                            <div className="mt-3 pt-3 border-t border-blue-100">
-                              <p className="text-xs font-semibold text-gray-600 mb-2">הגדרות מלאי</p>
-                              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                                <div>
-                                  <label className="block text-xs text-gray-500 mb-1">כמות מינימום (לרכש)</label>
-                                  <input type="number" min="0" step="0.01" value={editMinQty}
-                                    onChange={e => setEditMinQty(e.target.value)}
-                                    placeholder="0"
-                                    className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
-                                </div>
-                                <div>
-                                  <label className="block text-xs text-gray-500 mb-1">ספק מועדף</label>
-                                  <select value={editSupplierId} onChange={e => setEditSupplierId(e.target.value)}
-                                    className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
-                                    <option value="">— ללא ספק —</option>
-                                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                  </select>
-                                </div>
-                                <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2 self-end">
-                                  <div>נוכחי: <strong>{item.currentQuantity}</strong></div>
-                                  <div>שמור: <strong className="text-amber-600">{item.reservedQuantity}</strong></div>
-                                  <div>זמין: <strong>{item.currentQuantity - item.reservedQuantity}</strong></div>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-end gap-2 mt-3">
-                              <button type="button" onClick={() => saveEdit(item.id)} className="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors">שמור</button>
-                              <button type="button" onClick={cancelEdit} className="px-3 py-1 rounded-lg border border-gray-300 text-xs text-gray-600 hover:bg-gray-50 transition-colors">ביטול</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : (
-                        <tr key={item.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${!item.isActive ? "opacity-50" : ""}`}>
-                          <td className="px-4 py-3 font-medium text-gray-900">
-                            <span className="flex items-center gap-1.5 flex-wrap">
-                              {item.name}
-                              {(item.linkedProducts?.length ?? 0) > 0 && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
-                                  {item.linkedProducts!.length} נלווים
-                                </span>
-                              )}
-                              {getSourceLabel(item.metadata) && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 font-normal">
-                                  {getSourceLabel(item.metadata)}
-                                </span>
-                              )}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[item.type]}`}>{TYPE_LABELS[item.type]}</span>
-                          </td>
-                          <td className="px-4 py-3 text-gray-500 text-xs">{item.category || "—"}</td>
-                          <td className="px-4 py-3 text-gray-600 text-xs">{item.unitOfMeasure}</td>
-                          <td className="px-4 py-3 text-gray-600 text-xs" dir="ltr">
-                            {item.dimensionValue && item.dimensionUnit ? `${item.dimensionValue} ${item.dimensionUnit}` : item.dimensionValue || "—"}
-                          </td>
-                          <td className="px-4 py-3 text-gray-600 text-xs" dir="ltr">
-                            {item.defaultPrice !== null ? `₪${item.defaultPrice.toLocaleString()}` : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-gray-400 text-xs max-w-xs truncate">{item.description || "—"}</td>
-                          <td className="px-4 py-3 text-center">
-                            <button type="button" onClick={() => toggleActive(item.id)} className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${item.isActive ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
-                              {item.isActive ? "פעיל" : "לא פעיל"}
-                            </button>
-                          </td>
-                          <td className="px-3 py-3">
-                            <div className="flex items-center gap-1 justify-end">
-                              <button type="button" onClick={() => startEdit(item.id)} className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="ערוך"><PencilIcon /></button>
-                              <button type="button" onClick={() => deleteItem(item.id)} className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="מחק"><TrashIcon /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    )}
+                          )}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

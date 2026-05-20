@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { useOrdersContext } from "@/context/OrdersContext";
 import type { WorkOrder } from "@/types/workOrder";
@@ -516,7 +516,7 @@ export function AccountingPage() {
   const [filterCity, setFilterCity] = useState("");
   const [filterAccountingStatus, setFilterAccountingStatus] = useState("all");
   const [filterJobName, setFilterJobName] = useState("");
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [diaryExportingId, setDiaryExportingId] = useState<string | null>(null);
   const [diaryCsvExportingId, setDiaryCsvExportingId] = useState<string | null>(null);
@@ -766,12 +766,7 @@ export function AccountingPage() {
   }, [filtered]);
 
   function toggleRow(id: string) {
-    setExpandedRows((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setExpandedId((prev) => (prev === id ? null : id));
   }
 
   function buildReportData(): AccountingReportData {
@@ -1593,12 +1588,11 @@ export function AccountingPage() {
                     </thead>
                     <tbody>
                       {cancelledOrders.map((order, idx) => {
-                        const isExpanded = expandedRows.has(order.id);
+                        const isExpanded = expandedId === order.id;
                         return (
-                          <>
+                          <Fragment key={order.id}>
                             <tr
-                              key={order.id}
-                              className="border-b border-gray-100 hover:bg-red-50/20 transition-colors cursor-pointer"
+                              className={`border-b border-gray-100 hover:bg-red-50/20 transition-colors cursor-pointer ${isExpanded ? "bg-red-50/10" : ""}`}
                               onClick={() => toggleRow(order.id)}
                             >
                               <td className="px-4 py-3 text-gray-300 text-xs">{idx + 1}</td>
@@ -1629,8 +1623,8 @@ export function AccountingPage() {
                                 </div>
                               </td>
                             </tr>
-                            {isExpanded && <ExpandedRow key={`${order.id}-expanded`} order={order} />}
-                          </>
+                            {isExpanded && <ExpandedRow order={order} />}
+                          </Fragment>
                         );
                       })}
                     </tbody>
@@ -1902,12 +1896,11 @@ export function AccountingPage() {
                 </thead>
                 <tbody>
                   {filtered.map((order, idx) => {
-                    const isExpanded = expandedRows.has(order.id);
+                    const isExpanded = expandedId === order.id;
                     return (
-                      <>
+                      <Fragment key={order.id}>
                         <tr
-                          key={order.id}
-                          className="border-b border-gray-100 hover:bg-blue-50/20 transition-colors cursor-pointer"
+                          className={`border-b border-gray-100 hover:bg-blue-50/20 transition-colors cursor-pointer ${isExpanded ? "bg-blue-50/10" : ""}`}
                           onClick={() => toggleRow(order.id)}
                         >
                           <td className="px-4 py-3 text-gray-400 text-xs">{idx + 1}</td>
@@ -1948,8 +1941,8 @@ export function AccountingPage() {
                             </div>
                           </td>
                         </tr>
-                        {isExpanded && <ExpandedRow key={`${order.id}-expanded`} order={order} />}
-                      </>
+                        {isExpanded && <ExpandedRow order={order} />}
+                      </Fragment>
                     );
                   })}
                 </tbody>
