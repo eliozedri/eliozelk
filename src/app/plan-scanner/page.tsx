@@ -48,6 +48,12 @@ interface RunProgress {
   estimated_pct: number;
   stage_label: string;
   started_at: string;
+  scan_mode?: "fast_scan" | "deep_scan";
+  current_script?: string;
+  stage_index?: number;
+  total_stages?: number;
+  completed_count?: number;
+  is_real_progress?: boolean;
 }
 
 interface ScanSession {
@@ -269,6 +275,7 @@ function ExportCard({
 export default function PlanScannerPage() {
   const { profile, loading: authLoading } = useAuth();
   const [session, setSession] = useState<ScanSession>({ phase: "idle" });
+  const [scanMode, setScanMode] = useState<"fast" | "deep">("fast");
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionRef = useRef<ScanSession>(session);
 
@@ -489,7 +496,11 @@ export default function PlanScannerPage() {
     if (!slug) return;
 
     try {
-      const res = await authedFetch(`/api/plan-scanner/run/${slug}/start`, { method: "POST" });
+      const res = await authedFetch(`/api/plan-scanner/run/${slug}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: scanMode }),
+      });
       const data = await res.json();
 
       if (data.status === "execution_not_supported") {
@@ -538,7 +549,11 @@ export default function PlanScannerPage() {
     // Re-attempt pipeline start without re-uploading
     setSession((s) => ({ ...s, phase: "intake_created", error: undefined, executionMessage: undefined }));
     try {
-      const res = await authedFetch(`/api/plan-scanner/run/${slug}/start`, { method: "POST" });
+      const res = await authedFetch(`/api/plan-scanner/run/${slug}/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: scanMode }),
+      });
       const data = await res.json();
       if (data.status === "execution_not_supported") {
         setSession((s) => ({
@@ -722,6 +737,43 @@ export default function PlanScannerPage() {
               </div>
             )}
 
+            {/* Scan mode selector */}
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
+              <p className="text-xs font-semibold text-gray-600">בחר מצב סריקה</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setScanMode("fast")}
+                  className="flex-1 rounded-lg px-3 py-2 text-xs font-semibold border transition-all text-right"
+                  style={{
+                    borderColor: scanMode === "fast" ? EK_BLUE : "#e5e7eb",
+                    backgroundColor: scanMode === "fast" ? `${EK_BLUE}12` : "#fff",
+                    color: scanMode === "fast" ? EK_BLUE : "#6b7280",
+                  }}
+                >
+                  <span className="block font-bold">סריקה מהירה</span>
+                  <span className="block text-[10px] mt-0.5 text-gray-400">
+                    חילוץ, מיון, מקרא, קנה מידה, ייצוא · טיוטת BOQ
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScanMode("deep")}
+                  className="flex-1 rounded-lg px-3 py-2 text-xs font-semibold border transition-all text-right"
+                  style={{
+                    borderColor: scanMode === "deep" ? EK_GOLD : "#e5e7eb",
+                    backgroundColor: scanMode === "deep" ? `${EK_GOLD}12` : "#fff",
+                    color: scanMode === "deep" ? "#b45309" : "#6b7280",
+                  }}
+                >
+                  <span className="block font-bold">סריקה עמוקה</span>
+                  <span className="block text-[10px] mt-0.5 text-gray-400">
+                    OCR + קודי תמרורים + ניתוח מלא · לוקח יותר זמן
+                  </span>
+                </button>
+              </div>
+            </div>
+
             <div className="flex gap-2">
               <button
                 type="button"
@@ -730,7 +782,7 @@ export default function PlanScannerPage() {
                 style={{ backgroundColor: EK_BLUE }}
               >
                 <ScanText className="w-4 h-4" />
-                הפעל סריקה
+                {scanMode === "fast" ? "הפעל סריקה מהירה" : "הפעל סריקה עמוקה"}
               </button>
               {session.slug && (
                 <button
@@ -771,8 +823,18 @@ export default function PlanScannerPage() {
               {/* Progress bar */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-gray-700">{prog?.stage_label ?? "מתחיל..."}</p>
-                  <span className="text-[10px] text-gray-400">התקדמות משוערת</span>
+                  <p className="text-xs font-semibold text-gray-700">
+                    {prog?.is_real_progress && prog.total_stages
+                      ? `שלב ${(prog.completed_count ?? 0) + 1}/${prog.total_stages}: ${prog.stage_label}`
+                      : (prog?.stage_label ?? "מתחיל...")}
+                  </p>
+                  <span className="text-[10px] text-gray-400">
+                    {prog?.is_real_progress ? (
+                      <span className="text-green-600 font-medium">
+                        {prog.scan_mode === "fast_scan" ? "סריקה מהירה" : "סריקה עמוקה"}
+                      </span>
+                    ) : "התקדמות משוערת"}
+                  </span>
                 </div>
                 <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
@@ -781,7 +843,12 @@ export default function PlanScannerPage() {
                   />
                 </div>
                 <div className="flex items-center justify-between text-[10px] text-gray-400">
-                  <span>{prog?.estimated_pct ?? 0}%</span>
+                  <span>
+                    {prog?.estimated_pct ?? 0}%
+                    {prog?.is_real_progress && prog.total_stages
+                      ? ` · ${prog.completed_count ?? 0}/${prog.total_stages} שלבים`
+                      : ""}
+                  </span>
                   {secsSince !== null && (
                     <span>
                       {secsSince < 60

@@ -13,8 +13,9 @@ export const RUNS_BASE: string = (() => {
 })();
 
 export const VENV_PYTHON = path.join(RESEARCH_BASE, ".venv", "bin", "python3");
-const PIPELINE_SCRIPT = path.join(RESEARCH_BASE, "19_run_plan_scanner_pipeline.py");
-const EXPORT_SCRIPT   = path.join(RESEARCH_BASE, "33_worker_operations_export.py");
+const ORCHESTRATOR_SCRIPT = path.join(RESEARCH_BASE, "34_ui_plan_scan_orchestrator.py");
+const PIPELINE_SCRIPT     = path.join(RESEARCH_BASE, "19_run_plan_scanner_pipeline.py");
+const EXPORT_SCRIPT       = path.join(RESEARCH_BASE, "33_worker_operations_export.py");
 
 export const MAX_PDF_SIZE = 50 * 1024 * 1024; // 50 MB
 const SLUG_MAX_LEN = 200;
@@ -60,6 +61,28 @@ export interface RunProgress {
   estimated_pct: number;
   stage_label: string;
   started_at: string;
+  // Real-progress fields (populated when scan_progress.json is present)
+  scan_mode?: "fast_scan" | "deep_scan";
+  current_script?: string;
+  stage_index?: number;
+  total_stages?: number;
+  completed_count?: number;
+  is_real_progress?: boolean;
+}
+
+// Internal type matching scan_progress.json written by 34_
+interface ScanProgressFile {
+  scan_mode?: string;
+  status: "running" | "completed" | "failed";
+  current_script?: string | null;
+  current_stage_index?: number;
+  current_stage_label?: string;
+  completed_count?: number;
+  total_stages?: number;
+  progress_pct?: number;
+  started_at?: string;
+  error?: string | null;
+  failed_script?: string | null;
 }
 
 export interface ExportEntry {
@@ -83,6 +106,7 @@ export interface RunStatus {
   calibration?: ScaleCalibration;
   exports_generated_at?: string;
   progress?: RunProgress;
+  scan_mode?: "fast_scan" | "deep_scan";
 }
 
 export type ReexportResult =
@@ -281,6 +305,9 @@ export function inferRunStatus(slug: string): RunStatus {
   // Phase determination
   let phase: RunPhase;
   let progress: RunProgress | undefined;
+  let phaseError: string | undefined;
+  let scan_mode: "fast_scan" | "deep_scan" | undefined;
+
   if (!source_present && outputs_generated) {
     phase = "source_deleted";
   } else if (outputs_generated) {
@@ -288,20 +315,61 @@ export function inferRunStatus(slug: string): RunStatus {
   } else if (pipelineStarted) {
     try {
       const st = JSON.parse(fs.readFileSync(startedPath, "utf8"));
-      const elapsedMs = Date.now() - new Date(st.started_at).getTime();
-      phase = elapsedMs > 20 * 60 * 1000 ? "failed" : "running";
-      if (phase === "running") {
+      const startedAt: string = st.started_at;
+      const elapsedMs = Date.now() - new Date(startedAt).getTime();
+
+      // Read real progress from scan_progress.json (written by 34_ui_plan_scan_orchestrator.py)
+      const scanProgressPath = path.join(runDir, "state", "scan_progress.json");
+      let sp: ScanProgressFile | null = null;
+      if (fs.existsSync(scanProgressPath)) {
+        try {
+          sp = JSON.parse(fs.readFileSync(scanProgressPath, "utf8")) as ScanProgressFile;
+        } catch {}
+      }
+
+      if (sp?.scan_mode) {
+        scan_mode = sp.scan_mode as "fast_scan" | "deep_scan";
+      } else if (st.scan_mode) {
+        scan_mode = st.scan_mode as "fast_scan" | "deep_scan";
+      }
+
+      if (sp?.status === "failed") {
+        phase = "failed";
+        phaseError = sp.error ?? "הסריקה נכשלה";
+      } else if (elapsedMs > 20 * 60 * 1000) {
+        phase = "failed";
+        phaseError = sp?.error ?? "הסריקה חרגה מהזמן המוקצב (20 דקות)";
+      } else {
+        phase = "running";
         const elapsedSeconds = Math.floor(elapsedMs / 1000);
-        const estimated_pct = Math.min(95, Math.round((elapsedSeconds / 900) * 100));
-        const stage_label =
-          estimated_pct < 10 ? "הכנה" :
-          estimated_pct < 25 ? "קריאת PDF וחילוץ וקטורים" :
-          estimated_pct < 45 ? "ניתוח אלמנטים גרפיים" :
-          estimated_pct < 65 ? "מדידת מרחקים וכמויות" :
-          estimated_pct < 80 ? "בניית כמויות" :
-          estimated_pct < 92 ? "יצוא ודוחות" :
-          "כמעט מוכן...";
-        progress = { elapsed_seconds: elapsedSeconds, estimated_pct, stage_label, started_at: st.started_at };
+
+        if (sp?.status === "running" && typeof sp.progress_pct === "number") {
+          // Real progress from orchestrator
+          progress = {
+            elapsed_seconds: elapsedSeconds,
+            estimated_pct: sp.progress_pct,
+            stage_label: sp.current_stage_label ?? "מעבד...",
+            started_at: startedAt,
+            scan_mode: sp.scan_mode as "fast_scan" | "deep_scan" | undefined,
+            current_script: sp.current_script ?? undefined,
+            stage_index: sp.current_stage_index,
+            total_stages: sp.total_stages,
+            completed_count: sp.completed_count,
+            is_real_progress: true,
+          };
+        } else {
+          // Fallback: time-based estimate (orchestrator not yet started or progress unreadable)
+          const estimated_pct = Math.min(95, Math.round((elapsedSeconds / 900) * 100));
+          const stage_label =
+            estimated_pct < 10 ? "הכנה" :
+            estimated_pct < 25 ? "קריאת PDF וחילוץ וקטורים" :
+            estimated_pct < 45 ? "ניתוח אלמנטים גרפיים" :
+            estimated_pct < 65 ? "מדידת מרחקים וכמויות" :
+            estimated_pct < 80 ? "בניית כמויות" :
+            estimated_pct < 92 ? "יצוא ודוחות" :
+            "כמעט מוכן...";
+          progress = { elapsed_seconds: elapsedSeconds, estimated_pct, stage_label, started_at: startedAt };
+        }
       }
     } catch {
       phase = "running";
@@ -336,7 +404,7 @@ export function inferRunStatus(slug: string): RunStatus {
     } catch {}
   }
 
-  return { phase, source_present, outputs_generated, exports, plan_name, created_at, export_downloaded, export_downloaded_at, calibration, exports_generated_at, progress };
+  return { phase, source_present, outputs_generated, exports, plan_name, created_at, error: phaseError, export_downloaded, export_downloaded_at, calibration, exports_generated_at, progress, scan_mode };
 }
 
 // ── Export listing ────────────────────────────────────────────────────────────
@@ -353,7 +421,7 @@ export type StartResult =
   | { status: "already_running_or_done"; phase: RunPhase }
   | { status: "execution_not_supported"; message: string; manual_command: string };
 
-export function startPipeline(slug: string): StartResult {
+export function startPipeline(slug: string, mode: "fast" | "deep" = "fast"): StartResult {
   const status = inferRunStatus(slug);
   if (status.phase === "running" || status.phase === "outputs_generated" || status.phase === "source_deleted") {
     return { status: "already_running_or_done", phase: status.phase };
@@ -362,7 +430,8 @@ export function startPipeline(slug: string): StartResult {
   const isVercel = !!process.env.VERCEL;
   const venvExists = fs.existsSync(VENV_PYTHON);
   const runDir = getRunDir(slug);
-  const manual = `cd research/cad-pdf-intelligence && .venv/bin/python3 19_run_plan_scanner_pipeline.py --plan-run-dir "${runDir}" && .venv/bin/python3 33_worker_operations_export.py --plan-run-dir "${runDir}"`;
+  const scanMode = mode === "fast" ? "fast_scan" : "deep_scan";
+  const manual = `cd research/cad-pdf-intelligence && .venv/bin/python3 34_ui_plan_scan_orchestrator.py --plan-run-dir "${runDir}" --mode ${mode}`;
 
   if (isVercel || !venvExists) {
     return {
@@ -374,14 +443,14 @@ export function startPipeline(slug: string): StartResult {
     };
   }
 
-  // Write started marker
+  // Write started marker (includes scan_mode so inferRunStatus can read it before scan_progress.json exists)
   const stateDir = path.join(runDir, "state");
   if (!fs.existsSync(stateDir)) fs.mkdirSync(stateDir, { recursive: true });
-  const startedMarker = { started_at: new Date().toISOString(), run_dir: runDir, trigger: "api" };
+  const startedMarker = { started_at: new Date().toISOString(), run_dir: runDir, trigger: "api", scan_mode: scanMode };
   fs.writeFileSync(path.join(stateDir, "pipeline_started.json"), JSON.stringify(startedMarker, null, 2));
 
-  // Spawn pipeline + export script sequentially in bash
-  const cmd = `"${VENV_PYTHON}" "${PIPELINE_SCRIPT}" --plan-run-dir "${runDir}" && "${VENV_PYTHON}" "${EXPORT_SCRIPT}" --plan-run-dir "${runDir}"`;
+  // Spawn orchestrator — replaces the old `19_ && 33_` command
+  const cmd = `"${VENV_PYTHON}" "${ORCHESTRATOR_SCRIPT}" --plan-run-dir "${runDir}" --mode ${mode}`;
   const logPath = path.join(runDir, "logs", "api_run.log");
 
   // Lazy import to avoid bundling child_process on Vercel paths
@@ -593,4 +662,4 @@ export function markExportDownloaded(slug: string, filename: string): void {
 
 // ── Slug extraction (for RUNS_BASE / slug_list) ───────────────────────────────
 
-export { PIPELINE_SCRIPT, EXPORT_SCRIPT, RESEARCH_BASE, SLUG_MAX_LEN };
+export { ORCHESTRATOR_SCRIPT, PIPELINE_SCRIPT, EXPORT_SCRIPT, RESEARCH_BASE, SLUG_MAX_LEN };

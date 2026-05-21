@@ -11,8 +11,16 @@ export async function POST(
 
   const { slug } = await params;
 
+  let mode: "fast" | "deep" = "fast";
   try {
-    const result = startPipeline(slug);
+    const body = await req.json();
+    if (body?.mode === "deep") mode = "deep";
+  } catch {
+    // body absent or not JSON — default to fast
+  }
+
+  try {
+    const result = startPipeline(slug, mode);
     return NextResponse.json(result);
   } catch (err) {
     return NextResponse.json(

@@ -103,7 +103,9 @@ SVG_STROKE = {
 
 # ── Output helpers ─────────────────────────────────────────────────────────────
 
-OUTPUTS = Path(__file__).parent / "outputs"
+import os as _os
+_env_out = _os.environ.get("CAD_PLAN_OUTPUTS_DIR")
+OUTPUTS = Path(_env_out) if _env_out else Path(__file__).parent / "outputs"
 
 def output_path(filename: str) -> Path:
     OUTPUTS.mkdir(exist_ok=True)
