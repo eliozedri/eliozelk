@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   ScanText, Upload, FileSpreadsheet, Globe, ShieldAlert,
   AlertTriangle, CheckCircle, Loader2, Trash2, Download,
-  Terminal, RotateCcw, FileText,
+  Terminal, RotateCcw, FileText, Ruler,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { canAccessTab } from "@/types/auth";
@@ -268,13 +268,14 @@ export default function PlanScannerPage() {
           const res = await authedFetch(`/api/plan-scanner/run/${slug}/status`);
           if (!res.ok) return;
           const data = await res.json();
-          if (data.phase && data.phase !== sessionRef.current.phase) {
+          if (data.phase) {
             setSession((s) => ({
               ...s,
-              phase: data.phase,
+              phase: data.phase !== s.phase ? data.phase : s.phase,
               exports: data.exports ?? s.exports,
               planName: data.plan_name ?? s.planName,
               error: data.error,
+              exportDownloaded: data.export_downloaded || s.exportDownloaded,
             }));
           }
         } catch {}
@@ -307,9 +308,16 @@ export default function PlanScannerPage() {
   useDirtyGuard({
     isDirty: hasActiveScan,
     onSaveDraft: async () => {
-      // Stays on page — user must export manually before leaving
+      // No-op: navigation proceeds, user should download exports manually first
     },
     onDiscard: handleDiscard,
+    modalOverride: {
+      title: "האם לצאת מסורק התוכניות?",
+      subtitle: "קובץ התוכנית ונתוני הסריקה לא ישמרו. ודא שהורדת את הדוחות לפני היציאה.",
+      saveDraftLabel: "הישאר בעמוד",
+      discardLabel: "צא ומחק את נתוני הסריקה",
+      hideSaveDraft: false,
+    },
   });
 
   // Auth loading
@@ -418,8 +426,33 @@ export default function PlanScannerPage() {
       a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
+      // Optimistic client-side mark; server also persists via markExportDownloaded side-effect
       setSession((s) => ({ ...s, exportDownloaded: true }));
     } catch {}
+  }
+
+  async function handleRetry() {
+    const { slug, planName } = session;
+    if (!slug) { handleReset(); return; }
+    // Re-attempt pipeline start without re-uploading
+    setSession((s) => ({ ...s, phase: "intake_created", error: undefined, executionMessage: undefined }));
+    try {
+      const res = await authedFetch(`/api/plan-scanner/run/${slug}/start`, { method: "POST" });
+      const data = await res.json();
+      if (data.status === "execution_not_supported") {
+        setSession((s) => ({
+          ...s,
+          executionMessage: data.message,
+          manualCommand: data.manual_command,
+        }));
+        return;
+      }
+      if (data.status === "started" || data.status === "already_running_or_done") {
+        setSession({ phase: "running", slug, planName });
+      }
+    } catch (err) {
+      setSession((s) => ({ ...s, phase: "failed", error: err instanceof Error ? err.message : "שגיאה" }));
+    }
   }
 
   async function handleCleanup() {
@@ -583,6 +616,46 @@ export default function PlanScannerPage() {
               </div>
             </div>
 
+            {/* Scale calibration placeholder */}
+            <div className="bg-white rounded-xl border border-dashed border-gray-300 p-5 shadow-sm opacity-75">
+              <div className="flex items-start gap-3">
+                <Ruler className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-sm font-bold text-gray-600">כיול קנה מידה</p>
+                    <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ backgroundColor: `${EK_GOLD}30`, color: "#92400e" }}>
+                      Slice D
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    כל מדידות המרחק בדוח מבוססות על קנה מידה משוער ולא מאומת.
+                    כיול ידני יפותח בשלב הבא.
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 mb-1">מרחק ידוע (מטר)</label>
+                      <input disabled type="number" placeholder="e.g. 100" className="w-full text-xs rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-gray-400 cursor-not-allowed" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 mb-1">מרחק מדוד (פיקסלים)</label>
+                      <input disabled type="number" placeholder="e.g. 842" className="w-full text-xs rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-gray-400 cursor-not-allowed" />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-2">פיצ&#39;ר זה יהיה זמין ב-Slice D — בשלב זה המדידות הן הנחה בלבד</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Export-not-yet-downloaded nudge */}
+            {phase === "outputs_generated" && !session.exportDownloaded && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start gap-2">
+                <Download className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800">
+                  <strong>טרם הורדת דוח.</strong> הורד לפחות קובץ אחד לפני מחיקת קובץ המקור.
+                </p>
+              </div>
+            )}
+
             {/* Cleanup */}
             {phase === "outputs_generated" && (
               <div className="bg-white rounded-xl border border-red-100 p-5 shadow-sm">
@@ -611,22 +684,41 @@ export default function PlanScannerPage() {
 
         {/* Phase: failed */}
         {phase === "failed" && (
-          <div className="bg-white rounded-xl border border-red-200 p-5 shadow-sm">
-            <div className="flex items-start gap-3 mb-4">
+          <div className="bg-white rounded-xl border border-red-200 p-5 shadow-sm space-y-4">
+            <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-bold text-gray-800">שגיאה בתהליך</p>
-                <p className="text-xs text-gray-500 mt-1">{session.error ?? "אירעה שגיאה לא ידועה"}</p>
+              <div className="flex-1">
+                <p className="text-sm font-bold text-gray-800">שגיאה בתהליך הסריקה</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {session.error ?? "הסריקה נכשלה או חרגה מהזמן המוקצב (20 דקות)."}
+                </p>
+                {session.error?.includes("20") || !session.error ? (
+                  <p className="text-[10px] text-gray-400 mt-1.5">
+                    הקובץ עדיין קיים — ניתן לנסות שוב ללא העלאה מחדש.
+                  </p>
+                ) : null}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <RotateCcw className="w-4 h-4" />
-              התחל מחדש
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {session.slug && (
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                  style={{ backgroundColor: EK_BLUE }}
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  נסה שוב
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleReset}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                התחל מחדש (העלאה חדשה)
+              </button>
+            </div>
           </div>
         )}
 

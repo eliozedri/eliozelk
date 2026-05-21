@@ -45,6 +45,8 @@ export interface RunStatus {
   plan_name?: string;
   created_at?: string;
   error?: string;
+  export_downloaded: boolean;
+  export_downloaded_at?: string;
 }
 
 // ── Slug helpers ──────────────────────────────────────────────────────────────
@@ -179,11 +181,11 @@ export function inferRunStatus(slug: string): RunStatus {
   try {
     runDir = getRunDir(slug);
   } catch {
-    return { phase: "failed", source_present: false, outputs_generated: false, exports: [], error: "Invalid slug" };
+    return { phase: "failed", source_present: false, outputs_generated: false, exports: [], error: "Invalid slug", export_downloaded: false };
   }
 
   if (!fs.existsSync(runDir)) {
-    return { phase: "failed", source_present: false, outputs_generated: false, exports: [], error: "Run directory not found" };
+    return { phase: "failed", source_present: false, outputs_generated: false, exports: [], error: "Run directory not found", export_downloaded: false };
   }
 
   // Plan name from manifest
@@ -253,7 +255,21 @@ export function inferRunStatus(slug: string): RunStatus {
     phase = "intake_created";
   }
 
-  return { phase, source_present, outputs_generated, exports, plan_name, created_at };
+  // Export downloaded marker
+  const downloadedPath = path.join(runDir, "state", "export_downloaded.json");
+  let export_downloaded = false;
+  let export_downloaded_at: string | undefined;
+  if (fs.existsSync(downloadedPath)) {
+    try {
+      const d = JSON.parse(fs.readFileSync(downloadedPath, "utf8"));
+      export_downloaded = true;
+      export_downloaded_at = d.downloaded_at;
+    } catch {
+      export_downloaded = true;
+    }
+  }
+
+  return { phase, source_present, outputs_generated, exports, plan_name, created_at, export_downloaded, export_downloaded_at };
 }
 
 // ── Export listing ────────────────────────────────────────────────────────────
@@ -352,6 +368,21 @@ export function cleanupSourcePdf(slug: string): boolean {
   }
 
   return true;
+}
+
+// ── Export downloaded marker ──────────────────────────────────────────────────
+
+export function markExportDownloaded(slug: string, filename: string): void {
+  try {
+    const runDir = getRunDir(slug);
+    const stateDir = path.join(runDir, "state");
+    if (!fs.existsSync(stateDir)) return;
+    const marker = {
+      downloaded_at: new Date().toISOString(),
+      filename,
+    };
+    fs.writeFileSync(path.join(stateDir, "export_downloaded.json"), JSON.stringify(marker, null, 2));
+  } catch {}
 }
 
 // ── Slug extraction (for RUNS_BASE / slug_list) ───────────────────────────────

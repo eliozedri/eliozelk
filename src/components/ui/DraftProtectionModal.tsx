@@ -6,9 +6,24 @@ interface Props {
   onStay: () => void;
   onSaveDraft: () => Promise<void>;
   onDiscard: () => void;
+  // Optional custom copy — used by features that need different language (e.g. plan scanner)
+  title?: string;
+  subtitle?: string;
+  saveDraftLabel?: string;
+  discardLabel?: string;
+  hideSaveDraft?: boolean;
 }
 
-export function DraftProtectionModal({ onStay, onSaveDraft, onDiscard }: Props) {
+export function DraftProtectionModal({
+  onStay,
+  onSaveDraft,
+  onDiscard,
+  title = "יש שינויים שלא נשמרו",
+  subtitle = "האם לשמור כטיוטה או למחוק?",
+  saveDraftLabel = "שמור כטיוטה",
+  discardLabel = "מחק ויצא",
+  hideSaveDraft = false,
+}: Props) {
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -42,28 +57,30 @@ export function DraftProtectionModal({ onStay, onSaveDraft, onDiscard }: Props) 
               </svg>
             </div>
             <div>
-              <p className="font-bold text-gray-900">יש שינויים שלא נשמרו</p>
-              <p className="text-xs text-gray-500 mt-0.5">האם לשמור כטיוטה או למחוק?</p>
+              <p className="font-bold text-gray-900">{title}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
             </div>
           </div>
 
           {/* Actions */}
           <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full py-2.5 rounded-xl text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white transition-colors"
-            >
-              {saving ? "שומר טיוטה..." : "שמור כטיוטה"}
-            </button>
+            {!hideSaveDraft && (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="w-full py-2.5 rounded-xl text-sm font-bold bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white transition-colors"
+              >
+                {saving ? "...שומר" : saveDraftLabel}
+              </button>
+            )}
             <button
               type="button"
               onClick={onDiscard}
               disabled={saving}
               className="w-full py-2.5 rounded-xl text-sm font-semibold bg-red-50 hover:bg-red-100 disabled:opacity-60 text-red-700 border border-red-200 transition-colors"
             >
-              מחק ויצא
+              {discardLabel}
             </button>
             <button
               type="button"

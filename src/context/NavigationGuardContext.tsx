@@ -2,10 +2,19 @@
 
 import { createContext, useContext, useRef, useState, useCallback, useEffect } from "react";
 
+export interface ModalOverride {
+  title?: string;
+  subtitle?: string;
+  saveDraftLabel?: string;
+  discardLabel?: string;
+  hideSaveDraft?: boolean;
+}
+
 export interface NavigationGuard {
   isDirty: boolean;
   onSaveDraft: () => Promise<void>;
   onDiscard: () => void;
+  modalOverride?: ModalOverride;
 }
 
 interface NavigationGuardContextValue {
@@ -104,6 +113,7 @@ export function useDirtyGuard(options: {
   isDirty: boolean;
   onSaveDraft: () => Promise<void>;
   onDiscard: () => void;
+  modalOverride?: ModalOverride;
 }) {
   const { registerGuard, clearGuard } = useNavigationGuard();
 
@@ -112,8 +122,9 @@ export function useDirtyGuard(options: {
       isDirty: options.isDirty,
       onSaveDraft: options.onSaveDraft,
       onDiscard: options.onDiscard,
+      modalOverride: options.modalOverride,
     });
-  }, [options.isDirty, options.onSaveDraft, options.onDiscard, registerGuard]);
+  }, [options.isDirty, options.onSaveDraft, options.onDiscard, options.modalOverride, registerGuard]);
 
   // Always unregister on unmount (form left)
   useEffect(() => {

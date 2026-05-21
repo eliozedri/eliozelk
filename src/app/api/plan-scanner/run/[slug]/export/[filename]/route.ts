@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPlanScannerUser } from "@/lib/planScanner/auth";
-import { safeExportPath } from "@/lib/planScanner/runs";
+import { safeExportPath, markExportDownloaded } from "@/lib/planScanner/runs";
 import fs from "fs";
 import path from "path";
 
@@ -39,6 +39,8 @@ export async function GET(
   const contentType = MIME_MAP[ext] ?? "application/octet-stream";
 
   const buffer = fs.readFileSync(filePath);
+  // Side-effect: mark as downloaded for session state tracking
+  markExportDownloaded(slug, filename);
   return new NextResponse(buffer, {
     status: 200,
     headers: {

@@ -21,7 +21,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const { showModal, pendingHref, confirmSaveDraft, confirmDiscard, confirmStay, clearGuard } = useNavigationGuard();
+  const { guard, showModal, pendingHref, confirmSaveDraft, confirmDiscard, confirmStay, clearGuard } = useNavigationGuard();
 
   // Close sidebar on navigation
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -90,6 +90,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             onStay={confirmStay}
             onSaveDraft={handleSaveDraft}
             onDiscard={handleDiscard}
+            {...(guard?.modalOverride ?? {})}
           />
         )}
       </GlobalFloatingChatProvider>
