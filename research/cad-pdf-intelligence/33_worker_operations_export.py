@@ -180,10 +180,71 @@ class PipelineInputs:
     def plan_meta(self) -> Dict:
         return (self.data.get("pipeline") or {}).get("metadata") or {}
 
+# ── Scale calibration applier ──────────────────────────────────────────────────
+
+def apply_scale_calibration(inp: PipelineInputs, calibration: Dict) -> None:
+    """Apply human-manual scale correction in-place. Preserves originals as *_original_m."""
+    correction_factor = calibration.get("correction_factor")
+    if not (isinstance(correction_factor, (int, float)) and correction_factor > 0):
+        return
+
+    calib_source = calibration.get("calibration_source", "human_manual")
+    calib_at = calibration.get("calibrated_at", "")
+    scale_ratio_new = calibration.get("scale_ratio_new")
+    m_per_pt_new = calibration.get("m_per_pt_new")
+
+    # Apply to linear/area BOQ items
+    boq = inp.data.get("boq")
+    if isinstance(boq, dict):
+        for item in (boq.get("items") or []):
+            if item.get("item_category") in (
+                "measured_linear", "measured_linear_candidate", "measured_area"
+            ):
+                orig_qty = item.get("quantity")
+                if isinstance(orig_qty, (int, float)):
+                    item["quantity_original_m"] = orig_qty
+                    item["quantity"] = round(orig_qty * correction_factor, 3)
+                    item["calibration_applied"] = True
+                    item["calibration_source"] = calib_source
+        totals = boq.get("totals")
+        if isinstance(totals, dict):
+            orig_total = totals.get("total_linear_m")
+            if isinstance(orig_total, (int, float)):
+                totals["total_linear_m_original"] = orig_total
+                totals["total_linear_m"] = round(orig_total * correction_factor, 3)
+
+    def _patch_scale_info(si: Dict) -> None:
+        si["status_original"] = si.get("status", "unverified")
+        si["ratio_original"] = si.get("ratio")
+        si["m_per_pt_original"] = si.get("m_per_pt")
+        si["status"] = "human_calibrated"
+        si["source"] = "human_manual_calibration"
+        si["calibration_source"] = calib_source
+        si["calibrated_at"] = calib_at
+        si["correction_factor"] = correction_factor
+        if scale_ratio_new is not None:
+            si["ratio"] = scale_ratio_new
+        if m_per_pt_new is not None:
+            si["m_per_pt"] = m_per_pt_new
+
+    # Update scale_info — prefer dedicated scale file, fall back to BOQ's embedded
+    scale = inp.data.get("scale")
+    if isinstance(scale, dict):
+        si = scale.get("scale_info")
+        if isinstance(si, dict):
+            _patch_scale_info(si)
+    else:
+        boq = inp.data.get("boq")
+        if isinstance(boq, dict):
+            si = boq.get("scale_info")
+            if isinstance(si, dict):
+                _patch_scale_info(si)
+
+
 # ── Summary builder ────────────────────────────────────────────────────────────
 
 def build_summary(inp: PipelineInputs, plan_slug: str, plan_id: str,
-                  source_pdf: str) -> Dict:
+                  source_pdf: str, calibration: Optional[Dict] = None) -> Dict:
     totals = inp.boq_totals
     boq_meta = inp.boq_meta
     inv = inp.inv_summary
@@ -230,6 +291,13 @@ def build_summary(inp: PipelineInputs, plan_slug: str, plan_id: str,
             "n_red_flags": len(inp.red_flags),
             "n_teaching_questions": len(inp.teaching_questions),
         },
+        "calibration": {
+            "applied": True,
+            "source": calibration.get("calibration_source"),
+            "correction_factor": calibration.get("correction_factor"),
+            "calibrated_at": calibration.get("calibrated_at"),
+            "method": calibration.get("calibration_method"),
+        } if calibration else None,
     }
 
 # ── HTML generator ─────────────────────────────────────────────────────────────
@@ -489,11 +557,18 @@ def generate_html(inp: PipelineInputs, summary: Dict, plan_manifest: Dict) -> st
 
     # Scale calibration callout
     p("<div class='card'>")
-    p("<h3>Scale Calibration (CRITICAL)</h3>")
+    p("<h3>Scale Calibration</h3>")
     p(f"<p>Current scale: <strong>1:{scale_ratio}</strong> — source: <em>{scale_info.get('source', '?')}</em></p>")
-    if scale_status == "unverified":
+    if scale_status == "human_calibrated":
+        cf = scale_info.get("correction_factor", 1.0)
+        calib_at = scale_info.get("calibrated_at", "")
+        orig_ratio = scale_info.get("ratio_original", "?")
+        p(f"<p style='color:#16a34a;font-weight:600;'>✓ Scale manually calibrated — correction factor: {cf:.4f} (original 1:{orig_ratio})</p>")
+        if calib_at:
+            p(f"<p>Calibrated at: {calib_at}. All linear quantities updated; originals preserved as quantity_original_m.</p>")
+    elif scale_status == "unverified":
         p(f"<p class='review-yes'>⚠ Scale is unverified. All {fmt_m(total_m)} of linear measurements may be wrong.</p>")
-        p("<p>To calibrate: identify two PDF points with a known real-world distance, record their coordinates in scale_measurement/results.json, and re-run 15_scale_measurement.py.</p>")
+        p("<p>To calibrate: use the Plan Scanner calibration tool in the UI, then re-export.</p>")
     p("</div>")
 
     # ── 9. PDF print instructions ─────────────────────────────────────────────
@@ -531,7 +606,11 @@ def generate_html(inp: PipelineInputs, summary: Dict, plan_manifest: Dict) -> st
     p(f"<strong>This is a draft research export.</strong><br>")
     p(f"<br>• Do not use for final execution or billing without human review.")
     p(f"<br>• approved_for_boq: false for all {n_items} items.")
-    p(f"<br>• Scale 1:{scale_ratio} is {scale_status} — all linear measurements are provisional.")
+    if scale_status == "human_calibrated":
+        cf = scale_info.get("correction_factor", 1.0)
+        p(f"<br>• Scale 1:{scale_ratio} (human-calibrated, correction factor {cf:.4f}) — measurements updated but not independently verified.")
+    else:
+        p(f"<br>• Scale 1:{scale_ratio} is {scale_status} — all linear measurements are provisional.")
     p(f"<br>• Sign codes are not confirmed — pipeline structural limitation (2-digit partial codes only).")
     p(f"<br>• Source PDF is a temporary research input. This exported report is the durable product.")
     p(f"<br>• Generated: {gen_at} by {SCRIPT_NAME} v{VERSION}.")
@@ -911,7 +990,8 @@ def generate_excel(inp: PipelineInputs, summary: Dict, out_path: Path) -> bool:
 # ── Export manifest ────────────────────────────────────────────────────────────
 
 def generate_manifest(summary: Dict, exports: List[Dict], inp: PipelineInputs,
-                      plan_manifest: Dict, run_dir: Optional[Path] = None) -> Dict:
+                      plan_manifest: Dict, run_dir: Optional[Path] = None,
+                      calibration: Optional[Dict] = None) -> Dict:
     # Derive per-file status
     html_entry  = next((e for e in exports if e["type"] == "html_report"), {})
     pdf_entry   = next((e for e in exports if e["type"] == "pdf_report"), {})
@@ -961,6 +1041,7 @@ def generate_manifest(summary: Dict, exports: List[Dict], inp: PipelineInputs,
         },
         "missing_inputs": inp.missing,
         "pipeline_status": summary["pipeline"],
+        "scale_calibration": calibration or None,
     }
 
 # ── Markdown report ────────────────────────────────────────────────────────────
@@ -1090,6 +1171,24 @@ def main() -> None:
     else:
         print(f"[33] All inputs loaded.")
 
+    # Load and apply scale calibration (plan-scoped only)
+    calibration: Optional[Dict] = None
+    calibration_applied = False
+    if ctx.plan_run_dir:
+        calib_path = ctx.plan_run_dir / "state" / "scale_calibration.json"
+        calib_data = load_json(calib_path)
+        if calib_data:
+            cf = calib_data.get("correction_factor")
+            if isinstance(cf, (int, float)) and cf > 0:
+                apply_scale_calibration(inp, calib_data)
+                calibration = calib_data
+                calibration_applied = True
+                print(f"[33] Scale calibration applied: correction_factor={cf:.4f}, source={calib_data.get('calibration_source','?')}")
+            else:
+                print("[33] Calibration file found but no valid correction_factor — skipping.")
+        else:
+            print("[33] No scale calibration found — using pipeline scale as-is.")
+
     # Load plan manifest
     plan_manifest: Dict = {}
     if ctx.plan_run_dir:
@@ -1104,7 +1203,8 @@ def main() -> None:
     )
 
     # Build summary
-    summary = build_summary(inp, plan_slug, plan_id, source_pdf)
+    summary = build_summary(inp, plan_slug, plan_id, source_pdf,
+                            calibration=calibration if calibration_applied else None)
 
     # Paths for export files
     html_path = exports_dir / "worker_operations_report.html"
@@ -1161,8 +1261,9 @@ def main() -> None:
     })
 
     # Generate manifest (first pass — before manifest itself exists)
+    calib_arg = calibration if calibration_applied else None
     manifest = generate_manifest(summary, exports_list, inp, plan_manifest,
-                                 run_dir=ctx.plan_run_dir)
+                                 run_dir=ctx.plan_run_dir, calibration=calib_arg)
     # Write a placeholder so the manifest file exists before we add it to the list
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     exports_list.append({
@@ -1174,7 +1275,7 @@ def main() -> None:
     })
     # Final write — includes the manifest entry itself with exists=True
     manifest = generate_manifest(summary, exports_list, inp, plan_manifest,
-                                 run_dir=ctx.plan_run_dir)
+                                 run_dir=ctx.plan_run_dir, calibration=calib_arg)
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
     elapsed = time.time() - t0

@@ -34,6 +34,15 @@ interface ExportEntry {
   size: number;
 }
 
+interface CalibrationData {
+  calibration_source: string;
+  calibrated_at: string;
+  calibration_method: string;
+  scale_ratio_new: number;
+  m_per_pt_new: number;
+  correction_factor: number;
+}
+
 interface ScanSession {
   phase: ScanPhase;
   slug?: string;
@@ -43,6 +52,7 @@ interface ScanSession {
   exportDownloaded?: boolean;
   executionMessage?: string;
   manualCommand?: string;
+  exportsGeneratedAt?: string;
 }
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
@@ -254,6 +264,21 @@ export default function PlanScannerPage() {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionRef = useRef<ScanSession>(session);
 
+  // Calibration form state
+  const [calibrationMethod, setCalibrationMethod] = useState<"direct_ratio" | "two_point">("direct_ratio");
+  const [scaleRatioInput, setScaleRatioInput] = useState("");
+  const [knownMInput, setKnownMInput] = useState("");
+  const [measuredMInput, setMeasuredMInput] = useState("");
+  const [calibrationNotes, setCalibrationNotes] = useState("");
+  const [calibrationSaving, setCalibrationSaving] = useState(false);
+  const [calibrationError, setCalibrationError] = useState<string | null>(null);
+  const [savedCalibration, setSavedCalibration] = useState<CalibrationData | null>(null);
+
+  // Re-export state
+  const [isReexporting, setIsReexporting] = useState(false);
+  const [reexportMessage, setReexportMessage] = useState<string | null>(null);
+  const lastExportsGenAt = useRef<string | undefined>(undefined);
+
   // Keep ref in sync for use in callbacks
   useEffect(() => { sessionRef.current = session; }, [session]);
 
@@ -276,7 +301,9 @@ export default function PlanScannerPage() {
               planName: data.plan_name ?? s.planName,
               error: data.error,
               exportDownloaded: data.export_downloaded || s.exportDownloaded,
+              exportsGeneratedAt: data.exports_generated_at ?? s.exportsGeneratedAt,
             }));
+            if (data.calibration) setSavedCalibration(data.calibration as CalibrationData);
           }
         } catch {}
       }, 3000);
@@ -285,6 +312,28 @@ export default function PlanScannerPage() {
     }
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, [session.phase, session.slug]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reexport completion polling
+  useEffect(() => {
+    if (!isReexporting || !session.slug) return;
+    const slug = session.slug;
+    const interval = setInterval(async () => {
+      try {
+        const res = await authedFetch(`/api/plan-scanner/run/${slug}/status`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const newGenAt: string | undefined = data.exports_generated_at;
+        if (newGenAt && lastExportsGenAt.current && newGenAt !== lastExportsGenAt.current) {
+          setIsReexporting(false);
+          setSession((s) => ({ ...s, exports: data.exports ?? s.exports, exportsGeneratedAt: newGenAt }));
+          lastExportsGenAt.current = newGenAt;
+        } else if (newGenAt && !lastExportsGenAt.current) {
+          lastExportsGenAt.current = newGenAt;
+        }
+      } catch {}
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [isReexporting, session.slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Leave guard — active whenever there is a scan with unsaved data
   const hasActiveScan = session.phase !== "idle" && session.phase !== "source_deleted";
@@ -455,6 +504,66 @@ export default function PlanScannerPage() {
     }
   }
 
+  async function handleSaveCalibration() {
+    const { slug } = session;
+    if (!slug) return;
+    setCalibrationSaving(true);
+    setCalibrationError(null);
+    try {
+      const body =
+        calibrationMethod === "direct_ratio"
+          ? { calibration_method: "direct_ratio", scale_ratio: parseFloat(scaleRatioInput), notes: calibrationNotes }
+          : { calibration_method: "two_point", known_m: parseFloat(knownMInput), measured_m: parseFloat(measuredMInput), notes: calibrationNotes };
+      const res = await authedFetch(`/api/plan-scanner/run/${slug}/calibrate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCalibrationError(data.error ?? "שגיאה בשמירת הכיול");
+        return;
+      }
+      setSavedCalibration(data.calibration as CalibrationData);
+    } catch (err) {
+      setCalibrationError(err instanceof Error ? err.message : "שגיאה");
+    } finally {
+      setCalibrationSaving(false);
+    }
+  }
+
+  async function handleReexport() {
+    const { slug } = session;
+    if (!slug) return;
+    setReexportMessage(null);
+    // Capture current exports_generated_at so polling can detect change
+    try {
+      const statusRes = await authedFetch(`/api/plan-scanner/run/${slug}/status`);
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        lastExportsGenAt.current = statusData.exports_generated_at;
+      }
+    } catch {}
+    setIsReexporting(true);
+    try {
+      const res = await authedFetch(`/api/plan-scanner/run/${slug}/reexport`, { method: "POST" });
+      const data = await res.json();
+      if (data.status === "execution_not_supported") {
+        setReexportMessage(`${data.message}\n\nהפעל ידנית: ${data.manual_command}`);
+        setIsReexporting(false);
+        return;
+      }
+      if (!res.ok) {
+        setReexportMessage(data.error ?? "שגיאה");
+        setIsReexporting(false);
+      }
+      // status === "started" — polling effect will detect completion
+    } catch (err) {
+      setReexportMessage(err instanceof Error ? err.message : "שגיאה");
+      setIsReexporting(false);
+    }
+  }
+
   async function handleCleanup() {
     const { slug } = session;
     if (!slug) return;
@@ -616,32 +725,126 @@ export default function PlanScannerPage() {
               </div>
             </div>
 
-            {/* Scale calibration placeholder */}
-            <div className="bg-white rounded-xl border border-dashed border-gray-300 p-5 shadow-sm opacity-75">
+            {/* Scale calibration */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
               <div className="flex items-start gap-3">
-                <Ruler className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
+                <Ruler className="w-5 h-5 shrink-0 mt-0.5" style={{ color: EK_BLUE }} />
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-sm font-bold text-gray-600">כיול קנה מידה</p>
-                    <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ backgroundColor: `${EK_GOLD}30`, color: "#92400e" }}>
-                      Slice D
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    כל מדידות המרחק בדוח מבוססות על קנה מידה משוער ולא מאומת.
-                    כיול ידני יפותח בשלב הבא.
+                  <p className="text-sm font-bold text-gray-800 mb-1">כיול קנה מידה</p>
+                  <p className="text-xs text-gray-500 mb-3">
+                    כמויות המרחק בדוח מבוססות על קנה מידה שחושב אוטומטית ואינו מאומת.
+                    הזן את קנה המידה הנכון — הדוח יחושב מחדש.
                   </p>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[10px] font-semibold text-gray-400 mb-1">מרחק ידוע (מטר)</label>
-                      <input disabled type="number" placeholder="e.g. 100" className="w-full text-xs rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-gray-400 cursor-not-allowed" />
+
+                  {savedCalibration && (
+                    <div className="mb-3 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
+                      <p className="text-xs text-green-700 font-semibold">
+                        ✓ כיול נשמר — גורם תיקון: {savedCalibration.correction_factor.toFixed(4)} · קנה מידה חדש 1:{savedCalibration.scale_ratio_new.toFixed(0)}
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-gray-400 mb-1">מרחק מדוד (פיקסלים)</label>
-                      <input disabled type="number" placeholder="e.g. 842" className="w-full text-xs rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-gray-400 cursor-not-allowed" />
-                    </div>
+                  )}
+
+                  {/* Method tabs */}
+                  <div className="flex gap-2 mb-3">
+                    {(["direct_ratio", "two_point"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setCalibrationMethod(m)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors"
+                        style={calibrationMethod === m ? { backgroundColor: EK_BLUE, color: "#fff", borderColor: "transparent" } : { borderColor: "#d1d5db", color: "#374151" }}
+                      >
+                        {m === "direct_ratio" ? "קנה מידה ישיר" : "שני נקודות"}
+                      </button>
+                    ))}
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-2">פיצ&#39;ר זה יהיה זמין ב-Slice D — בשלב זה המדידות הן הנחה בלבד</p>
+
+                  {calibrationMethod === "direct_ratio" ? (
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-600 mb-1">קנה מידה (למשל: 500 עבור 1:500)</label>
+                      <input
+                        type="number"
+                        value={scaleRatioInput}
+                        onChange={(e) => setScaleRatioInput(e.target.value)}
+                        placeholder="500"
+                        min="1"
+                        className="w-40 text-xs rounded-lg border border-gray-300 px-3 py-1.5 focus:outline-none focus:ring-1"
+                        style={{ "--tw-ring-color": EK_BLUE } as React.CSSProperties}
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1">הזן את מספר קנה המידה מהכיתוב בתוכנית</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-600 mb-1">מרחק ידוע (מטר)</label>
+                          <input
+                            type="number"
+                            value={knownMInput}
+                            onChange={(e) => setKnownMInput(e.target.value)}
+                            placeholder="100"
+                            min="0.01"
+                            className="w-full text-xs rounded-lg border border-gray-300 px-3 py-1.5 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-gray-600 mb-1">ערך שהדוח מציג (מטר)</label>
+                          <input
+                            type="number"
+                            value={measuredMInput}
+                            onChange={(e) => setMeasuredMInput(e.target.value)}
+                            placeholder="120"
+                            min="0.01"
+                            className="w-full text-xs rounded-lg border border-gray-300 px-3 py-1.5 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      {knownMInput && measuredMInput && parseFloat(measuredMInput) > 0 && (
+                        <p className="text-[10px] text-gray-500">
+                          גורם תיקון = {parseFloat(knownMInput).toFixed(2)} ÷ {parseFloat(measuredMInput).toFixed(2)} = {(parseFloat(knownMInput) / parseFloat(measuredMInput)).toFixed(4)}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {calibrationError && (
+                    <p className="text-xs text-red-600 mt-2">{calibrationError}</p>
+                  )}
+
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={handleSaveCalibration}
+                      disabled={calibrationSaving}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
+                      style={{ backgroundColor: EK_BLUE }}
+                    >
+                      {calibrationSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ruler className="w-3.5 h-3.5" />}
+                      שמור כיול
+                    </button>
+
+                    {savedCalibration && (
+                      <button
+                        type="button"
+                        onClick={handleReexport}
+                        disabled={isReexporting}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-300 text-gray-700 disabled:opacity-50"
+                      >
+                        {isReexporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                        {isReexporting ? "מייצא מחדש..." : "יצא מחדש עם כיול"}
+                      </button>
+                    )}
+                  </div>
+
+                  {reexportMessage && (
+                    <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 p-2">
+                      <p className="text-[10px] text-amber-800 break-all whitespace-pre-wrap">{reexportMessage}</p>
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-gray-400 mt-2">
+                    ⚠ הכיול מעדכן את כמויות הכמות בדוח אך לא מאשר אותן לביצוע — כל הפלטים נשארים כטיוטה
+                  </p>
                 </div>
               </div>
             </div>

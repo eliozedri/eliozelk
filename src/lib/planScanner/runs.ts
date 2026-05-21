@@ -29,6 +29,22 @@ export type RunPhase =
   | "source_deleted"
   | "failed";
 
+export type CalibrationMethod = "direct_ratio" | "two_point";
+
+export interface ScaleCalibration {
+  calibration_source: "human_manual";
+  calibrated_at: string;
+  calibration_method: CalibrationMethod;
+  scale_ratio_new: number;
+  m_per_pt_new: number;
+  correction_factor: number;
+  original_scale_ratio?: number;
+  original_m_per_pt?: number;
+  two_point_known_m?: number | null;
+  two_point_measured_m?: number | null;
+  notes?: string;
+}
+
 export interface ExportEntry {
   filename: string;
   type: string;
@@ -47,7 +63,14 @@ export interface RunStatus {
   error?: string;
   export_downloaded: boolean;
   export_downloaded_at?: string;
+  calibration?: ScaleCalibration;
+  exports_generated_at?: string;
 }
+
+export type ReexportResult =
+  | { status: "started"; pid: number }
+  | { status: "execution_not_supported"; message: string; manual_command: string }
+  | { status: "not_ready"; reason: string };
 
 // ── Slug helpers ──────────────────────────────────────────────────────────────
 
@@ -269,7 +292,19 @@ export function inferRunStatus(slug: string): RunStatus {
     }
   }
 
-  return { phase, source_present, outputs_generated, exports, plan_name, created_at, export_downloaded, export_downloaded_at };
+  // Calibration
+  const calibration = readCalibration(slug) ?? undefined;
+
+  // Export manifest generated_at (for reexport polling)
+  let exports_generated_at: string | undefined;
+  if (outputs_generated) {
+    try {
+      const mf = JSON.parse(fs.readFileSync(exportManifestPath, "utf8"));
+      exports_generated_at = mf.generated_at;
+    } catch {}
+  }
+
+  return { phase, source_present, outputs_generated, exports, plan_name, created_at, export_downloaded, export_downloaded_at, calibration, exports_generated_at };
 }
 
 // ── Export listing ────────────────────────────────────────────────────────────
@@ -338,6 +373,86 @@ export function startPipeline(slug: string): StartResult {
     path.join(stateDir, "pipeline_started.json"),
     JSON.stringify({ ...startedMarker, pid: child.pid }, null, 2)
   );
+
+  return { status: "started", pid: child.pid };
+}
+
+// ── Scale calibration ─────────────────────────────────────────────────────────
+
+export function saveCalibration(slug: string, calibration: ScaleCalibration): void {
+  const runDir = getRunDir(slug);
+  const stateDir = path.join(runDir, "state");
+  if (!fs.existsSync(stateDir)) fs.mkdirSync(stateDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(stateDir, "scale_calibration.json"),
+    JSON.stringify(calibration, null, 2)
+  );
+  const manifestPath = path.join(runDir, "plan_manifest.json");
+  if (fs.existsSync(manifestPath)) {
+    try {
+      const m = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      m.scale_calibration_status = "human_calibrated";
+      m.scale_calibrated_at = calibration.calibrated_at;
+      m.scale_correction_factor = calibration.correction_factor;
+      fs.writeFileSync(manifestPath, JSON.stringify(m, null, 2));
+    } catch {}
+  }
+}
+
+export function readCalibration(slug: string): ScaleCalibration | null {
+  try {
+    const runDir = getRunDir(slug);
+    const calibPath = path.join(runDir, "state", "scale_calibration.json");
+    if (!fs.existsSync(calibPath)) return null;
+    return JSON.parse(fs.readFileSync(calibPath, "utf8")) as ScaleCalibration;
+  } catch {
+    return null;
+  }
+}
+
+export function reexportWithCalibration(slug: string): ReexportResult {
+  const status = inferRunStatus(slug);
+  if (!status.outputs_generated && status.phase !== "source_deleted") {
+    return { status: "not_ready", reason: "Pipeline outputs not yet generated" };
+  }
+
+  const isVercel = !!process.env.VERCEL;
+  const venvExists = fs.existsSync(VENV_PYTHON);
+  const runDir = getRunDir(slug);
+  const manual = `cd research/cad-pdf-intelligence && .venv/bin/python3 33_worker_operations_export.py --plan-run-dir "${runDir}"`;
+
+  if (isVercel || !venvExists) {
+    return {
+      status: "execution_not_supported",
+      message: isVercel
+        ? "Re-export not available in cloud deployments. Run the export script locally."
+        : "Python venv not found. Set up the environment first.",
+      manual_command: manual,
+    };
+  }
+
+  const logPath = path.join(runDir, "logs", "reexport.log");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { spawn } = require("child_process") as typeof import("child_process");
+  const logStream = fs.createWriteStream(logPath, { flags: "a" });
+  const child = spawn(
+    VENV_PYTHON,
+    [EXPORT_SCRIPT, "--plan-run-dir", runDir],
+    { detached: true, stdio: ["ignore", logStream, logStream], cwd: RESEARCH_BASE }
+  );
+
+  if (!child.pid) throw new Error("Failed to spawn re-export process");
+  child.unref();
+
+  // Write reexport marker so status polling can detect in-progress re-export
+  try {
+    const stateDir = path.join(runDir, "state");
+    if (!fs.existsSync(stateDir)) fs.mkdirSync(stateDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(stateDir, "reexport_started.json"),
+      JSON.stringify({ started_at: new Date().toISOString(), pid: child.pid }, null, 2)
+    );
+  } catch {}
 
   return { status: "started", pid: child.pid };
 }
