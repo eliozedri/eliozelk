@@ -1,5 +1,126 @@
 {
   "_schema": "1.0",
   "_note": "One entry per downloaded image. Updated by scrape + crop scripts.",
-  "entries": []
+  "entries": [
+    {
+      "item_id": "elkayam-mabr-khtsyyh",
+      "file_type": "original",
+      "source": "elkayam_website",
+      "category": "road-marking",
+      "source_url": "https://elkayam.co.il/wp-content/uploads/2024/01/8-1-360x245-1.jpg",
+      "source_page": "https://elkayam.co.il/",
+      "local_path": "/catalog/elkayam/road-marking/original/elkayam-mabr-khtsyyh-source.jpg",
+      "crop_status": "pending",
+      "review_state": "ok",
+      "imported_at": "2026-05-21T12:01:03.432325+00:00"
+    },
+    {
+      "item_id": "elkayam-mnyat-htspvt",
+      "file_type": "original",
+      "source": "elkayam_website",
+      "category": "road-marking",
+      "source_url": "https://elkayam.co.il/wp-content/uploads/2026/01/wet-road-asphalt-1024x683.webp",
+      "source_page": "https://elkayam.co.il/",
+      "local_path": "/catalog/elkayam/road-marking/original/elkayam-mnyat-htspvt-source.jpg",
+      "crop_status": "pending",
+      "review_state": "ok",
+      "imported_at": "2026-05-21T12:01:03.546528+00:00"
+    },
+    {
+      "item_id": "elkayam-gdr-mdbrt",
+      "file_type": "original",
+      "source": "elkayam_website",
+      "category": "road-marking",
+      "source_url": "https://elkayam.co.il/wp-content/uploads/2024/04/PHOTO-2021-12-13-12-50-19-1-1024x768.jpg",
+      "source_page": "https://elkayam.co.il/",
+      "local_path": "/catalog/elkayam/road-marking/original/elkayam-gdr-mdbrt-source.jpg",
+      "crop_status": "pending",
+      "review_state": "ok",
+      "imported_at": "2026-05-21T12:01:03.644000+00:00"
+    },
+    {
+      "item_id": "elkayam-prvykt-mslvl-rtsph-trmvplsty",
+      "file_type": "original",
+      "source": "elkayam_website",
+      "category": "road-marking",
+      "source_url": "https://elkayam.co.il/wp-content/uploads/2024/04/PHOTO-2021-04-04-17-02-48-300x300.jpg",
+      "source_page": "https://elkayam.co.il/product/%d7%97%d7%91%d7%a7%d7%99%d7%9d-%d7%9c%d7%aa%d7%9e%d7%a8%d7%95%d7%a8%d7%99%d7%9d-%d7%a9%d7%9c%d7%98%d7%99%d7%9d/",
+      "local_path": "/catalog/elkayam/road-marking/original/elkayam-prvykt-mslvl-rtsph-trmvplsty-source.jpg",
+      "crop_status": "pending",
+      "review_state": "ok",
+      "imported_at": "2026-05-21T12:01:31.501172+00:00"
+    },
+    {
+      "item_id": "elkayam-prvykt-gshr-hldym-navt-khvbb",
+      "file_type": "original",
+      "source": "elkayam_website",
+      "category": "road-marking",
+      "source_url": "https://elkayam.co.il/wp-content/uploads/2024/04/PHOTO-2021-04-04-17-19-10-300x300.jpg",
+      "source_page": "https://elkayam.co.il/product/%d7%97%d7%91%d7%a7%d7%99%d7%9d-%d7%9c%d7%aa%d7%9e%d7%a8%d7%95%d7%a8%d7%99%d7%9d-%d7%a9%d7%9c%d7%98%d7%99%d7%9d/",
+      "local_path": "/catalog/elkayam/road-marking/original/elkayam-prvykt-gshr-hldym-navt-khvbb-source.jpg",
+      "crop_status": "pending",
+      "review_state": "ok",
+      "imported_at": "2026-05-21T12:01:31.501262+00:00"
+    },
+    {
+      "item_id": "elkayam-prvykt-shylvt-mvar-navt-khvbb",
+      "file_type": "original",
+      "source": "elkayam_website",
+      "category": "road-marking",
+      "source_url": "https://elkayam.co.il/wp-content/uploads/2024/04/PHOTO-1112021-04-04-17-17-54-300x300.jpg",
+      "source_page": "https://elkayam.co.il/product/%d7%97%d7%91%d7%a7%d7%99%d7%9d-%d7%9c%d7%aa%d7%9e%d7%a8%d7%95%d7%a8%d7%99%d7%9d-%d7%a9%d7%9c%d7%98%d7%99%d7%9d/",
+      "local_path": "/catalog/elkayam/road-marking/original/elkayam-prvykt-shylvt-mvar-navt-khvbb-source.jpg",
+      "crop_status": "pending",
+      "review_state": "ok",
+      "imported_at": "2026-05-21T12:01:31.501297+00:00"
+    },
+    {
+      "item_id": "elkayam-prvyykt-shylvt-yyshvby-brnr",
+      "file_type": "original",
+      "source": "elkayam_website",
+      "category": "road-marking",
+      "source_url": "https://elkayam.co.il/wp-content/uploads/2024/04/PHOTO-2021-04-04-17-19-58-1-300x300.jpg",
+      "source_page": "https://elkayam.co.il/product/%d7%97%d7%91%d7%a7%d7%99%d7%9d-%d7%9c%d7%aa%d7%9e%d7%a8%d7%95%d7%a8%d7%99%d7%9d-%d7%a9%d7%9c%d7%98%d7%99%d7%9d/",
+      "local_path": "/catalog/elkayam/road-marking/original/elkayam-prvyykt-shylvt-yyshvby-brnr-source.jpg",
+      "crop_status": "pending",
+      "review_state": "ok",
+      "imported_at": "2026-05-21T12:01:31.501326+00:00"
+    },
+    {
+      "item_id": "elkayam-prvykt-shylvt-khvlvt-khvlvn",
+      "file_type": "original",
+      "source": "elkayam_website",
+      "category": "road-marking",
+      "source_url": "https://elkayam.co.il/wp-content/uploads/2024/04/PHOTO-2021-04-04-17-18-39-1-1-300x300.jpg",
+      "source_page": "https://elkayam.co.il/product/%d7%97%d7%91%d7%a7%d7%99%d7%9d-%d7%9c%d7%aa%d7%9e%d7%a8%d7%95%d7%a8%d7%99%d7%9d-%d7%a9%d7%9c%d7%98%d7%99%d7%9d/",
+      "local_path": "/catalog/elkayam/road-marking/original/elkayam-prvykt-shylvt-khvlvt-khvlvn-source.jpg",
+      "crop_status": "pending",
+      "review_state": "ok",
+      "imported_at": "2026-05-21T12:01:31.501354+00:00"
+    },
+    {
+      "item_id": "elkayam-prvykt-byt-mlvn-yrvshlym",
+      "file_type": "original",
+      "source": "elkayam_website",
+      "category": "road-marking",
+      "source_url": "https://elkayam.co.il/wp-content/uploads/2024/04/PHOTO-2021-04-04-17-11-37-1-1-300x300.jpg",
+      "source_page": "https://elkayam.co.il/product/%d7%97%d7%91%d7%a7%d7%99%d7%9d-%d7%9c%d7%aa%d7%9e%d7%a8%d7%95%d7%a8%d7%99%d7%9d-%d7%a9%d7%9c%d7%98%d7%99%d7%9d/",
+      "local_path": "/catalog/elkayam/road-marking/original/elkayam-prvykt-byt-mlvn-yrvshlym-source.jpg",
+      "crop_status": "pending",
+      "review_state": "ok",
+      "imported_at": "2026-05-21T12:01:31.506033+00:00"
+    },
+    {
+      "item_id": "elkayam-khvdsh-mvdavt-lsrtn-hshd",
+      "file_type": "original",
+      "source": "elkayam_website",
+      "category": "road-marking",
+      "source_url": "https://elkayam.co.il/wp-content/uploads/2024/04/4-1-300x300.jpg",
+      "source_page": "https://elkayam.co.il/product/%d7%97%d7%91%d7%a7%d7%99%d7%9d-%d7%9c%d7%aa%d7%9e%d7%a8%d7%95%d7%a8%d7%99%d7%9d-%d7%a9%d7%9c%d7%98%d7%99%d7%9d/",
+      "local_path": "/catalog/elkayam/road-marking/original/elkayam-khvdsh-mvdavt-lsrtn-hshd-source.jpg",
+      "crop_status": "pending",
+      "review_state": "ok",
+      "imported_at": "2026-05-21T12:01:31.506090+00:00"
+    }
+  ]
 }
