@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   ScanText, Upload, FileSpreadsheet, Globe, ShieldAlert,
   AlertTriangle, CheckCircle, Loader2, Trash2, Download,
@@ -43,6 +43,13 @@ interface CalibrationData {
   correction_factor: number;
 }
 
+interface RunProgress {
+  elapsed_seconds: number;
+  estimated_pct: number;
+  stage_label: string;
+  started_at: string;
+}
+
 interface ScanSession {
   phase: ScanPhase;
   slug?: string;
@@ -53,6 +60,7 @@ interface ScanSession {
   executionMessage?: string;
   manualCommand?: string;
   exportsGeneratedAt?: string;
+  progress?: RunProgress;
 }
 
 // ── Auth helper ───────────────────────────────────────────────────────────────
@@ -284,8 +292,19 @@ export default function PlanScannerPage() {
   const lastExportsGenAt = useRef<string | undefined>(undefined);
   const reexportTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Progress tick — 1s interval during running phase for "updated X seconds ago" display
+  const lastPollSuccessAt = useRef<number | null>(null);
+  const [tickMs, setTickMs] = useState<number>(() => Date.now());
+
   // Keep ref in sync for use in callbacks
   useEffect(() => { sessionRef.current = session; }, [session]);
+
+  // Tick every second during running phase for "updated X seconds ago" display
+  useEffect(() => {
+    if (session.phase !== "running") return;
+    const interval = setInterval(() => setTickMs(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [session.phase]);
 
   // Status polling
   useEffect(() => {
@@ -299,15 +318,29 @@ export default function PlanScannerPage() {
           if (!res.ok) return;
           const data = await res.json();
           if (data.phase) {
-            setSession((s) => ({
-              ...s,
-              phase: data.phase !== s.phase ? data.phase : s.phase,
-              exports: data.exports ?? s.exports,
-              planName: data.plan_name ?? s.planName,
-              error: data.error,
-              exportDownloaded: data.export_downloaded || s.exportDownloaded,
-              exportsGeneratedAt: data.exports_generated_at ?? s.exportsGeneratedAt,
-            }));
+            lastPollSuccessAt.current = Date.now();
+            setSession((s) => {
+              const newPhase = (data.phase as ScanPhase) ?? s.phase;
+              const newExportDownloaded = !!(data.export_downloaded) || !!(s.exportDownloaded);
+              const newExportsGenAt = (data.exports_generated_at as string | undefined) ?? s.exportsGeneratedAt;
+              const newProgress = data.progress as RunProgress | undefined;
+              if (
+                newPhase === s.phase &&
+                newExportDownloaded === s.exportDownloaded &&
+                newExportsGenAt === s.exportsGeneratedAt &&
+                (newProgress?.estimated_pct ?? null) === (s.progress?.estimated_pct ?? null)
+              ) return s;
+              return {
+                ...s,
+                phase: newPhase,
+                exports: (data.exports as ExportEntry[] | undefined) ?? s.exports,
+                planName: (data.plan_name as string | undefined) ?? s.planName,
+                error: data.error as string | undefined,
+                exportDownloaded: newExportDownloaded,
+                exportsGeneratedAt: newExportsGenAt,
+                progress: newProgress ?? s.progress,
+              };
+            });
             if (data.calibration) setSavedCalibration(data.calibration as CalibrationData);
           }
         } catch {}
@@ -371,19 +404,21 @@ export default function PlanScannerPage() {
     setSession({ phase: "idle" });
   }, []);
 
+  // Stable no-op — navigation proceeds, user should download exports manually first
+  const handleSaveDraftGuard = useCallback(async () => {}, []);
+  const modalOverrideGuard = useMemo(() => ({
+    title: "האם לצאת מסורק התוכניות?",
+    subtitle: "קובץ התוכנית ונתוני הסריקה לא ישמרו. ודא שהורדת את הדוחות לפני היציאה.",
+    saveDraftLabel: "הישאר בעמוד",
+    discardLabel: "צא ומחק את נתוני הסריקה",
+    hideSaveDraft: false,
+  }), []);
+
   useDirtyGuard({
     isDirty: hasActiveScan,
-    onSaveDraft: async () => {
-      // No-op: navigation proceeds, user should download exports manually first
-    },
+    onSaveDraft: handleSaveDraftGuard,
     onDiscard: handleDiscard,
-    modalOverride: {
-      title: "האם לצאת מסורק התוכניות?",
-      subtitle: "קובץ התוכנית ונתוני הסריקה לא ישמרו. ודא שהורדת את הדוחות לפני היציאה.",
-      saveDraftLabel: "הישאר בעמוד",
-      discardLabel: "צא ומחק את נתוני הסריקה",
-      hideSaveDraft: false,
-    },
+    modalOverride: modalOverrideGuard,
   });
 
   // Auth loading
@@ -663,7 +698,11 @@ export default function PlanScannerPage() {
               <CheckCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm font-bold text-gray-800">קובץ הועלה בהצלחה</p>
-                <p className="text-xs text-gray-500 mt-0.5">{session.planName} · ממתין להפעלת סריקה</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {session.executionMessage
+                    ? `${session.planName} · ממתין להרצה ידנית...`
+                    : `${session.planName} · ממתין להפעלת סריקה`}
+                </p>
               </div>
             </div>
 
@@ -711,18 +750,57 @@ export default function PlanScannerPage() {
         )}
 
         {/* Phase: running */}
-        {phase === "running" && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm flex flex-col items-center text-center gap-4">
-            <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ backgroundColor: `${EK_BLUE}15` }}>
-              <Loader2 className="w-7 h-7 animate-spin" style={{ color: EK_BLUE }} />
+        {phase === "running" && (() => {
+          const prog = session.progress;
+          const secsSince = lastPollSuccessAt.current
+            ? Math.floor((tickMs - lastPollSuccessAt.current) / 1000)
+            : null;
+          const isStale = secsSince !== null && secsSince > 300;
+          return (
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
+              <div className="flex flex-col items-center text-center gap-3">
+                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ backgroundColor: `${EK_BLUE}15` }}>
+                  <Loader2 className="w-7 h-7 animate-spin" style={{ color: EK_BLUE }} />
+                </div>
+                <div>
+                  <p className="text-base font-bold text-gray-800">סריקה מתבצעת...</p>
+                  <p className="text-sm text-gray-500 mt-1">{session.planName ?? "תוכנית"}</p>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-700">{prog?.stage_label ?? "מתחיל..."}</p>
+                  <span className="text-[10px] text-gray-400">התקדמות משוערת</span>
+                </div>
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-700"
+                    style={{ width: `${prog?.estimated_pct ?? 2}%`, backgroundColor: EK_BLUE }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-gray-400">
+                  <span>{prog?.estimated_pct ?? 0}%</span>
+                  {secsSince !== null && (
+                    <span>
+                      {secsSince < 60
+                        ? `עודכן לפני ${secsSince} שניות`
+                        : `עודכן לפני ${Math.floor(secsSince / 60)} דקות`}
+                    </span>
+                  )}
+                </div>
+
+                {isStale && (
+                  <div className="flex items-center gap-2 rounded-lg bg-amber-50 border border-amber-200 p-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <p className="text-[10px] text-amber-700">הסריקה לא מדווחת כבר 5 דקות — ייתכן שנתקעה. בדוק את הלוגים.</p>
+                  </div>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-base font-bold text-gray-800">סריקה מתבצעת...</p>
-              <p className="text-sm text-gray-500 mt-1">{session.planName ?? "תוכנית"}</p>
-              <p className="text-xs text-gray-400 mt-2">הניתוח עשוי לקחת מספר דקות. הדף יתעדכן אוטומטית.</p>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Phase: outputs_generated or source_deleted */}
         {(phase === "outputs_generated" || phase === "source_deleted") && (

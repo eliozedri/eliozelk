@@ -40,7 +40,8 @@ export function NavigationGuardProvider({ children }: { children: React.ReactNod
 
   const registerGuard = useCallback((g: NavigationGuard) => {
     guardRef.current = g;  // sync — requestNavigate reads this during click handlers
-    setGuard(g);           // async — triggers Sidebar re-render to switch Link→button
+    // Only trigger re-render when isDirty changes; callbacks stay fresh in guardRef
+    setGuard(prev => prev?.isDirty === g.isDirty ? prev : g);
   }, []);
 
   const clearGuard = useCallback(() => {

@@ -55,6 +55,13 @@ export interface ScaleOriginResult {
   reason?: string;
 }
 
+export interface RunProgress {
+  elapsed_seconds: number;
+  estimated_pct: number;
+  stage_label: string;
+  started_at: string;
+}
+
 export interface ExportEntry {
   filename: string;
   type: string;
@@ -75,6 +82,7 @@ export interface RunStatus {
   export_downloaded_at?: string;
   calibration?: ScaleCalibration;
   exports_generated_at?: string;
+  progress?: RunProgress;
 }
 
 export type ReexportResult =
@@ -272,15 +280,29 @@ export function inferRunStatus(slug: string): RunStatus {
 
   // Phase determination
   let phase: RunPhase;
+  let progress: RunProgress | undefined;
   if (!source_present && outputs_generated) {
     phase = "source_deleted";
   } else if (outputs_generated) {
     phase = "outputs_generated";
   } else if (pipelineStarted) {
     try {
-      const s = JSON.parse(fs.readFileSync(startedPath, "utf8"));
-      const elapsed = Date.now() - new Date(s.started_at).getTime();
-      phase = elapsed > 20 * 60 * 1000 ? "failed" : "running";
+      const st = JSON.parse(fs.readFileSync(startedPath, "utf8"));
+      const elapsedMs = Date.now() - new Date(st.started_at).getTime();
+      phase = elapsedMs > 20 * 60 * 1000 ? "failed" : "running";
+      if (phase === "running") {
+        const elapsedSeconds = Math.floor(elapsedMs / 1000);
+        const estimated_pct = Math.min(95, Math.round((elapsedSeconds / 900) * 100));
+        const stage_label =
+          estimated_pct < 10 ? "הכנה" :
+          estimated_pct < 25 ? "קריאת PDF וחילוץ וקטורים" :
+          estimated_pct < 45 ? "ניתוח אלמנטים גרפיים" :
+          estimated_pct < 65 ? "מדידת מרחקים וכמויות" :
+          estimated_pct < 80 ? "בניית כמויות" :
+          estimated_pct < 92 ? "יצוא ודוחות" :
+          "כמעט מוכן...";
+        progress = { elapsed_seconds: elapsedSeconds, estimated_pct, stage_label, started_at: st.started_at };
+      }
     } catch {
       phase = "running";
     }
@@ -314,7 +336,7 @@ export function inferRunStatus(slug: string): RunStatus {
     } catch {}
   }
 
-  return { phase, source_present, outputs_generated, exports, plan_name, created_at, export_downloaded, export_downloaded_at, calibration, exports_generated_at };
+  return { phase, source_present, outputs_generated, exports, plan_name, created_at, export_downloaded, export_downloaded_at, calibration, exports_generated_at, progress };
 }
 
 // ── Export listing ────────────────────────────────────────────────────────────
