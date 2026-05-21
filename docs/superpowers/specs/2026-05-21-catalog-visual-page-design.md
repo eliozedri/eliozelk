@@ -1,87 +1,410 @@
-# Spec: Visual Catalog Page — "קטלוג חזותי"
+# Spec: Catalog Assets, Product Import & Visual Catalog Upgrade
 
 **Date:** 2026-05-21  
-**Status:** Approved — ready for implementation planning  
-**Scope:** New `/catalog-showcase` route only. Does NOT touch the existing `/catalog` management screen.
+**Revision:** v2 — expanded scope per correction 2026-05-21  
+**Status:** Pending implementation planning  
+
+---
+
+## 0. Scope Summary
+
+This spec covers **four sequential phases** that together deliver a complete catalog upgrade:
+
+| Phase | Deliverable | Touches |
+|---|---|---|
+| A | Image pipeline — rescan, download, crop, store | `public/catalog/`, migration scripts |
+| B | Product data enrichment + supplier import as INACTIVE | Supabase `catalog_items`, migration SQL |
+| C | `/catalog` management UI upgrade | `CatalogPage`, `ItemCard`, `CatalogItemDetailPanel` |
+| D | `/catalog-showcase` visual catalog page | New route + new components |
+
+**Critical rule:** Phases A and B must complete before C and D, because C and D both depend on the new image paths and enriched product records.
 
 ---
 
 ## 1. Problem
 
-The existing `/catalog` page is a management tool: table/card view, edit forms, filters, inventory. It is not suitable for browsing products visually. We need a separate page that presents the catalog as a **visual product catalog website** — like a professional safety-equipment catalog landing page — using Elkayam branding and the existing product data.
+**1a.** The existing 37 safety-item images (`/catalog/safety/products/pXX-YY.jpg`) were extracted from a low-resolution PDF and are **not approved for use** as the final product images. They may be low quality, poorly cropped, or show full catalog pages rather than individual products. They must not be treated as final. All product images must be rebuilt from fresh source scans.
+
+**1b.** The `/catalog` management page currently shows product cards with no images, no source badges, and no click-to-edit card behavior. This must be upgraded.
+
+**1c.** There is no visual catalog page for browsing products. A new `/catalog-showcase` page is needed.
+
+**1d.** External supplier products relevant to our industry exist at `https://www.asclean.co.il/catalog-safety-equipment/` but are not in our catalog. They should be imported as INACTIVE reference items so they are available for future activation without being confused with active Elkayam stock.
 
 ---
 
-## 2. Goals
+## 2. What Is NOT Changing
 
-- Build a new internal page at `/catalog-showcase` styled as a visual product catalog.
-- Present existing `catalog_items` data via a category grid → product grid browsing flow.
-- Support active / inactive / source badge display on every product card.
-- Open a product detail modal on card click.
-- Add the page to the sidebar under "בנוסף" next to the existing catalog link.
-- Foundation for a future public-facing sales catalog.
-
----
-
-## 3. Reference Inspiration
-
-**Supplier reference:** `https://www.asclean.co.il/catalog-safety-equipment/`  
-Structure extracted:
-- Main page = grid of category cards (title + icon + CTA)
-- Clicking a category → drill-down to product list
-- Product cards: image, name, CTA button
-
-**Our adaptation:**
-- Single-page SPA (no drill-down routes): category card click filters product grid inline
-- Hero above categories
-- Product detail opens in modal (no separate page)
-- Elkayam dark theme, not supplier branding
+- The `/catalog` route, page shell, and overall management UX structure remain — no removal of existing filters, table view, add-item form, or edit modal.
+- No e-commerce, checkout, or pricing flows.
+- No public-facing deployment.
+- No Supabase auth changes.
+- No new TabId needed.
 
 ---
 
-## 4. Data Source
+## 3. Source Classification Model
 
-**Single source of truth:** existing `catalog_items` Supabase table via `useCatalogContext()`.  
-No new tables, no new migrations needed for Phase 1.
+All `catalog_items` carry `metadata.sources[0].type`. The badge system reads this field.
 
-### Source classification (metadata.sources[0].type → badge)
+### Source types and badge mapping
 
-| `sources[0].type` | Badge label | Badge color |
-|---|---|---|
-| `website` | אלקיים | blue |
-| `company_profile` | אלקיים | blue |
-| `seed` | אלקיים | blue |
-| `existing_catalog` | אלקיים | blue |
-| `manual` | ידני | gray |
-| `external_supplier_reference` | מקור חיצוני | amber |
-| anything else / missing | — | no badge |
+| `sources[0].type` | Means | Badge | Color |
+|---|---|---|---|
+| `website` | Elkayam website | אלקיים | blue |
+| `company_profile` | Elkayam company profile doc | אלקיים | blue |
+| `seed` | Prior internal seed/catalog | אלקיים | blue |
+| `existing_catalog` | Confirmed existing Elkayam item | אלקיים | blue |
+| `manual` | Manually entered by staff | ידני | gray |
+| `external_supplier_reference` | Imported from external supplier | מקור חיצוני | amber |
 
-### Status classification (item.isActive → badge)
+### Status (item.isActive)
 
-| `isActive` | Badge | Color |
-|---|---|---|
-| `true` | ● פעיל | green |
-| `false` | ○ לא פעיל | gray |
+| `isActive` | Badge |
+|---|---|
+| `true` | ● פעיל (green) |
+| `false` | ○ לא פעיל (gray) |
 
 ### Review state (metadata.review_state)
 
 | value | Badge |
 |---|---|
 | `needs_review` | דורש בדיקה (red) |
+| `missing_image` | חסרת תמונה (orange) |
 | absent | no badge |
 
-### Image resolution order (per card)
-1. `metadata.images.product` — if present and non-empty string → use it
-2. Category emoji fallback from `CATEGORY_ICONS` map
-3. Generic placeholder icon
+### Active vs inactive rule (non-negotiable)
+- Items from Elkayam sources (website, profile, existing catalog, manual) → `is_active = true`
+- Items from external supplier → `is_active = false`
+- Supplier items must **never** be automatically activated
+- If a supplier item matches an existing Elkayam item → enrich the Elkayam item, do not duplicate or downgrade
 
 ---
 
-## 5. Category Mapping
+## Phase A: Image Pipeline
 
-The category grid is built by **grouping `catalog_items` by their `category` field** and applying a display label + emoji from a static `SHOWCASE_CATEGORIES` config array. Categories with no matching items are hidden.
+### A1. Existing images — deprecation
 
-**Static config entries** (ordered, with emoji and display label):
+The 37 images at `/public/catalog/safety/products/pXX-YY.jpg` and `/public/catalog/safety/pages/page-XX.jpg` are treated as **deprecated candidates**. During Phase A:
+
+1. Do not delete them immediately — keep as fallback during transition.
+2. Mark them with `review_state: "image_needs_replacement"` in the relevant `metadata` fields via a migration script.
+3. After new images are confirmed good, clear the old references and optionally delete the old files.
+4. The `src/data/safetyAccessoryImages.ts` constant is frozen (migration-source-only, already noted in the migration SQL). It must not be used to drive production image rendering after Phase A completes.
+
+### A2. Rescan Elkayam sources
+
+Scan the following for product images:
+
+1. **Elkayam website**: `https://elkayam.co.il/` — crawl all product/service pages, download images for products that match items in our catalog. Save to `public/catalog/elkayam/`.
+2. **Company profile / source folder**: `מקורות מידע/` — inspect any PDFs or images already present. Extract product images where useful.
+3. **Existing internal catalog data** — no rescan needed, already known.
+
+For each image found:
+- Match to an existing `catalog_items` record by normalized Hebrew name.
+- If matched: add to `metadata.images` as the candidate product image.
+- If unmatched: create a new INACTIVE item or note as unmatched for manual review.
+
+### A3. Rescan external supplier catalog
+
+Scan `https://www.asclean.co.il/catalog-safety-equipment/`:
+
+1. Open the main catalog page and identify all category links.
+2. For each category page: collect all product names and image URLs.
+3. For each product: collect name, image URL, description, specs, and the product/category page URL.
+4. Download all product images. Save to `public/catalog/supplier/asclean/<category-slug>/`.
+
+**What to collect per product (supplier):**
+```
+name_he          — product name as displayed
+category         — category from the supplier page
+source_url       — exact URL of the product or category page
+image_url_remote — original image URL (keep as metadata reference)
+image_path_local — local /public path after download
+description      — short description if visible
+specs            — any dimension/material data visible
+source_name      — "Asclean / ארבל שטראוס"
+source_type      — "external_supplier_reference"
+is_active        — false (always)
+review_state     — "needs_review"
+imported_at      — timestamp
+```
+
+**Scraping limitations — what to report if blocked:**
+- If the page requires JavaScript rendering and the fetch returns HTML-only shell: report which categories were accessible vs blocked.
+- If images return 403/redirect when hotlinked: note those products as `image_status: "download_failed"`.
+- If PDFs are linked on category pages: note them for manual download and extraction.
+- Do not invent product data for pages that could not be accessed.
+
+### A4. Image crop pipeline
+
+For every downloaded image (Elkayam and supplier):
+
+1. **Inspect dimensions** — detect if image is a full page scan vs isolated product.
+2. **Background detection** — detect solid white/gray background vs complex background.
+3. **Object-aware crop** — attempt to detect product bounds:
+   - Remove empty white/solid-color margins.
+   - Detect the largest non-background bounding box.
+   - Add 5–10% padding around detected object.
+   - Center the object in the output frame.
+4. **Output two files per product:**
+   - `_thumb.webp` — 400×400 px, for product cards
+   - `_full.webp` — 800×800 px, for product detail modal
+5. **Quality thresholds:**
+   - If detected object fills <20% of original frame → apply aggressive crop.
+   - If crop confidence is low → store conservative crop + set `crop_status: "needs_review"`.
+   - Never destroy the original — keep `_original.jpg/png` alongside processed files.
+6. **Alt text** — attach Hebrew product name as `alt` metadata field.
+
+**Tooling options (choose based on what is available on this system):**
+- Python + Pillow (basic margin-trim crop)
+- Python + rembg (AI background removal if available)
+- Python + OpenCV (contour detection)
+- Sharp (Node.js) for format conversion + basic resize
+
+**Crop script location:** `scripts/crop-catalog-images.py` (or `.ts` if using Sharp).
+
+### A5. File naming convention
+
+```
+public/catalog/
+  elkayam/
+    <category-slug>/
+      <product-slug>_original.jpg
+      <product-slug>_thumb.webp
+      <product-slug>_full.webp
+  supplier/
+    asclean/
+      <category-slug>/
+        <product-slug>_original.jpg
+        <product-slug>_thumb.webp
+        <product-slug>_full.webp
+  safety/         ← deprecated — do not write new files here
+    products/     ← frozen, will be cleared post-Phase A
+    pages/        ← frozen, will be cleared post-Phase A
+```
+
+Slug rules:
+- Hebrew → romanized slug using transliteration (or kebab-case based on item ID)
+- Example: `קונוסים` → `sa-001` ID-based → `sa-001_thumb.webp`
+- Prefer ID-based naming for stability.
+
+### A6. Image metadata attachment
+
+After cropping, update each matching `catalog_items` record via upsert:
+
+```sql
+UPDATE catalog_items
+SET metadata = jsonb_set(
+  metadata,
+  '{images}',
+  '{
+    "thumb": "/catalog/<source>/<cat>/<id>_thumb.webp",
+    "full":  "/catalog/<source>/<cat>/<id>_full.webp",
+    "original_url": "<remote url or local original path>",
+    "source_page": "<url of page where image was found>",
+    "crop_status": "ok | needs_review | download_failed",
+    "imported_at": "<ISO timestamp>"
+  }'::jsonb,
+  true
+),
+updated_at = now()
+WHERE id = '<item-id>';
+```
+
+New image shape in `metadata.images`:
+- `thumb` — used in product cards
+- `full` — used in detail modal
+- `original_url` — source URL for audit trail
+- `source_page` — page where it was found
+- `crop_status` — `ok | needs_review | download_failed`
+- `imported_at`
+
+**Migration script location:** `scripts/attach-catalog-images.ts` (or SQL file in `supabase/migrations/`).
+
+---
+
+## Phase B: Product Data Enrichment + Supplier Import
+
+### B1. Elkayam product enrichment
+
+For each active Elkayam item, enrich `metadata` with:
+- `sources[0].type` set correctly if missing or wrong
+- `images.thumb` and `images.full` from Phase A
+- `specs` sub-object: material, dimensions, use case (only from confirmed source data — do not invent)
+- `aliases` array if the product has alternate names used in orders
+
+Matching rule: match by `id` (primary), then by normalized Hebrew name if `id` is unknown.
+
+**Do not modify `is_active`, `default_price`, or `name` of existing confirmed items without explicit review.**
+
+### B2. Supplier product import
+
+**Source:** `https://www.asclean.co.il/catalog-safety-equipment/`  
+**Target table:** `catalog_items`  
+**Status:** `is_active = false` (hard rule, never override automatically)
+
+Import script: `scripts/import-supplier-catalog.ts`
+
+Import rules:
+1. Generate a stable `id` from source name + category slug: `ext-asc-<category-slug>-<index>` (e.g., `ext-asc-speed-bump-001`).
+2. Before inserting, check if a catalog item with the same normalized Hebrew name already exists as an active Elkayam item. If yes → skip insert, log as "skipped — Elkayam item already covers this product", optionally enrich the existing item's `metadata.images` if the supplier image is better.
+3. If no match → insert as new INACTIVE item with `source_type: "external_supplier_reference"`.
+4. All supplier imports use `ON CONFLICT (id) DO UPDATE` to be idempotent.
+
+**New item shape for supplier imports:**
+
+```ts
+{
+  id: "ext-asc-<slug>-<n>",
+  name: "<Hebrew product name>",
+  type: "product",
+  category: "<mapped category>",
+  unit_of_measure: "יחידה",
+  default_price: null,
+  cost_price: null,
+  description: "<short factual description — not copied marketing copy>",
+  is_active: false,
+  current_quantity: 0,
+  minimum_quantity: 0,
+  reserved_quantity: 0,
+  metadata: {
+    sources: [{
+      type: "external_supplier_reference",
+      note: "Asclean / ארבל שטראוס",
+      url: "<source page url>"
+    }],
+    images: {
+      thumb: "/catalog/supplier/asclean/<cat>/<id>_thumb.webp",
+      full:  "/catalog/supplier/asclean/<cat>/<id>_full.webp",
+      original_url: "<remote image url>",
+      source_page: "<category page url>",
+      crop_status: "ok | needs_review | download_failed",
+      imported_at: "<ISO timestamp>"
+    },
+    review_state: "needs_review",
+    specs: { /* material, dimensions from supplier page if available */ }
+  }
+}
+```
+
+**Categories to import** (from the supplier catalog — use these as the mapped category values):
+
+| Supplier category | Our catalog category |
+|---|---|
+| פסי האטה | אביזרי כבישים |
+| מראות פנורמיות | אביזרי חנייה |
+| מעצורי חניה | אביזרי חנייה |
+| עמודים גמישים | אביזרי בטיחות — מפרדים ועמודים גמישים |
+| עמודי חסימה | אביזרי בטיחות — עמודי מחסום ועמודי חסימה |
+| מחסומים ניידים | מעקות ומחסומים |
+| קונוסים לסימון | אביזרי בטיחות — קונוסים ואביזריהם |
+| מפרידי נתיבים | אביזרי בטיחות — מפרדים ועמודים גמישים |
+| נצנץ סולארי | אביזרי כבישים |
+| מניעת החלקה | אביזרי כבישים |
+| שילוט ותמרור | שלטים ושילוט |
+| מעברי כבל | גובים ותעלות |
+| הגנות ומיגונים | אביזרי בטיחות — מתקני שילוט ואבזור תמרורים |
+| נגישות לעיוורים | אביזרי בטיחות — נגישות |
+| Others not mapped | אביזרי בטיחות — כללי |
+
+### B3. Deduplication rules
+
+| Situation | Action |
+|---|---|
+| Supplier product matches active Elkayam item (same name) | Skip insert. Optionally add supplier image to existing item's metadata as secondary reference. |
+| Supplier product is similar but different size/variant | Insert as separate INACTIVE item with variant info in name/description. |
+| Two supplier products look identical | Insert only once, keep both source URLs in `sources[]`. |
+| Uncertain match | Insert as INACTIVE with `review_state: "needs_review"`. Never silently merge. |
+
+---
+
+## Phase C: Existing `/catalog` Management UI Upgrade
+
+The existing `src/components/Catalog/index.tsx` must be upgraded. **Do not change the overall page structure, filters, table view, add-item form, or edit modal.** Only enhance the card view and detail panel.
+
+### C1. Card view — `ItemCard` component
+
+**Add to each card:**
+- Product image thumbnail (top of card, before the name row):
+  - Source: `item.metadata?.images?.thumb` (new field from Phase A)
+  - Fallback: emoji from `CATEGORY_ICONS` map (same map used in Showcase)
+  - Final fallback: a gray placeholder box with the item's initials
+  - Height: fixed `h-32` (`128px`), `object-cover`, rounded top
+  - `loading="lazy"`, `onError` → show placeholder
+- Status badge: already exists (active/inactive toggle button at bottom) — keep as-is, no change needed
+- Source badge: read `metadata.sources[0].type`, show as a small pill (same badge helper as Showcase)
+- Review state badge: if `metadata.review_state === "needs_review"` show small amber pill
+
+**Card click-to-edit behavior:**
+- The entire card `<div>` gains `cursor-pointer` and `onClick={() => onEdit(item.id)}`
+- Internal buttons (PencilIcon, TrashIcon, toggle button) must `e.stopPropagation()` to prevent double-triggering
+- Keyboard: card `div` gets `role="button"`, `tabIndex={0}`, `onKeyDown` → Enter/Space → `onEdit(item.id)`
+- Visual cue: existing `hover:shadow-sm` is sufficient; optionally add `hover:border-blue-300 transition-colors`
+
+**Do not add a second edit modal** — `onEdit(item.id)` calls the existing `startEdit` function which switches to table view and opens the inline edit form. This is the existing behavior, unchanged.
+
+### C2. Detail panel — `CatalogItemDetailPanel` (table view expand)
+
+The detail panel already shows `images.product` (old field). Update to check `images.thumb` first, then `images.full`, then `images.product` (legacy), then hide:
+
+```ts
+const imageUrl = images?.thumb ?? images?.full ?? images?.product ?? null;
+```
+
+Add to the detail panel:
+- Source badge if not already shown
+- Review state badge if present
+- `crop_status` note if `"needs_review"` (small italic note: "תמונה דורשת בדיקת חיתוך")
+
+### C3. No changes to
+
+- Table view row rendering
+- Filter bar
+- Add-item form
+- Edit inline form (FormFields)
+- Delete behavior
+- Inventory/stock fields
+- LinkedProducts panel
+
+---
+
+## Phase D: New `/catalog-showcase` Visual Catalog Page
+
+*This phase is unchanged from the v1 spec sections 5–15, except as noted below.*
+
+### Changes from v1
+
+**Section 9 (Image Handling) — replaced:**
+
+> ~~Existing images: 37 safety accessories have `metadata.images.product` set to `/catalog/safety/products/pXX-YY.jpg`. These load immediately.~~
+
+**Corrected:**
+- All product images come from Phase A — `metadata.images.thumb` (new field).
+- The `images.product` legacy field (old path) is **not used** in Phase D components.
+- If `metadata.images.thumb` is absent → emoji fallback from `CATEGORY_ICONS`.
+- If `metadata.images.thumb` is present but fails to load → `onError` → emoji fallback.
+- No image references in Phase D code hardcode the old `/catalog/safety/products/` path.
+
+### Supplier products in the showcase
+
+- Supplier-imported INACTIVE items (from Phase B) are visible in the showcase.
+- Default view: filter pills default to **"הכל"** which shows both active and inactive.
+- Inactive supplier cards render at `opacity-55` with `○ לא פעיל` + `מקור חיצוני` + `דורש בדיקה` badges.
+- The "● פעיל" filter pill hides supplier items.
+- No supplier product is ever shown without its status badges.
+
+---
+
+## 4. Data Source (unchanged from v1)
+
+**Single source of truth:** `catalog_items` Supabase table via `useCatalogContext()`.
+
+After Phase B, `useCatalogContext()` returns both Elkayam active items and supplier INACTIVE items. The UI components use `is_active` and `metadata.sources[0].type` to render badges and visual differentiation.
+
+---
+
+## 5. Category Mapping (unchanged from v1)
 
 ```ts
 const SHOWCASE_CATEGORIES = [
@@ -97,189 +420,103 @@ const SHOWCASE_CATEGORIES = [
   { key: "עבודות סימון וצביעה", label: "סימון וצביעה", icon: "🖌️" },
   { key: "הסרת סימון", label: "הסרת סימון", icon: "💧" },
   { key: "גובים ותעלות", label: "גובים ותעלות", icon: "🔌" },
+  { key: "אביזרי בטיחות — נגישות", label: "נגישות", icon: "♿" },
+  { key: "אביזרי בטיחות — כללי", label: "אביזרי בטיחות כלליים", icon: "🛡️" },
 ];
-// Catch-all "אביזרי בטיחות — ..." categories not in the list above map to:
-// { label: "אביזרי בטיחות נוספים", icon: "🛡️" }
+// All unmatched "אביזרי בטיחות — X" categories collapse into { label: "אביזרי בטיחות נוספים", icon: "🛡️" }
 ```
 
-**Runtime behavior:**
-- Filter `SHOWCASE_CATEGORIES` to those that have at least 1 matching item.
-- Append a synthetic "אביזרי בטיחות נוספים" entry collecting all `אביזרי בטיחות —` subcategories not explicitly listed.
-- Append a "הכל" entry at position 0.
-- Display count badge per category (total items, regardless of active state).
+---
+
+## 6. Page Structure (unchanged from v1 — see sections 6–12)
+
+Route, sidebar, hero, category grid, product grid, product detail modal, component architecture, filter logic, responsive breakpoints, RTL, navigation integration — all as specified in v1.
+
+One addition: **filter pills on the showcase page include a "הסתר לא פעיל" (hide inactive) toggle** as a convenience, since supplier imports will add a significant number of INACTIVE items.
 
 ---
 
-## 6. Page Structure
+## 7. Files to Create / Change
 
-### Route & file
-- Route: `/catalog-showcase`
-- File: `src/app/catalog-showcase/page.tsx` (thin shell, imports `<CatalogShowcasePage />`)
-- Component: `src/components/CatalogShowcase/index.tsx`
-
-### Sidebar
-- Add to `NAV_SECTIONS` in `src/components/Sidebar.tsx` under "בנוסף":
-  ```ts
-  { tabId: "catalog", href: "/catalog-showcase", label: "קטלוג חזותי", icon: <LayoutGrid />, matchFn: (p) => p.startsWith("/catalog-showcase"), noBadge: true }
-  ```
-- **Also fix the existing `/catalog` entry's `matchFn`** to `(p) => p === "/catalog" || (p.startsWith("/catalog") && !p.startsWith("/catalog-showcase"))` so it doesn't highlight when on `/catalog-showcase`.
-- Reuses existing `tabId: "catalog"` — no new auth changes needed.
-
-### Sections (top to bottom)
-
-#### A. Hero
-- Background: `linear-gradient(135deg, #1a2d4a, #0d1b2e)`
-- Badge: `🚧 ELKAYAM CATALOG` in blue pill
-- H1: `קטלוג מוצרי בטיחות ותנועה` with `בטיחות ותנועה` in `#f59e0b`
-- Subtitle: `פתרונות הסדרי תנועה, סימון כבישים, שילוט, אביזרי בטיחות ואביזרי דרך`
-- Search input (dark glass style)
-- Filter pills: `הכל | ● פעיל | ○ לא פעיל | אלקיים | מקור חיצוני`
-- Stats bar: total items, total categories, items with images
-
-#### B. Category grid
-- Section label: `קטגוריות מוצרים`
-- Grid: `grid-cols-6` desktop → `grid-cols-4` tablet → `grid-cols-3` mobile → `grid-cols-2` small
-- Each card: emoji icon + label + count
-- Selected state: blue border + blue text
-- "הכל" is default selected
-
-#### C. Product grid
-- Section header: selected category name + item count badge
-- Grid: `grid-cols-4` desktop → `grid-cols-3` tablet → `grid-cols-2` small → `grid-cols-1` mobile
-- Each card: **Style C** (image top, badges row, description, footer with unit + "פרטים ←" button)
-- Inactive cards: `opacity-55`
-- Images: lazy-loaded, `object-cover`, fallback to emoji placeholder
-- Empty state: "לא נמצאו מוצרים בקטגוריה זו"
-
-#### D. Product detail modal
-- Triggered: clicking anywhere on a product card (including "פרטים ←" button)
-- Contains: large image (or emoji), name, category, badges, description, specs grid, source, actions
-- Actions: `סגור` + `✏ ערוך מוצר` (navigates to `/catalog` — the management page — using Next.js `router.push("/catalog")`. The existing `/catalog` management page does not accept a deep-link to a specific item in Phase 1; the user manually finds and edits the item there.)
-- Closes on: backdrop click, Escape key, close button
-- Accessible: `role="dialog"`, `aria-modal="true"`, focus trap
-
----
-
-## 7. Component Architecture
-
-```
-src/components/CatalogShowcase/
-  index.tsx          — CatalogShowcasePage (hero + category grid + product grid + modal)
-  CategoryCard.tsx   — single category card (icon, label, count, selected state)
-  ProductCard.tsx    — single product card (image, name, badges, description, footer)
-  ProductModal.tsx   — detail modal (image, specs, badges, actions)
-  constants.ts       — SHOWCASE_CATEGORIES array, badge helpers, CATEGORY_ICONS fallback map
-```
-
-All components are client components (`"use client"`).  
-Data comes from `useCatalogContext()` — same hook as the management catalog.
-
----
-
-## 8. Filter Logic
-
-```ts
-// Active filter chain (applied in useMemo):
-items
-  .filter(byCategorySelection)   // "הכל" = no filter; else exact category match + catch-all group
-  .filter(byStatusPill)          // "הכל" | "active" | "inactive"
-  .filter(bySourcePill)          // "הכל" | "elkayam" | "external"
-  .filter(bySearchText)          // case-insensitive match on name + category + description
-```
-
-Category selection takes precedence; pills narrow within the selection.
-
----
-
-## 9. Image Handling
-
-- **Existing images**: 37 safety accessories have `metadata.images.product` set to `/catalog/safety/products/pXX-YY.jpg`. These load immediately.
-- **Other products**: no images yet → emoji fallback.
-- All `<img>` elements include `onError` fallback to hide and show emoji placeholder.
-- `loading="lazy"` on all product images.
-- Alt text: Hebrew `item.name`.
-- **No external URLs hotlinked** — all served from `/public/`.
-
----
-
-## 10. Responsive Breakpoints
-
-| Viewport | Category cols | Product cols |
+| File | Action | Phase |
 |---|---|---|
-| `≥1280px` (desktop) | 6 | 4 |
-| `≥1024px` (laptop) | 4 | 3 |
-| `≥768px` (tablet) | 3 | 2 |
-| `<768px` (mobile) | 2 | 1 |
-
-Modal: full-screen on mobile (`max-w-full`, bottom-sheet style), centered on tablet+.
-
----
-
-## 11. RTL / Hebrew Requirements
-
-- `dir="rtl"` on the page root.
-- All text is Hebrew.
-- Category grid wraps naturally RTL.
-- Badges flow RTL.
-- Modal closes button (×) on left side (logical start in RTL = right visually… no, use `start` not `left` for padding/margin).
-- Filter pills use `flex-wrap`.
+| `scripts/scrape-catalog-sources.py` | Create — scraper for Elkayam website + asclean | A |
+| `scripts/crop-catalog-images.py` | Create — crop + convert images | A |
+| `scripts/attach-catalog-images.ts` | Create — upsert image metadata to DB | A |
+| `scripts/import-supplier-catalog.ts` | Create — import INACTIVE supplier items | B |
+| `supabase/migrations/20260521100000_supplier_catalog_import.sql` | Create — upsert supplier items | B |
+| `src/components/Catalog/index.tsx` | Edit — image in card, source badge, click-to-edit | C |
+| `src/app/catalog-showcase/page.tsx` | Create | D |
+| `src/components/CatalogShowcase/index.tsx` | Create | D |
+| `src/components/CatalogShowcase/CategoryCard.tsx` | Create | D |
+| `src/components/CatalogShowcase/ProductCard.tsx` | Create | D |
+| `src/components/CatalogShowcase/ProductModal.tsx` | Create | D |
+| `src/components/CatalogShowcase/constants.ts` | Create | D |
+| `src/components/Sidebar.tsx` | Edit — add nav item | D |
 
 ---
 
-## 12. Navigation Integration
+## 8. Acceptance Criteria
 
-No new `TabId` is needed. The new page shares `tabId: "catalog"` which is already permitted for relevant roles. Both `/catalog` and `/catalog-showcase` will show as active when navigating between them (fine — they are sibling tools in the same section).
+### Phase A — Image pipeline
+- [ ] `scripts/scrape-catalog-sources.py` runs and downloads images from Elkayam + asclean
+- [ ] Images saved to `public/catalog/elkayam/` and `public/catalog/supplier/asclean/`
+- [ ] Crop script produces `_thumb.webp` and `_full.webp` per product
+- [ ] Crop status logged per item (`ok | needs_review | download_failed`)
+- [ ] `metadata.images.thumb` and `metadata.images.full` populated on matched items
+- [ ] Old `/catalog/safety/products/` references marked as `image_needs_replacement`
+- [ ] Original files preserved alongside cropped files
 
-If needed in future, split into a dedicated `TabId: "catalog-showcase"` — but out of scope for Phase 1.
+### Phase B — Supplier import
+- [ ] All accessible supplier categories scraped and products extracted
+- [ ] Each supplier product inserted as `is_active = false` with `source_type: "external_supplier_reference"`
+- [ ] No supplier product overwrites or downgrades an existing active Elkayam item
+- [ ] Duplicates detected and logged rather than silently merged
+- [ ] `review_state: "needs_review"` on all supplier imports
+- [ ] Upsert is idempotent — safe to re-run
 
----
+### Phase C — `/catalog` UI upgrade
+- [ ] ItemCard shows product image thumbnail where `metadata.images.thumb` exists
+- [ ] ItemCard shows source badge (אלקיים / מקור חיצוני / ידני)
+- [ ] Clicking a product card opens the existing edit flow (switches to table view + inline edit)
+- [ ] Internal buttons (edit, delete, toggle) do not bubble click to card
+- [ ] Card keyboard accessible (Enter/Space triggers edit)
+- [ ] Detail panel uses `images.thumb` before legacy `images.product`
+- [ ] Table view unchanged
+- [ ] Filters unchanged
+- [ ] No new edit modal created
 
-## 13. What Is NOT in Scope for This Phase
-
-- Supplier catalog scraping / import (Phase 2)
-- Downloading / cropping new product images (Phase 2)
-- External `source_type: "external_supplier_reference"` products (Phase 2 adds them)
-- Upgrade to existing `/catalog` management card view (parallel task)
-- Click-to-edit behavior on `/catalog` card view (parallel task)
-- E-commerce / checkout
-- Public-facing deployment of this page
-
----
-
-## 14. Files to Create / Change
-
-| File | Action |
-|---|---|
-| `src/app/catalog-showcase/page.tsx` | Create |
-| `src/components/CatalogShowcase/index.tsx` | Create |
-| `src/components/CatalogShowcase/CategoryCard.tsx` | Create |
-| `src/components/CatalogShowcase/ProductCard.tsx` | Create |
-| `src/components/CatalogShowcase/ProductModal.tsx` | Create |
-| `src/components/CatalogShowcase/constants.ts` | Create |
-| `src/components/Sidebar.tsx` | Edit — add nav item |
-
-No database changes. No migration files. No new API routes. No changes to `/catalog` or `CatalogPage`.
-
----
-
-## 15. Acceptance Criteria
-
-- [ ] `/catalog-showcase` route loads without error
-- [ ] "קטלוג חזותי" appears in sidebar under "בנוסף"
-- [ ] Hero section renders with correct Elkayam styling
-- [ ] Category grid shows only categories that have items
-- [ ] Clicking a category filters the product grid
-- [ ] "הכל" shows all products
+### Phase D — `/catalog-showcase`
+- [ ] Route `/catalog-showcase` loads without error
+- [ ] "קטלוג חזותי" in sidebar under "בנוסף"
+- [ ] Hero renders with Elkayam dark theme
+- [ ] Category grid shows only categories with items
+- [ ] Clicking category filters product grid
+- [ ] "הכל" shows all items
 - [ ] Status/source filter pills work
-- [ ] Search text filters across name + category + description
-- [ ] Product cards show image where `metadata.images.product` exists
-- [ ] Broken image falls back to emoji placeholder
-- [ ] Inactive products show at opacity-55 with correct badges
-- [ ] Clicking a product card opens detail modal
-- [ ] Modal shows name, category, badges, description, specs, source, edit button
-- [ ] Modal closes on backdrop click and Escape key
-- [ ] Desktop grid: 6 category cols, 4 product cols
-- [ ] Mobile: 2 category cols, 1 product col
-- [ ] TypeScript compiles without errors
+- [ ] "הסתר לא פעיל" toggle works
+- [ ] Search filters name + category + description
+- [ ] Images use `metadata.images.thumb` — no hardcoded old paths
+- [ ] Broken image falls back to emoji
+- [ ] Inactive supplier cards show at opacity-55 with all three badges
+- [ ] Product detail modal opens on card click
+- [ ] Modal shows image (thumb → full fallback), name, category, badges, description, specs, source, edit button
+- [ ] Edit button navigates to `/catalog`
+- [ ] Modal closes on backdrop click and Escape
+- [ ] Desktop: 6 cat cols, 4 prod cols; mobile: 2 cat cols, 1 prod col
+- [ ] TypeScript clean
 - [ ] No console errors or hydration warnings
-- [ ] Existing `/catalog` page unchanged
+- [ ] Existing `/catalog` unchanged in structure/function
+
+---
+
+## 9. Risks and Limitations
+
+| Risk | Mitigation |
+|---|---|
+| asclean.co.il blocks scraping | Report which pages were inaccessible; store what was reachable; note remainder for manual download |
+| Supplier images return 403 when downloaded | Mark as `crop_status: "download_failed"`; use placeholder; do not hotlink |
+| Hebrew product name matching is fuzzy | Use normalized comparison (strip diacritics, extra spaces); when uncertain, insert as `needs_review` rather than silently merging |
+| Image crop quality is low for complex backgrounds | Keep `_original`, set `crop_status: "needs_review"`, present conservative crop; do not delete originals |
+| Existing `/catalog` edit behavior change breaks workflows | Card click only triggers edit in card view; table view row click behavior is unchanged |
+| Large number of INACTIVE supplier items clutters catalog | Default filter in management catalog can default to `filterActive: "active"` (currently defaults to "all"); add "הסתר לא פעיל" toggle if needed |
