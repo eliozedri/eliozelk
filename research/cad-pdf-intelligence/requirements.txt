@@ -23,6 +23,10 @@ anthropic>=0.103.0            # Claude Vision API client
 # System dep: brew install tesseract  (tesseract 5.5.2, eng+snum data)
 pytesseract>=0.3.13           # thin pytesseract wrapper around tesseract binary
 
+# Stage S20 — Worker/Operations Export (installed 2026-05-21)
+openpyxl>=3.1.0                # Excel workbook generation
+
 # Optional — future stages
 # ezdxf>=1.0.0                  # Stage F: DXF export
 # svgwrite>=1.4.3                # alternative SVG generation
+# weasyprint>=60.0               # PDF generation from HTML (optional follow-up)
