@@ -104,6 +104,33 @@ function SpinnerIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
   );
 }
 
+// ── System scan progress ──────────────────────────────────────────────────────
+
+interface SystemScanState {
+  status: "idle" | "running" | "success" | "error";
+  pct: number;
+  stage: string;
+  error: string | null;
+}
+
+const SCAN_STAGE_STEPS: { threshold: number; label: string }[] = [
+  { threshold: 0,  label: "מתחיל סריקה" },
+  { threshold: 6,  label: "בודק סוכנים" },
+  { threshold: 26, label: "בודק התראות" },
+  { threshold: 46, label: "בודק משימות פתוחות" },
+  { threshold: 63, label: "בודק נתוני מערכת" },
+  { threshold: 79, label: "מסכם תוצאות" },
+  { threshold: 95, label: "סריקה הושלמה" },
+];
+
+function pctToStageLabel(pct: number): string {
+  let label = SCAN_STAGE_STEPS[0].label;
+  for (const step of SCAN_STAGE_STEPS) {
+    if (pct >= step.threshold) label = step.label;
+  }
+  return label;
+}
+
 // ── KPI Card ─────────────────────────────────────────────────────────────────
 
 function KpiCard({ value, label, sub, accent, onClick }: {
@@ -934,14 +961,23 @@ export function AgentCommandCenter() {
   // ── Scan state ─────────────────────────────────────────────────────────────
   const [scanStatuses, setScanStatuses] = useState<Record<string, ScanStatus>>({});
   const [scanSummaries, setScanSummaries] = useState<Record<string, string>>({});
-  const [allScansRunning, setAllScansRunning] = useState(false);
+  const [systemScan, setSystemScan] = useState<SystemScanState>({
+    status: "idle", pct: 0, stage: "", error: null,
+  });
 
-  const runScan = useCallback(async (agentId: string) => {
+  // Auto-clear success state after 4 s
+  useEffect(() => {
+    if (systemScan.status !== "success") return;
+    const t = setTimeout(() => setSystemScan({ status: "idle", pct: 0, stage: "", error: null }), 4000);
+    return () => clearTimeout(t);
+  }, [systemScan.status]);
+
+  const runScan = useCallback(async (agentId: string): Promise<ScanStatus> => {
     const supabase = getSupabase();
-    if (!supabase) return;
+    if (!supabase) return "error";
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
-    if (!token) return;
+    if (!token) return "error";
 
     setScanStatuses(prev => ({ ...prev, [agentId]: "running" }));
     try {
@@ -958,18 +994,37 @@ export function AgentCommandCenter() {
         [agentId]: `${json.exceptionsCreated} חריגות חדשות · ${json.tasksCreated} משימות · ${json.exceptionsResolved} נפתרו`,
       }));
       setTimeout(() => refresh(), 400);
+      return "success";
     } catch {
       setScanStatuses(prev => ({ ...prev, [agentId]: "error" }));
+      return "error";
     }
   }, [refresh]);
 
   const runAllScans = useCallback(async () => {
-    setAllScansRunning(true);
-    for (const id of SCANNABLE_AGENTS) {
-      await runScan(id);
+    if (systemScan.status === "running") return;
+    const ids = Array.from(SCANNABLE_AGENTS);
+    const total = ids.length;
+    let completed = 0;
+    let hasError = false;
+
+    setSystemScan({ status: "running", pct: 2, stage: "מתחיל סריקה", error: null });
+
+    for (const id of ids) {
+      const result = await runScan(id);
+      if (result === "error") hasError = true;
+      completed++;
+      const pct = Math.min(95, Math.round((completed / total) * 95));
+      setSystemScan({ status: "running", pct, stage: pctToStageLabel(pct), error: null });
     }
-    setAllScansRunning(false);
-  }, [runScan]);
+
+    setSystemScan({
+      status: hasError ? "error" : "success",
+      pct: 100,
+      stage: "סריקה הושלמה",
+      error: hasError ? "חלק מהסוכנים דיווחו שגיאה — ניתן לנסות שוב" : null,
+    });
+  }, [runScan, systemScan.status]);
 
   // ── Global counts ──────────────────────────────────────────────────────────
   const totalOpenTasks        = tasks.length;
@@ -977,7 +1032,7 @@ export function AgentCommandCenter() {
   const totalOpenExc          = exceptions.filter(e => e.status === "open").length;
   const totalPendingApprovals = approvals.length;
   const activeAgents          = agents.filter(a => a.status === "active").length;
-  const scansRunning          = Object.values(scanStatuses).filter(s => s === "running").length;
+  const isSystemScanRunning   = systemScan.status === "running";
 
   // ── Per-agent data for Room ────────────────────────────────────────────────
   const roomTasks       = selectedAgent ? tasks.filter(t => t.agent_id === selectedAgent.id) : [];
@@ -1027,17 +1082,17 @@ export function AgentCommandCenter() {
           </button>
           <button
             onClick={runAllScans}
-            disabled={allScansRunning || scansRunning > 0}
+            disabled={isSystemScanRunning}
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all disabled:opacity-50"
             style={{
-              backgroundColor: (allScansRunning || scansRunning > 0) ? "rgba(255,255,255,0.08)" : `${EK_GOLD}20`,
-              color: (allScansRunning || scansRunning > 0) ? "rgba(255,255,255,0.3)" : EK_GOLD,
+              backgroundColor: isSystemScanRunning ? "rgba(255,255,255,0.08)" : `${EK_GOLD}20`,
+              color: isSystemScanRunning ? "rgba(255,255,255,0.3)" : EK_GOLD,
               border: `1px solid ${EK_GOLD}40`,
             }}
           >
-            {(allScansRunning || scansRunning > 0)
-              ? <><SpinnerIcon /> סורק ({scansRunning})...</>
-              : <><PlayIcon /> הפעל סריקה כללית</>
+            {isSystemScanRunning
+              ? <><SpinnerIcon /> סריקה מתבצעת...</>
+              : <><PlayIcon /> סריקת מערכת</>
             }
           </button>
           <button
@@ -1056,6 +1111,38 @@ export function AgentCommandCenter() {
             📋 פנייה למנהל התפעול
           </button>
         </div>
+
+        {/* System scan progress strip */}
+        {systemScan.status !== "idle" && (
+          <div className="mb-3 max-w-sm" dir="rtl">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] font-semibold" style={{
+                color: systemScan.status === "error" ? "#f87171"
+                  : systemScan.status === "success" ? "#4ade80"
+                  : EK_GOLD,
+              }}>
+                {systemScan.status === "success" ? "✓ " : ""}{systemScan.stage}
+              </span>
+              <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.35)" }}>
+                {systemScan.pct}%
+              </span>
+            </div>
+            <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${systemScan.pct}%`,
+                  background: systemScan.status === "error" ? "#ef4444"
+                    : systemScan.status === "success" ? "#22c55e"
+                    : EK_GOLD,
+                }}
+              />
+            </div>
+            {systemScan.status === "error" && systemScan.error && (
+              <p className="text-[10px] text-red-400 mt-1">{systemScan.error}</p>
+            )}
+          </div>
+        )}
 
         {/* KPI Row */}
         <div className="flex gap-3 flex-wrap">
