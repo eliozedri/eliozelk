@@ -52,12 +52,29 @@ def parse_args() -> argparse.Namespace:
         help="Rendering DPI (150=fast, 300=default, 600=deep)"
     )
     parser.add_argument(
-        "--mode", choices=["fast", "deep"], default="fast",
-        help="Scan mode: fast=patches only, deep=full-page grid OCR too"
+        "--mode", choices=["fast", "deep", "tile"], default="fast",
+        help="Scan mode: fast=patches only, deep=full-page grid OCR too, tile=tile-based high-res scan"
     )
     parser.add_argument(
         "--ocr", choices=["all", "tesseract", "easyocr", "paddleocr"], default="all",
         help="OCR engines to use"
+    )
+    # --- Tile mode arguments ---
+    parser.add_argument(
+        "--tile-grid", default="4x4",
+        help="Tile grid dimensions NxM (default: 4x4)"
+    )
+    parser.add_argument(
+        "--tile-overlap", type=float, default=0.1,
+        help="Fractional overlap between adjacent tiles (default: 0.1 = 10%%)"
+    )
+    parser.add_argument(
+        "--max-tiles", type=int, default=None,
+        help="Stop after N tiles (for testing)"
+    )
+    parser.add_argument(
+        "--tile-dpi", type=int, default=150,
+        help="DPI per tile (default: 150)"
     )
     return parser.parse_args()
 
@@ -1466,6 +1483,1076 @@ def write_outputs(
     log(f"    {html_path.name}", indent=2)
 
 
+# --- 10. Tile mode ---
+
+def _parse_tile_grid(grid_str: str) -> Tuple[int, int]:
+    """Parse '4x4' or '3x5' into (rows, cols)."""
+    parts = grid_str.lower().split("x")
+    if len(parts) != 2:
+        raise ValueError(f"Invalid tile grid: {grid_str!r}. Expected format NxM (e.g. 4x4)")
+    return int(parts[0]), int(parts[1])
+
+
+def render_tile(pdf_path: Path, page_idx: int, tile_rect, tile_dpi: int):
+    """Render a single tile of the PDF at the given DPI.
+    tile_rect is a fitz.Rect in PDF points.
+    Returns (img_bgr, elapsed_ms).
+    """
+    import fitz
+    import numpy as np
+    import cv2
+
+    t0 = time.perf_counter()
+    doc = fitz.open(str(pdf_path))
+    page = doc[page_idx]
+    mat = fitz.Matrix(tile_dpi / 72, tile_dpi / 72)
+    pix = page.get_pixmap(matrix=mat, clip=tile_rect, colorspace=fitz.csRGB)
+    doc.close()
+
+    img_np = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
+    img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    return img_bgr, elapsed_ms
+
+
+def detect_poles_tile(img_bgr, tile_dpi: int) -> Tuple[List[Dict], float]:
+    """
+    Pole/tick detection tuned for tile mode at 150 DPI.
+    At 150 DPI, poles are 15-40px blobs. Uses tighter blob params to reduce false positives.
+    Returns (pole_candidates, elapsed_ms).
+    """
+    import cv2
+    import numpy as np
+
+    t0 = time.perf_counter()
+    h_img, w_img = img_bgr.shape[:2]
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    # Tighter blob params for 150 DPI tiles — poles are 15-40px blobs
+    params = cv2.SimpleBlobDetector_Params()
+    params.filterByArea = True
+    params.minArea = 50        # px² — tighter than full-page (avoids text dots)
+    params.maxArea = 3000      # px²
+    params.filterByCircularity = True
+    params.minCircularity = 0.5
+    params.filterByConvexity = True
+    params.minConvexity = 0.7
+    params.filterByInertia = True
+    params.minInertiaRatio = 0.3
+    params.minDistBetweenBlobs = 5
+
+    detector = cv2.SimpleBlobDetector_create(params)
+    keypoints = detector.detect(cv2.bitwise_not(thresh))
+
+    pole_search_radius_px = max(20, int(80 * tile_dpi / 300))
+
+    # Re-use original image for tick ROI (no blob-scale downscaling needed at 150 DPI tiles)
+    gray_orig = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+
+    pole_candidates = []
+    for kp in keypoints:
+        cx, cy = kp.pt
+        radius_px = kp.size / 2
+
+        # Tick search ROI
+        margin = pole_search_radius_px
+        roi_x1 = max(0, int(cx) - margin)
+        roi_y1 = max(0, int(cy) - margin)
+        roi_x2 = min(w_img, int(cx) + margin)
+        roi_y2 = min(h_img, int(cy) + margin)
+
+        roi_gray = gray_orig[roi_y1:roi_y2, roi_x1:roi_x2]
+        if roi_gray.size == 0:
+            continue
+        _, roi_thresh = cv2.threshold(roi_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+        # Tighter Hough params for 150 DPI
+        min_line_len = 8    # px at 150 DPI
+        max_line_gap = 3
+        hough_threshold = 15
+        max_tick_len = int(60 * tile_dpi / 300)
+
+        lines = cv2.HoughLinesP(
+            roi_thresh, rho=1, theta=math.pi / 180,
+            threshold=hough_threshold,
+            minLineLength=min_line_len,
+            maxLineGap=max_line_gap
+        )
+        tick_bboxes = []
+        tick_count = 0
+        if lines is not None:
+            for line in lines:
+                x1_l, y1_l, x2_l, y2_l = line[0]
+                length = math.hypot(x2_l - x1_l, y2_l - y1_l)
+                if min_line_len <= length <= max_tick_len:
+                    tick_bboxes.append([
+                        roi_x1 + x1_l, roi_y1 + y1_l,
+                        roi_x1 + x2_l, roi_y1 + y2_l
+                    ])
+                    tick_count += 1
+
+        bbox_r = max(1, int(radius_px))
+        pole_candidates.append({
+            "center_x": float(cx),
+            "center_y": float(cy),
+            "radius_px": float(radius_px),
+            "area_px": math.pi * radius_px ** 2,
+            "circularity": 1.0,
+            "bbox": [max(0, int(cx) - bbox_r), max(0, int(cy) - bbox_r),
+                     min(w_img, int(cx) + bbox_r), min(h_img, int(cy) + bbox_r)],
+            "tick_count": tick_count,
+            "tick_bboxes": tick_bboxes[:10],
+        })
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    return pole_candidates, elapsed_ms
+
+
+def detect_shapes_tile(img_bgr, tile_dpi: int) -> Tuple[List[Dict], float]:
+    """Shape detection tuned for tile mode."""
+    import cv2
+    import numpy as np
+
+    t0 = time.perf_counter()
+    # At 150 DPI tiles: shapes are larger in px than at 42 DPI full-page
+    scale = (tile_dpi / 300) ** 2
+    min_area = int(200 * scale)
+    max_area = int(50000 * scale)
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blurred, 50, 150)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    edges_dilated = cv2.dilate(edges, kernel, iterations=1)
+    contours, _ = cv2.findContours(edges_dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    shape_candidates = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area < min_area or area > max_area:
+            continue
+        perimeter = cv2.arcLength(cnt, True)
+        if perimeter == 0:
+            continue
+        circularity = 4 * math.pi * area / (perimeter ** 2)
+        epsilon = 0.02 * perimeter
+        approx = cv2.approxPolyDP(cnt, epsilon, True)
+        n_vertices = len(approx)
+        bx, by, bw, bh = cv2.boundingRect(cnt)
+        aspect_ratio = bw / bh if bh > 0 else 1.0
+        M = cv2.moments(cnt)
+        if M["m00"] == 0:
+            continue
+        cx = M["m10"] / M["m00"]
+        cy = M["m01"] / M["m00"]
+
+        if circularity > 0.8:
+            shape_type, shape_conf = "circle", circularity
+        elif n_vertices == 3:
+            shape_type, shape_conf = "triangle", 0.7
+        elif n_vertices == 4:
+            if 0.8 <= aspect_ratio <= 1.25:
+                shape_type, shape_conf = "square", 0.65
+            else:
+                shape_type, shape_conf = "rectangle", 0.65
+        elif n_vertices >= 8 or (6 <= n_vertices <= 9 and circularity > 0.7):
+            shape_type, shape_conf = "octagon", 0.7
+        elif n_vertices in (5, 6):
+            hull = cv2.convexHull(cnt)
+            hull_area = cv2.contourArea(hull)
+            solidity = area / hull_area if hull_area > 0 else 0
+            shape_type = "arrow" if solidity < 0.75 else "polygon"
+            shape_conf = 0.6 if solidity < 0.75 else 0.5
+        else:
+            shape_type, shape_conf = "unknown", 0.3
+
+        if shape_type == "unknown" and area < min_area * 2:
+            continue
+
+        shape_candidates.append({
+            "centroid_x": float(cx),
+            "centroid_y": float(cy),
+            "bbox": [int(bx), int(by), int(bx + bw), int(by + bh)],
+            "area_px": float(area),
+            "circularity": float(circularity),
+            "shape_type": shape_type,
+            "shape_confidence": float(shape_conf),
+            "vertex_count": int(n_vertices),
+            "aspect_ratio": float(aspect_ratio),
+        })
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    return shape_candidates, elapsed_ms
+
+
+def _ocr_tile(img_bgr, ocr_engines: Dict, tile_dpi: int) -> Tuple[List[Dict], List[Dict], float]:
+    """
+    Run OCR on a tile image. Returns (ocr_results, ocr_comparison, elapsed_ms).
+    OCR is run on the full tile image (not patch-by-patch) for efficiency.
+    """
+    import cv2
+    import numpy as np
+    from collections import Counter
+
+    t0 = time.perf_counter()
+    ocr_results: List[Dict] = []
+    ocr_comparison: List[Dict] = []
+
+    h_img, w_img = img_bgr.shape[:2]
+
+    def run_engines_on_crop(crop, crop_bbox, region_id: str) -> Dict:
+        results_per_engine: Dict[str, Any] = {}
+
+        if ocr_engines.get("tesseract"):
+            results_per_engine["tesseract"] = _ocr_tesseract(crop, region_id)
+        else:
+            results_per_engine["tesseract"] = {
+                "engine": "tesseract", "text": None, "confidence": 0.0,
+                "elapsed_ms": 0, "status": "not_installed"
+            }
+
+        if ocr_engines.get("easyocr"):
+            t_e = time.perf_counter()
+            try:
+                reader = ocr_engines["easyocr"]
+                results = reader.readtext(crop, detail=1, paragraph=False)
+                best_text, best_conf = "", 0.0
+                for (_, text, conf) in results:
+                    text = str(text).strip()
+                    if _is_valid_sign_code(text) and conf > best_conf:
+                        best_text, best_conf = text, conf
+                elapsed_ms = (time.perf_counter() - t_e) * 1000
+                results_per_engine["easyocr"] = {
+                    "engine": "easyocr",
+                    "text": best_text if best_text else None,
+                    "confidence": float(best_conf) if best_text else 0.0,
+                    "elapsed_ms": round(elapsed_ms, 1), "status": "ok"
+                }
+            except Exception as e:
+                results_per_engine["easyocr"] = {
+                    "engine": "easyocr", "text": None, "confidence": 0.0,
+                    "elapsed_ms": 0, "status": f"error:{e}"
+                }
+        else:
+            results_per_engine["easyocr"] = {
+                "engine": "easyocr", "text": None, "confidence": 0.0,
+                "elapsed_ms": 0, "status": "not_installed"
+            }
+
+        if ocr_engines.get("paddleocr"):
+            t_p = time.perf_counter()
+            try:
+                ocr_inst = ocr_engines["paddleocr"]
+                result = ocr_inst.ocr(crop, cls=True)
+                best_text, best_conf = "", 0.0
+                if result and result[0]:
+                    for line in result[0]:
+                        if line and len(line) >= 2:
+                            tc = line[1]
+                            if isinstance(tc, (list, tuple)) and len(tc) >= 2:
+                                text, conf = str(tc[0]).strip(), float(tc[1])
+                                if _is_valid_sign_code(text) and conf > best_conf:
+                                    best_text, best_conf = text, conf
+                elapsed_ms = (time.perf_counter() - t_p) * 1000
+                results_per_engine["paddleocr"] = {
+                    "engine": "paddleocr",
+                    "text": best_text if best_text else None,
+                    "confidence": float(best_conf) if best_text else 0.0,
+                    "elapsed_ms": round(elapsed_ms, 1), "status": "ok"
+                }
+            except Exception as e:
+                results_per_engine["paddleocr"] = {
+                    "engine": "paddleocr", "text": None, "confidence": 0.0,
+                    "elapsed_ms": 0, "status": f"error:{e}"
+                }
+        else:
+            results_per_engine["paddleocr"] = {
+                "engine": "paddleocr", "text": None, "confidence": 0.0,
+                "elapsed_ms": 0, "status": "not_installed"
+            }
+
+        texts = [v["text"] for v in results_per_engine.values() if v["text"]]
+        if texts:
+            most_common, count = Counter(texts).most_common(1)[0]
+            consensus = most_common
+            engines_agree = (count >= 2) or (len(texts) == 1)
+        else:
+            consensus = None
+            engines_agree = False
+
+        comparison_record = {
+            "region_id": region_id,
+            "crop_bbox": list(crop_bbox),
+            "tesseract": results_per_engine.get("tesseract", {}),
+            "easyocr": results_per_engine.get("easyocr", {}),
+            "paddleocr": results_per_engine.get("paddleocr", {}),
+            "consensus": consensus,
+            "engines_agree": engines_agree
+        }
+        ocr_comparison.append(comparison_record)
+
+        best, best_conf2, best_engine = None, 0.0, None
+        for eng_name, res in results_per_engine.items():
+            if res["text"] and res["confidence"] > best_conf2:
+                best = res["text"]
+                best_conf2 = res["confidence"]
+                best_engine = eng_name
+        if consensus and engines_agree and len(texts) > 1:
+            best_engine = "consensus"
+
+        return {
+            "text": best,
+            "confidence": best_conf2,
+            "engine": best_engine or "none",
+            "crop_bbox": list(crop_bbox),
+            "engines_agree": engines_agree,
+            "region_id": region_id
+        }
+
+    # Run OCR on the full tile as one region
+    full_bbox = (0, 0, w_img, h_img)
+    result = run_engines_on_crop(img_bgr, full_bbox, "tile_full")
+    result["source"] = "tile_full"
+    result["pole_index"] = None
+    ocr_results.append(result)
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    return ocr_results, ocr_comparison, elapsed_ms
+
+
+def _offset_candidates(
+    pole_candidates: List[Dict],
+    shape_candidates: List[Dict],
+    ocr_results: List[Dict],
+    offset_x: float,
+    offset_y: float,
+) -> Tuple[List[Dict], List[Dict], List[Dict]]:
+    """Shift all detected coordinates by (offset_x, offset_y) to page-level coordinates."""
+    import copy
+
+    def shift_bbox(bbox):
+        if not bbox:
+            return bbox
+        return [bbox[0] + offset_x, bbox[1] + offset_y,
+                bbox[2] + offset_x, bbox[3] + offset_y]
+
+    shifted_poles = []
+    for p in pole_candidates:
+        sp = copy.deepcopy(p)
+        sp["center_x"] += offset_x
+        sp["center_y"] += offset_y
+        sp["bbox"] = shift_bbox(sp.get("bbox"))
+        sp["tick_bboxes"] = [shift_bbox(tb) for tb in sp.get("tick_bboxes", [])]
+        shifted_poles.append(sp)
+
+    shifted_shapes = []
+    for s in shape_candidates:
+        ss = copy.deepcopy(s)
+        ss["centroid_x"] += offset_x
+        ss["centroid_y"] += offset_y
+        ss["bbox"] = shift_bbox(ss.get("bbox"))
+        shifted_shapes.append(ss)
+
+    shifted_ocr = []
+    for o in ocr_results:
+        so = copy.deepcopy(o)
+        so["crop_bbox"] = shift_bbox(so.get("crop_bbox"))
+        shifted_ocr.append(so)
+
+    return shifted_poles, shifted_shapes, shifted_ocr
+
+
+def _dedup_candidates(candidates: List[Dict], dedup_radius_px: float = 30.0) -> List[Dict]:
+    """
+    Deduplicate candidates within dedup_radius_px of each other.
+    For duplicates, keep the one with higher overall_confidence.
+    Uses scipy cdist for efficiency when N > 100, else O(N^2).
+    Returns deduplicated list.
+    """
+    if len(candidates) <= 1:
+        return candidates
+
+    # Extract pole centers (use first available position)
+    positions = []
+    for c in candidates:
+        pc = c.get("pole_center")
+        if pc:
+            positions.append((pc[0], pc[1]))
+        else:
+            scb = c.get("sign_code_bbox")
+            if scb:
+                positions.append(((scb[0] + scb[2]) / 2, (scb[1] + scb[3]) / 2))
+            else:
+                positions.append((0.0, 0.0))
+
+    import numpy as np
+    pos_arr = np.array(positions, dtype=float)
+    n = len(pos_arr)
+    keep = [True] * n
+
+    if n > 100:
+        try:
+            from scipy.spatial.distance import cdist
+            dists = cdist(pos_arr, pos_arr)
+            for i in range(n):
+                if not keep[i]:
+                    continue
+                for j in range(i + 1, n):
+                    if not keep[j]:
+                        continue
+                    if dists[i, j] <= dedup_radius_px:
+                        # Keep higher confidence
+                        ci = candidates[i].get("overall_confidence", 0)
+                        cj = candidates[j].get("overall_confidence", 0)
+                        if ci >= cj:
+                            keep[j] = False
+                        else:
+                            keep[i] = False
+                            break
+        except ImportError:
+            # Fall back to O(N^2)
+            for i in range(n):
+                if not keep[i]:
+                    continue
+                for j in range(i + 1, n):
+                    if not keep[j]:
+                        continue
+                    dx = pos_arr[i, 0] - pos_arr[j, 0]
+                    dy = pos_arr[i, 1] - pos_arr[j, 1]
+                    if math.hypot(dx, dy) <= dedup_radius_px:
+                        ci = candidates[i].get("overall_confidence", 0)
+                        cj = candidates[j].get("overall_confidence", 0)
+                        if ci >= cj:
+                            keep[j] = False
+                        else:
+                            keep[i] = False
+                            break
+    else:
+        for i in range(n):
+            if not keep[i]:
+                continue
+            for j in range(i + 1, n):
+                if not keep[j]:
+                    continue
+                dx = pos_arr[i, 0] - pos_arr[j, 0]
+                dy = pos_arr[i, 1] - pos_arr[j, 1]
+                if math.hypot(dx, dy) <= dedup_radius_px:
+                    ci = candidates[i].get("overall_confidence", 0)
+                    cj = candidates[j].get("overall_confidence", 0)
+                    if ci >= cj:
+                        keep[j] = False
+                    else:
+                        keep[i] = False
+                        break
+
+    return [c for c, k in zip(candidates, keep) if k]
+
+
+def save_tile_debug_image(
+    tile_img: Any,
+    pole_candidates: List[Dict],
+    ocr_results: List[Dict],
+    shape_candidates: List[Dict],
+    tile_dir: Path,
+    row: int,
+    col: int,
+) -> None:
+    """Save an annotated debug image for a single tile."""
+    import cv2
+    tile_dir.mkdir(parents=True, exist_ok=True)
+    debug = tile_img.copy()
+
+    # Poles = green dots
+    for p in pole_candidates:
+        cx, cy = int(p["center_x"]), int(p["center_y"])
+        r = max(3, int(p.get("radius_px", 5)))
+        cv2.circle(debug, (cx, cy), r, (0, 255, 0), 2)
+
+    # Tick lines = yellow
+    for p in pole_candidates:
+        for tb in p.get("tick_bboxes", []):
+            if tb:
+                cv2.line(debug, (int(tb[0]), int(tb[1])), (int(tb[2]), int(tb[3])), (0, 255, 255), 1)
+
+    # OCR boxes = blue
+    for o in ocr_results:
+        if o.get("text"):
+            bb = o.get("crop_bbox")
+            if bb:
+                cv2.rectangle(debug, (int(bb[0]), int(bb[1])), (int(bb[2]), int(bb[3])), (255, 0, 0), 1)
+                cv2.putText(debug, str(o["text"]), (int(bb[0]) + 2, int(bb[1]) + 14),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 0, 0), 1)
+
+    # Shapes = red
+    for s in shape_candidates:
+        bb = s.get("bbox")
+        if bb:
+            cv2.rectangle(debug, (int(bb[0]), int(bb[1])), (int(bb[2]), int(bb[3])), (0, 0, 255), 1)
+
+    save_path = tile_dir / f"tile_{row:02d}_{col:02d}.png"
+    cv2.imwrite(str(save_path), debug)
+
+
+def run_tile_mode(
+    pdf_path: Path,
+    page_idx: int,
+    run_dir: Path,
+    ocr_choice: str,
+    tile_grid_str: str,
+    tile_overlap: float,
+    tile_dpi: int,
+    max_tiles: Optional[int],
+) -> int:
+    """
+    Main entry point for tile mode. Processes the PDF page in an NxM grid of overlapping tiles,
+    detects poles/ticks/OCR/shapes in each tile, merges results, and writes outputs.
+    Returns exit code (0 = success).
+    """
+    import fitz
+    import json
+
+    t_total_start = time.perf_counter()
+
+    log(f"\n============================================================")
+    log(f"Engine B — Tile Mode (v0.2)")
+    log(f"============================================================")
+    log(f"PDF       : {pdf_path.name}")
+    log(f"Page      : {page_idx}")
+    log(f"Tile grid : {tile_grid_str}")
+    log(f"Tile DPI  : {tile_dpi}")
+    log(f"Overlap   : {tile_overlap*100:.0f}%")
+    if max_tiles:
+        log(f"Max tiles : {max_tiles} (test mode)")
+    log(f"")
+
+    n_rows, n_cols = _parse_tile_grid(tile_grid_str)
+
+    # --- Step 1: Page geometry ---
+    log("Step 1: Reading page geometry ...")
+    doc = fitz.open(str(pdf_path))
+    if page_idx >= len(doc):
+        log(f"  ERROR: PDF has {len(doc)} pages; index {page_idx} out of range.")
+        doc.close()
+        return 1
+    page = doc[page_idx]
+    page_rect = page.rect   # in PDF points
+    doc.close()
+
+    page_w_pt = page_rect.width
+    page_h_pt = page_rect.height
+    log(f"  Page size: {page_w_pt:.1f} x {page_h_pt:.1f} pt "
+        f"({page_w_pt/72*25.4:.0f} x {page_h_pt/72*25.4:.0f} mm)")
+
+    # Tile size in points (base, without overlap)
+    tile_w_pt_base = page_w_pt / n_cols
+    tile_h_pt_base = page_h_pt / n_rows
+
+    # --- Step 2: Tile grid calculation ---
+    # Each tile: base size + overlap on each edge (clipped to page)
+    ovlp_w = tile_w_pt_base * tile_overlap
+    ovlp_h = tile_h_pt_base * tile_overlap
+
+    # Page pixel size at tile_dpi (for coordinate transforms)
+    page_w_px = page_w_pt * tile_dpi / 72
+    page_h_px = page_h_pt * tile_dpi / 72
+
+    # --- Step 3: OCR engine init ---
+    log("Step 2: Initializing OCR engines ...")
+    available_engines = _check_ocr_availability(ocr_choice)
+    for eng, avail in available_engines.items():
+        log(f"  {eng}: {'available' if avail else 'not available'}", indent=1)
+    ocr_engines = _init_ocr_engines(available_engines)
+
+    # --- Step 3: Per-tile processing ---
+    output_dir = run_dir / "outputs"
+    debug_dir = output_dir / "image_scan_debug"
+    tile_debug_dir = debug_dir / "tiles"
+    tile_debug_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    run_slug = run_dir.name
+
+    per_tile_stats: List[Dict] = []
+    all_poles: List[Dict] = []
+    all_shapes: List[Dict] = []
+    all_ocr: List[Dict] = []
+    all_ocr_comparison: List[Dict] = []
+
+    tiles_processed = 0
+    total_tiles = n_rows * n_cols
+
+    log(f"\nStep 3: Processing tiles ({n_rows}x{n_cols} = {total_tiles} tiles) ...")
+
+    for row in range(n_rows):
+        for col in range(n_cols):
+            tile_idx = row * n_cols + col
+            if max_tiles is not None and tiles_processed >= max_tiles:
+                log(f"  [tile {tile_idx}] Reached --max-tiles={max_tiles}, stopping early.")
+                break
+
+            t_tile_start = time.perf_counter()
+
+            # Tile rect in PDF points (with overlap, clipped to page)
+            x0_pt = max(0.0, col * tile_w_pt_base - ovlp_w)
+            y0_pt = max(0.0, row * tile_h_pt_base - ovlp_h)
+            x1_pt = min(page_w_pt, (col + 1) * tile_w_pt_base + ovlp_w)
+            y1_pt = min(page_h_pt, (row + 1) * tile_h_pt_base + ovlp_h)
+
+            tile_rect = fitz.Rect(x0_pt, y0_pt, x1_pt, y1_pt)
+
+            # The tile origin in page pixels (top-left of the tile's *base* region, no overlap offset)
+            # We need to account for overlap: the tile image starts at x0_pt, y0_pt
+            tile_origin_x_px = x0_pt * tile_dpi / 72  # page-level pixel coord of tile's left edge
+            tile_origin_y_px = y0_pt * tile_dpi / 72  # page-level pixel coord of tile's top edge
+
+            log(f"  [tile {row},{col}] rect=({x0_pt:.0f},{y0_pt:.0f},{x1_pt:.0f},{y1_pt:.0f})pt ...", indent=1)
+
+            # Render tile
+            try:
+                tile_img, render_ms = render_tile(pdf_path, page_idx, tile_rect, tile_dpi)
+            except Exception as e:
+                log(f"    ERROR rendering tile {row},{col}: {e}", indent=2)
+                tiles_processed += 1
+                per_tile_stats.append({
+                    "row": row, "col": col, "tile_idx": tile_idx,
+                    "render_ms": 0, "poles": 0, "ocr_codes": 0, "shapes": 0,
+                    "total_ms": 0, "error": str(e)
+                })
+                continue
+
+            tile_h_px, tile_w_px = tile_img.shape[:2]
+            log(f"    Tile size: {tile_w_px}x{tile_h_px}px, render={render_ms:.0f}ms", indent=2)
+
+            # Pole detection
+            try:
+                tile_poles, pole_ms = detect_poles_tile(tile_img, tile_dpi)
+            except Exception as e:
+                log(f"    ERROR in pole detection: {e}", indent=2)
+                tile_poles, pole_ms = [], 0.0
+
+            # Shape detection
+            try:
+                tile_shapes, shape_ms = detect_shapes_tile(tile_img, tile_dpi)
+            except Exception as e:
+                log(f"    ERROR in shape detection: {e}", indent=2)
+                tile_shapes, shape_ms = [], 0.0
+
+            # OCR on tile
+            try:
+                tile_ocr_results, tile_ocr_cmp, ocr_ms = _ocr_tile(tile_img, ocr_engines, tile_dpi)
+            except Exception as e:
+                log(f"    ERROR in OCR: {e}", indent=2)
+                tile_ocr_results, tile_ocr_cmp, ocr_ms = [], [], 0.0
+
+            ocr_codes_found = sum(1 for o in tile_ocr_results if o.get("text"))
+
+            log(f"    poles={len(tile_poles)}, shapes={len(tile_shapes)}, "
+                f"ocr_codes={ocr_codes_found}, "
+                f"pole_ms={pole_ms:.0f}, shape_ms={shape_ms:.0f}, ocr_ms={ocr_ms:.0f}",
+                indent=2)
+
+            # Save tile debug image (using tile-local coords)
+            try:
+                save_tile_debug_image(
+                    tile_img, tile_poles, tile_ocr_results, tile_shapes,
+                    tile_debug_dir, row, col
+                )
+            except Exception as e:
+                log(f"    WARNING: Could not save tile debug image: {e}", indent=2)
+
+            # Shift coordinates to page level
+            shifted_poles, shifted_shapes, shifted_ocr = _offset_candidates(
+                tile_poles, tile_shapes, tile_ocr_results,
+                tile_origin_x_px, tile_origin_y_px
+            )
+
+            # Tag each shifted element with tile_id
+            tile_id = f"tile_{row:02d}_{col:02d}"
+            for p in shifted_poles:
+                p["tile_id"] = tile_id
+            for s in shifted_shapes:
+                s["tile_id"] = tile_id
+            for o in shifted_ocr:
+                o["tile_id"] = tile_id
+            for c in tile_ocr_cmp:
+                c["tile_id"] = tile_id
+
+            all_poles.extend(shifted_poles)
+            all_shapes.extend(shifted_shapes)
+            all_ocr.extend(shifted_ocr)
+            all_ocr_comparison.extend(tile_ocr_cmp)
+
+            tile_total_ms = (time.perf_counter() - t_tile_start) * 1000
+            per_tile_stats.append({
+                "row": row, "col": col, "tile_idx": tile_idx,
+                "tile_id": tile_id,
+                "render_ms": round(render_ms, 0),
+                "poles": len(tile_poles),
+                "ocr_codes": ocr_codes_found,
+                "shapes": len(tile_shapes),
+                "total_ms": round(tile_total_ms, 0),
+                "error": None,
+            })
+            tiles_processed += 1
+
+        else:
+            continue
+        break  # also break outer loop when max_tiles hit
+
+    log(f"\n  Processed {tiles_processed} tiles.")
+    log(f"  Raw candidates before dedup: poles={len(all_poles)}, shapes={len(all_shapes)}, ocr={len(all_ocr)}")
+
+    # --- Step 4: Spatial association across all tiles ---
+    log(f"\nStep 4: Running spatial association ...")
+    try:
+        raw_candidates, assoc_ms = spatial_association(
+            all_poles, all_ocr, all_shapes, tile_dpi, run_slug
+        )
+    except Exception as e:
+        log(f"  ERROR in spatial association: {e}")
+        traceback.print_exc()
+        raw_candidates, assoc_ms = [], 0.0
+
+    raw_count = len(raw_candidates)
+    log(f"  Raw candidates: {raw_count}")
+
+    # Add tile_id from pole if available (for traceability)
+    pole_tile_map = {(round(p["center_x"], 1), round(p["center_y"], 1)): p.get("tile_id") for p in all_poles}
+    for c in raw_candidates:
+        pc = c.get("pole_center")
+        if pc:
+            key = (round(pc[0], 1), round(pc[1], 1))
+            c["tile_id"] = pole_tile_map.get(key, "unknown")
+        else:
+            c["tile_id"] = "unknown"
+
+    # --- Step 5: Deduplication ---
+    log(f"\nStep 5: Deduplicating candidates (30px radius) ...")
+    merged_candidates = _dedup_candidates(raw_candidates, dedup_radius_px=30.0)
+    merged_count = len(merged_candidates)
+    log(f"  After dedup: {merged_count} candidates (removed {raw_count - merged_count} duplicates)")
+
+    total_elapsed_s = time.perf_counter() - t_total_start
+
+    # --- Step 6: Write outputs ---
+    log(f"\nStep 6: Writing outputs ...")
+    _write_tile_outputs(
+        run_dir=run_dir,
+        candidates=merged_candidates,
+        raw_count=raw_count,
+        ocr_comparison=all_ocr_comparison,
+        per_tile_stats=per_tile_stats,
+        tiles_processed=tiles_processed,
+        total_tiles=total_tiles,
+        tile_grid_str=tile_grid_str,
+        tile_dpi=tile_dpi,
+        tile_overlap=tile_overlap,
+        available_engines=available_engines,
+        ocr_choice=ocr_choice,
+        total_elapsed_s=total_elapsed_s,
+        page_idx=page_idx,
+        page_w_px=page_w_px,
+        page_h_px=page_h_px,
+    )
+
+    # Summary
+    needs_review = sum(1 for c in merged_candidates if c.get("requires_review"))
+    with_code = sum(1 for c in merged_candidates if c.get("sign_code_text"))
+    high_conf = sum(1 for c in merged_candidates if c.get("overall_confidence", 0) >= 70)
+    fp_reduction = (2224 - merged_count) / 2224 * 100 if merged_count <= 2224 else 0.0
+
+    log(f"\n============================================================")
+    log(f"DONE — Engine B Tile Mode")
+    log(f"============================================================")
+    log(f"  Grid: {tile_grid_str}, DPI: {tile_dpi}")
+    log(f"  Tiles processed: {tiles_processed}/{total_tiles}")
+    log(f"  Raw candidates (before dedup): {raw_count}")
+    log(f"  Merged candidates (after dedup): {merged_count}")
+    log(f"  False positive reduction vs full-page (2224): {fp_reduction:.1f}%")
+    log(f"  With sign code: {with_code}")
+    log(f"  High confidence (>=70): {high_conf}")
+    log(f"  Requires review: {needs_review}")
+    log(f"  Total elapsed: {total_elapsed_s:.1f}s")
+    log(f"")
+    log(f"  Output files:")
+    log(f"    outputs/image_scan_tile_candidates.json")
+    log(f"    outputs/image_scan_tile_report.md")
+    log(f"    outputs/image_scan_tile_report.html")
+    log(f"    outputs/image_scan_debug/tiles/  ({tiles_processed} tile images)")
+    log(f"")
+    return 0
+
+
+def _write_tile_outputs(
+    run_dir: Path,
+    candidates: List[Dict],
+    raw_count: int,
+    ocr_comparison: List[Dict],
+    per_tile_stats: List[Dict],
+    tiles_processed: int,
+    total_tiles: int,
+    tile_grid_str: str,
+    tile_dpi: int,
+    tile_overlap: float,
+    available_engines: Dict[str, bool],
+    ocr_choice: str,
+    total_elapsed_s: float,
+    page_idx: int,
+    page_w_px: float,
+    page_h_px: float,
+) -> None:
+    """Write tile-mode output files."""
+    import json
+    import base64
+
+    output_dir = run_dir / "outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    merged_count = len(candidates)
+    fp_reduction = (2224 - merged_count) / 2224 * 100 if merged_count <= 2224 else 0.0
+    needs_review = sum(1 for c in candidates if c.get("requires_review"))
+    with_code = sum(1 for c in candidates if c.get("sign_code_text"))
+    high_conf = sum(1 for c in candidates if c.get("overall_confidence", 0) >= 70)
+
+    # --- Candidates JSON ---
+    cands_path = output_dir / "image_scan_tile_candidates.json"
+    clean_cands = [_json_safe({k: v for k, v in c.items() if not k.startswith("_")}) for c in candidates]
+    with open(cands_path, "w", encoding="utf-8") as f:
+        json.dump(clean_cands, f, indent=2, ensure_ascii=False)
+
+    # --- OCR comparison JSON ---
+    ocr_cmp_path = output_dir / "image_scan_tile_ocr_comparison.json"
+    with open(ocr_cmp_path, "w", encoding="utf-8") as f:
+        json.dump(_json_safe(ocr_comparison), f, indent=2, ensure_ascii=False)
+
+    # --- Timing table: avg per-tile ---
+    tile_timings = [s for s in per_tile_stats if not s.get("error")]
+    avg_render = sum(s["render_ms"] for s in tile_timings) / len(tile_timings) if tile_timings else 0
+    avg_total = sum(s["total_ms"] for s in tile_timings) / len(tile_timings) if tile_timings else 0
+    avg_poles = sum(s["poles"] for s in tile_timings) / len(tile_timings) if tile_timings else 0
+    avg_ocr_codes = sum(s["ocr_codes"] for s in tile_timings) / len(tile_timings) if tile_timings else 0
+    avg_shapes = sum(s["shapes"] for s in tile_timings) / len(tile_timings) if tile_timings else 0
+
+    # OCR engine summary
+    engines_list = [k for k, v in available_engines.items() if v]
+    ocr_with_text = sum(1 for o in ocr_comparison if o.get("consensus"))
+    engines_str = ", ".join(engines_list) if engines_list else "none"
+
+    # Qualitative assessment
+    if merged_count < 100:
+        accuracy_note = "IMPROVED — tile mode yields far fewer candidates than full-page (2224), likely more accurate."
+    elif merged_count < 500:
+        accuracy_note = "MODERATE — tile mode reduces candidates vs full-page (2224) but still has significant candidates."
+    else:
+        accuracy_note = "NOT IMPROVED — candidate count still high; further tuning needed."
+
+    if tiles_processed < total_tiles:
+        speed_note = f"Only {tiles_processed}/{total_tiles} tiles processed (--max-tiles test). Full run would take ~{avg_total * total_tiles / 1000:.0f}s estimated."
+    elif total_elapsed_s < 60:
+        speed_note = f"Faster than full-page render+scan if full-page takes >60s; tile mode completed in {total_elapsed_s:.1f}s."
+    else:
+        speed_note = f"Tile mode is SLOWER than a quick full-page scan (total {total_elapsed_s:.1f}s). Use only when accuracy matters more than speed."
+
+    # Recommendation
+    if merged_count < 100 and high_conf > 5:
+        recommendation = "Proceed to Deep/Validation mode with these tile candidates as seed coordinates."
+    elif merged_count < 300:
+        recommendation = "Fast Scan result is reasonable. Manual review of high-confidence candidates recommended."
+    else:
+        recommendation = "Too many candidates; further blob parameter tuning required before production use."
+
+    # --- Markdown report ---
+    md_path = output_dir / "image_scan_tile_report.md"
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write("# Tile-Based Image Scan Report — Engine B v0.2\n\n")
+        f.write(f"**Run dir:** `{run_dir}`  \n")
+        f.write(f"**Page:** {page_idx}  \n")
+        f.write(f"**Grid:** {tile_grid_str}  \n")
+        f.write(f"**Tile DPI:** {tile_dpi}  \n")
+        f.write(f"**Overlap:** {tile_overlap*100:.0f}%  \n")
+        f.write(f"**OCR engines requested:** {ocr_choice}  \n")
+        f.write(f"**OCR engines available:** "
+                f"tesseract={available_engines.get('tesseract')}, "
+                f"easyocr={available_engines.get('easyocr')}, "
+                f"paddleocr={available_engines.get('paddleocr')}  \n\n")
+
+        f.write("## Summary\n\n")
+        f.write("| Metric | Value |\n|---|---|\n")
+        f.write(f"| Grid | {tile_grid_str} |\n")
+        f.write(f"| Tile DPI | {tile_dpi} |\n")
+        f.write(f"| Total tiles processed | {tiles_processed}/{total_tiles} |\n")
+        f.write(f"| Raw candidates (before dedup) | {raw_count} |\n")
+        f.write(f"| Merged candidates (after dedup) | {merged_count} |\n")
+        f.write(f"| False positive estimate vs full-page (2224) | {fp_reduction:.1f}% |\n")
+        f.write(f"| Candidates with sign code | {with_code} |\n")
+        f.write(f"| High confidence (≥70) | {high_conf} |\n")
+        f.write(f"| Requires review | {needs_review} |\n")
+        f.write(f"| Total runtime | {total_elapsed_s:.1f}s |\n")
+        f.write(f"| OCR engines used | {engines_str} |\n")
+        f.write(f"| OCR codes found (all tiles) | {ocr_with_text} |\n\n")
+
+        f.write("## Per-Tile Timing\n\n")
+        f.write("| Tile | Render(ms) | Poles | OCR codes | Shapes | Total(ms) |\n")
+        f.write("|---|---|---|---|---|---|\n")
+        for s in per_tile_stats:
+            err = f" ERROR: {s['error']}" if s.get("error") else ""
+            f.write(f"| {s['row']},{s['col']} | {s['render_ms']:.0f} | {s['poles']} "
+                    f"| {s['ocr_codes']} | {s['shapes']} | {s['total_ms']:.0f}{err} |\n")
+        f.write(f"| **Avg** | **{avg_render:.0f}** | **{avg_poles:.1f}** "
+                f"| **{avg_ocr_codes:.1f}** | **{avg_shapes:.1f}** | **{avg_total:.0f}** |\n\n")
+
+        f.write("## Assessment\n\n")
+        f.write(f"**Accuracy:** {accuracy_note}  \n\n")
+        f.write(f"**Speed:** {speed_note}  \n\n")
+        f.write(f"**Recommendation:** {recommendation}  \n\n")
+
+        f.write("## Top Candidates\n\n")
+        f.write("| Tile | Anchor | Code | Conf | Shape | Overall | Review |\n")
+        f.write("|---|---|---|---|---|---|---|\n")
+        top = sorted(candidates, key=lambda x: x.get("overall_confidence", 0), reverse=True)[:20]
+        for c in top:
+            rev = "YES" if c.get("requires_review") else "no"
+            f.write(f"| {c.get('tile_id','?')} "
+                    f"| {c.get('anchor_type','?')} "
+                    f"| {c.get('sign_code_text','—')} "
+                    f"| {c.get('sign_code_confidence',0):.2f} "
+                    f"| {c.get('sign_shape_type','—')} "
+                    f"| {c.get('overall_confidence',0)} "
+                    f"| {rev} |\n")
+
+    log(f"  Wrote {md_path.name}")
+
+    # --- HTML report ---
+    html_path = output_dir / "image_scan_tile_report.html"
+    tile_debug_dir = output_dir / "image_scan_debug" / "tiles"
+
+    # Build tile grid visualization data
+    tile_cells_html = ""
+    for s in per_tile_stats:
+        tile_img_path = tile_debug_dir / f"tile_{s['row']:02d}_{s['col']:02d}.png"
+        try:
+            with open(tile_img_path, "rb") as fh:
+                b64 = base64.b64encode(fh.read()).decode("ascii")
+            img_src = f"data:image/png;base64,{b64}"
+        except Exception:
+            img_src = ""
+        err_cls = ' style="border:2px solid red"' if s.get("error") else ""
+        img_tag = f'<img src="{img_src}" style="width:180px;height:auto">' if img_src else '<span style="color:#888">[no image]</span>'
+        tile_cells_html += (
+            f'<div class="tile-cell"{err_cls}>'
+            f'{img_tag}'
+            f'<div class="tile-label">'
+            f'[{s["row"]},{s["col"]}] poles={s["poles"]} ocr={s["ocr_codes"]} '
+            f'shapes={s["shapes"]} {s["total_ms"]:.0f}ms'
+            f'</div></div>\n'
+        )
+
+    top20 = sorted(candidates, key=lambda x: x.get("overall_confidence", 0), reverse=True)[:20]
+    cands_html = ""
+    for c in top20:
+        conf = c.get("overall_confidence", 0)
+        conf_cls = "high" if conf >= 70 else ("low" if conf < 40 else "")
+        rev_cls = "review" if c.get("requires_review") else ""
+        cands_html += (
+            f'<div class="card">'
+            f'<div class="label">'
+            f'<b>{c.get("anchor_type","?")}</b> '
+            f'tile: {c.get("tile_id","?")} '
+            f'code: <b>{c.get("sign_code_text","—")}</b> ({c.get("sign_code_confidence",0):.2f})<br>'
+            f'shape: {c.get("sign_shape_type","—")}<br>'
+            f'conf: <span class="{conf_cls}">{conf}</span> '
+            f'{"<span class=review>REVIEW</span>" if c.get("requires_review") else ""}'
+            f'<br><small>{c.get("candidate_id","?")}</small>'
+            f'</div></div>\n'
+        )
+
+    n_rows_grid, n_cols_grid = _parse_tile_grid(tile_grid_str)
+
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(textwrap.dedent(f"""\
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+            <meta charset="UTF-8">
+            <title>Tile Scan Report — Engine B v0.2</title>
+            <style>
+              body {{ font-family: monospace; background: #111; color: #eee; padding: 20px; }}
+              h1, h2 {{ color: #7cf; }}
+              table {{ border-collapse: collapse; margin-bottom: 20px; }}
+              th, td {{ border: 1px solid #444; padding: 6px 10px; text-align: left; }}
+              th {{ background: #222; color: #7cf; }}
+              .high {{ color: #4f4; }}
+              .low {{ color: #f84; }}
+              .review {{ color: #f44; font-weight: bold; }}
+              .tile-grid {{ display: grid; grid-template-columns: repeat({n_cols_grid}, 200px); gap: 8px; margin-bottom: 24px; }}
+              .tile-cell {{ background: #1a1a1a; border: 1px solid #333; padding: 4px; }}
+              .tile-label {{ font-size: 10px; color: #aaa; margin-top: 4px; }}
+              .grid {{ display: flex; flex-wrap: wrap; gap: 12px; }}
+              .card {{ background: #1a1a1a; border: 1px solid #333; padding: 10px; width: 220px; }}
+              .label {{ font-size: 11px; margin-top: 6px; color: #aaa; }}
+            </style>
+            </head>
+            <body>
+            <h1>Tile-Based Image Scan Report — Engine B v0.2</h1>
+            <p><b>Run dir:</b> {run_dir}<br>
+            <b>Page:</b> {page_idx} &nbsp; <b>Grid:</b> {tile_grid_str} &nbsp;
+            <b>Tile DPI:</b> {tile_dpi} &nbsp; <b>Overlap:</b> {tile_overlap*100:.0f}%</p>
+
+            <h2>Summary</h2>
+            <table>
+            <tr><th>Metric</th><th>Value</th></tr>
+            <tr><td>Tiles processed</td><td>{tiles_processed}/{total_tiles}</td></tr>
+            <tr><td>Raw candidates (before dedup)</td><td>{raw_count}</td></tr>
+            <tr><td>Merged candidates (after dedup)</td><td>{merged_count}</td></tr>
+            <tr><td>False positive reduction vs full-page (2224)</td><td>{fp_reduction:.1f}%</td></tr>
+            <tr><td>With sign code</td><td>{with_code}</td></tr>
+            <tr><td>High confidence (≥70)</td><td class="high">{high_conf}</td></tr>
+            <tr><td>Requires review</td><td class="review">{needs_review}</td></tr>
+            <tr><td>Total runtime</td><td>{total_elapsed_s:.1f}s</td></tr>
+            <tr><td>OCR engines used</td><td>{engines_str}</td></tr>
+            <tr><td>OCR codes found</td><td>{ocr_with_text}</td></tr>
+            </table>
+
+            <h2>Per-Tile Timing</h2>
+            <table>
+            <tr><th>Tile</th><th>Render(ms)</th><th>Poles</th><th>OCR codes</th><th>Shapes</th><th>Total(ms)</th></tr>
+        """))
+        for s in per_tile_stats:
+            err_note = f" <span style='color:red'>ERROR: {s['error']}</span>" if s.get("error") else ""
+            f.write(f"<tr><td>{s['row']},{s['col']}</td><td>{s['render_ms']:.0f}</td>"
+                    f"<td>{s['poles']}</td><td>{s['ocr_codes']}</td>"
+                    f"<td>{s['shapes']}</td><td>{s['total_ms']:.0f}{err_note}</td></tr>\n")
+        f.write(f"<tr><td><b>Avg</b></td><td><b>{avg_render:.0f}</b></td>"
+                f"<td><b>{avg_poles:.1f}</b></td><td><b>{avg_ocr_codes:.1f}</b></td>"
+                f"<td><b>{avg_shapes:.1f}</b></td><td><b>{avg_total:.0f}</b></td></tr>\n")
+        f.write(textwrap.dedent(f"""\
+            </table>
+
+            <h2>Assessment</h2>
+            <p><b>Accuracy:</b> {accuracy_note}</p>
+            <p><b>Speed:</b> {speed_note}</p>
+            <p><b>Recommendation:</b> {recommendation}</p>
+
+            <h2>Tile Grid Visualization</h2>
+            <div class="tile-grid">
+            {tile_cells_html}
+            </div>
+
+            <h2>Top 20 Candidates</h2>
+            <div class="grid">
+            {cands_html}
+            </div>
+            </body>
+            </html>
+        """))
+
+    log(f"  Wrote {html_path.name}")
+    log(f"  Wrote {cands_path.name} ({merged_count} candidates)")
+
+
 # --- Main ---
 
 def main() -> int:
@@ -1482,8 +2569,15 @@ def main() -> int:
     log(f"============================================================")
     log(f"Run dir : {run_dir}")
     log(f"Page    : {args.page}")
-    log(f"DPI     : {args.dpi}")
     log(f"Mode    : {args.mode}")
+    if args.mode == "tile":
+        log(f"Tile DPI: {args.tile_dpi}")
+        log(f"Grid    : {args.tile_grid}")
+        log(f"Overlap : {args.tile_overlap}")
+        if args.max_tiles:
+            log(f"MaxTiles: {args.max_tiles}")
+    else:
+        log(f"DPI     : {args.dpi}")
     log(f"OCR     : {args.ocr}")
     log(f"")
 
@@ -1505,6 +2599,19 @@ def main() -> int:
 
     log(f"  Found PDF: {pdf_path}")
     log(f"  File size: {pdf_path.stat().st_size / 1024 / 1024:.2f} MB")
+
+    # --- Tile mode dispatch ---
+    if args.mode == "tile":
+        return run_tile_mode(
+            pdf_path=pdf_path,
+            page_idx=args.page,
+            run_dir=run_dir,
+            ocr_choice=args.ocr,
+            tile_grid_str=args.tile_grid,
+            tile_overlap=args.tile_overlap,
+            tile_dpi=args.tile_dpi,
+            max_tiles=args.max_tiles,
+        )
 
     output_dir = run_dir / "outputs"
     debug_dir = output_dir / "image_scan_debug"

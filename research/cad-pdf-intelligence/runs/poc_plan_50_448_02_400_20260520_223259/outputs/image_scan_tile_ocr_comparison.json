@@ -1,0 +1,530 @@
+[
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2599,
+      1462
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 652.4,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "12",
+      "confidence": 0.5030466963262121,
+      "elapsed_ms": 79965.2,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "12",
+    "engines_agree": true,
+    "tile_id": "tile_00_00"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2836,
+      1462
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1317.2,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 90445.4,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false,
+    "tile_id": "tile_00_01"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2836,
+      1462
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1103.9,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 82324.1,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false,
+    "tile_id": "tile_00_02"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2599,
+      1462
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1925.4,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "88",
+      "confidence": 0.8761710622684499,
+      "elapsed_ms": 69810.4,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "88",
+    "engines_agree": true,
+    "tile_id": "tile_00_03"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2599,
+      1596
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 965.6,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "60",
+      "confidence": 0.9988042505264567,
+      "elapsed_ms": 59515.1,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "60",
+    "engines_agree": true,
+    "tile_id": "tile_01_00"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2836,
+      1596
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1428.5,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "30",
+      "confidence": 0.9996487662336546,
+      "elapsed_ms": 57755.0,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "30",
+    "engines_agree": true,
+    "tile_id": "tile_01_01"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2836,
+      1596
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 947.1,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "48",
+      "confidence": 0.7847855040109343,
+      "elapsed_ms": 61981.6,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "48",
+    "engines_agree": true,
+    "tile_id": "tile_01_02"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2599,
+      1596
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1022.7,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "402",
+      "confidence": 0.9999998623489704,
+      "elapsed_ms": 57653.5,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "402",
+    "engines_agree": true,
+    "tile_id": "tile_01_03"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2599,
+      1595
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1000.2,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "777",
+      "confidence": 0.8625581042529565,
+      "elapsed_ms": 45143.3,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "777",
+    "engines_agree": true,
+    "tile_id": "tile_02_00"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2836,
+      1595
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 837.0,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "206",
+      "confidence": 0.9998304843902588,
+      "elapsed_ms": 52576.9,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "206",
+    "engines_agree": true,
+    "tile_id": "tile_02_01"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2836,
+      1595
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1250.8,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "48",
+      "confidence": 0.28134624478425063,
+      "elapsed_ms": 90011.3,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "48",
+    "engines_agree": true,
+    "tile_id": "tile_02_02"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2599,
+      1595
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1626.9,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "402",
+      "confidence": 0.6457694054969526,
+      "elapsed_ms": 87172.1,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "402",
+    "engines_agree": true,
+    "tile_id": "tile_02_03"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2599,
+      1462
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1239.3,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 63396.9,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false,
+    "tile_id": "tile_03_00"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2836,
+      1462
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1054.7,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 53682.3,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false,
+    "tile_id": "tile_03_01"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2836,
+      1462
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1223.6,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "71",
+      "confidence": 0.3031250463678193,
+      "elapsed_ms": 47361.0,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "71",
+    "engines_agree": true,
+    "tile_id": "tile_03_02"
+  },
+  {
+    "region_id": "tile_full",
+    "crop_bbox": [
+      0,
+      0,
+      2599,
+      1462
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1045.3,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "26",
+      "confidence": 0.8792616253870194,
+      "elapsed_ms": 42124.4,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "26",
+    "engines_agree": true,
+    "tile_id": "tile_03_03"
+  }
+]
