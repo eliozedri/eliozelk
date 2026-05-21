@@ -5,6 +5,7 @@ import { useCatalogContext } from "@/context/CatalogContext";
 import type { CatalogItem, CatalogFormState, CatalogItemType, LinkedProductEntry } from "@/types/catalog";
 import { TYPE_LABELS, TYPE_COLORS, UNIT_OPTIONS, DIMENSION_UNIT_OPTIONS, LENGTH_UNITS, AREA_UNITS, NO_DIMENSION_UNITS } from "@/types/catalog";
 import { getSupabase } from "@/lib/supabase/client";
+import { getSourceType, SOURCE_BADGE, REVIEW_BADGE, resolveProductImage, getCategoryIcon } from "@/components/CatalogShowcase/constants";
 
 function getSourceLabel(metadata: Record<string, unknown> | undefined): string | null {
   const sources = metadata?.sources as Array<{ type: string }> | undefined;
@@ -82,7 +83,7 @@ function CatalogItemDetailPanel({ item, onEdit, onToggle }: {
   onToggle: (id: string) => void;
 }) {
   const specs   = item.metadata?.specs   as Record<string, unknown> | undefined;
-  const images  = item.metadata?.images  as { product?: string; page?: string } | undefined;
+  const images  = item.metadata?.images  as Record<string, string | undefined> | undefined;
   const safetyRefId     = item.metadata?.safety_ref_id as string  | undefined;
   const isFleetManaged  = item.metadata?.fleet_managed  as boolean | undefined;
   const sourceLabel     = getSourceLabel(item.metadata);
@@ -110,17 +111,24 @@ function CatalogItemDetailPanel({ item, onEdit, onToggle }: {
         <div className="px-6 py-4 bg-blue-50/25">
           <div className="flex gap-5">
 
-            {/* Thumbnail */}
-            {images?.product && (
-              <div className="shrink-0">
-                <img
-                  src={images.product}
-                  alt={item.name}
-                  className="w-20 h-20 object-cover rounded-lg border border-gray-200 bg-white shadow-sm"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                />
-              </div>
-            )}
+            {/* Thumbnail — prefer new thumb, fall back to full, suppress legacy product path */}
+            {(() => {
+              const imgUrl = images?.thumb ?? images?.full ?? null;
+              const cropStatus = images?.crop_status;
+              return imgUrl ? (
+                <div className="shrink-0 space-y-1">
+                  <img
+                    src={imgUrl}
+                    alt={item.name}
+                    className="w-20 h-20 object-cover rounded-lg border border-gray-200 bg-white shadow-sm"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                  {cropStatus === "needs_review" && (
+                    <p className="text-[9px] text-orange-500 italic text-center">תמונה לבדיקה</p>
+                  )}
+                </div>
+              ) : null;
+            })()}
 
             <div className="flex-1 min-w-0 space-y-3">
 
@@ -136,6 +144,13 @@ function CatalogItemDetailPanel({ item, onEdit, onToggle }: {
                     {safetyRefId && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">🛡 בטיחות</span>}
                     {isFleetManaged && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">צי</span>}
                     {sourceLabel && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400">{sourceLabel}</span>}
+                    {(() => {
+                      const reviewState = item.metadata?.review_state as string | undefined;
+                      const rb = reviewState ? REVIEW_BADGE[reviewState] : null;
+                      return rb ? (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${rb.className}`}>{rb.label}</span>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -258,90 +273,150 @@ function ItemCard({ item, onEdit, onToggle, onDelete }: {
   const isReflective = specs?.is_reflective as boolean | undefined;
   const specDimensions = specs?.dimensions as string | undefined;
   const safetyRefId = item.metadata?.safety_ref_id as string | undefined;
-  const sourceLabel = getSourceLabel(item.metadata);
+
+  const imgUrl = resolveProductImage(item.metadata);
+  const sourceType = getSourceType(item.metadata);
+  const sourceBadge = SOURCE_BADGE[sourceType];
+  const reviewState = item.metadata?.review_state as string | undefined;
+  const reviewBadge = reviewState ? REVIEW_BADGE[reviewState] : null;
+  const categoryIcon = getCategoryIcon(item.category);
+
+  function handleCardClick() {
+    onEdit(item.id);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onEdit(item.id);
+    }
+  }
 
   return (
-    <div className={`bg-white border rounded-xl p-4 flex flex-col gap-2.5 hover:shadow-sm transition-all ${!item.isActive ? "opacity-55 border-gray-100" : "border-gray-200 hover:border-gray-300"}`}>
-      {/* Name + actions */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-gray-900 text-sm leading-snug">{item.name}</p>
-          <p className="text-[11px] text-gray-400 mt-0.5 truncate">{item.category || "ללא קטגוריה"}</p>
-        </div>
-        <div className="flex items-center gap-1 shrink-0 -mt-0.5">
-          <button
-            type="button"
-            onClick={() => onEdit(item.id)}
-            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-            title="ערוך"
-          >
-            <PencilIcon />
-          </button>
-          <button
-            type="button"
-            onClick={() => onDelete(item.id)}
-            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
-            title="מחק"
-          >
-            <TrashIcon />
-          </button>
-        </div>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleCardClick}
+      onKeyDown={handleKeyDown}
+      className={`bg-white border rounded-xl overflow-hidden flex flex-col hover:shadow-md hover:border-blue-300 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+        !item.isActive ? "opacity-55 border-gray-100" : "border-gray-200"
+      }`}
+    >
+      {/* Product image */}
+      <div className="h-32 bg-gray-50 flex items-center justify-center border-b border-gray-100 relative overflow-hidden">
+        {imgUrl ? (
+          <img
+            src={imgUrl}
+            alt={item.name}
+            loading="lazy"
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              const el = e.target as HTMLImageElement;
+              el.style.display = "none";
+              const parent = el.parentElement;
+              if (parent) {
+                const span = document.createElement("span");
+                span.className = "text-4xl";
+                span.textContent = categoryIcon;
+                parent.appendChild(span);
+              }
+            }}
+          />
+        ) : (
+          <span className="text-4xl">{categoryIcon}</span>
+        )}
       </div>
 
-      {/* Type + property badges */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${TYPE_COLORS[item.type]}`}>
-          {TYPE_LABELS[item.type]}
-        </span>
-        {isSolar && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">☀ סולארי</span>
-        )}
-        {isElectric && !isSolar && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">⚡ חשמלי</span>
-        )}
-        {isReflective && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">◈ רפלקטיבי</span>
-        )}
-        {safetyRefId && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">🛡 בטיחות</span>
-        )}
-        {sourceLabel && !safetyRefId && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400">{sourceLabel}</span>
-        )}
-        {(item.linkedProducts?.length ?? 0) > 0 && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
-            {item.linkedProducts!.length} נלווים
+      {/* Content */}
+      <div className="p-4 flex flex-col gap-2.5 flex-1">
+        {/* Name + actions */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-gray-900 text-sm leading-snug">{item.name}</p>
+            <p className="text-[11px] text-gray-400 mt-0.5 truncate">{item.category || "ללא קטגוריה"}</p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0 -mt-0.5">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onEdit(item.id); }}
+              className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+              title="ערוך"
+            >
+              <PencilIcon />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+              className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors"
+              title="מחק"
+            >
+              <TrashIcon />
+            </button>
+          </div>
+        </div>
+
+        {/* Badges */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${TYPE_COLORS[item.type]}`}>
+            {TYPE_LABELS[item.type]}
           </span>
-        )}
-      </div>
-
-      {/* Description */}
-      {item.description && (
-        <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{item.description}</p>
-      )}
-
-      {/* Dimensions from specs */}
-      {specDimensions && (
-        <p className="text-[11px] text-gray-400 font-mono" dir="ltr">{specDimensions}</p>
-      )}
-
-      {/* Footer: price + active toggle */}
-      <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-100">
-        <div dir="ltr" className="text-sm font-semibold text-gray-700">
-          {item.defaultPrice !== null
-            ? <>₪{item.defaultPrice.toLocaleString()} <span className="text-xs font-normal text-gray-400">/ {item.unitOfMeasure}</span></>
-            : <span className="text-gray-300 font-normal text-xs">ללא מחיר</span>
-          }
+          {sourceBadge && (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${sourceBadge.className}`}>
+              {sourceBadge.label}
+            </span>
+          )}
+          {isSolar && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">☀ סולארי</span>
+          )}
+          {isElectric && !isSolar && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">⚡ חשמלי</span>
+          )}
+          {isReflective && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">◈ רפלקטיבי</span>
+          )}
+          {safetyRefId && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">🛡 בטיחות</span>
+          )}
+          {reviewBadge && (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${reviewBadge.className}`}>
+              {reviewBadge.label}
+            </span>
+          )}
+          {(item.linkedProducts?.length ?? 0) > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+              {item.linkedProducts!.length} נלווים
+            </span>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={() => onToggle(item.id)}
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
-            item.isActive ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-          }`}
-        >
-          {item.isActive ? "פעיל" : "לא פעיל"}
-        </button>
+
+        {/* Description */}
+        {item.description && (
+          <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{item.description}</p>
+        )}
+
+        {/* Dims from specs */}
+        {specDimensions && (
+          <p className="text-[11px] text-gray-400 font-mono" dir="ltr">{specDimensions}</p>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-100">
+          <div dir="ltr" className="text-sm font-semibold text-gray-700">
+            {item.defaultPrice !== null
+              ? <>₪{item.defaultPrice.toLocaleString()} <span className="text-xs font-normal text-gray-400">/ {item.unitOfMeasure}</span></>
+              : <span className="text-gray-300 font-normal text-xs">ללא מחיר</span>
+            }
+          </div>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onToggle(item.id); }}
+            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
+              item.isActive ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+            }`}
+          >
+            {item.isActive ? "פעיל" : "לא פעיל"}
+          </button>
+        </div>
       </div>
     </div>
   );
