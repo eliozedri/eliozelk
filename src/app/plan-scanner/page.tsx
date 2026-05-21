@@ -274,10 +274,15 @@ export default function PlanScannerPage() {
   const [calibrationError, setCalibrationError] = useState<string | null>(null);
   const [savedCalibration, setSavedCalibration] = useState<CalibrationData | null>(null);
 
+  // Calibration missing-scale acknowledgement
+  const [calibrationNeedsAck, setCalibrationNeedsAck] = useState(false);
+  const [calibrationAckMessage, setCalibrationAckMessage] = useState<string | null>(null);
+
   // Re-export state
   const [isReexporting, setIsReexporting] = useState(false);
   const [reexportMessage, setReexportMessage] = useState<string | null>(null);
   const lastExportsGenAt = useRef<string | undefined>(undefined);
+  const reexportTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep ref in sync for use in callbacks
   useEffect(() => { sessionRef.current = session; }, [session]);
@@ -313,10 +318,17 @@ export default function PlanScannerPage() {
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, [session.phase, session.slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reexport completion polling
+  // Reexport completion polling (2s interval, 120s hard timeout)
   useEffect(() => {
     if (!isReexporting || !session.slug) return;
     const slug = session.slug;
+
+    const timeout = setTimeout(() => {
+      setIsReexporting(false);
+      setReexportMessage("היצוא לקח יותר מ-120 שניות — בדוק את הלוגים בתיקיית הריצה ונסה שוב.");
+    }, 120_000);
+    reexportTimeoutRef.current = timeout;
+
     const interval = setInterval(async () => {
       try {
         const res = await authedFetch(`/api/plan-scanner/run/${slug}/status`);
@@ -324,6 +336,7 @@ export default function PlanScannerPage() {
         const data = await res.json();
         const newGenAt: string | undefined = data.exports_generated_at;
         if (newGenAt && lastExportsGenAt.current && newGenAt !== lastExportsGenAt.current) {
+          clearTimeout(timeout);
           setIsReexporting(false);
           setSession((s) => ({ ...s, exports: data.exports ?? s.exports, exportsGeneratedAt: newGenAt }));
           lastExportsGenAt.current = newGenAt;
@@ -332,7 +345,11 @@ export default function PlanScannerPage() {
         }
       } catch {}
     }, 2000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }, [isReexporting, session.slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Leave guard — active whenever there is a scan with unsaved data
@@ -504,24 +521,42 @@ export default function PlanScannerPage() {
     }
   }
 
-  async function handleSaveCalibration() {
+  async function handleSaveCalibration(acknowledgesMissingScale = false) {
     const { slug } = session;
     if (!slug) return;
     setCalibrationSaving(true);
     setCalibrationError(null);
+    setCalibrationNeedsAck(false);
+    setCalibrationAckMessage(null);
     try {
       const body =
         calibrationMethod === "direct_ratio"
-          ? { calibration_method: "direct_ratio", scale_ratio: parseFloat(scaleRatioInput), notes: calibrationNotes }
-          : { calibration_method: "two_point", known_m: parseFloat(knownMInput), measured_m: parseFloat(measuredMInput), notes: calibrationNotes };
+          ? {
+              calibration_method: "direct_ratio",
+              scale_ratio: parseFloat(scaleRatioInput),
+              notes: calibrationNotes,
+              ...(acknowledgesMissingScale ? { acknowledge_missing_scale: true } : {}),
+            }
+          : {
+              calibration_method: "two_point",
+              known_m: parseFloat(knownMInput),
+              measured_m: parseFloat(measuredMInput),
+              notes: calibrationNotes,
+            };
       const res = await authedFetch(`/api/plan-scanner/run/${slug}/calibrate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const data = await res.json();
+      // Server returns HTTP 200 with ok:false for recoverable warnings
       if (!res.ok) {
         setCalibrationError(data.error ?? "שגיאה בשמירת הכיול");
+        return;
+      }
+      if (data.ok === false && data.warning === "original_scale_not_found") {
+        setCalibrationNeedsAck(true);
+        setCalibrationAckMessage(data.warning_message ?? "קנה המידה המקורי אינו זמין — הכמויות לא ישתנו, רק מטא-דאטא יעודכן.");
         return;
       }
       setSavedCalibration(data.calibration as CalibrationData);
@@ -739,7 +774,10 @@ export default function PlanScannerPage() {
                   {savedCalibration && (
                     <div className="mb-3 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
                       <p className="text-xs text-green-700 font-semibold">
-                        ✓ כיול נשמר — גורם תיקון: {savedCalibration.correction_factor.toFixed(4)} · קנה מידה חדש 1:{savedCalibration.scale_ratio_new.toFixed(0)}
+                        ✓ כיול נשמר — גורם תיקון: {savedCalibration.correction_factor.toFixed(4)}
+                        {savedCalibration.scale_ratio_new != null
+                          ? ` · קנה מידה חדש 1:${Math.round(savedCalibration.scale_ratio_new)}`
+                          : " · קנה מידה חדש לא ידוע (שיטת שני נקודות)"}
                       </p>
                     </div>
                   )}
@@ -811,10 +849,27 @@ export default function PlanScannerPage() {
                     <p className="text-xs text-red-600 mt-2">{calibrationError}</p>
                   )}
 
+                  {/* Missing-scale acknowledge gate */}
+                  {calibrationNeedsAck && calibrationAckMessage && (
+                    <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2">
+                      <p className="text-xs text-amber-800 font-semibold">⚠ קנה המידה המקורי אינו זמין</p>
+                      <p className="text-[10px] text-amber-700 leading-relaxed">{calibrationAckMessage}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveCalibration(true)}
+                        disabled={calibrationSaving}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-400 text-amber-900 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 transition-colors"
+                      >
+                        {calibrationSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                        אשר וכיול (ללא תיקון כמויות)
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap gap-2 mt-3">
                     <button
                       type="button"
-                      onClick={handleSaveCalibration}
+                      onClick={() => handleSaveCalibration(false)}
                       disabled={calibrationSaving}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50"
                       style={{ backgroundColor: EK_BLUE }}

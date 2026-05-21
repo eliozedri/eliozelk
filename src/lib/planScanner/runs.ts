@@ -35,14 +35,24 @@ export interface ScaleCalibration {
   calibration_source: "human_manual";
   calibrated_at: string;
   calibration_method: CalibrationMethod;
-  scale_ratio_new: number;
-  m_per_pt_new: number;
+  scale_ratio_new?: number;       // undefined for two_point when original scale unavailable
+  m_per_pt_new?: number;          // undefined for two_point when original scale unavailable
   correction_factor: number;
   original_scale_ratio?: number;
   original_m_per_pt?: number;
   two_point_known_m?: number | null;
   two_point_measured_m?: number | null;
   notes?: string;
+  original_scale_basis?: string;  // "not_available_user_acknowledged" when original was missing
+}
+
+export interface ScaleOriginResult {
+  available: boolean;
+  m_per_pt?: number;
+  ratio?: number;
+  source?: string;
+  status?: string;
+  reason?: string;
 }
 
 export interface ExportEntry {
@@ -410,6 +420,75 @@ export function readCalibration(slug: string): ScaleCalibration | null {
   }
 }
 
+export function patchManifestWithScaleOrigin(slug: string): ScaleOriginResult {
+  const runDir = getRunDir(slug);
+  const manifestPath = path.join(runDir, "plan_manifest.json");
+  if (!fs.existsSync(manifestPath)) return { available: false, reason: "plan_manifest.json not found" };
+
+  let manifest: Record<string, unknown>;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  } catch {
+    return { available: false, reason: "Failed to parse plan_manifest.json" };
+  }
+
+  // Idempotent: return cached values if already patched
+  if (manifest.original_scale_available === true) {
+    return {
+      available: true,
+      m_per_pt: manifest.scale_m_per_pt_original as number,
+      ratio: manifest.scale_ratio_original as number,
+      source: manifest.scale_source_original as string,
+      status: manifest.scale_status_original as string,
+    };
+  }
+  if (manifest.original_scale_available === false) {
+    return { available: false, reason: manifest.original_scale_missing_reason as string };
+  }
+
+  // Not yet patched — read from scale_measurement/results.json
+  const scalePath = path.join(runDir, "outputs", "scale_measurement", "results.json");
+
+  function writeAndReturn(patch: Record<string, unknown>, result: ScaleOriginResult): ScaleOriginResult {
+    try {
+      Object.assign(manifest, patch);
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    } catch {}
+    return result;
+  }
+
+  if (!fs.existsSync(scalePath)) {
+    const reason = "scale_measurement/results.json not found";
+    return writeAndReturn({ original_scale_available: false, original_scale_missing_reason: reason }, { available: false, reason });
+  }
+
+  try {
+    const s = JSON.parse(fs.readFileSync(scalePath, "utf8")) as Record<string, unknown>;
+    const si = ((s.scale_info ?? s) as Record<string, unknown>);
+    const ratio = si.ratio as number | undefined;
+    const m_per_pt = (si.m_per_pt ?? si.derived_m_per_pt) as number | undefined;
+    const source = (si.source as string | undefined) ?? "unknown";
+    const calib = si.calibration as Record<string, unknown> | undefined;
+    const status = (si.status as string | undefined) ?? (calib?.status as string | undefined) ?? "unverified";
+
+    if (typeof m_per_pt === "number" && m_per_pt > 0) {
+      return writeAndReturn({
+        original_scale_available: true,
+        scale_ratio_original: ratio,
+        scale_m_per_pt_original: m_per_pt,
+        scale_source_original: source,
+        scale_status_original: status,
+      }, { available: true, m_per_pt, ratio, source, status });
+    }
+
+    const reason = "scale_measurement/results.json has no valid m_per_pt";
+    return writeAndReturn({ original_scale_available: false, original_scale_missing_reason: reason }, { available: false, reason });
+  } catch (err) {
+    const reason = `Failed to parse scale_measurement/results.json: ${err instanceof Error ? err.message : "unknown"}`;
+    return writeAndReturn({ original_scale_available: false, original_scale_missing_reason: reason }, { available: false, reason });
+  }
+}
+
 export function reexportWithCalibration(slug: string): ReexportResult {
   const status = inferRunStatus(slug);
   if (!status.outputs_generated && status.phase !== "source_deleted") {
@@ -443,16 +522,6 @@ export function reexportWithCalibration(slug: string): ReexportResult {
 
   if (!child.pid) throw new Error("Failed to spawn re-export process");
   child.unref();
-
-  // Write reexport marker so status polling can detect in-progress re-export
-  try {
-    const stateDir = path.join(runDir, "state");
-    if (!fs.existsSync(stateDir)) fs.mkdirSync(stateDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(stateDir, "reexport_started.json"),
-      JSON.stringify({ started_at: new Date().toISOString(), pid: child.pid }, null, 2)
-    );
-  } catch {}
 
   return { status: "started", pid: child.pid };
 }

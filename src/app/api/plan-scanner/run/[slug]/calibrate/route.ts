@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPlanScannerUser } from "@/lib/planScanner/auth";
-import { getRunDir, saveCalibration, inferRunStatus, type ScaleCalibration } from "@/lib/planScanner/runs";
+import path from "path";
 import fs from "fs";
+import { getPlanScannerUser } from "@/lib/planScanner/auth";
+import {
+  getRunDir,
+  saveCalibration,
+  inferRunStatus,
+  patchManifestWithScaleOrigin,
+  type ScaleCalibration,
+} from "@/lib/planScanner/runs";
 
 // PDF point to meters: scale_ratio * (25.4 mm/inch / 72 pt/inch) / 1000 mm/m
 const PT_TO_M_FACTOR = (25.4 / 72) / 1000;
@@ -43,36 +50,16 @@ export async function POST(
     return NextResponse.json({ error: "calibration_method must be direct_ratio or two_point" }, { status: 400 });
   }
 
-  // Determine scale_ratio_new and correction_factor
-  let scale_ratio_new: number;
-  let m_per_pt_new: number;
+  // Patch manifest with original scale (idempotent — reads scale_measurement/results.json once)
+  const origin = patchManifestWithScaleOrigin(slug);
+
+  // Variables for computed calibration
+  let scale_ratio_new: number | undefined;
+  let m_per_pt_new: number | undefined;
   let correction_factor: number;
   let two_point_known_m: number | null = null;
   let two_point_measured_m: number | null = null;
-
-  // Read original scale from manifest or use default
-  const manifestPath = require("path").join(runDir, "plan_manifest.json");
-  let original_scale_ratio: number | undefined;
-  let original_m_per_pt: number | undefined;
-  if (fs.existsSync(manifestPath)) {
-    try {
-      const m = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-      original_scale_ratio = m.scale_ratio_original ?? undefined;
-      original_m_per_pt = m.scale_m_per_pt_original ?? undefined;
-    } catch {}
-  }
-  // Fallback: read from scale_measurement/results.json
-  if (!original_m_per_pt) {
-    const scalePath = require("path").join(runDir, "outputs", "scale_measurement", "results.json");
-    if (fs.existsSync(scalePath)) {
-      try {
-        const s = JSON.parse(fs.readFileSync(scalePath, "utf8"));
-        const si = s.scale_info ?? s;
-        original_m_per_pt = si.m_per_pt ?? si.derived_m_per_pt ?? undefined;
-        original_scale_ratio = si.ratio ?? undefined;
-      } catch {}
-    }
-  }
+  let original_scale_basis: string | undefined;
 
   if (method === "direct_ratio") {
     const ratio = Number(body.scale_ratio);
@@ -81,10 +68,31 @@ export async function POST(
     }
     scale_ratio_new = ratio;
     m_per_pt_new = ratio * PT_TO_M_FACTOR;
-    const orig_mpp = original_m_per_pt ?? (500 * PT_TO_M_FACTOR);
-    correction_factor = m_per_pt_new / orig_mpp;
+
+    if (!origin.available) {
+      // Original scale basis is missing — require explicit acknowledgment before proceeding
+      if (!body.acknowledge_missing_scale) {
+        return NextResponse.json({
+          ok: false,
+          warning: "original_scale_not_found",
+          warning_message:
+            "קנה המידה המקורי של הריצה אינו זמין" +
+            (origin.reason ? ` (${origin.reason})` : "") +
+            ". לא ניתן לחשב גורם תיקון מול הנחת המדידה המקורית. " +
+            "הכיול יעדכן את מטא-דאטא קנה המידה בלבד — הכמויות לא ישתנו. " +
+            "שלח שוב עם acknowledge_missing_scale: true כדי לאשר ולהמשיך.",
+          origin_reason: origin.reason,
+        }, { status: 200 });
+      }
+      // User acknowledged: set correction_factor = 1.0 — quantities unchanged, scale metadata updated
+      correction_factor = 1.0;
+      original_scale_basis = "not_available_user_acknowledged";
+    } else {
+      // Original scale is known — compute real correction
+      correction_factor = m_per_pt_new / origin.m_per_pt!;
+    }
   } else {
-    // two_point
+    // two_point: correction_factor independent of original scale
     const known_m = Number(body.known_m);
     const measured_m = Number(body.measured_m);
     if (!Number.isFinite(known_m) || known_m <= 0) {
@@ -96,23 +104,29 @@ export async function POST(
     two_point_known_m = known_m;
     two_point_measured_m = measured_m;
     correction_factor = known_m / measured_m;
-    const orig_mpp = original_m_per_pt ?? (500 * PT_TO_M_FACTOR);
-    m_per_pt_new = orig_mpp * correction_factor;
-    scale_ratio_new = m_per_pt_new / PT_TO_M_FACTOR;
+
+    if (origin.available) {
+      m_per_pt_new = origin.m_per_pt! * correction_factor;
+      scale_ratio_new = m_per_pt_new / PT_TO_M_FACTOR;
+    } else {
+      // Can still apply correction_factor to quantities; scale display unavailable
+      original_scale_basis = "not_available_two_point_correction_applied";
+    }
   }
 
   const calibration: ScaleCalibration = {
     calibration_source: "human_manual",
     calibrated_at: new Date().toISOString(),
     calibration_method: method,
-    scale_ratio_new: parseFloat(scale_ratio_new.toFixed(4)),
-    m_per_pt_new: parseFloat(m_per_pt_new.toFixed(8)),
+    scale_ratio_new: scale_ratio_new !== undefined ? parseFloat(scale_ratio_new.toFixed(4)) : undefined,
+    m_per_pt_new: m_per_pt_new !== undefined ? parseFloat(m_per_pt_new.toFixed(8)) : undefined,
     correction_factor: parseFloat(correction_factor.toFixed(6)),
-    original_scale_ratio: original_scale_ratio,
-    original_m_per_pt: original_m_per_pt,
+    original_scale_ratio: origin.ratio,
+    original_m_per_pt: origin.m_per_pt,
     two_point_known_m,
     two_point_measured_m,
     notes: typeof body.notes === "string" ? body.notes.slice(0, 500) : "",
+    ...(original_scale_basis ? { original_scale_basis } : {}),
   };
 
   try {
