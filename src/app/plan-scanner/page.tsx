@@ -1,181 +1,327 @@
 "use client";
 
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  ScanText, Upload, FileSpreadsheet, Globe, Printer,
-  Package, AlertTriangle, CheckCircle, Clock, ChevronLeft,
-  Info, ShieldAlert,
+  ScanText, Upload, FileSpreadsheet, Globe, ShieldAlert,
+  AlertTriangle, CheckCircle, Loader2, Trash2, Download,
+  Terminal, RotateCcw, FileText,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { canAccessTab } from "@/types/auth";
+import { getSupabase } from "@/lib/supabase/client";
+import { useDirtyGuard } from "@/context/NavigationGuardContext";
 
 const NAVY    = "#0d1b2e";
 const EK_BLUE = "#1d6fd8";
 const EK_GOLD = "#f59e0b";
 
-// ── Small reusable UI atoms ────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-function Badge({
-  label,
-  color,
-}: {
-  label: string;
-  color: "amber" | "red" | "blue" | "gray" | "teal";
-}) {
-  const map: Record<string, { bg: string; text: string; border: string }> = {
-    amber: { bg: "#fef3c7", text: "#92400e", border: "#fcd34d" },
-    red:   { bg: "#fee2e2", text: "#991b1b", border: "#fca5a5" },
-    blue:  { bg: "#dbeafe", text: "#1e40af", border: "#93c5fd" },
-    gray:  { bg: "#f3f4f6", text: "#374151", border: "#d1d5db" },
-    teal:  { bg: "#ccfbf1", text: "#134e4a", border: "#5eead4" },
-  };
-  const { bg, text, border } = map[color];
+type ScanPhase =
+  | "idle"
+  | "uploading"
+  | "intake_created"
+  | "running"
+  | "outputs_generated"
+  | "source_deleted"
+  | "failed";
+
+interface ExportEntry {
+  filename: string;
+  type: string;
+  description: string;
+  exists: boolean;
+  size: number;
+}
+
+interface ScanSession {
+  phase: ScanPhase;
+  slug?: string;
+  planName?: string;
+  error?: string;
+  exports?: ExportEntry[];
+  exportDownloaded?: boolean;
+  executionMessage?: string;
+  manualCommand?: string;
+}
+
+// ── Auth helper ───────────────────────────────────────────────────────────────
+
+async function getToken(): Promise<string | null> {
+  const db = getSupabase();
+  if (!db) return null;
+  const { data: { session } } = await db.auth.getSession();
+  return session?.access_token ?? null;
+}
+
+async function authedFetch(url: string, options?: RequestInit): Promise<Response> {
+  const token = await getToken();
+  if (!token) throw new Error("Not authenticated");
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options?.headers,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+// ── Stepper ───────────────────────────────────────────────────────────────────
+
+const STEPS = [
+  { label: "העלאה",   sub: "PDF לסריקה" },
+  { label: "סריקה",   sub: "ניתוח ממוחשב" },
+  { label: "תוצאות",  sub: "כמויות ואלמנטים" },
+  { label: "יצוא",    sub: "Excel / HTML" },
+  { label: "ניקוי",   sub: "מחיקת מקור" },
+];
+
+function phaseToStep(phase: ScanPhase): number {
   return (
-    <span
-      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide"
-      style={{ backgroundColor: bg, color: text, border: `1px solid ${border}` }}
-    >
-      {label}
-    </span>
+    { idle: 0, uploading: 0, intake_created: 1, running: 1, outputs_generated: 2, source_deleted: 4, failed: -1 }[phase] ?? 0
   );
 }
 
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function Stepper({ phase }: { phase: ScanPhase }) {
+  const current = phaseToStep(phase);
+  const isRunning = phase === "running";
+
   return (
-    <div
-      className={`bg-white rounded-xl border border-gray-200 p-5 shadow-sm ${className}`}
-    >
-      {children}
+    <div className="flex items-center justify-between gap-1 bg-white rounded-xl border border-gray-200 p-4 shadow-sm overflow-x-auto">
+      {STEPS.map((step, i) => {
+        const done = current > i;
+        const active = current === i;
+        const spinning = active && isRunning;
+        return (
+          <div key={i} className="flex items-center gap-1 shrink-0">
+            <div className="flex flex-col items-center text-center min-w-[56px]">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center mb-1 shrink-0"
+                style={{
+                  backgroundColor: done ? "#16a34a" : active ? EK_BLUE : "#e5e7eb",
+                  color: done || active ? "#fff" : "#9ca3af",
+                }}
+              >
+                {done ? (
+                  <CheckCircle className="w-4 h-4" />
+                ) : spinning ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <span className="text-xs font-bold">{i + 1}</span>
+                )}
+              </div>
+              <p className="text-[10px] font-semibold" style={{ color: active ? EK_BLUE : done ? "#16a34a" : "#9ca3af" }}>
+                {step.label}
+              </p>
+              <p className="text-[9px] text-gray-400">{step.sub}</p>
+            </div>
+            {i < STEPS.length - 1 && (
+              <div className="w-8 h-px mx-1 shrink-0" style={{ backgroundColor: done ? "#16a34a" : "#e5e7eb" }} />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+// ── Upload zone ───────────────────────────────────────────────────────────────
+
+function UploadZone({
+  onFile,
+  uploading,
+}: {
+  onFile: (file: File) => void;
+  uploading: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) onFile(file);
+  }
+
   return (
-    <h2 className="text-base font-bold mb-3" style={{ color: NAVY }}>
-      {children}
-    </h2>
-  );
-}
-
-// ── Step indicators ────────────────────────────────────────────────────────────
-
-const FLOW_STEPS = [
-  { num: 1, label: "העלאת תוכנית",         sub: "PDF זמני בלבד" },
-  { num: 2, label: "סריקה",                sub: "ניתוח וקטורי" },
-  { num: 3, label: "מדידות / תמרורים / אלמנטים", sub: "זיהוי וכמות" },
-  { num: 4, label: "שאלות לבדיקה",         sub: "אישור אנושי" },
-  { num: 5, label: "יצוא",                 sub: "Excel / HTML / PDF" },
-  { num: 6, label: "ניקוי קובץ מקור",      sub: "ברירת מחדל" },
-];
-
-function FlowStep({ num, label, sub, isLast }: { num: number; label: string; sub: string; isLast: boolean }) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="flex flex-col items-center shrink-0">
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
+    <div
+      className="rounded-xl border-2 border-dashed p-8 flex flex-col items-center justify-center text-center gap-3 transition-colors cursor-pointer"
+      style={{
+        borderColor: dragging ? EK_BLUE : "#d1d5db",
+        backgroundColor: dragging ? `${EK_BLUE}08` : "#f9fafb",
+      }}
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={handleDrop}
+      onClick={() => !uploading && inputRef.current?.click()}
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pdf,application/pdf"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+        disabled={uploading}
+      />
+      {uploading ? (
+        <Loader2 className="w-10 h-10 text-gray-400 animate-spin" />
+      ) : (
+        <Upload className="w-10 h-10 text-gray-400" />
+      )}
+      <div>
+        <p className="text-sm font-semibold text-gray-700">
+          {uploading ? "מעלה קובץ..." : "גרור PDF לכאן או לחץ לבחירה"}
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
+          קבצי PDF בלבד · מקסימום 50 MB
+        </p>
+      </div>
+      {!uploading && (
+        <button
+          type="button"
+          className="px-4 py-2 rounded-lg text-sm font-semibold text-white"
           style={{ backgroundColor: EK_BLUE }}
         >
-          {num}
-        </div>
-        {!isLast && <div className="w-px flex-1 mt-1" style={{ backgroundColor: "#e5e7eb", minHeight: 24 }} />}
-      </div>
-      <div className="pb-4">
-        <p className="text-sm font-semibold text-gray-800">{label}</p>
-        <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
-      </div>
+          בחר קובץ PDF
+        </button>
+      )}
     </div>
   );
 }
 
-// ── Export placeholder cards ───────────────────────────────────────────────────
-
-const EXPORT_CARDS = [
-  {
-    icon: <Globe className="w-5 h-5" />,
-    title: "דוח עבודה HTML",
-    sub: "פתיחה בדפדפן / הדפסה",
-    color: EK_BLUE,
-  },
-  {
-    icon: <FileSpreadsheet className="w-5 h-5" />,
-    title: "Excel כמויות",
-    sub: "10 גיליונות — BOQ / תמרורים / מדידות",
-    color: "#16a34a",
-  },
-  {
-    icon: <Printer className="w-5 h-5" />,
-    title: "PDF להדפסה",
-    sub: "Cmd+P → Save as PDF",
-    color: "#7c3aed",
-  },
-  {
-    icon: <Package className="w-5 h-5" />,
-    title: "חבילת Audit JSON",
-    sub: "manifest + pipeline summary",
-    color: "#d97706",
-  },
-];
+// ── Export card ───────────────────────────────────────────────────────────────
 
 function ExportCard({
-  icon,
-  title,
-  sub,
-  color,
+  entry,
+  onDownload,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  sub: string;
-  color: string;
+  entry: ExportEntry;
+  onDownload: (filename: string) => void;
 }) {
+  const isHtml   = entry.type === "html_report";
+  const isExcel  = entry.type === "excel_workbook";
+  const isJson   = entry.filename.endsWith(".json");
+
+  const icon = isHtml ? <Globe className="w-5 h-5" /> :
+               isExcel ? <FileSpreadsheet className="w-5 h-5" /> :
+               <FileText className="w-5 h-5" />;
+
+  const color = isHtml ? EK_BLUE : isExcel ? "#16a34a" : "#6b7280";
+
+  const label = isHtml   ? "פתח בדפדפן / הדפסה" :
+                isExcel  ? "הורד Excel" :
+                isJson   ? "הורד JSON" :
+                "הורד";
+
+  if (!entry.exists) return null;
+
   return (
-    <div
-      className="flex items-start gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 opacity-60 cursor-not-allowed select-none"
-      title="יתחבר בשלב הבא"
-    >
+    <div className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4">
       <div
-        className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-white"
+        className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-white"
         style={{ backgroundColor: color }}
       >
         {icon}
       </div>
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-gray-700 truncate">{title}</p>
-        <p className="text-xs text-gray-400 mt-0.5">{sub}</p>
-        <p className="text-[10px] mt-1 font-medium" style={{ color: EK_GOLD }}>
-          יתחבר בשלב הבא
-        </p>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-gray-800 truncate">{entry.filename}</p>
+        <p className="text-xs text-gray-400 mt-0.5">{entry.description || entry.type}</p>
+        {entry.size > 0 && (
+          <p className="text-[10px] text-gray-400 mt-0.5">
+            {(entry.size / 1024).toFixed(0)} KB
+          </p>
+        )}
       </div>
+      <button
+        type="button"
+        onClick={() => onDownload(entry.filename)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shrink-0"
+        style={{ backgroundColor: color }}
+      >
+        <Download className="w-3.5 h-3.5" />
+        {label}
+      </button>
     </div>
   );
 }
 
-// ── Safety row ─────────────────────────────────────────────────────────────────
-
-function SafetyRow({ text }: { text: string }) {
-  return (
-    <li className="flex items-start gap-2 text-sm text-red-700">
-      <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
-      <span>{text}</span>
-    </li>
-  );
-}
-
-// ── Main page component ────────────────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function PlanScannerPage() {
   const { profile, loading: authLoading } = useAuth();
+  const [session, setSession] = useState<ScanSession>({ phase: "idle" });
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sessionRef = useRef<ScanSession>(session);
 
-  // Loading state
+  // Keep ref in sync for use in callbacks
+  useEffect(() => { sessionRef.current = session; }, [session]);
+
+  // Status polling
+  useEffect(() => {
+    const { phase, slug } = session;
+    if (phase === "running" || phase === "intake_created") {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = setInterval(async () => {
+        if (!slug) return;
+        try {
+          const res = await authedFetch(`/api/plan-scanner/run/${slug}/status`);
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data.phase && data.phase !== sessionRef.current.phase) {
+            setSession((s) => ({
+              ...s,
+              phase: data.phase,
+              exports: data.exports ?? s.exports,
+              planName: data.plan_name ?? s.planName,
+              error: data.error,
+            }));
+          }
+        } catch {}
+      }, 3000);
+    } else {
+      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+    }
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [session.phase, session.slug]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Leave guard — active whenever there is a scan with unsaved data
+  const hasActiveScan = session.phase !== "idle" && session.phase !== "source_deleted";
+
+  const handleDiscard = useCallback(() => {
+    const { slug } = sessionRef.current;
+    if (slug) {
+      // Best-effort cleanup before navigation
+      getToken().then((token) => {
+        if (token) {
+          fetch(`/api/plan-scanner/run/${slug}/cleanup`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          }).catch(() => {});
+        }
+      });
+    }
+    setSession({ phase: "idle" });
+  }, []);
+
+  useDirtyGuard({
+    isDirty: hasActiveScan,
+    onSaveDraft: async () => {
+      // Stays on page — user must export manually before leaving
+    },
+    onDiscard: handleDiscard,
+  });
+
+  // Auth loading
   if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <p className="text-sm text-gray-400">טוען...</p>
+        <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
       </div>
     );
   }
 
-  // Access guard — same pattern as AccessManager
+  // Access guard
   const canAccess = !!profile && canAccessTab(profile, "plan-scanner");
   if (!canAccess) {
     return (
@@ -189,176 +335,332 @@ export default function PlanScannerPage() {
     );
   }
 
-  return (
-    <div
-      className="min-h-screen p-5 md:p-8"
-      style={{ backgroundColor: "#f4f4f5", direction: "rtl" }}
-    >
-      <div className="max-w-4xl mx-auto space-y-5">
+  // ── Handlers ────────────────────────────────────────────────────────────────
 
-        {/* ── Header ───────────────────────────────────────────────────────────── */}
-        <div
-          className="rounded-xl p-6 text-white"
-          style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #1a2d4a 100%)` }}
-        >
+  async function handleFileSelected(file: File) {
+    setSession({ phase: "uploading" });
+
+    if (file.type !== "application/pdf") {
+      setSession({ phase: "failed", error: `קובץ לא נתמך: ${file.type}. נדרש PDF בלבד.` });
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      setSession({ phase: "failed", error: `קובץ גדול מדי (${(file.size / 1024 / 1024).toFixed(1)} MB). מקסימום: 50 MB` });
+      return;
+    }
+
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("לא מחובר");
+
+      const form = new FormData();
+      form.append("file", file);
+
+      const res = await fetch("/api/plan-scanner/intake", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `שגיאת שרת ${res.status}`);
+      }
+
+      const { slug, planName } = await res.json();
+      setSession({ phase: "intake_created", slug, planName });
+    } catch (err) {
+      setSession({ phase: "failed", error: err instanceof Error ? err.message : "שגיאה בהעלאה" });
+    }
+  }
+
+  async function handleStartScan() {
+    const { slug } = session;
+    if (!slug) return;
+
+    try {
+      const res = await authedFetch(`/api/plan-scanner/run/${slug}/start`, { method: "POST" });
+      const data = await res.json();
+
+      if (data.status === "execution_not_supported") {
+        setSession((s) => ({
+          ...s,
+          executionMessage: data.message,
+          manualCommand: data.manual_command,
+          // Stay in intake_created so user can see the manual command
+        }));
+        return;
+      }
+
+      if (data.status === "started" || data.status === "already_running_or_done") {
+        setSession((s) => ({ ...s, phase: "running", executionMessage: undefined }));
+      }
+    } catch (err) {
+      setSession((s) => ({ ...s, error: err instanceof Error ? err.message : "שגיאה" }));
+    }
+  }
+
+  async function handleDownload(filename: string) {
+    const { slug } = session;
+    if (!slug) return;
+    try {
+      const token = await getToken();
+      if (!token) return;
+      const res = await fetch(`/api/plan-scanner/run/${slug}/export/${encodeURIComponent(filename)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      setSession((s) => ({ ...s, exportDownloaded: true }));
+    } catch {}
+  }
+
+  async function handleCleanup() {
+    const { slug } = session;
+    if (!slug) return;
+    try {
+      const res = await authedFetch(`/api/plan-scanner/run/${slug}/cleanup`, { method: "POST" });
+      if (res.ok) {
+        setSession((s) => ({ ...s, phase: "source_deleted" }));
+      }
+    } catch {}
+  }
+
+  function handleReset() {
+    setSession({ phase: "idle" });
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+
+  const { phase } = session;
+
+  return (
+    <div className="min-h-screen p-5 md:p-8" style={{ backgroundColor: "#f4f4f5", direction: "rtl" }}>
+      <div className="max-w-4xl mx-auto space-y-4">
+
+        {/* Header */}
+        <div className="rounded-xl p-5 text-white" style={{ background: `linear-gradient(135deg, ${NAVY} 0%, #1a2d4a 100%)` }}>
           <div className="flex items-start gap-4">
-            <div
-              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-              style={{ backgroundColor: "rgba(255,255,255,0.1)" }}
-            >
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "rgba(255,255,255,0.1)" }}>
               <ScanText className="w-6 h-6 text-white" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <h1 className="text-xl font-black">סורק תוכניות</h1>
-                <span
-                  className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
-                  style={{ backgroundColor: EK_GOLD, color: NAVY }}
-                >
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide" style={{ backgroundColor: EK_GOLD, color: NAVY }}>
                   BETA · פנימי
                 </span>
               </div>
-              <p className="text-sm opacity-75 mb-3">
-                העלאת תוכנית PDF, סריקה, הפקת דוח עבודה וכתב כמויות — גרסת בטא פנימית
+              <p className="text-sm opacity-70">
+                סריקת תוכניות PDF · חילוץ כמויות · דוח עבודה · ייצוא Excel — כלי ניתוח זמני פנימי
               </p>
-              <div className="flex flex-wrap gap-2">
-                <Badge label="טיוטה — Draft" color="amber" />
-                <Badge label="דורש סקירה" color="red" />
-                <Badge label="לא מאושר לביצוע" color="red" />
-                <Badge label="גישה פנימית בלבד" color="gray" />
-              </div>
+              <p className="text-xs opacity-50 mt-1">
+                קובץ המקור הוא קלט זמני בלבד · הדוחות המיוצאים הם המוצר הסופי · לא ארכיון · לא מאושר לביצוע
+              </p>
             </div>
           </div>
         </div>
 
-        {/* ── Scanner-not-archive notice ────────────────────────────────────────── */}
-        <Card>
-          <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 mt-0.5 shrink-0" style={{ color: EK_BLUE }} />
-            <div>
-              <SectionTitle>קבצי מקור הם קלט זמני — לא ארכיון</SectionTitle>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                סורק התוכניות <strong>אינו</strong> מאחסן תוכניות PDF לצמיתות.
-                קובץ ה-PDF הוא קלט ביניים זמני בלבד.
-              </p>
-              <p className="text-sm text-gray-600 mt-2 leading-relaxed">
-                <strong>המוצר הסופי</strong> הוא הדוחות המיוצאים:{" "}
-                <span className="font-semibold text-gray-800">
-                  דוח HTML · Excel כמויות · JSON
-                </span>
-                {" "}— ועתידית PDF.
-              </p>
-              <ul className="mt-3 space-y-1 text-sm text-gray-600 list-none">
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 shrink-0 text-green-500" />
-                  ברירת מחדל: קובץ המקור נמחק לאחר הסריקה
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 shrink-0 text-green-500" />
-                  הדוחות המיוצאים נשמרים לאחר מחיקת המקור
-                </li>
-                <li className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 shrink-0 text-amber-500" />
-                  שמירת קובץ המקור דורשת בחירה מפורשת
-                </li>
-              </ul>
-            </div>
+        {/* Stepper */}
+        <Stepper phase={phase} />
+
+        {/* Phase: idle / uploading */}
+        {(phase === "idle" || phase === "uploading") && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+            <h2 className="text-base font-bold mb-3" style={{ color: NAVY }}>העלאת תוכנית PDF</h2>
+            <UploadZone onFile={handleFileSelected} uploading={phase === "uploading"} />
           </div>
-        </Card>
+        )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-          {/* ── Upload placeholder ────────────────────────────────────────────────── */}
-          <Card>
-            <SectionTitle>העלאת תוכנית PDF</SectionTitle>
-            <div
-              className="rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-8 flex flex-col items-center justify-center text-center gap-3 cursor-not-allowed opacity-60"
-              title="יתחבר בשלב הבא"
-            >
-              <Upload className="w-10 h-10 text-gray-400" />
-              <div>
-                <p className="text-sm font-semibold text-gray-600">
-                  העלאת PDF — יתחבר בשלב הבא
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  קבצי PDF בלבד · מגבלת גודל להגדרה
-                </p>
+        {/* Phase: intake_created */}
+        {phase === "intake_created" && (
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-4">
+            <div className="flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-bold text-gray-800">קובץ הועלה בהצלחה</p>
+                <p className="text-xs text-gray-500 mt-0.5">{session.planName} · ממתין להפעלת סריקה</p>
               </div>
-              <span
-                className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold text-white opacity-50 cursor-not-allowed"
+            </div>
+
+            {session.executionMessage && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <div className="flex items-start gap-2">
+                  <Terminal className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-amber-800 mb-1">{session.executionMessage}</p>
+                    <p className="text-xs text-amber-700 mb-2">הפעל ידנית מהטרמינל:</p>
+                    <code className="block text-[10px] bg-amber-100 rounded p-2 text-amber-900 break-all whitespace-pre-wrap leading-relaxed">
+                      {session.manualCommand}
+                    </code>
+                    <p className="text-[10px] text-amber-600 mt-1.5">לאחר הרצה, לחץ על ״בדוק סטטוס״ לטעינת התוצאות.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleStartScan}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white"
                 style={{ backgroundColor: EK_BLUE }}
               >
-                בחר קובץ PDF
-              </span>
-              <p className="text-[10px] text-amber-600 font-medium">
-                ⚠ לא מחובר עדיין — Slice B
+                <ScanText className="w-4 h-4" />
+                הפעל סריקה
+              </button>
+              {session.slug && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = await authedFetch(`/api/plan-scanner/run/${session.slug}/status`);
+                    const data = await res.json();
+                    if (data.phase) setSession((s) => ({ ...s, phase: data.phase, exports: data.exports }));
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-gray-300 text-gray-700 bg-white"
+                >
+                  בדוק סטטוס
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Phase: running */}
+        {phase === "running" && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm flex flex-col items-center text-center gap-4">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ backgroundColor: `${EK_BLUE}15` }}>
+              <Loader2 className="w-7 h-7 animate-spin" style={{ color: EK_BLUE }} />
+            </div>
+            <div>
+              <p className="text-base font-bold text-gray-800">סריקה מתבצעת...</p>
+              <p className="text-sm text-gray-500 mt-1">{session.planName ?? "תוכנית"}</p>
+              <p className="text-xs text-gray-400 mt-2">הניתוח עשוי לקחת מספר דקות. הדף יתעדכן אוטומטית.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Phase: outputs_generated or source_deleted */}
+        {(phase === "outputs_generated" || phase === "source_deleted") && (
+          <div className="space-y-4">
+            {/* Results summary */}
+            <div className="bg-white rounded-xl border border-green-200 p-5 shadow-sm">
+              <div className="flex items-center gap-3 mb-3">
+                <CheckCircle className="w-5 h-5 text-green-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-gray-800">סריקה הושלמה</p>
+                  <p className="text-xs text-gray-500">{session.planName} · כל הכמויות הן טיוטה בלבד</p>
+                </div>
+              </div>
+              {phase === "source_deleted" && (
+                <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>קובץ המקור נמחק — הדוחות נשמרו</span>
+                </div>
+              )}
+            </div>
+
+            {/* Export cards */}
+            <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+              <h2 className="text-base font-bold mb-3" style={{ color: NAVY }}>הורדת דוחות</h2>
+              <p className="text-xs text-gray-400 mb-3">
+                כל הדוחות הם טיוטה — נדרש אישור אנושי לפני שימוש מבצעי
               </p>
+              <div className="space-y-2">
+                {(session.exports ?? []).filter((e) => e.exists).map((entry) => (
+                  <ExportCard key={entry.filename} entry={entry} onDownload={handleDownload} />
+                ))}
+                {(session.exports ?? []).filter((e) => e.exists).length === 0 && (
+                  <p className="text-sm text-gray-400 text-center py-4">אין קבצים זמינים להורדה</p>
+                )}
+              </div>
             </div>
-          </Card>
 
-          {/* ── Flow preview ──────────────────────────────────────────────────────── */}
-          <Card>
-            <SectionTitle>תהליך הסריקה</SectionTitle>
-            <div className="mt-1">
-              {FLOW_STEPS.map((step, i) => (
-                <FlowStep
-                  key={step.num}
-                  num={step.num}
-                  label={step.label}
-                  sub={step.sub}
-                  isLast={i === FLOW_STEPS.length - 1}
-                />
-              ))}
+            {/* Cleanup */}
+            {phase === "outputs_generated" && (
+              <div className="bg-white rounded-xl border border-red-100 p-5 shadow-sm">
+                <div className="flex items-start gap-3">
+                  <Trash2 className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-gray-800">מחיקת קובץ המקור</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      קובץ ה-PDF המקורי הוא קלט זמני בלבד. לאחר הורדת הדוחות, מחק אותו.
+                      הדוחות יישארו זמינים.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleCleanup}
+                      className="mt-3 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-red-300 text-red-700 hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      מחק קובץ PDF מקור
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Phase: failed */}
+        {phase === "failed" && (
+          <div className="bg-white rounded-xl border border-red-200 p-5 shadow-sm">
+            <div className="flex items-start gap-3 mb-4">
+              <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-gray-800">שגיאה בתהליך</p>
+                <p className="text-xs text-gray-500 mt-1">{session.error ?? "אירעה שגיאה לא ידועה"}</p>
+              </div>
             </div>
-          </Card>
-        </div>
-
-        {/* ── Export preview cards ──────────────────────────────────────────────── */}
-        <Card>
-          <SectionTitle>יצואים עתידיים</SectionTitle>
-          <p className="text-xs text-gray-400 mb-4">
-            הכפתורים יהיו פעילים לאחר השלמת הסריקה. כל הפלטים הם טיוטה.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {EXPORT_CARDS.map((c) => (
-              <ExportCard key={c.title} icon={c.icon} title={c.title} sub={c.sub} color={c.color} />
-            ))}
+            <button
+              type="button"
+              onClick={handleReset}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <RotateCcw className="w-4 h-4" />
+              התחל מחדש
+            </button>
           </div>
-        </Card>
+        )}
 
-        {/* ── Safety section ────────────────────────────────────────────────────── */}
-        <Card className="border-red-100">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 mt-0.5 shrink-0 text-red-500" />
-            <div className="flex-1">
-              <SectionTitle>הצהרת אחריות — טיוטה בלבד</SectionTitle>
-              <ul className="space-y-2">
-                <SafetyRow text="לא מאושר לביצוע עבודה — כל הכמויות הן טיוטה בלבד" />
-                <SafetyRow text="לא מאושר לחיוב / חשבון ללא אישור אנושי מפורש" />
-                <SafetyRow text="נדרש אישור אנושי לכל פריט כמות לפני שימוש מבצעי" />
-                <SafetyRow text="קנה מידה חייב כיול ידני — כל מדידות המטרים הן הנחה" />
-                <SafetyRow text="מקור התוכנית הוא קלט זמני — לא ישמר לצמיתות כברירת מחדל" />
-              </ul>
+        {/* Safety panel — always visible when active scan */}
+        {hasActiveScan && (
+          <div className="rounded-xl border border-red-100 bg-red-50 p-4">
+            <div className="flex items-start gap-2">
+              <ShieldAlert className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-red-700">הצהרת אחריות — טיוטה בלבד</p>
+                <ul className="mt-1 space-y-0.5 text-[10px] text-red-600">
+                  <li>לא מאושר לביצוע עבודה — כל הכמויות הן טיוטה בלבד</li>
+                  <li>נדרש אישור אנושי לכל פריט כמות לפני שימוש מבצעי</li>
+                  <li>קנה מידה לא מאומת — מדידות הן הנחה בלבד</li>
+                  <li>קובץ המקור הוא קלט זמני — אינו נשמר לצמיתות</li>
+                </ul>
+              </div>
             </div>
           </div>
-        </Card>
+        )}
 
-        {/* ── Next implementation note ──────────────────────────────────────────── */}
-        <div
-          className="rounded-xl border border-dashed p-4 flex items-start gap-3"
-          style={{ borderColor: EK_BLUE + "60", backgroundColor: EK_BLUE + "08" }}
-        >
-          <ChevronLeft className="w-5 h-5 mt-0.5 shrink-0" style={{ color: EK_BLUE }} />
-          <div>
-            <p className="text-sm font-bold" style={{ color: EK_BLUE }}>
-              שלב הבא: Slice B — חיבור upload/run/export backend wrapper
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              יחבר את שדה ההעלאה ל-API, יפעיל את הסריקה ברקע, ויחזיר קישורי הורדה לדוחות.
-              ללא שינוי DB / ללא API בתשלום / ללא ארכיון PDF קבוע.
-            </p>
+        {/* Reset — when outputs or source deleted */}
+        {(phase === "outputs_generated" || phase === "source_deleted") && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleReset}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold text-gray-500 hover:text-gray-700 border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              סריקה חדשה
+            </button>
           </div>
-        </div>
+        )}
 
       </div>
     </div>
