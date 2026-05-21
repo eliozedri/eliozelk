@@ -27,6 +27,15 @@ pytesseract>=0.3.13           # thin pytesseract wrapper around tesseract binary
 openpyxl>=3.1.0                # Excel workbook generation
 
 # Optional — future stages
-# ezdxf>=1.0.0                  # Stage F: DXF export
 # svgwrite>=1.4.3                # alternative SVG generation
 # weasyprint>=60.0               # PDF generation from HTML (optional follow-up)
+
+# Image Scanner Engine (installed 2026-05-21)
+easyocr>=1.7.2                 # multi-language OCR; numeric sign codes + Hebrew annotations
+paddleocr>=3.5.0               # alternative OCR engine for comparison
+paddlepaddle>=3.3.1            # PaddlePaddle backend for PaddleOCR
+scikit-image>=0.24.0           # connected components, morphological ops, local peak detection
+shapely>=2.0.7                 # geometric containment/proximity queries for spatial association
+ezdxf>=1.4.2                   # DXF reading for plans delivered as DXF (future use)
+rtree>=1.4.1                   # spatial indexing for fast proximity search (needs: brew install spatialindex)
+# System dep: brew install tesseract-lang  (adds heb.traineddata + 100+ languages to tesseract)

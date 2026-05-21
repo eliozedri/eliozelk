@@ -1,0 +1,1648 @@
+#!/usr/bin/env python3
+"""
+35_image_based_plan_scanner_poc.py
+===================================
+Engine B: Image-Based Plan Scanner POC
+
+Renders PDF pages as raster images and detects signs/poles/codes visually.
+Does NOT touch or modify any existing scripts (01-34) or the existing pipeline.
+
+Usage:
+    .venv/bin/python 35_image_based_plan_scanner_poc.py \
+        --plan-run-dir runs/poc_plan_50_448_02_400_20260520_223259 \
+        [--page 0] [--dpi 300] [--mode fast|deep] [--ocr all|tesseract|easyocr|paddleocr]
+"""
+
+# --- 1. CLI & configuration ---
+import argparse
+import json
+import math
+import os
+import sys
+import time
+import traceback
+import warnings
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import base64
+import textwrap
+
+warnings.filterwarnings("ignore")
+
+# Suppress urllib3 SSL warning from paddleocr deps
+import urllib3
+urllib3.disable_warnings()
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Engine B: Image-Based Plan Scanner POC"
+    )
+    parser.add_argument(
+        "--plan-run-dir", required=True,
+        help="Path to the plan run directory (e.g. runs/poc_plan_50_448_02_400_...)"
+    )
+    parser.add_argument(
+        "--page", type=int, default=0,
+        help="Page index to scan (0-based, default=0)"
+    )
+    parser.add_argument(
+        "--dpi", type=int, default=300,
+        help="Rendering DPI (150=fast, 300=default, 600=deep)"
+    )
+    parser.add_argument(
+        "--mode", choices=["fast", "deep"], default="fast",
+        help="Scan mode: fast=patches only, deep=full-page grid OCR too"
+    )
+    parser.add_argument(
+        "--ocr", choices=["all", "tesseract", "easyocr", "paddleocr"], default="all",
+        help="OCR engines to use"
+    )
+    return parser.parse_args()
+
+
+def log(msg: str, indent: int = 0) -> None:
+    prefix = "  " * indent
+    print(f"{prefix}{msg}", flush=True)
+
+
+# --- 2. Input resolution ---
+
+def find_source_pdf(run_dir: Path) -> Optional[Path]:
+    """Find source PDF in run_dir/source/, run_dir/uploads/, or run_dir/ directly."""
+    search_dirs = [
+        run_dir / "source",
+        run_dir / "uploads",
+        run_dir,
+    ]
+    for d in search_dirs:
+        if d.exists():
+            for f in sorted(d.iterdir()):
+                if f.suffix.lower() == ".pdf" and f.is_file():
+                    return f
+    return None
+
+
+# --- 3. PDF rendering ---
+
+MAX_IMG_PIXELS = 4_000_000   # 4 Megapixels — safety cap for CV processing (connectedComponents scales as O(n))
+MAX_BLOB_PIXELS = 4_000_000  # Pole detection runs on a downscaled version if needed
+
+
+def render_page(pdf_path: Path, page_idx: int, dpi: int, output_dir: Path) -> Tuple[Any, str]:
+    """Render PDF page to numpy array and save PNG. Returns (img_bgr, save_path, elapsed_ms).
+
+    Applies a MAX_IMG_PIXELS cap: if the rendered image would exceed 16MP at the requested
+    DPI, the DPI is reduced proportionally so the total pixel count stays under the cap.
+    This prevents multi-minute connectedComponents runs on A0/A1 plans at 300 DPI.
+    """
+    import fitz  # PyMuPDF
+    import numpy as np
+    import cv2
+
+    t0 = time.perf_counter()
+    log(f"Rendering page {page_idx} at {dpi} DPI ...", indent=1)
+
+    doc = fitz.open(str(pdf_path))
+    if page_idx >= len(doc):
+        log(f"  ERROR: PDF has {len(doc)} pages; page index {page_idx} out of range.", indent=1)
+        sys.exit(1)
+
+    page = doc[page_idx]
+    # Compute rendered size at requested DPI to check cap
+    page_rect = page.rect  # in points (1 pt = 1/72 inch)
+    w_px_req = int(page_rect.width * dpi / 72)
+    h_px_req = int(page_rect.height * dpi / 72)
+    total_px_req = w_px_req * h_px_req
+
+    effective_dpi = dpi
+    if total_px_req > MAX_IMG_PIXELS:
+        scale = math.sqrt(MAX_IMG_PIXELS / total_px_req)
+        effective_dpi = max(36, int(dpi * scale))
+        log(f"  WARNING: Requested DPI={dpi} would yield {w_px_req}x{h_px_req}px ({total_px_req/1e6:.1f}MP), "
+            f"exceeding {MAX_IMG_PIXELS/1e6:.0f}MP cap.", indent=1)
+        log(f"  Auto-reducing DPI to {effective_dpi} for processing (rendering will be ~{int(w_px_req*scale)}x{int(h_px_req*scale)}px).", indent=1)
+
+    mat = fitz.Matrix(effective_dpi / 72, effective_dpi / 72)
+    pix = page.get_pixmap(matrix=mat, colorspace=fitz.csRGB)
+
+    # Save PNG
+    output_dir.mkdir(parents=True, exist_ok=True)
+    png_path = output_dir / f"page_{page_idx}_{effective_dpi}dpi.png"
+    pix.save(str(png_path))
+
+    # Convert to numpy BGR for OpenCV
+    img_data = pix.samples  # RGB bytes
+    img_np = np.frombuffer(img_data, dtype=np.uint8).reshape(pix.height, pix.width, 3)
+    img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    doc.close()
+
+    w, h = pix.width, pix.height
+    log(f"  Rendered: {w}x{h}px ({w*h/1e6:.1f}MP), effective_dpi={effective_dpi}, "
+        f"saved to {png_path.name}, elapsed={elapsed_ms:.0f}ms", indent=1)
+    return img_bgr, str(png_path), elapsed_ms, effective_dpi
+
+
+# --- 4. Pole/tick detection (anchor pass 1) ---
+
+def detect_poles_and_ticks(
+    img_bgr,
+    dpi: int,
+    pole_search_radius_px: int = None
+) -> Tuple[List[Dict], float]:
+    """
+    Detect pole candidates as small filled circles, then find tick marks near each.
+    Uses SimpleBlobDetector (fast, O(pixels)) then a contour pass on small ROIs.
+    Returns (list of pole candidates, elapsed_ms).
+    """
+    import cv2
+    import numpy as np
+
+    if pole_search_radius_px is None:
+        pole_search_radius_px = max(20, int(80 * dpi / 300))
+
+    t0 = time.perf_counter()
+    log("Pole/tick detection (anchor pass 1) ...", indent=1)
+
+    h_img, w_img = img_bgr.shape[:2]
+
+    # If image is still too large for fast blob detection, work on a downscaled version
+    blob_scale = 1.0
+    work_img = img_bgr
+    if h_img * w_img > MAX_BLOB_PIXELS:
+        blob_scale = math.sqrt(MAX_BLOB_PIXELS / (h_img * w_img))
+        new_w = int(w_img * blob_scale)
+        new_h = int(h_img * blob_scale)
+        work_img = cv2.resize(img_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        log(f"  Downscaling for pole detection: {w_img}x{h_img} → {new_w}x{new_h} (scale={blob_scale:.3f})", indent=2)
+
+    gray = cv2.cvtColor(work_img, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    _, thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    # Use SimpleBlobDetector — much faster than connectedComponents on large images
+    effective_dpi = dpi * blob_scale
+    # Blob area bounds at effective DPI: poles are 0.5–3mm diameter
+    # At effective_dpi: 1mm = effective_dpi/25.4 px; area = π*(d/2)²
+    mm_to_px = effective_dpi / 25.4
+    min_dia_px = max(2, int(0.5 * mm_to_px))   # 0.5mm min pole diameter
+    max_dia_px = max(10, int(6.0 * mm_to_px))  # 6mm max pole diameter
+    min_area = math.pi * (min_dia_px / 2) ** 2
+    max_area = math.pi * (max_dia_px / 2) ** 2
+
+    params = cv2.SimpleBlobDetector_Params()
+    params.filterByArea = True
+    params.minArea = max(4, min_area)
+    params.maxArea = max_area
+    params.filterByCircularity = True
+    params.minCircularity = 0.5
+    params.filterByConvexity = False
+    params.filterByInertia = False
+    params.minDistBetweenBlobs = max(2, int(min_dia_px * 0.8))
+
+    detector = cv2.SimpleBlobDetector_create(params)
+    # SimpleBlobDetector expects white blobs on black background — invert thresh
+    keypoints = detector.detect(cv2.bitwise_not(thresh))
+
+    pole_candidates = []
+    for kp in keypoints:
+        cx_s, cy_s = kp.pt
+        # Scale back to original image coords
+        cx = cx_s / blob_scale
+        cy = cy_s / blob_scale
+        radius_s = kp.size / 2
+        radius_px = radius_s / blob_scale
+
+        # Search for tick marks in original image around this pole
+        margin = int(pole_search_radius_px)
+        roi_x1 = max(0, int(cx) - margin)
+        roi_y1 = max(0, int(cy) - margin)
+        roi_x2 = min(w_img, int(cx) + margin)
+        roi_y2 = min(h_img, int(cy) + margin)
+
+        # Re-threshold on the original image ROI for tick detection
+        gray_orig = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        roi_gray = gray_orig[roi_y1:roi_y2, roi_x1:roi_x2]
+        if roi_gray.size == 0:
+            continue
+        _, roi_thresh = cv2.threshold(roi_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+        # Hough lines for ticks
+        tick_bboxes = []
+        min_line_len = max(3, int(5 * dpi / 300))
+        max_line_gap = max(2, int(3 * dpi / 300))
+        max_tick_len = int(80 * dpi / 300)
+
+        lines = cv2.HoughLinesP(
+            roi_thresh, rho=1, theta=math.pi / 180,
+            threshold=max(5, int(8 * dpi / 300)),
+            minLineLength=min_line_len,
+            maxLineGap=max_line_gap
+        )
+        tick_count = 0
+        if lines is not None:
+            for line in lines:
+                x1_l, y1_l, x2_l, y2_l = line[0]
+                length = math.hypot(x2_l - x1_l, y2_l - y1_l)
+                if min_line_len <= length <= max_tick_len:
+                    tick_bboxes.append([
+                        roi_x1 + x1_l, roi_y1 + y1_l,
+                        roi_x1 + x2_l, roi_y1 + y2_l
+                    ])
+                    tick_count += 1
+
+        bbox_r = int(radius_px)
+        pole_candidates.append({
+            "center_x": float(cx),
+            "center_y": float(cy),
+            "radius_px": float(radius_px),
+            "area_px": math.pi * radius_px ** 2,
+            "circularity": 1.0,  # SimpleBlobDetector already filters circularity
+            "bbox": [max(0, int(cx) - bbox_r), max(0, int(cy) - bbox_r),
+                     min(w_img, int(cx) + bbox_r), min(h_img, int(cy) + bbox_r)],
+            "tick_count": tick_count,
+            "tick_bboxes": tick_bboxes[:10],
+        })
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    log(f"  Found {len(pole_candidates)} pole candidates "
+        f"(dia range: {min_dia_px:.0f}–{max_dia_px:.0f}px at {effective_dpi:.0f}dpi), "
+        f"elapsed={elapsed_ms:.0f}ms", indent=1)
+    return pole_candidates, elapsed_ms
+
+
+# --- 5. OCR pass (anchor pass 2) ---
+
+def _check_ocr_availability(ocr_choice: str) -> Dict[str, bool]:
+    available = {}
+    if ocr_choice in ("all", "tesseract"):
+        try:
+            import pytesseract
+            pytesseract.get_tesseract_version()
+            available["tesseract"] = True
+        except Exception:
+            available["tesseract"] = False
+    else:
+        available["tesseract"] = False
+
+    if ocr_choice in ("all", "easyocr"):
+        try:
+            import easyocr  # noqa: F401
+            available["easyocr"] = True
+        except ImportError:
+            available["easyocr"] = False
+    else:
+        available["easyocr"] = False
+
+    if ocr_choice in ("all", "paddleocr"):
+        try:
+            from paddleocr import PaddleOCR  # noqa: F401
+            available["paddleocr"] = True
+        except ImportError:
+            available["paddleocr"] = False
+    else:
+        available["paddleocr"] = False
+
+    return available
+
+
+def _is_valid_sign_code(text: str) -> bool:
+    """Return True if text looks like a sign code: 2-4 digits, value 1-9999."""
+    text = text.strip()
+    if not text.isdigit():
+        return False
+    if len(text) < 2 or len(text) > 4:
+        return False
+    val = int(text)
+    return 1 <= val <= 9999
+
+
+def _ocr_tesseract(crop_img, region_id: str) -> Dict[str, Any]:
+    """Run Tesseract digit-mode OCR on crop. Returns result dict."""
+    import pytesseract
+    import numpy as np
+
+    t0 = time.perf_counter()
+    try:
+        data = pytesseract.image_to_data(
+            crop_img,
+            lang="eng",
+            config="--psm 7 -c tessedit_char_whitelist=0123456789",
+            output_type=pytesseract.Output.DICT
+        )
+        best_text = ""
+        best_conf = 0.0
+        for i, text in enumerate(data["text"]):
+            text = str(text).strip()
+            conf = float(data["conf"][i])
+            if _is_valid_sign_code(text) and conf > best_conf:
+                best_text = text
+                best_conf = conf
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        return {
+            "engine": "tesseract",
+            "text": best_text if best_text else None,
+            "confidence": best_conf if best_text else 0.0,
+            "elapsed_ms": round(elapsed_ms, 1),
+            "status": "ok"
+        }
+    except Exception as e:
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        return {"engine": "tesseract", "text": None, "confidence": 0.0,
+                "elapsed_ms": round(elapsed_ms, 1), "status": f"error: {e}"}
+
+
+def _ocr_easyocr(crop_img, reader_cache: Dict, region_id: str) -> Dict[str, Any]:
+    """Run EasyOCR on crop. reader_cache allows reuse across calls."""
+    t0 = time.perf_counter()
+    try:
+        import easyocr
+        if "reader" not in reader_cache:
+            log("    Initializing EasyOCR reader (may download models on first run) ...", indent=2)
+            t_load = time.perf_counter()
+            # Use English + Hebrew
+            reader_cache["reader"] = easyocr.Reader(["en", "he"], gpu=False, verbose=False)
+            load_ms = (time.perf_counter() - t_load) * 1000
+            log(f"    EasyOCR reader initialized in {load_ms:.0f}ms", indent=2)
+
+        reader = reader_cache["reader"]
+        results = reader.readtext(crop_img, detail=1, paragraph=False)
+        best_text = ""
+        best_conf = 0.0
+        for (bbox_pts, text, conf) in results:
+            text = str(text).strip()
+            if _is_valid_sign_code(text) and conf > best_conf:
+                best_text = text
+                best_conf = conf
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        return {
+            "engine": "easyocr",
+            "text": best_text if best_text else None,
+            "confidence": float(best_conf) if best_text else 0.0,
+            "elapsed_ms": round(elapsed_ms, 1),
+            "status": "ok"
+        }
+    except Exception as e:
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        return {"engine": "easyocr", "text": None, "confidence": 0.0,
+                "elapsed_ms": round(elapsed_ms, 1), "status": f"error: {e}"}
+
+
+def _ocr_paddleocr(crop_img, paddle_cache: Dict, region_id: str) -> Dict[str, Any]:
+    """Run PaddleOCR on crop. paddle_cache allows reuse across calls."""
+    t0 = time.perf_counter()
+    try:
+        from paddleocr import PaddleOCR
+        import numpy as np
+
+        if "ocr" not in paddle_cache:
+            log("    Initializing PaddleOCR (may download models on first run) ...", indent=2)
+            t_load = time.perf_counter()
+            paddle_cache["ocr"] = PaddleOCR(
+                use_angle_cls=True, lang="en",
+                use_gpu=False, show_log=False
+            )
+            load_ms = (time.perf_counter() - t_load) * 1000
+            log(f"    PaddleOCR initialized in {load_ms:.0f}ms", indent=2)
+
+        ocr = paddle_cache["ocr"]
+        result = ocr.ocr(crop_img, cls=True)
+        best_text = ""
+        best_conf = 0.0
+        if result and result[0]:
+            for line in result[0]:
+                if line and len(line) >= 2:
+                    text_conf = line[1]
+                    if isinstance(text_conf, (list, tuple)) and len(text_conf) >= 2:
+                        text, conf = str(text_conf[0]).strip(), float(text_conf[1])
+                    else:
+                        continue
+                    if _is_valid_sign_code(text) and conf > best_conf:
+                        best_text = text
+                        best_conf = conf
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        return {
+            "engine": "paddleocr",
+            "text": best_text if best_text else None,
+            "confidence": float(best_conf) if best_text else 0.0,
+            "elapsed_ms": round(elapsed_ms, 1),
+            "status": "ok"
+        }
+    except Exception as e:
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        return {"engine": "paddleocr", "text": None, "confidence": 0.0,
+                "elapsed_ms": round(elapsed_ms, 1), "status": f"error: {e}"}
+
+
+def _init_ocr_engines(available_engines: Dict[str, bool]) -> Dict[str, Any]:
+    """Initialize all available OCR engines once. Returns dict of {engine_name: instance}."""
+    engines: Dict[str, Any] = {}
+
+    if available_engines.get("easyocr"):
+        log("  Initializing EasyOCR reader (first run may download ~800MB models) ...", indent=1)
+        t0 = time.perf_counter()
+        try:
+            import easyocr
+            # Hebrew ('he') is not directly supported; use English only.
+            # For Hebrew annotation support, consider 'he' via a separate easyocr model in future.
+            engines["easyocr"] = easyocr.Reader(["en"], gpu=False, verbose=False)
+            log(f"  EasyOCR ready in {(time.perf_counter()-t0)*1000:.0f}ms", indent=1)
+        except Exception as e:
+            log(f"  EasyOCR init failed: {e}", indent=1)
+            engines["easyocr"] = None
+
+    if available_engines.get("paddleocr"):
+        log("  Initializing PaddleOCR (first run may download models) ...", indent=1)
+        t0 = time.perf_counter()
+        try:
+            from paddleocr import PaddleOCR
+            # PaddleOCR v3+ changed API; try progressively simpler argument sets
+            for kwargs in [
+                {"use_angle_cls": True, "lang": "en", "device": "cpu"},
+                {"use_angle_cls": True, "lang": "en"},
+                {"lang": "en"},
+            ]:
+                try:
+                    engines["paddleocr"] = PaddleOCR(**kwargs)
+                    break
+                except TypeError:
+                    continue
+            log(f"  PaddleOCR ready in {(time.perf_counter()-t0)*1000:.0f}ms", indent=1)
+        except Exception as e:
+            log(f"  PaddleOCR init failed: {e}", indent=1)
+            engines["paddleocr"] = None
+
+    if available_engines.get("tesseract"):
+        try:
+            import pytesseract
+            pytesseract.get_tesseract_version()
+            engines["tesseract"] = True  # No instance needed
+            log("  Tesseract ready.", indent=1)
+        except Exception as e:
+            log(f"  Tesseract unavailable: {e}", indent=1)
+            engines["tesseract"] = None
+
+    return engines
+
+
+def render_crop_hires(pdf_path: Path, page_idx: int, crop_bbox_px: Tuple,
+                      source_dpi: int, target_dpi: int = 150):
+    """Render a specific region of the PDF at higher DPI for better OCR.
+    crop_bbox_px: (x1,y1,x2,y2) in source_dpi pixel space.
+    Returns a BGR numpy array of the crop at target_dpi, or None on error.
+    """
+    try:
+        import fitz
+        import numpy as np
+        import cv2
+        x1, y1, x2, y2 = crop_bbox_px
+        # Convert px coords to PDF points (pt = px * 72 / dpi)
+        pt_x1 = x1 * 72 / source_dpi
+        pt_y1 = y1 * 72 / source_dpi
+        pt_x2 = x2 * 72 / source_dpi
+        pt_y2 = y2 * 72 / source_dpi
+        clip = fitz.Rect(pt_x1, pt_y1, pt_x2, pt_y2)
+        doc = fitz.open(str(pdf_path))
+        page = doc[page_idx]
+        mat = fitz.Matrix(target_dpi / 72, target_dpi / 72)
+        pix = page.get_pixmap(matrix=mat, clip=clip, colorspace=fitz.csRGB)
+        doc.close()
+        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
+        return cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    except Exception:
+        return None
+
+
+def run_ocr_pass(
+    img_bgr,
+    pole_candidates: List[Dict],
+    dpi: int,
+    ocr_choice: str,
+    mode: str,
+    available_engines: Dict[str, bool],
+    run_slug: str,
+    pdf_path: Path = None,
+    page_idx: int = 0,
+) -> Tuple[List[Dict], List[Dict], float]:
+    """
+    Run OCR on crops around each pole candidate + optionally full-page grid.
+    Returns (ocr_results, ocr_comparison, elapsed_ms).
+    """
+    import cv2
+    import numpy as np
+
+    t0 = time.perf_counter()
+    log("OCR pass (anchor pass 2) ...", indent=1)
+
+    h_img, w_img = img_bgr.shape[:2]
+    # Patch radius: about 10mm at the effective DPI. Min 40px, max 200px.
+    patch_radius_mm = 10.0
+    patch_radius = min(200, max(40, int(patch_radius_mm * dpi / 25.4)))
+
+    # Initialize all engines ONCE before the loop
+    ocr_engines = _init_ocr_engines(available_engines)
+
+    ocr_results: List[Dict] = []
+    ocr_comparison: List[Dict] = []
+
+    # For OCR, try to use hi-res PDF crop (150 DPI) for better text quality
+    # If the source DPI is already < 100, the main render is too low for OCR
+    ocr_render_dpi = 150  # Target DPI for OCR crops
+    use_hires_ocr = (pdf_path is not None and dpi < 100)
+
+    def crop_patch(cx: float, cy: float) -> Optional[Tuple]:
+        x1 = max(0, int(cx) - patch_radius)
+        y1 = max(0, int(cy) - patch_radius)
+        x2 = min(w_img, int(cx) + patch_radius)
+        y2 = min(h_img, int(cy) + patch_radius)
+        if x2 <= x1 or y2 <= y1:
+            return None
+        if use_hires_ocr:
+            # Re-render this region from PDF at higher DPI for better OCR
+            hires_crop = render_crop_hires(pdf_path, page_idx, (x1, y1, x2, y2),
+                                           source_dpi=dpi, target_dpi=ocr_render_dpi)
+            if hires_crop is not None and hires_crop.size > 0:
+                return hires_crop, (x1, y1, x2, y2)
+        crop = img_bgr[y1:y2, x1:x2]
+        return crop, (x1, y1, x2, y2)
+
+    def run_all_engines(crop, crop_bbox, region_id: str) -> Dict:
+        results_per_engine = {}
+        if ocr_engines.get("tesseract"):
+            results_per_engine["tesseract"] = _ocr_tesseract(crop, region_id)
+        else:
+            results_per_engine["tesseract"] = {"engine": "tesseract", "text": None,
+                                                "confidence": 0.0, "elapsed_ms": 0,
+                                                "status": "not_installed"}
+
+        if ocr_engines.get("easyocr"):
+            t_e = time.perf_counter()
+            try:
+                reader = ocr_engines["easyocr"]
+                results = reader.readtext(crop, detail=1, paragraph=False)
+                best_text, best_conf = "", 0.0
+                for (_, text, conf) in results:
+                    text = str(text).strip()
+                    if _is_valid_sign_code(text) and conf > best_conf:
+                        best_text, best_conf = text, conf
+                elapsed_ms = (time.perf_counter() - t_e) * 1000
+                results_per_engine["easyocr"] = {
+                    "engine": "easyocr",
+                    "text": best_text if best_text else None,
+                    "confidence": float(best_conf) if best_text else 0.0,
+                    "elapsed_ms": round(elapsed_ms, 1), "status": "ok"
+                }
+            except Exception as e:
+                results_per_engine["easyocr"] = {"engine": "easyocr", "text": None,
+                                                  "confidence": 0.0, "elapsed_ms": 0,
+                                                  "status": f"error:{e}"}
+        else:
+            results_per_engine["easyocr"] = {"engine": "easyocr", "text": None,
+                                              "confidence": 0.0, "elapsed_ms": 0,
+                                              "status": "not_installed"}
+
+        if ocr_engines.get("paddleocr"):
+            t_p = time.perf_counter()
+            try:
+                ocr_inst = ocr_engines["paddleocr"]
+                result = ocr_inst.ocr(crop, cls=True)
+                best_text, best_conf = "", 0.0
+                if result and result[0]:
+                    for line in result[0]:
+                        if line and len(line) >= 2:
+                            tc = line[1]
+                            if isinstance(tc, (list, tuple)) and len(tc) >= 2:
+                                text, conf = str(tc[0]).strip(), float(tc[1])
+                                if _is_valid_sign_code(text) and conf > best_conf:
+                                    best_text, best_conf = text, conf
+                elapsed_ms = (time.perf_counter() - t_p) * 1000
+                results_per_engine["paddleocr"] = {
+                    "engine": "paddleocr",
+                    "text": best_text if best_text else None,
+                    "confidence": float(best_conf) if best_text else 0.0,
+                    "elapsed_ms": round(elapsed_ms, 1), "status": "ok"
+                }
+            except Exception as e:
+                results_per_engine["paddleocr"] = {"engine": "paddleocr", "text": None,
+                                                    "confidence": 0.0, "elapsed_ms": 0,
+                                                    "status": f"error:{e}"}
+        else:
+            results_per_engine["paddleocr"] = {"engine": "paddleocr", "text": None,
+                                                "confidence": 0.0, "elapsed_ms": 0,
+                                                "status": "not_installed"}
+
+        # Determine consensus
+        texts = [v["text"] for v in results_per_engine.values() if v["text"]]
+        from collections import Counter
+        if texts:
+            most_common, count = Counter(texts).most_common(1)[0]
+            consensus = most_common
+            engines_agree = (count >= 2) or (len(texts) == 1)
+        else:
+            consensus = None
+            engines_agree = False
+
+        comparison_record = {
+            "region_id": region_id,
+            "crop_bbox": list(crop_bbox),
+            "tesseract": results_per_engine.get("tesseract", {}),
+            "easyocr": results_per_engine.get("easyocr", {}),
+            "paddleocr": results_per_engine.get("paddleocr", {}),
+            "consensus": consensus,
+            "engines_agree": engines_agree
+        }
+        ocr_comparison.append(comparison_record)
+
+        # Pick best result for output
+        best = None
+        best_conf = 0.0
+        best_engine = None
+        for eng_name, res in results_per_engine.items():
+            if res["text"] and res["confidence"] > best_conf:
+                best = res["text"]
+                best_conf = res["confidence"]
+                best_engine = eng_name
+        if consensus and engines_agree and len(texts) > 1:
+            best_engine = "consensus"
+
+        return {
+            "text": best,
+            "confidence": best_conf,
+            "engine": best_engine or "none",
+            "crop_bbox": list(crop_bbox),
+            "engines_agree": engines_agree,
+            "region_id": region_id
+        }
+
+    # Limit OCR patches to avoid extremely long runs
+    # Prioritize poles with tick_count > 0, then sample the rest
+    MAX_OCR_PATCHES = 50 if mode == "fast" else 200
+    poles_with_ticks = [p for p in pole_candidates if p.get("tick_count", 0) > 0]
+    poles_no_ticks = [p for p in pole_candidates if p.get("tick_count", 0) == 0]
+    # Sort by tick count desc, take up to MAX_OCR_PATCHES
+    poles_sorted = sorted(poles_with_ticks, key=lambda p: p.get("tick_count", 0), reverse=True)
+    remaining = MAX_OCR_PATCHES - len(poles_sorted)
+    if remaining > 0:
+        poles_sorted.extend(poles_no_ticks[:remaining])
+    ocr_pole_candidates = poles_sorted[:MAX_OCR_PATCHES]
+    if len(pole_candidates) > MAX_OCR_PATCHES:
+        log(f"  Capped OCR to {len(ocr_pole_candidates)}/{len(pole_candidates)} pole patches "
+            f"(prioritising {len(poles_with_ticks)} with ticks)", indent=1)
+
+    # Process crops around each pole candidate
+    log(f"  Processing {len(ocr_pole_candidates)} pole patches ...", indent=1)
+    for i, pole in enumerate(ocr_pole_candidates):
+        cx, cy = pole["center_x"], pole["center_y"]
+        result = crop_patch(cx, cy)
+        if result is None:
+            continue
+        crop, crop_bbox = result
+        region_id = f"pole_{i:04d}"
+        ocr_result = run_all_engines(crop, crop_bbox, region_id)
+        ocr_result["pole_index"] = i
+        ocr_result["source"] = "pole_patch"
+        ocr_results.append(ocr_result)
+
+    # Full-page grid OCR fallback (deep mode or if very few poles found)
+    if mode == "deep" or len(pole_candidates) < 3:
+        grid_step = int(300 * dpi / 300)  # 300px grid at 300dpi
+        grid_size = int(200 * dpi / 300)  # 200px patch
+        log(f"  Running grid OCR fallback (mode={mode}, poles={len(pole_candidates)}) ...", indent=1)
+        grid_count = 0
+        for gy in range(0, h_img - grid_size, grid_step):
+            for gx in range(0, w_img - grid_size, grid_step):
+                crop = img_bgr[gy:gy + grid_size, gx:gx + grid_size]
+                crop_bbox = (gx, gy, gx + grid_size, gy + grid_size)
+                region_id = f"grid_{gy:04d}_{gx:04d}"
+                # Quick Tesseract pre-filter to avoid running all engines on blank patches
+                tess_result = _ocr_tesseract(crop, region_id) if available_engines.get("tesseract") else {"text": None}
+                if tess_result["text"] is None:
+                    continue  # skip blank patches
+                ocr_result = run_all_engines(crop, crop_bbox, region_id)
+                ocr_result["pole_index"] = None
+                ocr_result["source"] = "grid"
+                ocr_results.append(ocr_result)
+                grid_count += 1
+        log(f"  Grid OCR added {grid_count} additional text candidates", indent=1)
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    found = sum(1 for r in ocr_results if r["text"])
+    log(f"  OCR pass complete: {len(ocr_results)} regions checked, {found} with text, elapsed={elapsed_ms:.0f}ms", indent=1)
+    return ocr_results, ocr_comparison, elapsed_ms
+
+
+# --- 6. Sign shape detection (anchor pass 3) ---
+
+def detect_sign_shapes(img_bgr, dpi: int) -> Tuple[List[Dict], float]:
+    """
+    Detect sign shapes (circle, triangle, rectangle, octagon, arrow) via contour analysis.
+    Returns (list of shape candidates, elapsed_ms).
+    """
+    import cv2
+    import numpy as np
+
+    t0 = time.perf_counter()
+    log("Sign shape detection (anchor pass 3) ...", indent=1)
+
+    scale = (dpi / 300) ** 2
+    min_area = int(200 * scale)
+    max_area = int(50000 * scale)
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blurred, 50, 150)
+
+    # Dilate edges slightly to close gaps
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    edges_dilated = cv2.dilate(edges, kernel, iterations=1)
+
+    contours, _ = cv2.findContours(edges_dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    shape_candidates = []
+
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area < min_area or area > max_area:
+            continue
+
+        perimeter = cv2.arcLength(cnt, True)
+        if perimeter == 0:
+            continue
+
+        circularity = 4 * math.pi * area / (perimeter ** 2)
+
+        # Approximate polygon
+        epsilon = 0.02 * perimeter
+        approx = cv2.approxPolyDP(cnt, epsilon, True)
+        n_vertices = len(approx)
+
+        # Bounding box
+        bx, by, bw, bh = cv2.boundingRect(cnt)
+        aspect_ratio = bw / bh if bh > 0 else 1.0
+
+        # Centroid via moments
+        M = cv2.moments(cnt)
+        if M["m00"] == 0:
+            continue
+        cx = M["m10"] / M["m00"]
+        cy = M["m01"] / M["m00"]
+
+        # Classify shape
+        if circularity > 0.8:
+            shape_type = "circle"
+            shape_conf = circularity
+        elif n_vertices == 3:
+            shape_type = "triangle"
+            shape_conf = 0.7
+        elif n_vertices == 4:
+            if 0.8 <= aspect_ratio <= 1.25:
+                shape_type = "square"
+                shape_conf = 0.65
+            else:
+                shape_type = "rectangle"
+                shape_conf = 0.65
+        elif n_vertices >= 8 or (6 <= n_vertices <= 9 and circularity > 0.7):
+            shape_type = "octagon"
+            shape_conf = 0.7
+        elif n_vertices == 5 or n_vertices == 6:
+            # Could be arrow or pentagon
+            hull = cv2.convexHull(cnt)
+            hull_area = cv2.contourArea(hull)
+            solidity = area / hull_area if hull_area > 0 else 0
+            if solidity < 0.75:
+                shape_type = "arrow"
+                shape_conf = 0.6
+            else:
+                shape_type = "polygon"
+                shape_conf = 0.5
+        else:
+            shape_type = "unknown"
+            shape_conf = 0.3
+
+        # Skip very low confidence unknowns
+        if shape_type == "unknown" and area < min_area * 2:
+            continue
+
+        shape_candidates.append({
+            "centroid_x": float(cx),
+            "centroid_y": float(cy),
+            "bbox": [int(bx), int(by), int(bx + bw), int(by + bh)],
+            "area_px": float(area),
+            "circularity": float(circularity),
+            "shape_type": shape_type,
+            "shape_confidence": float(shape_conf),
+            "vertex_count": int(n_vertices),
+            "aspect_ratio": float(aspect_ratio),
+        })
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    log(f"  Found {len(shape_candidates)} shape candidates, elapsed={elapsed_ms:.0f}ms", indent=1)
+    return shape_candidates, elapsed_ms
+
+
+# --- 7. Spatial association ---
+
+def euclidean_dist(x1: float, y1: float, x2: float, y2: float) -> float:
+    return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+
+
+def spatial_association(
+    pole_candidates: List[Dict],
+    ocr_results: List[Dict],
+    shape_candidates: List[Dict],
+    dpi: int,
+    run_slug: str
+) -> Tuple[List[Dict], float]:
+    """
+    Build association candidates linking poles, text, and shapes.
+    Returns (candidates list, elapsed_ms).
+    """
+    t0 = time.perf_counter()
+    log("Spatial association ...", indent=1)
+
+    # Radii scaled with DPI
+    pole_ocr_radius = int(150 * dpi / 300)
+    pole_shape_radius = int(200 * dpi / 300)
+    text_pole_radius = int(200 * dpi / 300)
+    shape_text_radius = int(120 * dpi / 300)
+
+    px_per_mm = dpi / 25.4
+
+    candidates: List[Dict] = []
+    candidate_counter = [0]
+    used_ocr_indices: set = set()
+    used_shape_indices: set = set()
+
+    def make_candidate_id() -> str:
+        cid = f"{run_slug}_p0_c{candidate_counter[0]:04d}"
+        candidate_counter[0] += 1
+        return cid
+
+    def find_nearest_ocr(ref_x: float, ref_y: float, radius: float,
+                         exclude_indices: set = None) -> Optional[Tuple[int, Dict, float]]:
+        best_idx = None
+        best_dist = float("inf")
+        best_item = None
+        for i, r in enumerate(ocr_results):
+            if exclude_indices and i in exclude_indices:
+                continue
+            if r["text"] is None:
+                continue
+            bx = (r["crop_bbox"][0] + r["crop_bbox"][2]) / 2
+            by = (r["crop_bbox"][1] + r["crop_bbox"][3]) / 2
+            d = euclidean_dist(ref_x, ref_y, bx, by)
+            if d <= radius and d < best_dist:
+                best_dist = d
+                best_idx = i
+                best_item = r
+        return (best_idx, best_item, best_dist) if best_idx is not None else None
+
+    def find_nearest_shape(ref_x: float, ref_y: float, radius: float,
+                           exclude_indices: set = None) -> Optional[Tuple[int, Dict, float]]:
+        best_idx = None
+        best_dist = float("inf")
+        best_item = None
+        for i, s in enumerate(shape_candidates):
+            if exclude_indices and i in exclude_indices:
+                continue
+            d = euclidean_dist(ref_x, ref_y, s["centroid_x"], s["centroid_y"])
+            if d <= radius and d < best_dist:
+                best_dist = d
+                best_idx = i
+                best_item = s
+        return (best_idx, best_item, best_dist) if best_idx is not None else None
+
+    def find_nearest_pole(ref_x: float, ref_y: float, radius: float) -> Optional[Tuple[int, Dict, float]]:
+        best_idx = None
+        best_dist = float("inf")
+        best_item = None
+        for i, p in enumerate(pole_candidates):
+            d = euclidean_dist(ref_x, ref_y, p["center_x"], p["center_y"])
+            if d <= radius and d < best_dist:
+                best_dist = d
+                best_idx = i
+                best_item = p
+        return (best_idx, best_item, best_dist) if best_idx is not None else None
+
+    def compute_score(pole: Optional[Dict], ocr: Optional[Dict], shape: Optional[Dict], engines_agree: bool) -> Tuple[int, List[str]]:
+        score = 0
+        reasons = []
+        if pole:
+            score += 40
+            reasons.append("pole_detected")
+            if pole.get("tick_count", 0) > 0:
+                score += 20
+                reasons.append("tick_marks_found")
+        if ocr and ocr.get("text"):
+            score += 30
+            reasons.append("sign_code_found")
+            if engines_agree:
+                score += 10
+                reasons.append("ocr_engines_agree")
+        if shape:
+            score += 10
+            reasons.append("shape_detected")
+        return min(score, 100), reasons
+
+    def review_reasons(score: int, ocr: Optional[Dict], pole: Optional[Dict], shape: Optional[Dict]) -> Optional[str]:
+        reasons = []
+        if score < 60:
+            reasons.append(f"low_confidence_{score}")
+        if not ocr or not ocr.get("text"):
+            reasons.append("no_sign_code")
+        if not pole:
+            reasons.append("no_pole_detected")
+        if not shape:
+            reasons.append("no_shape_detected")
+        return "; ".join(reasons) if reasons else None
+
+    # Primary: pole-first
+    log(f"  Pole-first association ({len(pole_candidates)} poles) ...", indent=2)
+    for pole_idx, pole in enumerate(pole_candidates):
+        cx, cy = pole["center_x"], pole["center_y"]
+
+        ocr_match = find_nearest_ocr(cx, cy, pole_ocr_radius)
+        shape_match = find_nearest_shape(cx, cy, pole_shape_radius)
+
+        ocr_item = ocr_match[1] if ocr_match else None
+        ocr_dist = ocr_match[2] if ocr_match else None
+        ocr_idx = ocr_match[0] if ocr_match else None
+
+        shape_item = shape_match[1] if shape_match else None
+        shape_dist = shape_match[2] if shape_match else None
+        shape_idx = shape_match[0] if shape_match else None
+
+        engines_agree = ocr_item.get("engines_agree", False) if ocr_item else False
+        score, score_reasons = compute_score(pole, ocr_item, shape_item, engines_agree)
+        rev_reason = review_reasons(score, ocr_item, pole, shape_item)
+
+        assoc_dist_px = ocr_dist if ocr_dist is not None else (shape_dist if shape_dist is not None else 0.0)
+        assoc_dist_mm = assoc_dist_px / px_per_mm if px_per_mm > 0 else 0.0
+
+        cid = make_candidate_id()
+        candidates.append({
+            "candidate_id": cid,
+            "page_number": 0,
+            "anchor_type": "pole",
+            "pole_bbox": pole["bbox"],
+            "pole_center": [round(cx, 1), round(cy, 1)],
+            "tick_count": pole["tick_count"],
+            "tick_bboxes": pole["tick_bboxes"],
+            "sign_code_text": ocr_item["text"] if ocr_item else None,
+            "sign_code_confidence": round(ocr_item["confidence"], 3) if ocr_item else 0.0,
+            "sign_code_bbox": ocr_item["crop_bbox"] if ocr_item else None,
+            "sign_code_ocr_engine": ocr_item["engine"] if ocr_item else None,
+            "sign_shape_bbox": shape_item["bbox"] if shape_item else None,
+            "sign_shape_type": shape_item["shape_type"] if shape_item else None,
+            "sign_shape_confidence": round(shape_item["shape_confidence"], 3) if shape_item else 0.0,
+            "association_distance_px": round(assoc_dist_px, 1),
+            "association_distance_mm": round(assoc_dist_mm, 2),
+            "overall_confidence": score,
+            "requires_review": score < 60 or (ocr_item is None or not ocr_item.get("text")),
+            "review_reason": rev_reason,
+            "evidence_crop_path": f"outputs/image_scan_debug/evidence_crop_{cid}.png",
+            "_debug_score_reasons": score_reasons,
+        })
+
+        if ocr_idx is not None:
+            used_ocr_indices.add(ocr_idx)
+        if shape_idx is not None:
+            used_shape_indices.add(shape_idx)
+
+    # Text-first fallback: OCR results not yet associated
+    text_fallback_count = 0
+    for i, ocr_item in enumerate(ocr_results):
+        if i in used_ocr_indices:
+            continue
+        if not ocr_item.get("text"):
+            continue
+        bx = (ocr_item["crop_bbox"][0] + ocr_item["crop_bbox"][2]) / 2
+        by = (ocr_item["crop_bbox"][1] + ocr_item["crop_bbox"][3]) / 2
+
+        pole_match = find_nearest_pole(bx, by, text_pole_radius)
+        shape_match = find_nearest_shape(bx, by, shape_text_radius)
+
+        pole_item = pole_match[1] if pole_match else None
+        pole_dist = pole_match[2] if pole_match else None
+
+        shape_item = shape_match[1] if shape_match else None
+        shape_dist = shape_match[2] if shape_match else None
+        shape_idx = shape_match[0] if shape_match else None
+
+        engines_agree = ocr_item.get("engines_agree", False)
+        score, _ = compute_score(pole_item, ocr_item, shape_item, engines_agree)
+        rev_reason = review_reasons(score, ocr_item, pole_item, shape_item)
+
+        anchor = "text" if pole_item else "text_standalone"
+        assoc_dist_px = pole_dist if pole_dist is not None else 0.0
+        assoc_dist_mm = assoc_dist_px / px_per_mm if px_per_mm > 0 else 0.0
+
+        cid = make_candidate_id()
+        candidates.append({
+            "candidate_id": cid,
+            "page_number": 0,
+            "anchor_type": anchor,
+            "pole_bbox": pole_item["bbox"] if pole_item else None,
+            "pole_center": [round(pole_item["center_x"], 1), round(pole_item["center_y"], 1)] if pole_item else None,
+            "tick_count": pole_item["tick_count"] if pole_item else 0,
+            "tick_bboxes": pole_item["tick_bboxes"] if pole_item else [],
+            "sign_code_text": ocr_item["text"],
+            "sign_code_confidence": round(ocr_item["confidence"], 3),
+            "sign_code_bbox": ocr_item["crop_bbox"],
+            "sign_code_ocr_engine": ocr_item["engine"],
+            "sign_shape_bbox": shape_item["bbox"] if shape_item else None,
+            "sign_shape_type": shape_item["shape_type"] if shape_item else None,
+            "sign_shape_confidence": round(shape_item["shape_confidence"], 3) if shape_item else 0.0,
+            "association_distance_px": round(assoc_dist_px, 1),
+            "association_distance_mm": round(assoc_dist_mm, 2),
+            "overall_confidence": score,
+            "requires_review": score < 60,
+            "review_reason": rev_reason,
+            "evidence_crop_path": f"outputs/image_scan_debug/evidence_crop_{cid}.png",
+            "_debug_score_reasons": [],
+        })
+
+        if shape_idx is not None:
+            used_shape_indices.add(shape_idx)
+        text_fallback_count += 1
+
+    # Shape-first fallback: shapes not yet associated
+    shape_fallback_count = 0
+    for i, shape_item in enumerate(shape_candidates):
+        if i in used_shape_indices:
+            continue
+        scx, scy = shape_item["centroid_x"], shape_item["centroid_y"]
+        ocr_match = find_nearest_ocr(scx, scy, shape_text_radius)
+        if not ocr_match:
+            continue
+        ocr_item = ocr_match[1]
+        if not ocr_item.get("text"):
+            continue
+
+        engines_agree = ocr_item.get("engines_agree", False)
+        score, _ = compute_score(None, ocr_item, shape_item, engines_agree)
+        rev_reason = review_reasons(score, ocr_item, None, shape_item)
+
+        assoc_dist_px = ocr_match[2]
+        assoc_dist_mm = assoc_dist_px / px_per_mm if px_per_mm > 0 else 0.0
+
+        cid = make_candidate_id()
+        candidates.append({
+            "candidate_id": cid,
+            "page_number": 0,
+            "anchor_type": "shape",
+            "pole_bbox": None,
+            "pole_center": None,
+            "tick_count": 0,
+            "tick_bboxes": [],
+            "sign_code_text": ocr_item["text"],
+            "sign_code_confidence": round(ocr_item["confidence"], 3),
+            "sign_code_bbox": ocr_item["crop_bbox"],
+            "sign_code_ocr_engine": ocr_item["engine"],
+            "sign_shape_bbox": shape_item["bbox"],
+            "sign_shape_type": shape_item["shape_type"],
+            "sign_shape_confidence": round(shape_item["shape_confidence"], 3),
+            "association_distance_px": round(assoc_dist_px, 1),
+            "association_distance_mm": round(assoc_dist_mm, 2),
+            "overall_confidence": score,
+            "requires_review": score < 60,
+            "review_reason": rev_reason,
+            "evidence_crop_path": f"outputs/image_scan_debug/evidence_crop_{cid}.png",
+            "_debug_score_reasons": [],
+        })
+        shape_fallback_count += 1
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    total = len(candidates)
+    needs_review = sum(1 for c in candidates if c["requires_review"])
+    log(f"  Association complete: {total} candidates ({needs_review} require review), "
+        f"text-fallback={text_fallback_count}, shape-fallback={shape_fallback_count}, "
+        f"elapsed={elapsed_ms:.0f}ms", indent=1)
+    return candidates, elapsed_ms
+
+
+# --- 8. Evidence crops ---
+
+def save_evidence_crops(
+    img_bgr,
+    candidates: List[Dict],
+    output_dir: Path,
+    run_dir: Path
+) -> Tuple[int, float]:
+    """
+    For each candidate, save an annotated crop as evidence.
+    Returns (count_saved, elapsed_ms).
+    """
+    import cv2
+    import numpy as np
+
+    t0 = time.perf_counter()
+    log("Saving evidence crops ...", indent=1)
+
+    debug_dir = output_dir / "image_scan_debug"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+
+    h_img, w_img = img_bgr.shape[:2]
+    padding = 20
+    count_saved = 0
+
+    for cand in candidates:
+        cid = cand["candidate_id"]
+        # Compute bounding box covering all elements
+        all_x1, all_y1, all_x2, all_y2 = [], [], [], []
+
+        def add_bbox(bbox):
+            if bbox:
+                all_x1.append(bbox[0])
+                all_y1.append(bbox[1])
+                all_x2.append(bbox[2])
+                all_y2.append(bbox[3])
+
+        add_bbox(cand.get("pole_bbox"))
+        add_bbox(cand.get("sign_code_bbox"))
+        add_bbox(cand.get("sign_shape_bbox"))
+        for tb in cand.get("tick_bboxes", []):
+            add_bbox(tb)
+
+        if not all_x1:
+            # Use pole center as fallback
+            pc = cand.get("pole_center")
+            if pc:
+                cx, cy = pc
+                all_x1 = [cx - 50]
+                all_y1 = [cy - 50]
+                all_x2 = [cx + 50]
+                all_y2 = [cy + 50]
+            else:
+                # Use sign code bbox center
+                scb = cand.get("sign_code_bbox")
+                if scb:
+                    cx = (scb[0] + scb[2]) / 2
+                    cy = (scb[1] + scb[3]) / 2
+                    all_x1 = [cx - 50]
+                    all_y1 = [cy - 50]
+                    all_x2 = [cx + 50]
+                    all_y2 = [cy + 50]
+                else:
+                    continue
+
+        crop_x1 = max(0, int(min(all_x1)) - padding)
+        crop_y1 = max(0, int(min(all_y1)) - padding)
+        crop_x2 = min(w_img, int(max(all_x2)) + padding)
+        crop_y2 = min(h_img, int(max(all_y2)) + padding)
+
+        if crop_x2 <= crop_x1 or crop_y2 <= crop_y1:
+            continue
+
+        crop = img_bgr[crop_y1:crop_y2, crop_x1:crop_x2].copy()
+
+        def to_local(bbox):
+            if not bbox:
+                return None
+            return [bbox[0] - crop_x1, bbox[1] - crop_y1, bbox[2] - crop_x1, bbox[3] - crop_y1]
+
+        # Annotate: pole = green, text = blue, shape = red, ticks = yellow
+        pole_bbox_local = to_local(cand.get("pole_bbox"))
+        if pole_bbox_local:
+            cv2.rectangle(crop, (pole_bbox_local[0], pole_bbox_local[1]),
+                          (pole_bbox_local[2], pole_bbox_local[3]), (0, 255, 0), 2)
+
+        code_bbox_local = to_local(cand.get("sign_code_bbox"))
+        if code_bbox_local:
+            cv2.rectangle(crop, (code_bbox_local[0], code_bbox_local[1]),
+                          (code_bbox_local[2], code_bbox_local[3]), (255, 0, 0), 2)
+            code_text = cand.get("sign_code_text", "?")
+            cv2.putText(crop, str(code_text), (code_bbox_local[0], max(0, code_bbox_local[1] - 4)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+
+        shape_bbox_local = to_local(cand.get("sign_shape_bbox"))
+        if shape_bbox_local:
+            cv2.rectangle(crop, (shape_bbox_local[0], shape_bbox_local[1]),
+                          (shape_bbox_local[2], shape_bbox_local[3]), (0, 0, 255), 2)
+
+        for tb in cand.get("tick_bboxes", []):
+            tb_local = to_local(tb)
+            if tb_local:
+                cv2.rectangle(crop, (tb_local[0], tb_local[1]),
+                              (tb_local[2], tb_local[3]), (0, 255, 255), 1)
+
+        # Add confidence label
+        conf = cand.get("overall_confidence", 0)
+        anchor = cand.get("anchor_type", "?")
+        label = f"{cid.split('_')[-1]} {anchor} conf={conf}"
+        cv2.putText(crop, label, (5, min(25, crop.shape[0] - 5)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 2)
+        cv2.putText(crop, label, (5, min(25, crop.shape[0] - 5)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+
+        save_path = debug_dir / f"evidence_crop_{cid}.png"
+        cv2.imwrite(str(save_path), crop)
+        count_saved += 1
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    log(f"  Saved {count_saved} evidence crops to {debug_dir.name}/, elapsed={elapsed_ms:.0f}ms", indent=1)
+    return count_saved, elapsed_ms
+
+
+# --- 9. Output generation ---
+
+class _NumpyEncoder(json.JSONEncoder):
+    """JSON encoder that handles numpy int/float types."""
+    def default(self, obj):
+        import numpy as np
+        if isinstance(obj, (np.integer,)):
+            return int(obj)
+        if isinstance(obj, (np.floating,)):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super().default(obj)
+
+
+def _json_safe(obj):
+    """Recursively convert numpy types in nested structures to Python native types."""
+    import numpy as np
+    if isinstance(obj, dict):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
+
+
+def write_outputs(
+    run_dir: Path,
+    candidates: List[Dict],
+    ocr_comparison: List[Dict],
+    page_idx: int,
+    dpi: int,
+    mode: str,
+    ocr_choice: str,
+    available_engines: Dict[str, bool],
+    timing: Dict[str, float],
+    png_path: str,
+) -> None:
+    """Write all output files."""
+    import json
+    import base64
+
+    output_dir = run_dir / "outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # --- image_scan_candidates.json ---
+    candidates_path = output_dir / "image_scan_candidates.json"
+    # Remove private debug fields and convert numpy types before saving
+    clean_candidates = []
+    for c in candidates:
+        cc = {k: v for k, v in c.items() if not k.startswith("_")}
+        clean_candidates.append(_json_safe(cc))
+    with open(candidates_path, "w", encoding="utf-8") as f:
+        json.dump(clean_candidates, f, indent=2, ensure_ascii=False)
+
+    # --- image_scan_ocr_comparison.json ---
+    ocr_comp_path = output_dir / "image_scan_ocr_comparison.json"
+    with open(ocr_comp_path, "w", encoding="utf-8") as f:
+        json.dump(_json_safe(ocr_comparison), f, indent=2, ensure_ascii=False)
+
+    total = len(candidates)
+    needs_review = sum(1 for c in candidates if c.get("requires_review"))
+    with_code = sum(1 for c in candidates if c.get("sign_code_text"))
+    with_shape = sum(1 for c in candidates if c.get("sign_shape_type"))
+    high_conf = sum(1 for c in candidates if c.get("overall_confidence", 0) >= 70)
+
+    total_elapsed = sum(timing.values())
+
+    # --- image_scan_report.md ---
+    md_path = output_dir / "image_scan_report.md"
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(f"# Image Scan Report — Engine B POC\n\n")
+        f.write(f"**Run dir:** `{run_dir}`  \n")
+        f.write(f"**Page:** {page_idx}  \n")
+        f.write(f"**DPI:** {dpi}  \n")
+        f.write(f"**Mode:** {mode}  \n")
+        f.write(f"**OCR engines requested:** {ocr_choice}  \n")
+        f.write(f"**OCR engines available:** "
+                f"tesseract={available_engines.get('tesseract')}, "
+                f"easyocr={available_engines.get('easyocr')}, "
+                f"paddleocr={available_engines.get('paddleocr')}  \n\n")
+        f.write(f"## Summary\n\n")
+        f.write(f"| Metric | Value |\n|---|---|\n")
+        f.write(f"| Total candidates | {total} |\n")
+        f.write(f"| Requires review | {needs_review} |\n")
+        f.write(f"| High confidence (≥70) | {high_conf} |\n")
+        f.write(f"| Candidates with sign code | {with_code} |\n")
+        f.write(f"| Candidates with shape | {with_shape} |\n\n")
+        f.write(f"## Timing\n\n")
+        f.write(f"| Stage | Elapsed (ms) |\n|---|---|\n")
+        for stage, ms in timing.items():
+            f.write(f"| {stage} | {ms:.0f} |\n")
+        f.write(f"| **Total** | **{total_elapsed:.0f}** |\n\n")
+        f.write(f"## Top Candidates\n\n")
+        top = sorted(candidates, key=lambda x: x.get("overall_confidence", 0), reverse=True)[:20]
+        f.write(f"| ID | Anchor | Code | Code Conf | Shape | Overall Conf | Review |\n")
+        f.write(f"|---|---|---|---|---|---|---|\n")
+        for c in top:
+            rev = "YES" if c.get("requires_review") else "no"
+            f.write(f"| {c['candidate_id'].split('_')[-1]} "
+                    f"| {c.get('anchor_type','?')} "
+                    f"| {c.get('sign_code_text','—')} "
+                    f"| {c.get('sign_code_confidence',0):.2f} "
+                    f"| {c.get('sign_shape_type','—')} "
+                    f"| {c.get('overall_confidence',0)} "
+                    f"| {rev} |\n")
+
+    # --- image_scan_ocr_comparison.md ---
+    ocr_md_path = output_dir / "image_scan_ocr_comparison.md"
+    with open(ocr_md_path, "w", encoding="utf-8") as f:
+        f.write(f"# OCR Engine Comparison\n\n")
+        f.write(f"| Region | Tesseract | EasyOCR | PaddleOCR | Consensus | Agree |\n")
+        f.write(f"|---|---|---|---|---|---|\n")
+        shown = 0
+        for comp in ocr_comparison:
+            t_text = comp.get("tesseract", {}).get("text") or "—"
+            e_text = comp.get("easyocr", {}).get("text") or "—"
+            p_text = comp.get("paddleocr", {}).get("text") or "—"
+            cons = comp.get("consensus") or "—"
+            agree = "YES" if comp.get("engines_agree") else "no"
+            if cons != "—":  # only show regions where something was found
+                f.write(f"| {comp['region_id']} | {t_text} | {e_text} | {p_text} | {cons} | {agree} |\n")
+                shown += 1
+            if shown >= 50:
+                f.write(f"\n*(truncated at 50 rows — see JSON for full data)*\n")
+                break
+
+    # --- image_scan_report.html ---
+    html_path = output_dir / "image_scan_report.html"
+    debug_dir = output_dir / "image_scan_debug"
+
+    def img_to_b64(path: Path) -> Optional[str]:
+        try:
+            with open(path, "rb") as fh:
+                return base64.b64encode(fh.read()).decode("ascii")
+        except Exception:
+            return None
+
+    top20 = sorted(candidates, key=lambda x: x.get("overall_confidence", 0), reverse=True)[:20]
+
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(textwrap.dedent(f"""\
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+            <meta charset="UTF-8">
+            <title>Image Scan Report — Engine B POC</title>
+            <style>
+              body {{ font-family: monospace; background: #111; color: #eee; padding: 20px; }}
+              h1, h2 {{ color: #7cf; }}
+              table {{ border-collapse: collapse; margin-bottom: 20px; }}
+              th, td {{ border: 1px solid #444; padding: 6px 10px; text-align: left; }}
+              th {{ background: #222; color: #7cf; }}
+              .high {{ color: #4f4; }}
+              .low {{ color: #f84; }}
+              .review {{ color: #f44; font-weight: bold; }}
+              img {{ max-width: 200px; border: 1px solid #555; background: #222; }}
+              .grid {{ display: flex; flex-wrap: wrap; gap: 12px; }}
+              .card {{ background: #1a1a1a; border: 1px solid #333; padding: 10px; width: 220px; }}
+              .card img {{ width: 200px; height: auto; }}
+              .card .label {{ font-size: 11px; margin-top: 6px; color: #aaa; }}
+            </style>
+            </head>
+            <body>
+            <h1>Image Scan Report — Engine B POC</h1>
+            <p><b>Run dir:</b> {run_dir}<br>
+            <b>Page:</b> {page_idx} &nbsp; <b>DPI:</b> {dpi} &nbsp; <b>Mode:</b> {mode}</p>
+            <h2>Summary</h2>
+            <table>
+            <tr><th>Metric</th><th>Value</th></tr>
+            <tr><td>Total candidates</td><td>{total}</td></tr>
+            <tr><td>Requires review</td><td class="review">{needs_review}</td></tr>
+            <tr><td>High confidence (≥70)</td><td class="high">{high_conf}</td></tr>
+            <tr><td>With sign code</td><td>{with_code}</td></tr>
+            <tr><td>With shape</td><td>{with_shape}</td></tr>
+            </table>
+            <h2>Timing</h2>
+            <table>
+            <tr><th>Stage</th><th>ms</th></tr>
+        """))
+        for stage, ms in timing.items():
+            f.write(f"<tr><td>{stage}</td><td>{ms:.0f}</td></tr>\n")
+        f.write(f"<tr><td><b>Total</b></td><td><b>{total_elapsed:.0f}</b></td></tr>\n")
+        f.write("</table>\n<h2>Top 20 Candidates</h2>\n<div class='grid'>\n")
+
+        for c in top20:
+            cid = c["candidate_id"]
+            crop_file = debug_dir / f"evidence_crop_{cid}.png"
+            b64 = img_to_b64(crop_file)
+            img_tag = f'<img src="data:image/png;base64,{b64}">' if b64 else '<span style="color:#888">[no crop]</span>'
+            conf = c.get("overall_confidence", 0)
+            conf_class = "high" if conf >= 70 else ("low" if conf < 40 else "")
+            rev_class = "review" if c.get("requires_review") else ""
+            f.write(f"""<div class='card'>
+  {img_tag}
+  <div class='label'>
+    <b>{c.get('anchor_type','?')}</b> &nbsp;
+    code: <b>{c.get('sign_code_text','—')}</b> ({c.get('sign_code_confidence',0):.2f})<br>
+    shape: {c.get('sign_shape_type','—')}<br>
+    conf: <span class='{conf_class}'>{conf}</span>
+    {f'<span class="review">REVIEW</span>' if c.get("requires_review") else ''}
+    <br><small>{cid}</small>
+  </div>
+</div>\n""")
+        f.write("</div>\n</body>\n</html>\n")
+
+    log(f"  Outputs written:", indent=1)
+    log(f"    {candidates_path.name} ({len(candidates)} candidates)", indent=2)
+    log(f"    {ocr_comp_path.name} ({len(ocr_comparison)} regions)", indent=2)
+    log(f"    {md_path.name}", indent=2)
+    log(f"    {ocr_md_path.name}", indent=2)
+    log(f"    {html_path.name}", indent=2)
+
+
+# --- Main ---
+
+def main() -> int:
+    args = parse_args()
+
+    run_dir = Path(args.plan_run_dir).resolve()
+    if not run_dir.exists():
+        log(f"ERROR: Run directory not found: {run_dir}")
+        return 1
+
+    log(f"")
+    log(f"============================================================")
+    log(f"Engine B — Image-Based Plan Scanner POC")
+    log(f"============================================================")
+    log(f"Run dir : {run_dir}")
+    log(f"Page    : {args.page}")
+    log(f"DPI     : {args.dpi}")
+    log(f"Mode    : {args.mode}")
+    log(f"OCR     : {args.ocr}")
+    log(f"")
+
+    # 2. Find source PDF
+    log("Step 1: Finding source PDF ...")
+    pdf_path = find_source_pdf(run_dir)
+    if pdf_path is None:
+        log(f"  ERROR: No PDF found in {run_dir}/source/, /uploads/, or /")
+        log(f"  Check plan_manifest.json for source_storage_status — PDF may have been deleted.")
+        manifest_path = run_dir / "plan_manifest.json"
+        if manifest_path.exists():
+            with open(manifest_path) as fh:
+                manifest = json.load(fh)
+            log(f"  plan_manifest.json:")
+            log(f"    source_storage_status: {manifest.get('source_storage_status', 'unknown')}")
+            log(f"    original_filename: {manifest.get('original_filename', 'unknown')}")
+            log(f"    status: {manifest.get('status', 'unknown')}")
+        return 1
+
+    log(f"  Found PDF: {pdf_path}")
+    log(f"  File size: {pdf_path.stat().st_size / 1024 / 1024:.2f} MB")
+
+    output_dir = run_dir / "outputs"
+    debug_dir = output_dir / "image_scan_debug"
+    run_slug = run_dir.name
+
+    timing: Dict[str, float] = {}
+
+    # 3. Render page
+    log(f"\nStep 2: Rendering PDF page {args.page} at {args.dpi} DPI ...")
+    try:
+        img_bgr, png_path, render_ms, effective_dpi = render_page(pdf_path, args.page, args.dpi, debug_dir)
+    except Exception as e:
+        log(f"  ERROR during rendering: {e}")
+        traceback.print_exc()
+        return 1
+    timing["render"] = render_ms
+    if effective_dpi != args.dpi:
+        log(f"  NOTE: Using effective_dpi={effective_dpi} for all downstream processing (requested {args.dpi})")
+
+    # 4. Pole/tick detection
+    log(f"\nStep 3: Detecting poles and ticks ...")
+    try:
+        pole_candidates, pole_ms = detect_poles_and_ticks(img_bgr, effective_dpi)
+    except Exception as e:
+        log(f"  ERROR during pole detection: {e}")
+        traceback.print_exc()
+        pole_candidates, pole_ms = [], 0.0
+    timing["pole_detection"] = pole_ms
+
+    if len(pole_candidates) == 0:
+        log("  WARNING: 0 pole candidates found. This may indicate:")
+        log("    - Low contrast plan (try higher DPI or preprocessing)")
+        log("    - Plan uses tick/pole style not matching expected blob parameters")
+        log("    - Text-first and shape-first fallbacks will still run")
+
+    # 5. Check OCR availability
+    log(f"\nStep 4: Checking OCR engine availability ...")
+    available_engines = _check_ocr_availability(args.ocr)
+    for eng, avail in available_engines.items():
+        log(f"  {eng}: {'available' if avail else 'not available'}", indent=1)
+    if not any(available_engines.values()):
+        log("  WARNING: No OCR engines available. Candidates will have no sign codes.")
+
+    # 6. OCR pass
+    log(f"\nStep 5: Running OCR pass ...")
+    try:
+        ocr_results, ocr_comparison, ocr_ms = run_ocr_pass(
+            img_bgr, pole_candidates, effective_dpi, args.ocr, args.mode, available_engines, run_slug,
+            pdf_path=pdf_path, page_idx=args.page,
+        )
+    except Exception as e:
+        log(f"  ERROR during OCR: {e}")
+        traceback.print_exc()
+        ocr_results, ocr_comparison, ocr_ms = [], [], 0.0
+    timing["ocr_pass"] = ocr_ms
+
+    # 7. Sign shape detection
+    log(f"\nStep 6: Detecting sign shapes ...")
+    try:
+        shape_candidates, shape_ms = detect_sign_shapes(img_bgr, effective_dpi)
+    except Exception as e:
+        log(f"  ERROR during shape detection: {e}")
+        traceback.print_exc()
+        shape_candidates, shape_ms = [], 0.0
+    timing["shape_detection"] = shape_ms
+
+    # 8. Spatial association
+    log(f"\nStep 7: Running spatial association ...")
+    try:
+        candidates, assoc_ms = spatial_association(
+            pole_candidates, ocr_results, shape_candidates, effective_dpi, run_slug
+        )
+    except Exception as e:
+        log(f"  ERROR during spatial association: {e}")
+        traceback.print_exc()
+        candidates, assoc_ms = [], 0.0
+    timing["spatial_association"] = assoc_ms
+
+    # 9. Evidence crops
+    log(f"\nStep 8: Saving evidence crops ...")
+    try:
+        crops_saved, crops_ms = save_evidence_crops(img_bgr, candidates, output_dir, run_dir)
+    except Exception as e:
+        log(f"  ERROR during evidence crops: {e}")
+        traceback.print_exc()
+        crops_saved, crops_ms = 0, 0.0
+    timing["evidence_crops"] = crops_ms
+
+    # 10. Write outputs
+    log(f"\nStep 9: Writing output files ...")
+    try:
+        write_outputs(
+            run_dir=run_dir,
+            candidates=candidates,
+            ocr_comparison=ocr_comparison,
+            page_idx=args.page,
+            dpi=effective_dpi,
+            mode=args.mode,
+            ocr_choice=args.ocr,
+            available_engines=available_engines,
+            timing=timing,
+            png_path=png_path,
+        )
+    except Exception as e:
+        log(f"  ERROR writing outputs: {e}")
+        traceback.print_exc()
+
+    # Final summary
+    total_ms = sum(timing.values())
+    needs_review = sum(1 for c in candidates if c.get("requires_review"))
+    with_code = sum(1 for c in candidates if c.get("sign_code_text"))
+    high_conf = sum(1 for c in candidates if c.get("overall_confidence", 0) >= 70)
+
+    log(f"\n============================================================")
+    log(f"DONE — Engine B POC complete")
+    log(f"============================================================")
+    log(f"  PDF rendered      : {pdf_path.name} @ {args.dpi} DPI")
+    log(f"  Poles detected    : {len(pole_candidates)}")
+    log(f"  OCR regions       : {len(ocr_results)}")
+    log(f"  Shapes detected   : {len(shape_candidates)}")
+    log(f"  Total candidates  : {len(candidates)}")
+    log(f"  With sign code    : {with_code}")
+    log(f"  High confidence   : {high_conf}")
+    log(f"  Requires review   : {needs_review}")
+    log(f"  Evidence crops    : {crops_saved}")
+    log(f"  Total elapsed     : {total_ms:.0f}ms ({total_ms/1000:.1f}s)")
+    log(f"")
+    log(f"  Output files:")
+    log(f"    outputs/image_scan_candidates.json")
+    log(f"    outputs/image_scan_report.md")
+    log(f"    outputs/image_scan_report.html")
+    log(f"    outputs/image_scan_ocr_comparison.json")
+    log(f"    outputs/image_scan_ocr_comparison.md")
+    log(f"    outputs/image_scan_debug/page_{args.page}_{args.dpi}dpi.png")
+    log(f"    outputs/image_scan_debug/evidence_crop_*.png  ({crops_saved} files)")
+    log(f"")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

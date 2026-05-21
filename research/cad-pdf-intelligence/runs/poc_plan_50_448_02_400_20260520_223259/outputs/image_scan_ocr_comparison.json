@@ -1,0 +1,1602 @@
+[
+  {
+    "region_id": "pole_0000",
+    "crop_bbox": [
+      2176,
+      959,
+      2256,
+      1039
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 365.3,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1096.7,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0001",
+    "crop_bbox": [
+      2176,
+      1041,
+      2256,
+      1121
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 352.2,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 696.1,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0002",
+    "crop_bbox": [
+      1119,
+      788,
+      1199,
+      868
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 365.8,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 454.9,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0003",
+    "crop_bbox": [
+      1917,
+      432,
+      1997,
+      512
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 283.7,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "070",
+      "confidence": 0.26781830413252217,
+      "elapsed_ms": 605.8,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "070",
+    "engines_agree": true
+  },
+  {
+    "region_id": "pole_0004",
+    "crop_bbox": [
+      1872,
+      419,
+      1952,
+      499
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 325.4,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 535.2,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0005",
+    "crop_bbox": [
+      1336,
+      851,
+      1416,
+      931
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 243.3,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 459.8,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0006",
+    "crop_bbox": [
+      1340,
+      791,
+      1420,
+      871
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 211.4,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 492.8,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0007",
+    "crop_bbox": [
+      2516,
+      283,
+      2596,
+      363
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 271.6,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 440.6,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0008",
+    "crop_bbox": [
+      1362,
+      832,
+      1442,
+      912
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 614.3,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 798.3,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0009",
+    "crop_bbox": [
+      261,
+      602,
+      341,
+      682
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 425.1,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 429.7,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0010",
+    "crop_bbox": [
+      2432,
+      360,
+      2512,
+      440
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 366.2,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 624.9,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0011",
+    "crop_bbox": [
+      150,
+      655,
+      230,
+      735
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 349.5,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 410.3,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0012",
+    "crop_bbox": [
+      1921,
+      423,
+      2001,
+      503
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 327.3,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "10",
+      "confidence": 0.29896109945272165,
+      "elapsed_ms": 622.9,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "10",
+    "engines_agree": true
+  },
+  {
+    "region_id": "pole_0013",
+    "crop_bbox": [
+      1860,
+      420,
+      1940,
+      500
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 315.8,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 600.9,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0014",
+    "crop_bbox": [
+      1867,
+      417,
+      1947,
+      497
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 309.7,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 612.8,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0015",
+    "crop_bbox": [
+      482,
+      1152,
+      562,
+      1232
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 309.2,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 388.4,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0016",
+    "crop_bbox": [
+      1123,
+      834,
+      1203,
+      914
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 288.7,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 570.1,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0017",
+    "crop_bbox": [
+      2010,
+      711,
+      2090,
+      791
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 387.0,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "48",
+      "confidence": 0.25814578228728685,
+      "elapsed_ms": 579.7,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "48",
+    "engines_agree": true
+  },
+  {
+    "region_id": "pole_0018",
+    "crop_bbox": [
+      2258,
+      503,
+      2338,
+      583
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 405.2,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "38",
+      "confidence": 0.18277824036982565,
+      "elapsed_ms": 1167.7,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "38",
+    "engines_agree": true
+  },
+  {
+    "region_id": "pole_0019",
+    "crop_bbox": [
+      662,
+      766,
+      742,
+      846
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 293.6,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "42",
+      "confidence": 0.2585956760359577,
+      "elapsed_ms": 1462.6,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "42",
+    "engines_agree": true
+  },
+  {
+    "region_id": "pole_0020",
+    "crop_bbox": [
+      2430,
+      690,
+      2510,
+      770
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 361.6,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 535.9,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0021",
+    "crop_bbox": [
+      1482,
+      496,
+      1562,
+      576
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 350.9,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 452.9,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0022",
+    "crop_bbox": [
+      1917,
+      428,
+      1997,
+      508
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 285.9,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "347",
+      "confidence": 0.2082624436097307,
+      "elapsed_ms": 598.3,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "347",
+    "engines_agree": true
+  },
+  {
+    "region_id": "pole_0023",
+    "crop_bbox": [
+      1318,
+      800,
+      1398,
+      880
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 254.7,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 438.5,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0024",
+    "crop_bbox": [
+      1335,
+      786,
+      1415,
+      866
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 259.6,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 524.6,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0025",
+    "crop_bbox": [
+      568,
+      694,
+      648,
+      774
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 263.1,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 370.7,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0026",
+    "crop_bbox": [
+      1924,
+      423,
+      2004,
+      503
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 333.8,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "070",
+      "confidence": 0.2801207641331943,
+      "elapsed_ms": 746.8,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "070",
+    "engines_agree": true
+  },
+  {
+    "region_id": "pole_0027",
+    "crop_bbox": [
+      2167,
+      1039,
+      2247,
+      1119
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 381.4,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1343.2,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0028",
+    "crop_bbox": [
+      2428,
+      982,
+      2508,
+      1062
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 525.2,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "11",
+      "confidence": 0.38340333197526394,
+      "elapsed_ms": 1161.7,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "11",
+    "engines_agree": true
+  },
+  {
+    "region_id": "pole_0029",
+    "crop_bbox": [
+      1361,
+      798,
+      1441,
+      878
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 648.8,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1335.1,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0030",
+    "crop_bbox": [
+      322,
+      574,
+      402,
+      654
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 490.1,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 2041.1,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0031",
+    "crop_bbox": [
+      2280,
+      465,
+      2360,
+      545
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 491.8,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1179.6,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0032",
+    "crop_bbox": [
+      2247,
+      324,
+      2327,
+      404
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 452.1,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1468.7,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0033",
+    "crop_bbox": [
+      2411,
+      982,
+      2491,
+      1062
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 470.1,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1351.2,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0034",
+    "crop_bbox": [
+      2167,
+      957,
+      2247,
+      1037
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 494.4,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1045.2,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0035",
+    "crop_bbox": [
+      1096,
+      869,
+      1176,
+      949
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 403.9,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "079",
+      "confidence": 0.767582356929779,
+      "elapsed_ms": 854.8,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "079",
+    "engines_agree": true
+  },
+  {
+    "region_id": "pole_0036",
+    "crop_bbox": [
+      1299,
+      839,
+      1379,
+      919
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 523.3,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 1107.6,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0037",
+    "crop_bbox": [
+      1911,
+      459,
+      1991,
+      539
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 485.0,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "660",
+      "confidence": 0.06747442548414716,
+      "elapsed_ms": 1000.1,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "660",
+    "engines_agree": true
+  },
+  {
+    "region_id": "pole_0038",
+    "crop_bbox": [
+      1928,
+      423,
+      2008,
+      503
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 333.2,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": "070",
+      "confidence": 0.2801207641331943,
+      "elapsed_ms": 664.8,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": "070",
+    "engines_agree": true
+  },
+  {
+    "region_id": "pole_0039",
+    "crop_bbox": [
+      794,
+      381,
+      874,
+      461
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 413.7,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 642.3,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0040",
+    "crop_bbox": [
+      815,
+      274,
+      895,
+      354
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 442.3,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 496.0,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0041",
+    "crop_bbox": [
+      1897,
+      270,
+      1977,
+      350
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 382.4,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 645.3,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0042",
+    "crop_bbox": [
+      180,
+      942,
+      260,
+      1022
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 340.8,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 479.0,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0043",
+    "crop_bbox": [
+      1262,
+      854,
+      1342,
+      934
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 340.8,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 462.5,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0044",
+    "crop_bbox": [
+      1365,
+      807,
+      1445,
+      887
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 336.5,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 436.7,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0045",
+    "crop_bbox": [
+      261,
+      695,
+      341,
+      775
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 270.6,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 481.3,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0046",
+    "crop_bbox": [
+      2412,
+      619,
+      2492,
+      699
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 383.3,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 616.5,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0047",
+    "crop_bbox": [
+      277,
+      616,
+      357,
+      696
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 385.6,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 638.1,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0048",
+    "crop_bbox": [
+      1891,
+      270,
+      1971,
+      350
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 318.6,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 504.2,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  },
+  {
+    "region_id": "pole_0049",
+    "crop_bbox": [
+      2422,
+      981,
+      2502,
+      1061
+    ],
+    "tesseract": {
+      "engine": "tesseract",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 330.6,
+      "status": "ok"
+    },
+    "easyocr": {
+      "engine": "easyocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 669.6,
+      "status": "ok"
+    },
+    "paddleocr": {
+      "engine": "paddleocr",
+      "text": null,
+      "confidence": 0.0,
+      "elapsed_ms": 0,
+      "status": "error:predict() got an unexpected keyword argument 'cls'"
+    },
+    "consensus": null,
+    "engines_agree": false
+  }
+]
