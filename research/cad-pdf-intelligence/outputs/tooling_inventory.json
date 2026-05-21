@@ -1,0 +1,54 @@
+{
+  "generated_at": "2026-05-21",
+  "python_version": "3.9.6",
+  "venv_path": "research/cad-pdf-intelligence/.venv",
+  "installed_packages": {
+    "pdfminer.six": { "version": "20231228", "role": "PDF text/path extraction", "used": true, "stage": "01,02" },
+    "pymupdf": { "version": "1.25.5", "role": "PDF rendering + rasterization", "used": true, "stage": "01,02,03" },
+    "opencv-python-headless": { "version": "4.11.0.86", "size_mb": 119, "role": "Image processing, template matching", "used": true, "stage": "03,04,06,12" },
+    "scikit-learn": { "version": "1.6.1", "role": "DBSCAN clustering, KNN", "used": true, "stage": "04,06" },
+    "pillow": { "version": "11.2.1", "role": "Image I/O", "used": true, "stage": "multiple" },
+    "numpy": { "version": "2.2.4", "role": "Numerical arrays", "used": true, "stage": "multiple" },
+    "scipy": { "version": "1.15.2", "role": "Spatial indexing, cKDTree", "used": true, "stage": "06,07" },
+    "shapely": { "version": "2.0.7", "role": "Geometry (polygon/line ops)", "used": false, "note": "installed but not imported anywhere in codebase" },
+    "pytesseract": { "version": "0.3.13", "role": "OCR wrapper", "used": true, "stage": "10,11" },
+    "tesseract_langs_installed": ["eng", "osd", "snum"],
+    "tesseract_langs_missing": ["heb"],
+    "anthropic": { "version": "0.103.1", "role": "Cloud API (paid)", "used": false, "note": "installed but disabled — paid API, violates no-paid-api constraint" },
+    "requests": { "version": "2.32.3", "role": "HTTP", "used": false },
+    "pandas": { "version": "2.2.3", "role": "Tabular data", "used": true, "stage": "09,17" },
+    "matplotlib": { "version": "3.10.1", "role": "Debug visualization", "used": true, "stage": "debug scripts" },
+    "networkx": { "version": "installed", "role": "Graph analysis", "used": false, "note": "installed, not imported in pipeline scripts" }
+  },
+  "not_installed": {
+    "ezdxf": { "note": "commented out in requirements.txt", "size_mb": 2.9, "priority": "HIGH — enables DXF-native parsing if source is DXF" },
+    "easyocr": { "priority": "MEDIUM — local free Hebrew OCR, 200MB+GPU model download" },
+    "doctr": { "priority": "MEDIUM — transformer OCR, local free" },
+    "svgpathtools": { "priority": "LOW — SVG path parsing utility" }
+  },
+  "cad_tools": {
+    "ezdxf": { "status": "not_installed", "recommendation": "use_now", "reason": "pure Python, 2.9MB, already referenced in requirements.txt — install immediately" },
+    "oda_file_converter": { "status": "not_installed", "recommendation": "keep_for_later", "reason": "free binary for DWG→DXF conversion but requires manual install and GUI" },
+    "libredwg": { "status": "not_installed", "recommendation": "keep_for_later", "reason": "C library, MIT license, complex build on ARM" },
+    "freecad_headless": { "status": "not_installed", "recommendation": "reject", "reason": "1.5GB binary, overkill for this use case" }
+  },
+  "ocr_tools": {
+    "tesseract_heb": { "status": "not_installed", "recommendation": "use_now", "install": "brew install tesseract-lang", "reason": "one command, enables Hebrew OCR immediately" },
+    "easyocr": { "status": "not_installed", "recommendation": "smoke_test_now", "reason": "local free Hebrew+English OCR, larger install" },
+    "doctr": { "status": "not_installed", "recommendation": "keep_for_later", "reason": "transformer-based, high accuracy, heavier" },
+    "paddleocr": { "status": "not_installed", "recommendation": "keep_for_later", "reason": "excellent multilingual but complex ARM install" },
+    "mmocr": { "status": "not_installed", "recommendation": "reject", "reason": "2GB, ARM issues, overkill" }
+  },
+  "annotation_tools": {
+    "via_annotator": { "status": "not_installed", "recommendation": "use_now", "reason": "single HTML file, no install, for building ground truth" },
+    "label_studio": { "status": "not_installed", "recommendation": "keep_for_later", "reason": "full server, heavier but powerful" }
+  },
+  "geometry_tools": {
+    "shapely": { "status": "installed", "imported": false, "recommendation": "use_now", "reason": "already installed, wire into 15_scale_measurement.py immediately" },
+    "networkx": { "status": "installed", "imported": false, "recommendation": "smoke_test_now", "reason": "graph analysis for sign grouping" },
+    "svgpathtools": { "status": "not_installed", "recommendation": "smoke_test_now", "reason": "lightweight SVG path parsing" }
+  },
+  "document_tools": {
+    "docling": { "status": "not_installed", "recommendation": "keep_for_later", "reason": "IBM document AI, strong PDF layout analysis, larger install" }
+  }
+}

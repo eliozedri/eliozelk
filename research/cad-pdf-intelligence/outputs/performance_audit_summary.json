@@ -1,0 +1,45 @@
+{
+  "generated_at": "2026-05-21",
+  "pipeline_mode": "fast_scan",
+  "realistic_fast_scan_target_minutes": "2-5",
+  "realistic_deep_scan_target_minutes": "10-30",
+  "previous_ui_timeout_minutes": 20,
+  "stall_root_cause": "UI called 19_run_plan_scanner_pipeline.py (validator) + 33_worker_operations_export.py (exporter). Detection scripts 01-18 were never called. Progress was time-based: min(95, round((elapsed_seconds / 900) * 100)). Actual pipeline ran in < 1 second on empty outputs.",
+  "fix_applied": "34_ui_plan_scan_orchestrator.py — calls all detection stages in order, writes real stage progress to state/scan_progress.json",
+  "python_version_penalty": {
+    "current": "3.9.6",
+    "recommended": "3.12",
+    "estimated_speedup": "20-25% on CPU-bound loops"
+  },
+  "stage_timing_estimates_seconds": {
+    "01_inspect": { "typical": 1, "bottleneck": "none", "notes": "fast metadata read" },
+    "02_extract_vectors": { "typical": 30, "worst_case": 120, "bottleneck": "pdfminer path iteration on 50k+ paths", "quick_win": "checksum cache — skip if PDF unchanged" },
+    "03_analyze_colors_geometry": { "typical": 15, "bottleneck": "pixel-level color stats on rasterized pages" },
+    "04_cluster_symbols": { "typical": 10, "bottleneck": "DBSCAN on large cluster sets" },
+    "06_match_signs": { "typical": 20, "bottleneck": "per-cluster OpenCV template matching" },
+    "07_extract_legend": { "typical": 5, "bottleneck": "none" },
+    "09_stage_g_inventory": { "typical": 3, "bottleneck": "none" },
+    "15_scale_measurement": { "typical": 5, "bottleneck": "none; Shapely wire-up would add robustness" },
+    "17_boq_aggregator": { "typical": 2, "bottleneck": "none" },
+    "33_worker_operations_export": { "typical": 2, "bottleneck": "none" }
+  },
+  "fast_scan_total_estimate_seconds": { "min": 93, "max": 177, "label": "~2–3 minutes typical" },
+  "bottlenecks_ranked": [
+    { "rank": 1, "script": "02_extract_vectors.py", "issue": "no caching — re-extracts full PDF on every run", "fix": "MD5/SHA256 checksum of source PDF → skip if outputs exist and hash matches", "effort": "low" },
+    { "rank": 2, "script": "06_match_signs.py", "issue": "per-cluster template matching with full catalog", "fix": "pre-filter by color bin before template matching; use spatial index", "effort": "medium" },
+    { "rank": 3, "script": "03_analyze_colors_geometry.py", "issue": "full rasterization at high DPI", "fix": "reduce raster DPI for color stats pass (150 DPI sufficient)", "effort": "low" },
+    { "rank": 4, "runtime": "python_version", "issue": "Python 3.9.6 — 20-25% slower than 3.12 on numeric loops", "fix": "rebuild venv with system Python 3.12 or pyenv", "effort": "medium" }
+  ],
+  "quick_wins_tier1": [
+    { "action": "install ezdxf", "command": ".venv/bin/pip install ezdxf", "impact": "enables DXF-native parsing if source is DXF — 10x faster extraction", "risk": "none" },
+    { "action": "install Hebrew Tesseract", "command": "brew install tesseract-lang", "impact": "enables Hebrew OCR in scripts 10+11; currently zero Hebrew capability", "risk": "none" },
+    { "action": "wire Shapely into 15_scale_measurement.py", "command": "import shapely (already installed)", "impact": "more robust polyline length calculation for scale bar detection", "risk": "low" },
+    { "action": "add PDF checksum cache to 02_extract_vectors.py", "command": "code change only", "impact": "eliminates re-extraction on retry/re-run — saves 30-120s per repeat scan", "risk": "low" }
+  ],
+  "quick_wins_tier2": [
+    { "action": "smoke test EasyOCR on one sign crop", "install": ".venv/bin/pip install easyocr", "risk": "200MB download + CUDA/MPS probe on first run" },
+    { "action": "smoke test networkx for sign graph grouping", "install": "already installed", "risk": "none" },
+    { "action": "reduce raster DPI in 03_ to 150", "impact": "~30% faster color analysis", "risk": "low" }
+  ],
+  "no_short_path_to_10s_scan": "A raw PDF with 50k+ paths requires real vector extraction. No tooling change eliminates this. 10-second scan is only achievable for trivially small plans or with pre-parsed DXF source."
+}
