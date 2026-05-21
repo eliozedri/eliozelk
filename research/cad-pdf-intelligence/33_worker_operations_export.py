@@ -496,7 +496,26 @@ def generate_html(inp: PipelineInputs, summary: Dict, plan_manifest: Dict) -> st
         p("<p>To calibrate: identify two PDF points with a known real-world distance, record their coordinates in scale_measurement/results.json, and re-run 15_scale_measurement.py.</p>")
     p("</div>")
 
-    # ── 9. Missing inputs ──────────────────────────────────────────────────────
+    # ── 9. PDF print instructions ─────────────────────────────────────────────
+    p("<h2>PDF Export Instructions</h2>")
+    p("<div class='card'>")
+    p("<h3>How to save this report as PDF</h3>")
+    p("<p>Direct PDF generation requires an optional dependency (<code>weasyprint</code>) that is not installed. "
+      "Use browser print to get a PDF:</p>")
+    p("<ol>")
+    p("<li>Open <code>worker_operations_report.html</code> in <strong>Google Chrome</strong> or Safari.</li>")
+    p("<li>Press <kbd>Cmd+P</kbd> (Mac) or <kbd>Ctrl+P</kbd> (Windows).</li>")
+    p("<li>Destination: <strong>Save as PDF</strong> (not a printer).</li>")
+    p("<li>Enable <em>Background graphics</em> so colored headers are included.</li>")
+    p("<li>Paper size: A4 Landscape or A3 for wide tables.</li>")
+    p("<li>Click Save. The result is operationally equivalent to a generated PDF.</li>")
+    p("</ol>")
+    p("<p><em>Optional automated PDF:</em> install weasyprint in the venv: "
+      "<code>.venv/bin/pip install weasyprint</code> — requires system libs. "
+      "Do not install in production without explicit approval.</p>")
+    p("</div>")
+
+    # ── 10. Missing inputs ─────────────────────────────────────────────────────
     if inp.missing:
         p("<h2>Missing Inputs</h2>")
         p("<div class='card'>")
@@ -506,7 +525,7 @@ def generate_html(inp: PipelineInputs, summary: Dict, plan_manifest: Dict) -> st
             p(f"<li class='missing'>{m}</li>")
         p("</ul></div>")
 
-    # ── 10. Safety disclaimer ──────────────────────────────────────────────────
+    # ── 11. Safety disclaimer ─────────────────────────────────────────────────
     p("<h2>Safety Disclaimer</h2>")
     p("<div class='disclaimer'>")
     p(f"<strong>This is a draft research export.</strong><br>")
@@ -572,12 +591,28 @@ def generate_excel(inp: PipelineInputs, summary: Dict, out_path: Path) -> bool:
     # ── Sheet 1: Summary ──────────────────────────────────────────────────────
     ws = wb.create_sheet("Summary")
     ws.column_dimensions["A"].width = 36
-    ws.column_dimensions["B"].width = 48
+    ws.column_dimensions["B"].width = 60
+    # DRAFT banner spanning both columns
+    try:
+        from openpyxl.styles import PatternFill as PF, Font as FN, Alignment as AL
+        draft_fill = PF("solid", fgColor="DC2626")
+        draft_font = FN(color="FFFFFF", bold=True, size=13)
+        banner = ws.cell(row=1, column=1,
+                         value="⚠  DRAFT — REQUIRES REVIEW — NOT APPROVED FOR EXECUTION OR BILLING")
+        banner.fill = draft_fill
+        banner.font = draft_font
+        ws.cell(row=1, column=2).fill = draft_fill
+        ws.merge_cells("A1:B1")
+        ws.row_dimensions[1].height = 24
+    except Exception:
+        ws.cell(row=1, column=1, value="DRAFT — REQUIRES REVIEW — NOT APPROVED")
+    ws.freeze_panes = "A2"
     rows = [
         ("Plan", summary.get("plan_slug", "")),
         ("Source PDF", summary.get("source_pdf", "")),
         ("Generated At", summary.get("generated_at", "")),
         ("Status", "DRAFT — REQUIRES REVIEW"),
+        ("Scanner Note", "Source PDF is temporary research input. Exported reports are the durable product."),
         ("", ""),
         ("--- Pipeline ---", ""),
         ("Stages OK", summary["pipeline"]["stages_ok"]),
@@ -599,7 +634,8 @@ def generate_excel(inp: PipelineInputs, summary: Dict, out_path: Path) -> bool:
         ("", ""),
         ("--- Measurements ---", ""),
         ("Total Linear (m)", summary["measurements"]["total_linear_m"]),
-        ("Scale Status", summary["measurements"]["scale_status"]),
+        ("Scale Status (UNVERIFIED)", summary["measurements"]["scale_status"]),
+        ("Scale Warning", "All linear quantities are provisional until scale is manually confirmed."),
         ("", ""),
         ("--- Review ---", ""),
         ("Review Items", summary["review"]["n_review_items"]),
@@ -609,7 +645,7 @@ def generate_excel(inp: PipelineInputs, summary: Dict, out_path: Path) -> bool:
         ("--- Disclaimer ---", ""),
         ("WARNING", DISCLAIMER),
     ]
-    for r, (k, v) in enumerate(rows, 1):
+    for r, (k, v) in enumerate(rows, 2):
         ws.cell(row=r, column=1, value=k)
         ws.cell(row=r, column=2, value=str(v) if v is not None else "")
 
@@ -619,6 +655,7 @@ def generate_excel(inp: PipelineInputs, summary: Dict, out_path: Path) -> bool:
                "Quantity", "Unit", "Source Branch", "Confidence",
                "Requires Review", "Approved for BOQ", "Review Reason", "Audit Notes"]
     _write_headers(ws2, headers, hf, hfont)
+    ws2.freeze_panes = "A2"
     for r, it in enumerate(inp.boq_items, 2):
         vals = [
             it.get("boq_item_id", ""),
@@ -646,6 +683,7 @@ def generate_excel(inp: PipelineInputs, summary: Dict, out_path: Path) -> bool:
                "Code Source", "Final Confidence", "Contradiction Flags",
                "Requires Review", "Notes"]
     _write_headers(ws3, headers, hf, hfont)
+    ws3.freeze_panes = "A2"
     for r, occ in enumerate(inp.occurrences, 2):
         flags = ", ".join(occ.get("contradiction_flags") or [])
         vals = [
@@ -674,6 +712,7 @@ def generate_excel(inp: PipelineInputs, summary: Dict, out_path: Path) -> bool:
                "Quantity", "Unit", "Confidence", "Requires Review",
                "Review Reason", "Source IDs (sample)"]
     _write_headers(ws4, headers, hf, hfont)
+    ws4.freeze_panes = "A2"
     pole_items = [it for it in inp.boq_items
                   if it.get("item_type") in ("pole_location", "sign_plate", "assembly")]
     for r, it in enumerate(pole_items, 2):
@@ -698,6 +737,7 @@ def generate_excel(inp: PipelineInputs, summary: Dict, out_path: Path) -> bool:
     headers = ["BOQ ID", "Type", "Description EN", "Quantity (m)", "Unit",
                "Scale Status", "Confidence", "Requires Review", "Review Reason"]
     _write_headers(ws5, headers, hf, hfont)
+    ws5.freeze_panes = "A2"
     scale_status = inp.scale_info.get("status", "unverified")
     scale_ratio  = inp.scale_info.get("ratio", "?")
     lin = [it for it in inp.boq_items if it.get("item_category") in ("measured_linear", "measured_area", "measured_linear_candidate")]
@@ -728,6 +768,7 @@ def generate_excel(inp: PipelineInputs, summary: Dict, out_path: Path) -> bool:
                "Description EN", "Description HE", "N Paths", "Total Length (pt)",
                "BOQ Category", "Confidence", "Requires Review", "Approved for BOQ", "Notes"]
     _write_headers(ws6, headers, hf, hfont)
+    ws6.freeze_panes = "A2"
     for r, g in enumerate(inp.groups, 2):
         rgb = g.get("color_rgb8") or []
         rgb_str = f"({','.join(str(x) for x in rgb)})" if rgb else ""
@@ -755,6 +796,7 @@ def generate_excel(inp: PipelineInputs, summary: Dict, out_path: Path) -> bool:
     headers = ["BOQ ID", "Type", "Description EN", "Quantity", "Unit",
                "Confidence", "Review Reason", "Approved for BOQ"]
     _write_headers(ws7, headers, hf, hfont)
+    ws7.freeze_panes = "A2"
     review_items = [it for it in inp.boq_items if it.get("requires_review")]
     for r, it in enumerate(review_items, 2):
         vals = [
@@ -775,6 +817,7 @@ def generate_excel(inp: PipelineInputs, summary: Dict, out_path: Path) -> bool:
     ws8 = wb.create_sheet("Red Flags")
     headers = ["Severity", "Code", "Message", "Action", "File"]
     _write_headers(ws8, headers, hf, hfont)
+    ws8.freeze_panes = "A2"
     for r, rf in enumerate(inp.red_flags, 2):
         vals = [
             rf.get("severity", ""),
@@ -868,19 +911,43 @@ def generate_excel(inp: PipelineInputs, summary: Dict, out_path: Path) -> bool:
 # ── Export manifest ────────────────────────────────────────────────────────────
 
 def generate_manifest(summary: Dict, exports: List[Dict], inp: PipelineInputs,
-                      plan_manifest: Dict) -> Dict:
+                      plan_manifest: Dict, run_dir: Optional[Path] = None) -> Dict:
+    # Derive per-file status
+    html_entry  = next((e for e in exports if e["type"] == "html_report"), {})
+    pdf_entry   = next((e for e in exports if e["type"] == "pdf_report"), {})
+    excel_entry = next((e for e in exports if e["type"] == "excel_workbook"), {})
+
+    # Compute exists for each export file
+    exports_with_exists = []
+    for e in exports:
+        entry = dict(e)
+        if e.get("path"):
+            entry["exists"] = Path(e["path"]).exists()
+        else:
+            entry["exists"] = False
+        exports_with_exists.append(entry)
+
     return {
         "_warning": DISCLAIMER,
+        "_scanner_not_archive_note": (
+            "The Plan Scanner does not archive source PDFs. "
+            "Source PDF is a temporary research input. "
+            "Exported reports (HTML, Excel, MD) are the durable products of each scan run."
+        ),
         "plan_id": summary.get("plan_id", ""),
         "plan_slug": summary.get("plan_slug", ""),
         "plan_name": plan_manifest.get("plan_name", ""),
         "source_pdf": summary.get("source_pdf", ""),
+        "run_dir": str(run_dir) if run_dir else None,
         "generated_at": summary.get("generated_at", ""),
         "generator_script": SCRIPT_NAME,
         "generator_version": VERSION,
         "approved_for_boq": False,
         "status": "DRAFT",
-        "export_files": exports,
+        "html_status": "generated" if html_entry.get("generated") else "not_generated",
+        "pdf_status": "not_generated — use browser print on HTML (Cmd+P → Save as PDF)",
+        "excel_status": "generated" if excel_entry.get("generated") else "not_generated — install openpyxl",
+        "export_files": exports_with_exists,
         "totals": {
             "boq_items": len(inp.boq_items),
             "approved_for_boq_count": 0,
@@ -969,8 +1036,23 @@ def generate_md_report(summary: Dict, inp: PipelineInputs,
         f"## Excel Status",
         f"{'Excel workbook generated: worker_operations_quantities.xlsx' if excel_ok else 'Excel NOT generated — openpyxl unavailable'}",
         f"",
-        f"## PDF Status",
-        f"PDF generation not implemented (no weasyprint/reportlab in venv). Print-ready HTML is available.",
+        f"## PDF Export Instructions",
+        f"",
+        f"Direct PDF generation requires `weasyprint` (optional, not installed). To save as PDF:",
+        f"",
+        f"1. Open `worker_operations_report.html` in **Google Chrome** or Safari.",
+        f"2. Press `Cmd+P` (Mac) / `Ctrl+P` (Windows) → Destination: **Save as PDF**.",
+        f"3. Enable **Background graphics** so colored headers are included.",
+        f"4. Paper: A4 Landscape or A3 for wide tables.",
+        f"5. Click Save.",
+        f"",
+        f"Optional automated PDF: `.venv/bin/pip install weasyprint` (requires system libs).",
+        f"Do not install in production without explicit approval.",
+        f"",
+        f"## Scanner-Not-Archive Note",
+        f"",
+        f"The Plan Scanner does not archive source PDFs. Source PDF is a temporary research input.",
+        f"Exported reports (HTML, Excel, MD) are the durable products of each scan run.",
         f"",
     ]
     return "\n".join(lines)
@@ -1078,17 +1160,21 @@ def main() -> None:
         "generated": True,
     })
 
-    # Generate manifest
-    manifest = generate_manifest(summary, exports_list, inp, plan_manifest)
+    # Generate manifest (first pass — before manifest itself exists)
+    manifest = generate_manifest(summary, exports_list, inp, plan_manifest,
+                                 run_dir=ctx.plan_run_dir)
+    # Write a placeholder so the manifest file exists before we add it to the list
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
     exports_list.append({
         "filename": "export_manifest.json",
         "type": "manifest",
-        "description": "Export manifest with metadata and file list",
+        "description": "Export manifest with metadata, file list, and per-file exists status",
         "path": str(manifest_path),
         "generated": True,
     })
-    manifest["export_files"] = exports_list
+    # Final write — includes the manifest entry itself with exists=True
+    manifest = generate_manifest(summary, exports_list, inp, plan_manifest,
+                                 run_dir=ctx.plan_run_dir)
     manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
     elapsed = time.time() - t0
