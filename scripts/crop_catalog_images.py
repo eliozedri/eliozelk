@@ -175,7 +175,7 @@ def main():
         print(f"  crop: {rel_orig}")
         status = process_image(orig_path, thumb_path, proc_path)
 
-        if status == 'ok':
+        if status in ('ok', 'conservative'):
             ok_count += 1
         elif status == 'needs_review':
             review_count += 1

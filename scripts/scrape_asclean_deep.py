@@ -144,11 +144,15 @@ class FullPageParser(HTMLParser):
 
 # ── Fetching ──────────────────────────────────────────────────────────────────
 
-def fetch_html(url, retries=2):
+RETRY_DELAY = 5      # seconds between retries
+MAX_RETRIES = 3      # attempts per URL before marking failed
+
+def fetch_html(url, retries=MAX_RETRIES):
+    last_err = None
     for attempt in range(retries + 1):
         try:
             req = urllib.request.Request(url, headers=HEADERS)
-            with urllib.request.urlopen(req, timeout=20) as resp:
+            with urllib.request.urlopen(req, timeout=25) as resp:
                 ct = resp.headers.get('Content-Type', '')
                 if 'text/html' not in ct and 'text/' not in ct:
                     return None, f"non-HTML content-type: {ct}"
@@ -157,30 +161,38 @@ def fetch_html(url, retries=2):
                     charset = ct.split('charset=')[-1].strip().split(';')[0].strip()
                 return resp.read().decode(charset, errors='replace'), None
         except urllib.error.HTTPError as e:
-            if attempt == retries:
-                return None, f"HTTP {e.code}"
-            time.sleep(0.5)
+            last_err = f"HTTP {e.code}"
+            if attempt < retries:
+                print(f"    [retry {attempt+1}/{retries}] {url} — {last_err}, waiting {RETRY_DELAY}s")
+                time.sleep(RETRY_DELAY)
         except Exception as e:
-            if attempt == retries:
-                return None, str(e)
-            time.sleep(0.5)
+            last_err = str(e)
+            if attempt < retries:
+                print(f"    [retry {attempt+1}/{retries}] {url} — {last_err}, waiting {RETRY_DELAY}s")
+                time.sleep(RETRY_DELAY)
+    return None, last_err
 
 
-def download_binary(url, dest_path, min_bytes=500):
+def download_binary(url, dest_path, min_bytes=500, retries=MAX_RETRIES):
     if os.path.exists(dest_path):
         return True, "already_exists"
-    try:
-        req = urllib.request.Request(url, headers=HEADERS)
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            data = resp.read()
-            if len(data) < min_bytes:
-                return False, f"too_small ({len(data)} bytes)"
-            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-            with open(dest_path, 'wb') as f:
-                f.write(data)
-            return True, "downloaded"
-    except Exception as e:
-        return False, str(e)
+    last_err = None
+    for attempt in range(retries + 1):
+        try:
+            req = urllib.request.Request(url, headers=HEADERS)
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                data = resp.read()
+                if len(data) < min_bytes:
+                    return False, f"too_small ({len(data)} bytes)"
+                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                with open(dest_path, 'wb') as f:
+                    f.write(data)
+                return True, "downloaded"
+        except Exception as e:
+            last_err = str(e)
+            if attempt < retries:
+                time.sleep(RETRY_DELAY)
+    return False, last_err
 
 
 # ── Product Data Extraction ───────────────────────────────────────────────────
@@ -447,7 +459,9 @@ def scrape_product_page(url, url_parts, manifest):
         ext = os.path.splitext(img['url'].split('?')[0])[-1].lower()
         if ext not in ('.jpg', '.jpeg', '.png', '.webp', '.gif'):
             ext = '.jpg'
-        fname = f"{product_slug}-img{i+1}-source{ext}"
+        # Clean stable filename: product-slug-source.ext for primary, -2/-3 for extras
+        suffix = '' if i == 0 else f'-{i+1}'
+        fname = f"{product_slug}-source{suffix}{ext}"
         dest = os.path.join(folder_abs, 'original', fname)
         ok, reason = download_binary(img['url'], dest)
         if ok:
@@ -462,7 +476,8 @@ def scrape_product_page(url, url_parts, manifest):
     # Download PDF spec files
     local_spec_paths = []
     for i, pdf_url in enumerate(pdfs[:3]):
-        fname = f"{product_slug}-spec{i+1}.pdf"
+        suffix = '' if i == 0 else f'-{i+1}'
+        fname = f"{product_slug}-technical-spec{suffix}.pdf"
         dest = os.path.join(folder_abs, 'specs', fname)
         ok, reason = download_binary(pdf_url, dest)
         if ok:
