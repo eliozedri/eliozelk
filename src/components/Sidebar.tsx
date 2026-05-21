@@ -6,7 +6,7 @@ import {
   FileText, Table2, LayoutDashboard, Users, Palette, Wrench,
   Database, ShieldCheck, Warehouse, DollarSign, Map, Calendar,
   UsersRound, BookOpen, TrendingUp, Bot, Settings, ShieldPlus,
-  LogOut, X, Cable, ScanLine,
+  LogOut, X, Cable, ScanLine, ScanText,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { canAccessTab, canPerformAction, ROLE_LABELS } from "@/types/auth";
@@ -95,6 +95,12 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "profitability", href: "/profitability", label: "דשבורד רווחיות", icon: <TrendingUp className={ICON_CLS} />, matchFn: (p) => p.startsWith("/profitability") },
       { tabId: "cost-settings", href: "/cost-settings", label: "תעריפי עלות", icon: <Settings className={ICON_CLS} />, matchFn: (p) => p.startsWith("/cost-settings") },
+    ],
+  },
+  {
+    label: "מחקר ותכנון",
+    items: [
+      { tabId: "plan-scanner", href: "/plan-scanner", label: "סורק תוכניות", icon: <ScanText className={ICON_CLS} />, matchFn: (p) => p.startsWith("/plan-scanner"), noBadge: true },
     ],
   },
 ];

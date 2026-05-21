@@ -51,7 +51,8 @@ export type TabId =
   | "cost-settings"
   | "agents"
   | "access"
-  | "integrations";
+  | "integrations"
+  | "plan-scanner";
 
 export const ALL_TABS: { id: TabId; label: string; path: string; section: string }[] = [
   { id: "dashboard", label: "לוח בקרה", path: "/", section: "ניהול" },
@@ -72,6 +73,7 @@ export const ALL_TABS: { id: TabId; label: string; path: string; section: string
   { id: "agents", label: "מרכז פיקוד דיגיטלי", path: "/agents", section: "בינה מלאכותית" },
   { id: "access", label: "הרשאות גישה", path: "/access", section: "מערכת" },
   { id: "integrations", label: "אינטגרציות", path: "/integrations", section: "מערכת" },
+  { id: "plan-scanner", label: "סורק תוכניות", path: "/plan-scanner", section: "מחקר ותכנון" },
 ];
 
 export type ActionPermission =
