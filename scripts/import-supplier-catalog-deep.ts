@@ -41,6 +41,30 @@ function normalize(s: string): string {
     .replace(/[—–-]+/g, '-');
 }
 
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&quot;/g, '"')
+    .replace(/&#34;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&#8220;/g, '"').replace(/&#8221;/g, '"')
+    .replace(/&#8217;/g, "'").replace(/&#8216;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+/** Strip SEO suffixes like " - ארבל שטראוס אביזרי בטיחות לחיים" / "| Asclean". */
+function cleanProductName(raw: string): string {
+  let s = decodeEntities((raw ?? '').trim());
+  s = s.replace(/\s*[-–—|]\s*ארבל\s*שטראוס.*$/u, '');
+  s = s.replace(/\s*[-–—|]\s*אסקלין.*$/u, '');
+  s = s.replace(/\s*[-–—|]\s*asclean.*$/iu, '');
+  s = s.replace(/\s+/g, ' ').trim();
+  return s;
+}
+
 interface DownloadedImage {
   local: string | null;
   remote: string;
@@ -137,20 +161,36 @@ async function main() {
   let errors = 0;
 
   for (const product of unique) {
-    const nameNorm = normalize(product.product_name);
+    const cleanName = cleanProductName(product.product_name);
+    const nameNorm = normalize(cleanName);
 
     if (activeNames.has(nameNorm)) {
-      console.log(`  [skip] "${product.product_name}" — already active in catalog`);
+      console.log(`  [skip] "${cleanName}" — already active in catalog`);
       skipped++;
       continue;
     }
 
     // Build images metadata — primary downloaded image, with crop pending
     const primaryImg = product.images_downloaded?.find(d => d.local) ?? null;
+    // Derive thumb/processed paths from primary image since crop runs after JSON write
+    // Primary path:   /catalog/supplier/asclean/<...>/original/<slug>-source.<ext>
+    // Thumb path:     /catalog/supplier/asclean/<...>/thumbs/<slug>-thumb.webp
+    // Processed path: /catalog/supplier/asclean/<...>/processed/<slug>.webp
+    let derivedThumb: string | null = null;
+    let derivedFull:  string | null = null;
+    const primary = primaryImg?.local ?? null;
+    if (primary) {
+      const m = primary.match(/^(.*)\/original\/([^/]+?)(?:-source)?(?:-\d+)?\.[^./]+$/);
+      if (m) {
+        const [, base, slug] = m;
+        derivedThumb = `${base}/thumbs/${slug}-thumb.webp`;
+        derivedFull  = `${base}/processed/${slug}.webp`;
+      }
+    }
     const imagesMeta: Record<string, unknown> = {
-      thumb:        product.local_thumb ?? null,
-      full:         product.local_processed ?? null,
-      original:     primaryImg?.local ?? null,
+      thumb:        product.local_thumb     ?? derivedThumb,
+      full:         product.local_processed ?? derivedFull,
+      original:     primary,
       original_url: primaryImg?.remote ?? product.image_urls_found?.[0] ?? null,
       source_page:  product.source_url,
       crop_status:  product.crop_status ?? 'pending',
@@ -168,14 +208,15 @@ async function main() {
     }
 
     // Build description — use long desc, fall back to short, then generic
-    const description =
+    const description = decodeEntities(
       product.description_long?.trim() ||
       product.description_short?.trim() ||
-      `מוצר ייחוס מספק חיצוני — ${product.catalog_category}`;
+      `מוצר ייחוס מספק חיצוני — ${product.catalog_category}`
+    );
 
     const row = {
       id:                product.item_id,
-      name:              product.product_name,
+      name:              cleanName,
       type:              'product' as const,
       category:          product.catalog_category,
       unit_of_measure:   'יחידה',
@@ -200,7 +241,7 @@ async function main() {
     };
 
     if (DRY_RUN) {
-      console.log(`  [dry] ${product.item_id} — "${product.product_name}" → ${product.catalog_category}`);
+      console.log(`  [dry] ${product.item_id} — "${cleanName}" → ${product.catalog_category}`);
       inserted++;
       continue;
     }
@@ -215,7 +256,7 @@ async function main() {
     } else {
       const imgStatus = product.local_original ? '📷' : '🚫';
       const specCount = Object.keys(product.technical_specs ?? {}).length;
-      console.log(`  [ok] ${imgStatus} ${product.item_id} — "${product.product_name}" | specs=${specCount}`);
+      console.log(`  [ok] ${imgStatus} ${product.item_id} — "${cleanName}" | specs=${specCount}`);
       inserted++;
     }
   }

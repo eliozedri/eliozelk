@@ -24,8 +24,11 @@ export function ProductModal({ item, onClose }: Props) {
   const reviewBadge = reviewState ? REVIEW_BADGE[reviewState] : null;
   const categoryIcon = getCategoryIcon(item.category);
   const specs = item.metadata?.specs as Record<string, string | boolean | number | undefined> | undefined;
+  const specVariants = item.metadata?.spec_variants as Array<Record<string, string>> | undefined;
+  const features = item.metadata?.features as string[] | undefined;
   const sources = item.metadata?.sources as Array<{ type: string; note?: string; url?: string }> | undefined;
   const cropStatus = (item.metadata?.images as Record<string, string> | undefined)?.crop_status;
+  const sourcePage = (item.metadata?.images as Record<string, string> | undefined)?.source_page;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -144,6 +147,41 @@ export function ProductModal({ item, onClose }: Props) {
             </div>
           )}
 
+          {/* Spec variants — multiple SKUs / sizes per product page */}
+          {specVariants && specVariants.length > 0 && (
+            <div className="bg-white/4 rounded-lg p-3 mb-4">
+              <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-2">
+                גרסאות {specVariants.length > 1 ? `(${specVariants.length})` : ""}
+              </p>
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                {specVariants.map((variant, idx) => (
+                  <div key={idx} className="bg-white/3 rounded p-2 border border-white/5">
+                    <div className="space-y-0.5">
+                      {Object.entries(variant).map(([k, v]) => (
+                        <div key={k} className="flex justify-between text-[11px] gap-2">
+                          <span className="text-white/40 shrink-0">{k}</span>
+                          <span className="text-white/70 text-right">{String(v)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Features */}
+          {features && features.length > 0 && (
+            <div className="bg-white/4 rounded-lg p-3 mb-4">
+              <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-2">תכונות</p>
+              <ul className="space-y-1 text-xs text-white/65">
+                {features.slice(0, 8).map((f, i) => (
+                  <li key={i} className="flex gap-1.5"><span className="text-blue-400">•</span><span>{f}</span></li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Source info */}
           <div className="bg-white/4 rounded-lg p-3 mb-5">
             <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider mb-2">מקור</p>
@@ -155,6 +193,15 @@ export function ProductModal({ item, onClose }: Props) {
               <div className="flex justify-between text-xs mt-1">
                 <span className="text-white/40">מקור</span>
                 <span className="text-white/70">{sources[0].note}</span>
+              </div>
+            )}
+            {sourcePage && (
+              <div className="flex justify-between text-xs mt-1">
+                <span className="text-white/40">דף ספק</span>
+                <a href={sourcePage} target="_blank" rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 underline truncate max-w-[60%]" dir="ltr">
+                  פתח באתר ↗
+                </a>
               </div>
             )}
             {cropStatus === "needs_review" && (

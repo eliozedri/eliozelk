@@ -11,6 +11,7 @@ Usage:
   python3 scrape_asclean_deep.py --sample URL  # single product page
 """
 
+import base64
 import json
 import os
 import re
@@ -20,6 +21,11 @@ import urllib.request
 import urllib.parse
 import collections
 from html.parser import HTMLParser
+
+# ── Vercel proxy (optional) ───────────────────────────────────────────────────
+PROXY_URL    = os.environ.get('SCRAPER_PROXY_URL', '').strip()
+PROXY_SECRET = os.environ.get('SCRAPER_PROXY_SECRET', '').strip()
+USE_PROXY    = bool(PROXY_URL and PROXY_SECRET)
 
 sys.path.insert(0, os.path.dirname(__file__))
 from catalog_utils import load_manifest, save_manifest, add_manifest_entry, now_iso, slugify
@@ -147,10 +153,58 @@ class FullPageParser(HTMLParser):
 RETRY_DELAY = 5      # seconds between retries
 MAX_RETRIES = 3      # attempts per URL before marking failed
 
+
+def _fetch_via_proxy(target_url, binary=False, timeout=30):
+    """POST to /api/scrape-fetch. Returns (data, content_type, err)."""
+    payload = json.dumps({
+        'secret': PROXY_SECRET,
+        'url':    target_url,
+        'binary': binary,
+    }).encode('utf-8')
+    req = urllib.request.Request(
+        PROXY_URL,
+        data=payload,
+        headers={'Content-Type': 'application/json', 'Accept': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = json.loads(e.read().decode('utf-8'))
+            return None, None, f"proxy HTTP {e.code}: {err_body.get('error', e.reason)}"
+        except Exception:
+            return None, None, f"proxy HTTP {e.code}"
+    except Exception as e:
+        return None, None, f"proxy error: {e}"
+
+    upstream_status = body.get('status', 0)
+    ct = body.get('content_type', '')
+    if upstream_status < 200 or upstream_status >= 400:
+        return None, ct, f"upstream HTTP {upstream_status}"
+
+    if binary:
+        b64 = body.get('data_b64', '')
+        try:
+            return base64.b64decode(b64), ct, None
+        except Exception as e:
+            return None, ct, f"b64 decode: {e}"
+    return body.get('html', ''), ct, None
+
+
 def fetch_html(url, retries=MAX_RETRIES):
     last_err = None
     for attempt in range(retries + 1):
         try:
+            if USE_PROXY:
+                html, ct, err = _fetch_via_proxy(url, binary=False)
+                if err:
+                    last_err = err
+                    raise RuntimeError(err)
+                if ct and 'text/html' not in ct and 'text/' not in ct:
+                    return None, f"non-HTML content-type: {ct}"
+                return html, None
             req = urllib.request.Request(url, headers=HEADERS)
             with urllib.request.urlopen(req, timeout=25) as resp:
                 ct = resp.headers.get('Content-Type', '')
@@ -179,15 +233,21 @@ def download_binary(url, dest_path, min_bytes=500, retries=MAX_RETRIES):
     last_err = None
     for attempt in range(retries + 1):
         try:
-            req = urllib.request.Request(url, headers=HEADERS)
-            with urllib.request.urlopen(req, timeout=25) as resp:
-                data = resp.read()
-                if len(data) < min_bytes:
-                    return False, f"too_small ({len(data)} bytes)"
-                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-                with open(dest_path, 'wb') as f:
-                    f.write(data)
-                return True, "downloaded"
+            if USE_PROXY:
+                data, _ct, err = _fetch_via_proxy(url, binary=True)
+                if err:
+                    last_err = err
+                    raise RuntimeError(err)
+            else:
+                req = urllib.request.Request(url, headers=HEADERS)
+                with urllib.request.urlopen(req, timeout=25) as resp:
+                    data = resp.read()
+            if data is None or len(data) < min_bytes:
+                return False, f"too_small ({0 if data is None else len(data)} bytes)"
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            with open(dest_path, 'wb') as f:
+                f.write(data)
+            return True, "downloaded"
         except Exception as e:
             last_err = str(e)
             if attempt < retries:
@@ -549,12 +609,16 @@ def discover_and_crawl(start_url=CATALOG_URL, max_pages=300):
         html, err = fetch_html(url)
         if not html:
             failed[url] = err or 'unknown'
+            print(f"  [crawl][fail] {url} — {err}", flush=True)
             continue
 
         if is_product_page(html, url):
             product_urls.append(url)
+            print(f"  [crawl][prod {len(product_urls)}] {url}", flush=True)
         else:
             category_urls.append(url)
+            if len(visited) % 5 == 0:
+                print(f"  [crawl] visited={len(visited)} prods={len(product_urls)} queue={len(to_visit)}", flush=True)
 
         # Find more internal links
         links = re.findall(
