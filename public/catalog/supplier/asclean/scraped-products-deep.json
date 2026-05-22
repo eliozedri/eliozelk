@@ -14747,6 +14747,703 @@
       "review_state": "needs_review",
       "failure_reason": null,
       "imported_at": "2026-05-22T18:12:35.492014+00:00"
+    },
+    {
+      "item_id": "ext-asc-additional-products-rubber-surfaces-for-fatigue-relieving",
+      "product_slug": "rubber-surfaces-for-fatigue-relieving",
+      "product_name": "משטחי גומי להקלה על עייפות - ארבל שטראוס אביזרי בטיחות",
+      "category_path": [
+        "additional-products",
+        "rubber-surfaces-for-fatigue-relieving"
+      ],
+      "catalog_category": "אביזרי בטיחות — כללי",
+      "breadcrumb": [],
+      "source_url": "https://www.asclean.co.il/catalog-safety-equipment/additional-products/rubber-surfaces-for-fatigue-relieving/",
+      "description_short": "משטחי גומי להקלה על עייפות - חברת ארבל שטראוס מייבאת משטחי גומי להקלה על עייפות. למידע נוסף אודות מוצר זה, כנסו לאתר.",
+      "description_long": "משטחי גומי להקלה על עייפות - חברת ארבל שטראוס מייבאת משטחי גומי להקלה על עייפות. למידע נוסף אודות מוצר זה, כנסו לאתר.",
+      "features": [
+        "אודות",
+        "קטלוג",
+        "ביתני שמירה",
+        "אינטרקלמפ",
+        "תפרי התפשטות ופתרונות גמר",
+        "הגנות ומיגונים למר\"לוגים",
+        "צור קשר",
+        "הגנות ומיגונים למר&#8221;לוגים"
+      ],
+      "spec_variants": [
+        {
+          "מק\"ט": "E-EN6090",
+          "מידות": "60X90 ס\"מ",
+          "חומר": "NITRIL",
+          "צבע": "שחור"
+        }
+      ],
+      "technical_specs": {
+        "מק\"ט": "E-EN6090",
+        "מידות": "60X90 ס\"מ",
+        "חומר": "NITRIL",
+        "צבע": "שחור"
+      },
+      "image_urls_found": [
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/משטח-עייפות-באנר-ראשי.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/משטח-גומי-אווירה-עיגול.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/משטח-לעייפות.png"
+      ],
+      "images_downloaded": [
+        {
+          "local": "/catalog/supplier/asclean/additional-products/rubber-surfaces-for-fatigue-relieving/original/rubber-surfaces-for-fatigue-relieving-source.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/משטח-עייפות-באנר-ראשי.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/additional-products/rubber-surfaces-for-fatigue-relieving/original/rubber-surfaces-for-fatigue-relieving-source-2.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/משטח-גומי-אווירה-עיגול.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/additional-products/rubber-surfaces-for-fatigue-relieving/original/rubber-surfaces-for-fatigue-relieving-source-3.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/משטח-לעייפות.png",
+          "status": "downloaded"
+        }
+      ],
+      "local_original": "/catalog/supplier/asclean/additional-products/rubber-surfaces-for-fatigue-relieving/original/rubber-surfaces-for-fatigue-relieving-source.png",
+      "local_thumb": null,
+      "local_processed": null,
+      "specs_downloaded": [
+        "/catalog/supplier/asclean/additional-products/rubber-surfaces-for-fatigue-relieving/specs/rubber-surfaces-for-fatigue-relieving-technical-spec.pdf"
+      ],
+      "pdf_urls": [
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/משטח-להקלה-על-עייפות.pdf"
+      ],
+      "extraction_status": "ok",
+      "image_status": "ok",
+      "crop_status": "pending",
+      "db_status": "pending",
+      "review_state": "needs_review",
+      "failure_reason": null,
+      "imported_at": "2026-05-22T18:37:22.350261+00:00"
+    },
+    {
+      "item_id": "ext-asc-barrier-post-removable-blocking-poles-removable-iron-bollard",
+      "product_slug": "removable-iron-bollard",
+      "product_name": "עמוד חסימה מברזל - ארבל שטראוס אביזרי בטיחות לחניונים, מוסדות ומפעלים",
+      "category_path": [
+        "barrier-post",
+        "removable-blocking-poles",
+        "removable-iron-bollard"
+      ],
+      "catalog_category": "מעקות ומחסומים",
+      "breadcrumb": [],
+      "source_url": "https://www.asclean.co.il/catalog-safety-equipment/barrier-post/removable-blocking-poles/removable-iron-bollard/",
+      "description_short": "עמוד חסימה מברזל - עמוד חסימה 3 צול עם תושבת נשלפת. צריכים עמוד חסימה? אצלנו תמצאו מגוון רחב של עמודים. כנסו לאתר וצרו איתנו קשר.",
+      "description_long": "עמוד חסימה מברזל - עמוד חסימה 3 צול עם תושבת נשלפת. צריכים עמוד חסימה? אצלנו תמצאו מגוון רחב של עמודים. כנסו לאתר וצרו איתנו קשר.",
+      "features": [
+        "אודות",
+        "קטלוג",
+        "ביתני שמירה",
+        "אינטרקלמפ",
+        "תפרי התפשטות ופתרונות גמר",
+        "הגנות ומיגונים למר\"לוגים",
+        "צור קשר",
+        "נועד למניעת חניה או מעבר באיזור אסור.",
+        "מתאים לשימוש במקומות בהן נדרשת לעיתים הסרה של העמודים על מנת לאפשר מעבר לרכב.",
+        "מכסה המאפשר את סגירת התושבת לאחר שליפת העמוד.",
+        "עמוד חסימה מברזל 3&#8243; עם תושבת נשלפת עשוי לגרום נזק רב לרכב במקרה של פגיעה.",
+        "דורשים תחזוקה ע&#8221;י צביעה בלבד, בהתאם לסביבה בה הם מותקנים.",
+        "עמידים לפגעי מזג האויר והסביבה.",
+        "ניתן להזמין צבוע לפי דרישה.",
+        "הגנות ומיגונים למר&#8221;לוגים"
+      ],
+      "spec_variants": [
+        {
+          "מק\"ט": "12205",
+          "גובה": "57.5 ס\"מ",
+          "חומר": "PE",
+          "מספר חורים להתקנה": "4",
+          "מחזירי אור": "1",
+          "אביזרי חיבור": "ראה טבלת אביזרי חיבור",
+          "משך אחריות": "ראה נספח אחריות",
+          "יצרן": "EVELUX"
+        },
+        {
+          "מק\"ט": "12205",
+          "גובה": "57.5 ס\"מ",
+          "חומר": "PE",
+          "מספר חורים להתקנה": "4",
+          "מחזירי אור": "1",
+          "אביזרי חיבור": "ראה טבלת אביזרי חיבור",
+          "משך אחריות": "ראה נספח אחריות",
+          "יצרן": "EVELUX"
+        }
+      ],
+      "technical_specs": {
+        "מק\"ט": "12205",
+        "גובה": "57.5 ס\"מ",
+        "חומר": "PE",
+        "מספר חורים להתקנה": "4",
+        "מחזירי אור": "1",
+        "אביזרי חיבור": "ראה טבלת אביזרי חיבור",
+        "משך אחריות": "ראה נספח אחריות",
+        "יצרן": "EVELUX"
+      },
+      "image_urls_found": [
+        "https://www.asclean.co.il/wp-content/uploads/2020/09/חסימה-נשלפים-תמונת-אווירה-עיגול.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/09/עמוד-עם-תושבת-נשלפת.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמוד-עם-תושבת-נשלפת.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/09/עמודי-חסימה-נשלפים-יתרונות.png"
+      ],
+      "images_downloaded": [
+        {
+          "local": "/catalog/supplier/asclean/barrier-post/removable-blocking-poles/removable-iron-bollard/original/removable-iron-bollard-source.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/09/חסימה-נשלפים-תמונת-אווירה-עיגול.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/barrier-post/removable-blocking-poles/removable-iron-bollard/original/removable-iron-bollard-source-2.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/09/עמוד-עם-תושבת-נשלפת.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/barrier-post/removable-blocking-poles/removable-iron-bollard/original/removable-iron-bollard-source-3.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/עמוד-עם-תושבת-נשלפת.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/barrier-post/removable-blocking-poles/removable-iron-bollard/original/removable-iron-bollard-source-4.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/09/עמודי-חסימה-נשלפים-יתרונות.png",
+          "status": "downloaded"
+        }
+      ],
+      "local_original": "/catalog/supplier/asclean/barrier-post/removable-blocking-poles/removable-iron-bollard/original/removable-iron-bollard-source.png",
+      "local_thumb": null,
+      "local_processed": null,
+      "specs_downloaded": [],
+      "pdf_urls": [],
+      "extraction_status": "ok",
+      "image_status": "ok",
+      "crop_status": "pending",
+      "db_status": "pending",
+      "review_state": "needs_review",
+      "failure_reason": null,
+      "imported_at": "2026-05-22T18:37:27.546842+00:00"
+    },
+    {
+      "item_id": "ext-asc-barrier-post-sharon-pole-chrom",
+      "product_slug": "sharon-pole-chrom",
+      "product_name": "עמוד שרון כרום - ארבל שטראוס אביזרי בטיחות לחניונים, מוסדות ומפעלים",
+      "category_path": [
+        "barrier-post",
+        "sharon-pole-chrom"
+      ],
+      "catalog_category": "מעקות ומחסומים",
+      "breadcrumb": [],
+      "source_url": "https://www.asclean.co.il/catalog-safety-equipment/barrier-post/sharon-pole-chrom/",
+      "description_short": "עמוד שרון כרום - עמוד חסימה חדשני תוצרת EVELUX המיועד להוות אלטרנטיבה במחיר מוזל לעמודי חסימה מסדרת X-LAST ועמודי ירון בפרט.",
+      "description_long": "עמוד שרון כרום - עמוד חסימה חדשני תוצרת EVELUX המיועד להוות אלטרנטיבה במחיר מוזל לעמודי חסימה מסדרת X-LAST ועמודי ירון בפרט.",
+      "features": [
+        "אודות",
+        "קטלוג",
+        "ביתני שמירה",
+        "אינטרקלמפ",
+        "תפרי התפשטות ופתרונות גמר",
+        "הגנות ומיגונים למר\"לוגים",
+        "צור קשר",
+        "מראה אסתטי ויוקרתי.",
+        "עמוד חסימה המתאים לתקן הנגישות.",
+        "מתאים להתקנה ברחבות כיבוי אש.",
+        "עמיד בפני וונדליזם ופגיעות רכבים – חוזר לצורתו המקורית.",
+        "עמוד חסימה המתאים להתקנה בכל תנאי מזג אוויר וכן עמיד בחומציות (שתן של כלבים) אינו מחליד ואינו דורש צביעה ותחזוקה.",
+        "מחיר אטרקטיבי במיוחד! התמורה הטובה ביותר לכסף, בהשוואה לכל עמודי החסימה!!!",
+        "הגנות ומיגונים למר&#8221;לוגים"
+      ],
+      "spec_variants": [
+        {
+          "מק\"ט": "12285CH",
+          "גובה": "60 ס\"מ מעל פני הקרקע",
+          "קוטר עמוד": "15 ס\"מ",
+          "חומר": "TPE",
+          "מחזירי אור": "אופציונלי",
+          "התקנה": "ביציקת בטון",
+          "יצרן": "Evelux"
+        }
+      ],
+      "technical_specs": {
+        "מק\"ט": "12285CH",
+        "גובה": "60 ס\"מ מעל פני הקרקע",
+        "קוטר עמוד": "15 ס\"מ",
+        "חומר": "TPE",
+        "מחזירי אור": "אופציונלי",
+        "התקנה": "ביציקת בטון",
+        "יצרן": "Evelux"
+      },
+      "image_urls_found": [
+        "https://www.asclean.co.il/wp-content/uploads/2021/07/עמוד-שרון-כרום.png",
+        "https://www.asclean.co.il/wp-content/uploads/2021/07/עמוד-שרון-כרום-מוקטן.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/09/עמוד-שרון-שרטוט.jpg"
+      ],
+      "images_downloaded": [
+        {
+          "local": "/catalog/supplier/asclean/barrier-post/sharon-pole-chrom/original/sharon-pole-chrom-source.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2021/07/עמוד-שרון-כרום.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/barrier-post/sharon-pole-chrom/original/sharon-pole-chrom-source-2.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2021/07/עמוד-שרון-כרום-מוקטן.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/barrier-post/sharon-pole-chrom/original/sharon-pole-chrom-source-3.jpg",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/09/עמוד-שרון-שרטוט.jpg",
+          "status": "downloaded"
+        }
+      ],
+      "local_original": "/catalog/supplier/asclean/barrier-post/sharon-pole-chrom/original/sharon-pole-chrom-source.png",
+      "local_thumb": null,
+      "local_processed": null,
+      "specs_downloaded": [
+        "/catalog/supplier/asclean/barrier-post/sharon-pole-chrom/specs/sharon-pole-chrom-technical-spec.pdf",
+        "/catalog/supplier/asclean/barrier-post/sharon-pole-chrom/specs/sharon-pole-chrom-technical-spec-2.pdf",
+        "/catalog/supplier/asclean/barrier-post/sharon-pole-chrom/specs/sharon-pole-chrom-technical-spec-3.pdf"
+      ],
+      "pdf_urls": [
+        "https://www.asclean.co.il/wp-content/uploads/2025/04/מפרט-טכני-עמוד-שרון-עם-תושבתTPE.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/%D7%94%D7%95%D7%A8%D7%90%D7%95%D7%AA-%D7%94%D7%AA%D7%A7%D7%A0%D7%94-%D7%A2%D7%9E%D7%95%D7%93%D7%99-%D7%A9%D7%A8%D7%95%D7%9F.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/כתב-אחריות-לעמוד-שרון.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/11/UV-עמוד-שרון-מכון-תקנים.pdf"
+      ],
+      "extraction_status": "ok",
+      "image_status": "ok",
+      "crop_status": "pending",
+      "db_status": "pending",
+      "review_state": "needs_review",
+      "failure_reason": null,
+      "imported_at": "2026-05-22T18:37:36.064531+00:00"
+    },
+    {
+      "item_id": "ext-asc-barrier-post-x-last",
+      "product_slug": "x-last",
+      "product_name": "עמודי חסימה X-Last - ארבל שטראוס אביזרי בטיחות לחניונים, מוסדות ומפעלים",
+      "category_path": [
+        "barrier-post",
+        "x-last"
+      ],
+      "catalog_category": "מעקות ומחסומים",
+      "breadcrumb": [],
+      "source_url": "https://www.asclean.co.il/catalog-safety-equipment/barrier-post/x-last/",
+      "description_short": "עמודי חסימה X-Last - עמודי החסימה המתקדמים והטובים ביותר בעולם. צריכים עמוד חסימה? כנסו לאתר וצרו איתנו קשר.",
+      "description_long": "עמודי חסימה X-Last - עמודי החסימה המתקדמים והטובים ביותר בעולם. צריכים עמוד חסימה? כנסו לאתר וצרו איתנו קשר.",
+      "features": [
+        "אודות",
+        "קטלוג",
+        "ביתני שמירה",
+        "אינטרקלמפ",
+        "תפרי התפשטות ופתרונות גמר",
+        "הגנות ומיגונים למר\"לוגים",
+        "צור קשר",
+        "הגנות ומיגונים למר&#8221;לוגים"
+      ],
+      "spec_variants": [
+        {
+          "מק\"ט": "YARON"
+        },
+        {
+          "מק\"ט": "DIAMOND"
+        },
+        {
+          "מק\"ט": "CLASS"
+        },
+        {
+          "מק\"ט": "BOULE"
+        },
+        {
+          "מק\"ט": "KRETA"
+        },
+        {
+          "מק\"ט": "CLASS"
+        },
+        {
+          "מק\"ט": "GOLA"
+        },
+        {
+          "מק\"ט": "NANTES"
+        },
+        {
+          "מק\"ט": "KROLA"
+        },
+        {
+          "מק\"ט": "NOVO"
+        },
+        {
+          "מק\"ט": "WATT"
+        },
+        {
+          "מק\"ט": "OBUS"
+        },
+        {
+          "מק\"ט": "BALIZA SING"
+        },
+        {
+          "מק\"ט": "KUAY"
+        },
+        {
+          "מק\"ט": "BABIK"
+        }
+      ],
+      "technical_specs": {
+        "מק\"ט": "YARON"
+      },
+      "image_urls_found": [
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/XLAST-300x300.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/XLAST.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמוד-ירון.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-2.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-3.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-4.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-8.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-9.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-10.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-11.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-16.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-17.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-18.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-19.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-24.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-25.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-26.jpg"
+      ],
+      "images_downloaded": [
+        {
+          "local": "/catalog/supplier/asclean/barrier-post/x-last/original/x-last-source.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/XLAST-300x300.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/barrier-post/x-last/original/x-last-source-2.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/XLAST.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/barrier-post/x-last/original/x-last-source-3.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/עמוד-ירון.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/barrier-post/x-last/original/x-last-source-4.jpg",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-2.jpg",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/barrier-post/x-last/original/x-last-source-5.jpg",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/עמודי-חסימה-X-Last-3.jpg",
+          "status": "downloaded"
+        }
+      ],
+      "local_original": "/catalog/supplier/asclean/barrier-post/x-last/original/x-last-source.png",
+      "local_thumb": null,
+      "local_processed": null,
+      "specs_downloaded": [
+        "/catalog/supplier/asclean/barrier-post/x-last/specs/x-last-technical-spec.pdf",
+        "/catalog/supplier/asclean/barrier-post/x-last/specs/x-last-technical-spec-2.pdf",
+        "/catalog/supplier/asclean/barrier-post/x-last/specs/x-last-technical-spec-3.pdf"
+      ],
+      "pdf_urls": [
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-קלאס.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-ננטס.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-בולה.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-קויה.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-דיאמונד.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-קרטה.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-קרולה.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-נובו.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-בביק.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/%D7%90%D7%99%D7%A9%D7%95%D7%A8-%D7%A2%D7%9E%D7%95%D7%93-%D7%99%D7%A8%D7%95%D7%9F.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-אובוס.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-בליזה.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-וואט.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מפרט-טכני-גולה.pdf"
+      ],
+      "extraction_status": "ok",
+      "image_status": "ok",
+      "crop_status": "pending",
+      "db_status": "pending",
+      "review_state": "needs_review",
+      "failure_reason": null,
+      "imported_at": "2026-05-22T18:37:45.856232+00:00"
+    },
+    {
+      "item_id": "ext-asc-corona-protection",
+      "product_slug": "corona-protection",
+      "product_name": "מוצרי הגנה מקורונה - ארבל שטראוס אביזרי בטיחות לחניונים, מוסדות ומפעלים",
+      "category_path": [
+        "corona-protection"
+      ],
+      "catalog_category": "אביזרי בטיחות — כללי",
+      "breadcrumb": [],
+      "source_url": "https://www.asclean.co.il/catalog-safety-equipment/corona-protection/",
+      "description_short": "מוצרי הגנה מקורונה - חברת ארבל שטראוס מייבאת ומשווקת מגוון מוצרי הגנה מקורונה, בהתאם לתו הסגול. למידע נוסף, כנסו לאתר.",
+      "description_long": "מוצרי הגנה מקורונה - חברת ארבל שטראוס מייבאת ומשווקת מגוון מוצרי הגנה מקורונה, בהתאם לתו הסגול. למידע נוסף, כנסו לאתר.",
+      "features": [
+        "אודות",
+        "קטלוג",
+        "ביתני שמירה",
+        "אינטרקלמפ",
+        "תפרי התפשטות ופתרונות גמר",
+        "הגנות ומיגונים למר\"לוגים",
+        "צור קשר",
+        "הגנות ומיגונים למר&#8221;לוגים"
+      ],
+      "spec_variants": [
+        {
+          "מק\"ט": "A-KOLCEK01",
+          "תיאור": "ידית משיכה לפתיחת דלת, התקנה בוואקום",
+          "צבע": "צהוב"
+        },
+        {
+          "מק\"ט": "A-KOLCEK02",
+          "תיאור": "ידית משיכה לפתיחת דלת, התקנה עם ברגים",
+          "צבע": "צהוב"
+        }
+      ],
+      "technical_specs": {
+        "מק\"ט": "A-KOLCEK01",
+        "תיאור": "ידית משיכה לפתיחת דלת, התקנה בוואקום",
+        "צבע": "צהוב"
+      },
+      "image_urls_found": [
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מחיצות-שקופות-3.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מגן-שולחני-1.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מחיצות-שקופות.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/מחיצות-שקופות-2.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/ידיות-משיכה-לדלתות.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/ידיות-משיכה-לדלתות-3.jpeg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/ידיות-משיכה-לדלתות-4.jpeg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/ידיות-משיכה-לדלתות-2.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/שומרים-על-תור-בטוח-2.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/שומרים-על-תור-בטוח.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/שומרים-על-תור-בטוח-3.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/שומרים-על-תור-בטוח-4.jpg"
+      ],
+      "images_downloaded": [
+        {
+          "local": "/catalog/supplier/asclean/corona-protection/original/corona-protection-source.jpg",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/מחיצות-שקופות-3.jpg",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/corona-protection/original/corona-protection-source-2.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/מגן-שולחני-1.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/corona-protection/original/corona-protection-source-3.jpg",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/מחיצות-שקופות.jpg",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/corona-protection/original/corona-protection-source-4.jpg",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/מחיצות-שקופות-2.jpg",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/corona-protection/original/corona-protection-source-5.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/ידיות-משיכה-לדלתות.png",
+          "status": "downloaded"
+        }
+      ],
+      "local_original": "/catalog/supplier/asclean/corona-protection/original/corona-protection-source.jpg",
+      "local_thumb": null,
+      "local_processed": null,
+      "specs_downloaded": [],
+      "pdf_urls": [],
+      "extraction_status": "ok",
+      "image_status": "ok",
+      "crop_status": "pending",
+      "db_status": "pending",
+      "review_state": "needs_review",
+      "failure_reason": null,
+      "imported_at": "2026-05-22T18:37:52.354507+00:00"
+    },
+    {
+      "item_id": "ext-asc-flexible-delineator-posts-yellow-flexible-delineator",
+      "product_slug": "yellow-flexible-delineator",
+      "product_name": "עמוד גמיש צהוב - ארבל שטראוס אביזרי בטיחות לחניונים, מוסדות ומפעלים",
+      "category_path": [
+        "flexible-delineator-posts",
+        "yellow-flexible-delineator"
+      ],
+      "catalog_category": "אביזרי בטיחות — מפרדים ועמודים גמישים",
+      "breadcrumb": [],
+      "source_url": "https://www.asclean.co.il/catalog-safety-equipment/flexible-delineator-posts/yellow-flexible-delineator/",
+      "description_short": "עמוד גמיש צהוב - הינו העמוד הגמיש היחיד המאושר לייבוא והתקנה בישראל על ידי הוועדה הבין משרדית להתקני תנועה ובטיחות.",
+      "description_long": "עמוד גמיש צהוב - הינו העמוד הגמיש היחיד המאושר לייבוא והתקנה בישראל על ידי הוועדה הבין משרדית להתקני תנועה ובטיחות.",
+      "features": [
+        "אודות",
+        "קטלוג",
+        "ביתני שמירה",
+        "אינטרקלמפ",
+        "תפרי התפשטות ופתרונות גמר",
+        "הגנות ומיגונים למר\"לוגים",
+        "צור קשר",
+        "תכונות מכאניות המקנות לעמוד עמידות מירבית, גבוהה יותר מכל עמוד גמיש אחר הנמכר בישראל.",
+        "לעמוד מחזירי אור תקניים של חברת 3M המתאימים לתקן הישראלי ומודבקים על העמוד הגמיש ע&#8221;פ תקנות משרד התחבורה.",
+        "הגנות ומיגונים למר&#8221;לוגים"
+      ],
+      "spec_variants": [
+        {
+          "מק\"ט": "12286UBR",
+          "גובה": "91 ס\"מ",
+          "קוטר עמוד": "10 ס\"מ",
+          "קוטר בסיס": "20 ס\"מ",
+          "חומר": "PU",
+          "מספר חורים להתקנה": "3",
+          "מחזירי אור": "2",
+          "אביזרי חיבור": "בורג 500121 + חומר כימי 500122",
+          "יצרן": "Evelux"
+        }
+      ],
+      "technical_specs": {
+        "מק\"ט": "12286UBR",
+        "גובה": "91 ס\"מ",
+        "קוטר עמוד": "10 ס\"מ",
+        "קוטר בסיס": "20 ס\"מ",
+        "חומר": "PU",
+        "מספר חורים להתקנה": "3",
+        "מחזירי אור": "2",
+        "אביזרי חיבור": "בורג 500121 + חומר כימי 500122",
+        "יצרן": "Evelux"
+      },
+      "image_urls_found": [
+        "https://www.asclean.co.il/wp-content/uploads/2024/07/עמוד-גמיש-צהוב-אתר.jpg",
+        "https://www.asclean.co.il/wp-content/uploads/2020/11/עמוד-שחור-גמיש-תקני.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/09/חמודי-מסביר5-1.jpg"
+      ],
+      "images_downloaded": [
+        {
+          "local": "/catalog/supplier/asclean/flexible-delineator-posts/yellow-flexible-delineator/original/yellow-flexible-delineator-source.jpg",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2024/07/עמוד-גמיש-צהוב-אתר.jpg",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/flexible-delineator-posts/yellow-flexible-delineator/original/yellow-flexible-delineator-source-2.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/11/עמוד-שחור-גמיש-תקני.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/flexible-delineator-posts/yellow-flexible-delineator/original/yellow-flexible-delineator-source-3.jpg",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/09/חמודי-מסביר5-1.jpg",
+          "status": "downloaded"
+        }
+      ],
+      "local_original": "/catalog/supplier/asclean/flexible-delineator-posts/yellow-flexible-delineator/original/yellow-flexible-delineator-source.jpg",
+      "local_thumb": null,
+      "local_processed": null,
+      "specs_downloaded": [
+        "/catalog/supplier/asclean/flexible-delineator-posts/yellow-flexible-delineator/specs/yellow-flexible-delineator-technical-spec.pdf",
+        "/catalog/supplier/asclean/flexible-delineator-posts/yellow-flexible-delineator/specs/yellow-flexible-delineator-technical-spec-2.pdf"
+      ],
+      "pdf_urls": [
+        "https://www.asclean.co.il/wp-content/uploads/2020/11/עמוד-שחור-תקני.pdf",
+        "https://www.asclean.co.il/wp-content/uploads/2020/11/CE-Ingilizce.pdf"
+      ],
+      "extraction_status": "ok",
+      "image_status": "ok",
+      "crop_status": "pending",
+      "db_status": "pending",
+      "review_state": "needs_review",
+      "failure_reason": null,
+      "imported_at": "2026-05-22T18:38:00.343326+00:00"
+    },
+    {
+      "item_id": "ext-asc-marking-poles-blinker-copy",
+      "product_slug": "blinker-copy",
+      "product_name": "בסיס כובד לתמרורים - ארבל שטראוס אביזרי בטיחות לחניונים, מוסדות ומפעלים",
+      "category_path": [
+        "marking-poles",
+        "blinker-copy"
+      ],
+      "catalog_category": "הסדרי תנועה",
+      "breadcrumb": [],
+      "source_url": "https://www.asclean.co.il/catalog-safety-equipment/marking-poles/blinker-copy/",
+      "description_short": "בסיס כובד לתמרורים - מתאים להצבת תמרורים באופן זמני",
+      "description_long": "בסיס כובד לתמרורים - מתאים להצבת תמרורים באופן זמני",
+      "features": [
+        "אודות",
+        "קטלוג",
+        "ביתני שמירה",
+        "אינטרקלמפ",
+        "תפרי התפשטות ופתרונות גמר",
+        "הגנות ומיגונים למר\"לוגים",
+        "צור קשר",
+        "הגנות ומיגונים למר&#8221;לוגים"
+      ],
+      "spec_variants": [
+        {
+          "מק\"ט": "300185",
+          "תיאור": "בסיס כובד לתמרור",
+          "מידות": "750X400X140",
+          "משקל": "25 ק\"ג",
+          "צבע": "שחור",
+          "חורים לעיגון": "30X30, 40X40, 60X60, קוטר 45"
+        },
+        {
+          "מק\"ט": "300186",
+          "תיאור": "בסיס כובד לתמרור",
+          "מידות": "490X390X115",
+          "משקל": "12.5 ק\"ג",
+          "צבע": "שחור",
+          "חורים לעיגון": "30X30, 40X40, 60X60, קוטר 45"
+        },
+        {
+          "מק\"ט": "300187",
+          "תיאור": "פרופיל מגולוון לחיבור תמרורים",
+          "מידות": "40X40X150",
+          "צבע": "כסוף"
+        }
+      ],
+      "technical_specs": {
+        "מק\"ט": "300185",
+        "תיאור": "בסיס כובד לתמרור",
+        "מידות": "750X400X140",
+        "משקל": "25 ק\"ג",
+        "צבע": "שחור",
+        "חורים לעיגון": "30X30, 40X40, 60X60, קוטר 45"
+      },
+      "image_urls_found": [
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/נצנץ-יתרונות.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/נצנץ-סולארי-באנר-ראשי.png",
+        "https://www.asclean.co.il/wp-content/uploads/2020/10/11817נצנצץ-אדום-.png"
+      ],
+      "images_downloaded": [
+        {
+          "local": "/catalog/supplier/asclean/marking-poles/blinker-copy/original/blinker-copy-source.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/נצנץ-יתרונות.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/marking-poles/blinker-copy/original/blinker-copy-source-2.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/נצנץ-סולארי-באנר-ראשי.png",
+          "status": "downloaded"
+        },
+        {
+          "local": "/catalog/supplier/asclean/marking-poles/blinker-copy/original/blinker-copy-source-3.png",
+          "remote": "https://www.asclean.co.il/wp-content/uploads/2020/10/11817נצנצץ-אדום-.png",
+          "status": "downloaded"
+        }
+      ],
+      "local_original": "/catalog/supplier/asclean/marking-poles/blinker-copy/original/blinker-copy-source.png",
+      "local_thumb": null,
+      "local_processed": null,
+      "specs_downloaded": [],
+      "pdf_urls": [],
+      "extraction_status": "ok",
+      "image_status": "ok",
+      "crop_status": "pending",
+      "db_status": "pending",
+      "review_state": "needs_review",
+      "failure_reason": null,
+      "imported_at": "2026-05-22T18:38:06.416272+00:00"
     }
   ],
   "report": {
@@ -14754,9 +15451,11 @@
     "pages_visited": 152,
     "category_pages": 18,
     "product_pages": 133,
-    "products_extracted": 133,
+    "products_extracted": 140,
     "images_downloaded": 605,
     "specs_downloaded": 94,
-    "failures": []
+    "failures": [],
+    "second_pass_at": "2026-05-22T18:38:14.447499Z",
+    "second_pass_added": 7
   }
 }

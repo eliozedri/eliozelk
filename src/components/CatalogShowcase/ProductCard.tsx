@@ -1,7 +1,11 @@
 "use client";
 
 import type { CatalogItem } from "@/types/catalog";
-import { getSourceType, SOURCE_BADGE, STATUS_BADGE, REVIEW_BADGE, resolveProductImage, getCategoryIcon } from "./constants";
+import {
+  getSourceType, SOURCE_BADGE, STATUS_BADGE, REVIEW_BADGE,
+  resolveProductImage, getCategoryIcon,
+  isBrandedSupplierImage, BRANDED_OVERLAY_LABEL,
+} from "./constants";
 
 interface Props {
   item: CatalogItem;
@@ -18,6 +22,7 @@ export function ProductCard({ item, onClick }: Props) {
   const categoryIcon = getCategoryIcon(item.category);
   const specs = item.metadata?.specs as Record<string, unknown> | undefined;
   const dimensions = specs?.dimensions as string | undefined;
+  const branded = isBrandedSupplierImage(item.metadata);
 
   return (
     <div
@@ -34,23 +39,34 @@ export function ProductCard({ item, onClick }: Props) {
       {/* Image */}
       <div className="h-28 bg-white/5 flex items-center justify-center border-b border-white/5 relative overflow-hidden">
         {imgUrl ? (
-          <img
-            src={imgUrl}
-            alt={item.name}
-            loading="lazy"
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              const el = e.currentTarget;
-              el.style.display = "none";
-              const parent = el.parentElement;
-              if (parent) {
-                const span = document.createElement("span");
-                span.className = "text-3xl opacity-50";
-                span.textContent = categoryIcon;
-                parent.appendChild(span);
-              }
-            }}
-          />
+          <>
+            <img
+              src={imgUrl}
+              alt={item.name}
+              loading="lazy"
+              className={`w-full h-full object-cover ${branded ? "opacity-55" : ""}`}
+              onError={(e) => {
+                const el = e.currentTarget;
+                el.style.display = "none";
+                const parent = el.parentElement;
+                if (parent) {
+                  const span = document.createElement("span");
+                  span.className = "text-3xl opacity-50";
+                  span.textContent = categoryIcon;
+                  parent.appendChild(span);
+                }
+              }}
+            />
+            {branded && (
+              <span
+                className="absolute bottom-1 left-1 text-[8px] font-semibold px-1.5 py-0.5 rounded
+                  bg-amber-500/90 text-white shadow-md"
+                title={BRANDED_OVERLAY_LABEL}
+              >
+                ⚠ {BRANDED_OVERLAY_LABEL}
+              </span>
+            )}
+          </>
         ) : (
           <span className="text-3xl opacity-50">{categoryIcon}</span>
         )}

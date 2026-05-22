@@ -86,3 +86,27 @@ export function resolveDetailImage(metadata?: Record<string, unknown>): string |
   const thumb = images?.thumb as string | undefined;
   return full ?? thumb ?? null;
 }
+
+/**
+ * Image is "not approved as a final clean Elkayam asset" when:
+ *   - source is external supplier reference, OR
+ *   - metadata.images.is_branded === true, OR
+ *   - metadata.images.image_status is anything other than "clean_product_crop"
+ *
+ * Used by the showcase to render the "מקור ספק — אינו מאושר" overlay over
+ * supplier images so they are never presented as Elkayam-approved assets.
+ */
+export function isBrandedSupplierImage(
+  metadata?: Record<string, unknown>,
+): boolean {
+  const images = metadata?.images as Record<string, unknown> | undefined;
+  if (!images) return false;
+  if (images.is_branded === true) return true;
+  const status = images.image_status as string | undefined;
+  if (status && status !== 'clean_product_crop') return true;
+  // Fallback: treat external-supplier-reference rows as branded by default
+  if (getSourceType(metadata) === 'external') return true;
+  return false;
+}
+
+export const BRANDED_OVERLAY_LABEL = 'מקור ספק — אינו מאושר';

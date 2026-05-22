@@ -187,6 +187,10 @@ async function main() {
         derivedFull  = `${base}/processed/${slug}.webp`;
       }
     }
+    // Supplier images default to "needs_review" — they may carry the
+    // supplier logo/watermark. A human reviewer (or future heuristic) can
+    // promote to "clean_product_crop" later. The UI uses this to render
+    // the "מקור ספק — אינו מאושר" overlay.
     const imagesMeta: Record<string, unknown> = {
       thumb:        product.local_thumb     ?? derivedThumb,
       full:         product.local_processed ?? derivedFull,
@@ -194,6 +198,8 @@ async function main() {
       original_url: primaryImg?.remote ?? product.image_urls_found?.[0] ?? null,
       source_page:  product.source_url,
       crop_status:  product.crop_status ?? 'pending',
+      image_status: 'needs_review',          // explicit per-asset state
+      is_branded:   true,                     // assume branded until reviewed
       imported_at:  product.imported_at,
     };
 

@@ -1,0 +1,186 @@
+{
+  "run_at": "2026-05-22T18:36:03.793006Z",
+  "counts": {
+    "sitemap_urls": 167,
+    "wp_rest_urls": 167,
+    "all_discovered": 167,
+    "already_imported": 133,
+    "overlap": 128,
+    "newly_discovered": 39,
+    "only_in_imported": 5
+  },
+  "sitemap_breakdown": {
+    "https://www.asclean.co.il/post-sitemap.xml": {
+      "total": 109,
+      "catalog": 0,
+      "sample": []
+    },
+    "https://www.asclean.co.il/page-sitemap.xml": {
+      "total": 175,
+      "catalog": 167,
+      "sample": [
+        "https://www.asclean.co.il/catalog-safety-equipment/corona-protection/",
+        "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/",
+        "https://www.asclean.co.il/catalog-safety-equipment/barrier-post/removable-blocking-poles/removable-iron-bollard/",
+        "https://www.asclean.co.il/catalog-safety-equipment/signage-and-signpost/signs-and-traffic-signs/",
+        "https://www.asclean.co.il/catalog-safety-equipment/bicycle-parking-facilities/bicycle-care-facilities/"
+      ]
+    },
+    "https://www.asclean.co.il/category-sitemap.xml": {
+      "total": 1,
+      "catalog": 0,
+      "sample": []
+    },
+    "https://www.asclean.co.il/post_tag-sitemap.xml": {
+      "total": 0,
+      "catalog": 0,
+      "sample": []
+    }
+  },
+  "newly_discovered": [
+    "https://www.asclean.co.il/catalog-safety-equipment/",
+    "https://www.asclean.co.il/catalog-safety-equipment/accessibility-in-public-places/",
+    "https://www.asclean.co.il/catalog-safety-equipment/additional-products/height-limiters/",
+    "https://www.asclean.co.il/catalog-safety-equipment/additional-products/rubber-surfaces-for-fatigue-relieving/",
+    "https://www.asclean.co.il/catalog-safety-equipment/barrier-post/",
+    "https://www.asclean.co.il/catalog-safety-equipment/barrier-post/removable-blocking-poles/removable-iron-bollard/",
+    "https://www.asclean.co.il/catalog-safety-equipment/barrier-post/sharon-pole-chrom/",
+    "https://www.asclean.co.il/catalog-safety-equipment/barrier-post/x-last/",
+    "https://www.asclean.co.il/catalog-safety-equipment/bicycle-parking-facilities/",
+    "https://www.asclean.co.il/catalog-safety-equipment/corona-protection/",
+    "https://www.asclean.co.il/catalog-safety-equipment/defenses-and-defenders/",
+    "https://www.asclean.co.il/catalog-safety-equipment/flexible-delineator-posts/",
+    "https://www.asclean.co.il/catalog-safety-equipment/flexible-delineator-posts/yellow-flexible-delineator/",
+    "https://www.asclean.co.il/catalog-safety-equipment/floode-pumping/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/barrier-post-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/flexible-delineator-posts-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/marking-sheets-and-anti-skid-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/modular-speed-bumps-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/multi-band-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/panoramic-mirrors-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/park-stopper-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/parking-guard-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/removable-bollards-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/slow-stop-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/spikes-barrier-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/standard-flexible-pillar-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/installation-instructions/x-last-installation/",
+    "https://www.asclean.co.il/catalog-safety-equipment/marking-and-non-slip/",
+    "https://www.asclean.co.il/catalog-safety-equipment/marking-poles/blinker-copy/",
+    "https://www.asclean.co.il/catalog-safety-equipment/panoramic-mirrors/",
+    "https://www.asclean.co.il/catalog-safety-equipment/park-stopper/",
+    "https://www.asclean.co.il/catalog-safety-equipment/parking-guard/",
+    "https://www.asclean.co.il/catalog-safety-equipment/parking-lot-cleanup/",
+    "https://www.asclean.co.il/catalog-safety-equipment/plastic-fence-and-new-jersey-fence/",
+    "https://www.asclean.co.il/catalog-safety-equipment/signage-and-signpost/",
+    "https://www.asclean.co.il/catalog-safety-equipment/signage-and-signpost/signs-and-traffic-signs/",
+    "https://www.asclean.co.il/catalog-safety-equipment/speed-bumps/",
+    "https://www.asclean.co.il/catalog-safety-equipment/spikes-barier/"
+  ],
+  "only_in_imported": [
+    "https://www.asclean.co.il/catalog-safety-equipment/bicycle-parking-facilities/arched-bicycle-parking-facility/",
+    "https://www.asclean.co.il/catalog-safety-equipment/bicycle-parking-facilities/bicycle-hanger/",
+    "https://www.asclean.co.il/catalog-safety-equipment/bicycle-parking-facilities/central-axis-parking-facility/",
+    "https://www.asclean.co.il/catalog-safety-equipment/bicycle-parking-facilities/spiral-parking-facility/",
+    "https://www.asclean.co.il/catalog-safety-equipment/bicycle-parking-facility/"
+  ],
+  "per_category": {
+    "accessibility-in-public-places": {
+      "discovered": 7,
+      "imported": 6
+    },
+    "additional-products": {
+      "discovered": 8,
+      "imported": 6
+    },
+    "barrier-post": {
+      "discovered": 16,
+      "imported": 12
+    },
+    "bicycle-parking-facilities": {
+      "discovered": 20,
+      "imported": 23
+    },
+    "blinker": {
+      "discovered": 1,
+      "imported": 1
+    },
+    "conus": {
+      "discovered": 1,
+      "imported": 1
+    },
+    "corona-protection": {
+      "discovered": 1,
+      "imported": 0
+    },
+    "defenses-and-defenders": {
+      "discovered": 17,
+      "imported": 16
+    },
+    "flexible-delineator-posts": {
+      "discovered": 19,
+      "imported": 17
+    },
+    "floode-pumping": {
+      "discovered": 1,
+      "imported": 0
+    },
+    "installation-instructions": {
+      "discovered": 14,
+      "imported": 0
+    },
+    "marking-and-non-slip": {
+      "discovered": 4,
+      "imported": 3
+    },
+    "marking-poles": {
+      "discovered": 5,
+      "imported": 4
+    },
+    "panoramic-mirrors": {
+      "discovered": 13,
+      "imported": 12
+    },
+    "park-stopper": {
+      "discovered": 5,
+      "imported": 4
+    },
+    "parking-guard": {
+      "discovered": 3,
+      "imported": 2
+    },
+    "parking-lot-cleanup": {
+      "discovered": 1,
+      "imported": 0
+    },
+    "plastic-fence-and-new-jersey-fence": {
+      "discovered": 8,
+      "imported": 7
+    },
+    "signage-and-signpost": {
+      "discovered": 5,
+      "imported": 3
+    },
+    "speed-bumps": {
+      "discovered": 11,
+      "imported": 10
+    },
+    "spikes-barier": {
+      "discovered": 3,
+      "imported": 2
+    },
+    "spray-paint-marking": {
+      "discovered": 1,
+      "imported": 1
+    },
+    "traffic-separator": {
+      "discovered": 1,
+      "imported": 1
+    },
+    "wet-room-products": {
+      "discovered": 1,
+      "imported": 1
+    }
+  }
+}

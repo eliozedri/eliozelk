@@ -6,7 +6,8 @@ import type { CatalogItem } from "@/types/catalog";
 import { TYPE_LABELS } from "@/types/catalog";
 import {
   getSourceType, SOURCE_BADGE, STATUS_BADGE, REVIEW_BADGE,
-  resolveDetailImage, getCategoryIcon
+  resolveDetailImage, getCategoryIcon,
+  isBrandedSupplierImage, BRANDED_OVERLAY_LABEL,
 } from "./constants";
 
 interface Props {
@@ -29,6 +30,8 @@ export function ProductModal({ item, onClose }: Props) {
   const sources = item.metadata?.sources as Array<{ type: string; note?: string; url?: string }> | undefined;
   const cropStatus = (item.metadata?.images as Record<string, string> | undefined)?.crop_status;
   const sourcePage = (item.metadata?.images as Record<string, string> | undefined)?.source_page;
+  const imageStatus = (item.metadata?.images as Record<string, string> | undefined)?.image_status;
+  const branded = isBrandedSupplierImage(item.metadata);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -60,22 +63,30 @@ export function ProductModal({ item, onClose }: Props) {
         {/* Image */}
         <div className="h-48 sm:h-56 bg-white/5 flex items-center justify-center relative overflow-hidden border-b border-white/7">
           {imgUrl ? (
-            <img
-              src={imgUrl}
-              alt={item.name}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                const el = e.currentTarget;
-                el.style.display = "none";
-                const parent = el.parentElement;
-                if (parent) {
-                  const span = document.createElement("span");
-                  span.className = "text-6xl opacity-40";
-                  span.textContent = categoryIcon;
-                  parent.appendChild(span);
-                }
-              }}
-            />
+            <>
+              <img
+                src={imgUrl}
+                alt={item.name}
+                className={`w-full h-full object-cover ${branded ? "opacity-60" : ""}`}
+                onError={(e) => {
+                  const el = e.currentTarget;
+                  el.style.display = "none";
+                  const parent = el.parentElement;
+                  if (parent) {
+                    const span = document.createElement("span");
+                    span.className = "text-6xl opacity-40";
+                    span.textContent = categoryIcon;
+                    parent.appendChild(span);
+                  }
+                }}
+              />
+              {branded && (
+                <div className="absolute bottom-2 right-2 left-2 sm:left-auto bg-amber-500/90 text-white text-xs sm:text-sm font-semibold px-3 py-1.5 rounded shadow-lg flex items-center gap-1.5">
+                  <span>⚠</span>
+                  <span>{BRANDED_OVERLAY_LABEL}</span>
+                </div>
+              )}
+            </>
           ) : (
             <span className="text-6xl opacity-40">{categoryIcon}</span>
           )}
@@ -206,6 +217,9 @@ export function ProductModal({ item, onClose }: Props) {
             )}
             {cropStatus === "needs_review" && (
               <p className="text-[10px] text-orange-400 mt-2 italic">תמונה דורשת בדיקת חיתוך</p>
+            )}
+            {imageStatus && imageStatus !== 'clean_product_crop' && (
+              <p className="text-[10px] text-amber-400 mt-1 italic">סטטוס נכס: {imageStatus}</p>
             )}
           </div>
 
