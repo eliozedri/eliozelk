@@ -920,7 +920,8 @@ export function CatalogPage() {
     setEditSupplierId(item.supplierId ?? "");
     setExpandedId(null);
     setEditingId(id);
-    setViewMode("table");
+    // NOTE: do not switch to table view. In card view the edit form is
+    // rendered as an overlay drawer so the user stays in context.
   }
 
   function saveEdit(id: string) {
@@ -1058,6 +1059,152 @@ export function CatalogPage() {
               ))}
             </div>
           )}
+
+          {/* Card-view edit drawer — opens in place when editingId is set */}
+          {viewMode === "cards" && editingId && (() => {
+            const editingItem = items.find(i => i.id === editingId);
+            if (!editingItem) return null;
+            const meta = editingItem.metadata as Record<string, unknown> | undefined;
+            const images = meta?.images as Record<string, unknown> | undefined;
+            const thumb = (images?.thumb as string | undefined) ?? (images?.full as string | undefined);
+            const imageStatus = images?.image_status as string | undefined;
+            const sources = meta?.sources as Array<{ type: string; note?: string; url?: string }> | undefined;
+            const isSupplier = sources?.[0]?.type === "external_supplier_reference";
+            return (
+              <div
+                className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-6 overflow-y-auto"
+                role="dialog"
+                aria-modal="true"
+                aria-label={`עריכת ${editingItem.name}`}
+              >
+                <div
+                  className="absolute inset-0 bg-black/40"
+                  onClick={cancelEdit}
+                  aria-hidden="true"
+                />
+                <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-8">
+                  <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 sticky top-0 bg-white rounded-t-2xl">
+                    <h2 className="text-lg font-semibold text-gray-900">עריכת מוצר</h2>
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      className="w-8 h-8 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 flex items-center justify-center text-xl leading-none"
+                      aria-label="סגור"
+                    >×</button>
+                  </div>
+
+                  <div className="px-5 py-4 space-y-4">
+                    {/* Image preview + status */}
+                    <div className="flex gap-4 items-start">
+                      <div className="shrink-0">
+                        {thumb ? (
+                          <img src={thumb} alt={editingItem.name}
+                            className="w-28 h-28 object-cover rounded-lg border border-gray-200 bg-gray-50" />
+                        ) : (
+                          <div className="w-28 h-28 rounded-lg border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-3xl text-gray-300">
+                            🖼
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0 text-xs space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${editingItem.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                            {editingItem.isActive ? "● פעיל" : "○ לא פעיל"}
+                          </span>
+                          {isSupplier && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                              מקור ספק חיצוני
+                            </span>
+                          )}
+                          {imageStatus && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                              image_status={imageStatus}
+                            </span>
+                          )}
+                        </div>
+                        {sources?.[0]?.url && (
+                          <div>
+                            <span className="text-gray-500">מקור: </span>
+                            <a href={sources[0].url} target="_blank" rel="noopener noreferrer"
+                              className="text-blue-600 underline truncate max-w-xs inline-block align-middle">
+                              {sources[0].note ?? sources[0].url}
+                            </a>
+                          </div>
+                        )}
+                        <p className="text-[10px] text-gray-400">
+                          להחלפת תמונה — שמרו תמונה ב-public/catalog/elkayam/&lt;קטגוריה&gt;/&lt;מוצר&gt;/original/ ועדכנו את metadata.images.thumb דרך עורך הפריט.
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => { toggleActive(editingItem.id); }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${editingItem.isActive ? "bg-white border-gray-300 text-gray-700 hover:bg-gray-50" : "bg-green-600 border-green-700 text-white hover:bg-green-700"}`}
+                        >
+                          {editingItem.isActive ? "השבת" : "✓ הפעל"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {isSupplier && !editingItem.isActive && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                        מוצר זה יובא ממקור ספק חיצוני והוא אינו פעיל עד לאישור ידני. הפעלה תהפוך אותו לזמין כפריט פעיל בקטלוג.
+                      </div>
+                    )}
+
+                    {/* Reuse the same FormFields used in table view */}
+                    <FormFields
+                      form={editForm}
+                      update={updateEditForm}
+                      categories={categories}
+                      linkedProducts={editLinked}
+                      onLinkedProductsChange={setEditLinked}
+                      onCreateLinked={handleCreateAndLink}
+                      allItems={allItemRefs}
+                      itemId={editingItem.id}
+                      compact
+                    />
+
+                    <div className="pt-3 border-t border-gray-100">
+                      <p className="text-xs font-semibold text-gray-600 mb-2">הגדרות מלאי</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">כמות מינימום (לרכש)</label>
+                          <input type="number" min="0" step="0.01" value={editMinQty}
+                            onChange={e => setEditMinQty(e.target.value)} placeholder="0"
+                            className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">ספק מועדף</label>
+                          <select value={editSupplierId} onChange={e => setEditSupplierId(e.target.value)}
+                            className="w-full px-2 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-400">
+                            <option value="">— ללא ספק —</option>
+                            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2">
+                          <div>נוכחי: <strong>{editingItem.currentQuantity}</strong></div>
+                          <div>שמור: <strong className="text-amber-600">{editingItem.reservedQuantity}</strong></div>
+                          <div>זמין: <strong>{editingItem.currentQuantity - editingItem.reservedQuantity}</strong></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-200 sticky bottom-0 bg-white rounded-b-2xl">
+                    <button type="button" onClick={cancelEdit}
+                      className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">
+                      ביטול
+                    </button>
+                    <button type="button" onClick={() => saveEdit(editingItem.id)}
+                      className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
+                      שמור
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ── Table view ───────────────────────────────────────────────────── */}
           {filtered.length > 0 && viewMode === "table" && (
