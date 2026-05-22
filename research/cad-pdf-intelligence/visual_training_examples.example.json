@@ -1,0 +1,167 @@
+{
+  "schema_version": "1.0",
+  "plan_id": "poc_plan_50_448_02_400_20260520_223259",
+  "page_number": 0,
+  "image_dpi": 150,
+  "image_source": "rendered_from_pdf",
+  "pdf_filename": "50-448-02-400.pdf",
+  "author": "sample_for_poc",
+  "purpose": "Demonstrates Engine C training example schema. Coordinates point to real pole locations detected by Engine B (zone mode) so the POC's template matching has something to find. Real-world examples would be created via the marking UI (future).",
+  "examples": [
+    {
+      "training_example_id": "te_001",
+      "label_type": "pole_dot",
+      "label_value": "pole",
+      "marking_geometry": {
+        "type": "point",
+        "x": 2952,
+        "y": 1330,
+        "radius": 8
+      },
+      "associated_objects": [],
+      "user_answer": "yes, this is a pole",
+      "confidence_source": "human_labeled",
+      "scope": "current_plan_only",
+      "created_at": "2026-05-22T23:30:00",
+      "audit_notes": "First pole example - center of map body"
+    },
+    {
+      "training_example_id": "te_002",
+      "label_type": "pole_dot",
+      "label_value": "pole",
+      "marking_geometry": {
+        "type": "point",
+        "x": 3674,
+        "y": 1266,
+        "radius": 8
+      },
+      "associated_objects": [],
+      "user_answer": "yes, this is a pole",
+      "confidence_source": "human_labeled",
+      "scope": "current_plan_only",
+      "created_at": "2026-05-22T23:30:08",
+      "audit_notes": "Second pole - same visual style as te_001"
+    },
+    {
+      "training_example_id": "te_003",
+      "label_type": "pole_dot",
+      "label_value": "pole",
+      "marking_geometry": {
+        "type": "point",
+        "x": 2684,
+        "y": 1265,
+        "radius": 8
+      },
+      "associated_objects": [],
+      "user_answer": "yes, this is a pole",
+      "confidence_source": "human_labeled",
+      "scope": "current_plan_only",
+      "created_at": "2026-05-22T23:30:15",
+      "audit_notes": "Third pole - reinforces template"
+    },
+    {
+      "training_example_id": "te_004",
+      "label_type": "tick_mark",
+      "label_value": "single_tick",
+      "marking_geometry": {
+        "type": "line",
+        "x0": 2960,
+        "y0": 1322,
+        "x1": 2970,
+        "y1": 1322
+      },
+      "associated_objects": ["te_001"],
+      "user_answer": "single tick mark attached to pole te_001 — indicates 1 sign on this pole",
+      "confidence_source": "human_labeled",
+      "scope": "current_plan_only",
+      "created_at": "2026-05-22T23:30:30",
+      "audit_notes": "Short horizontal line near pole"
+    },
+    {
+      "training_example_id": "te_005",
+      "label_type": "sign_code_text",
+      "label_value": "402",
+      "marking_geometry": {
+        "type": "rectangle",
+        "x0": 2980,
+        "y0": 1290,
+        "x1": 3020,
+        "y1": 1310
+      },
+      "associated_objects": ["te_001"],
+      "user_answer": "sign code 402 belongs to pole te_001",
+      "confidence_source": "human_labeled",
+      "scope": "current_plan_only",
+      "created_at": "2026-05-22T23:30:45",
+      "audit_notes": "Numeric code text near pole"
+    },
+    {
+      "training_example_id": "te_006",
+      "label_type": "related_code_to_pole",
+      "label_value": "code_to_pole_assoc",
+      "marking_geometry": {
+        "type": "association",
+        "from": {"type": "point", "x": 3000, "y": 1300},
+        "to": {"type": "point", "x": 2952, "y": 1330}
+      },
+      "associated_objects": ["te_005", "te_001"],
+      "user_answer": "the sign code at te_005 belongs to the pole at te_001 — distance ~50px, direction up-right",
+      "confidence_source": "human_labeled",
+      "scope": "current_plan_only",
+      "created_at": "2026-05-22T23:31:00",
+      "audit_notes": "Defines proximity + direction rule for code-to-pole association"
+    },
+    {
+      "training_example_id": "te_007",
+      "label_type": "number_of_signs_on_pole",
+      "label_value": "1",
+      "marking_geometry": {
+        "type": "point",
+        "x": 2952,
+        "y": 1330
+      },
+      "associated_objects": ["te_001", "te_004"],
+      "user_answer": "this pole has 1 sign mounted (matches tick count of 1)",
+      "confidence_source": "human_labeled",
+      "scope": "current_plan_only",
+      "created_at": "2026-05-22T23:31:15",
+      "audit_notes": "Sign count assertion"
+    },
+    {
+      "training_example_id": "te_008",
+      "label_type": "ignore_region",
+      "label_value": "title_block",
+      "marking_geometry": {
+        "type": "rectangle",
+        "x0": 8200,
+        "y0": 4500,
+        "x1": 9450,
+        "y1": 5314
+      },
+      "associated_objects": [],
+      "user_answer": "this is the title block in the bottom-right corner; do not detect signs here",
+      "confidence_source": "human_labeled",
+      "scope": "current_plan_only",
+      "created_at": "2026-05-22T23:31:30",
+      "audit_notes": "Exclusion zone covering title block area at 150 DPI page coords"
+    },
+    {
+      "training_example_id": "te_009",
+      "label_type": "ignore_region",
+      "label_value": "right_legend_strip",
+      "marking_geometry": {
+        "type": "rectangle",
+        "x0": 7900,
+        "y0": 0,
+        "x1": 9450,
+        "y1": 4500
+      },
+      "associated_objects": [],
+      "user_answer": "right-side legend/notes strip; not part of the map drawing body",
+      "confidence_source": "human_labeled",
+      "scope": "current_plan_only",
+      "created_at": "2026-05-22T23:31:45",
+      "audit_notes": "Exclusion zone covering right legend/notes column"
+    }
+  ]
+}

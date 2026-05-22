@@ -279,7 +279,10 @@ Every candidate record contains the following fields:
 
 ---
 
-## 6. Comparison Strategy with Engine A (Vector Engine)
+## 6. Comparison Strategy with Engine A (Vector Engine) and Engine C (Visual Learning Agent)
+
+> **Three engines now exist:** Engine A (vector/CAD, scripts 01–34), Engine B (image detection, this script 35), Engine C (visual learning agent, script 36). See `PLAN_SCANNER_VISUAL_LEARNING_AGENT_SPEC.md` for Engine C's full role. The cross-validation layer below covers Engine A vs B; Engine C's comparison logic is documented in its own spec §12.
+
 
 Engine A produces a candidate list from vector/text parsing. Engine B produces one from image analysis. The comparison layer:
 
@@ -347,6 +350,8 @@ spatial association → evidence crops → output generation → timing summary
 ## 9. Image-Based Visual Teaching Loop / Agent Learning Principle
 
 **This section is a core principle of the Image-Based Plan Scanner, not an optional enhancement.**
+
+> **Production track:** This principle is now implemented as **Engine C — Visual Learning Agent**, documented in [`PLAN_SCANNER_VISUAL_LEARNING_AGENT_SPEC.md`](PLAN_SCANNER_VISUAL_LEARNING_AGENT_SPEC.md). Engine C is the operational realization of everything in this section: rule extraction from user markings, evidence crops, review questions, learning scopes, hard BOQ boundary. Engine B (this script) provides the *image rendering and detection primitives* that Engine C builds upon. The POC is `36_visual_learning_agent_poc.py`.
 
 ### 9.1 Why this principle exists
 
