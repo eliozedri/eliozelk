@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, Fragment } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useCatalogContext } from "@/context/CatalogContext";
 import type { CatalogItem, CatalogFormState, CatalogItemType, LinkedProductEntry } from "@/types/catalog";
 import { TYPE_LABELS, TYPE_COLORS, UNIT_OPTIONS, DIMENSION_UNIT_OPTIONS, LENGTH_UNITS, AREA_UNITS, NO_DIMENSION_UNITS } from "@/types/catalog";
@@ -845,6 +846,21 @@ export function CatalogPage() {
     db.from("suppliers").select("id,name").eq("is_active", true).order("name")
       .then(({ data }) => { if (data) setSuppliers(data as { id: string; name: string }[]); });
   }, []);
+
+  // Deep-link support: /catalog?edit=<id> opens that item in edit mode.
+  // Used by /catalog-showcase's ProductModal "ערוך פרטים" button so the
+  // showcase no longer dumps the user into a generic list view.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  useEffect(() => {
+    const editId = searchParams?.get("edit");
+    if (editId && items.some(i => i.id === editId) && editingId !== editId) {
+      startEdit(editId);
+      // Strip the param so reloads don't re-open
+      router.replace("/catalog", { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, items]);
 
   const categories = useMemo(() => {
     const cats = new Set(items.map((i) => i.category).filter(Boolean));

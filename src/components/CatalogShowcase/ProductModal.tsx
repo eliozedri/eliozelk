@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CatalogItem } from "@/types/catalog";
 import { TYPE_LABELS } from "@/types/catalog";
+import { useCatalogContext } from "@/context/CatalogContext";
 import {
   getSourceType, SOURCE_BADGE, STATUS_BADGE, REVIEW_BADGE,
   resolveDetailImage, getCategoryIcon,
@@ -17,6 +18,8 @@ interface Props {
 
 export function ProductModal({ item, onClose }: Props) {
   const router = useRouter();
+  const { toggleActive } = useCatalogContext();
+  const [confirming, setConfirming] = useState(false);
   const imgUrl = resolveDetailImage(item.metadata);
   const sourceType = getSourceType(item.metadata);
   const sourceBadge = SOURCE_BADGE[sourceType];
@@ -24,6 +27,7 @@ export function ProductModal({ item, onClose }: Props) {
   const reviewState = item.metadata?.review_state as string | undefined;
   const reviewBadge = reviewState ? REVIEW_BADGE[reviewState] : null;
   const categoryIcon = getCategoryIcon(item.category);
+  const isExternalSupplier = sourceType === "external";
   const specs = item.metadata?.specs as Record<string, string | boolean | number | undefined> | undefined;
   const specVariants = item.metadata?.spec_variants as Array<Record<string, string>> | undefined;
   const features = item.metadata?.features as string[] | undefined;
@@ -223,8 +227,16 @@ export function ProductModal({ item, onClose }: Props) {
             )}
           </div>
 
+          {/* Supplier-import warning for inactive supplier rows */}
+          {isExternalSupplier && !item.isActive && (
+            <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-200">
+              <p className="font-semibold mb-0.5">מוצר זה יובא ממקור ספק חיצוני</p>
+              <p className="text-amber-300/80">המוצר אינו פעיל עד לאישור ידני. הפעלה תהפוך אותו לזמין בקטלוג הפעיל.</p>
+            </div>
+          )}
+
           {/* Actions */}
-          <div className="flex gap-2 justify-end">
+          <div className="flex gap-2 justify-end flex-wrap">
             <button
               type="button"
               onClick={onClose}
@@ -232,12 +244,45 @@ export function ProductModal({ item, onClose }: Props) {
             >
               סגור
             </button>
+            {!item.isActive ? (
+              confirming ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-amber-300">להפעיל?</span>
+                  <button
+                    type="button"
+                    onClick={() => { toggleActive(item.id); setConfirming(false); onClose(); }}
+                    className="px-3 py-2 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700"
+                  >כן, הפעל</button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(false)}
+                    className="px-3 py-2 rounded-lg bg-white/10 text-white/70 text-xs"
+                  >ביטול</button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirming(true)}
+                  className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors"
+                >
+                  ✓ הפעל מוצר
+                </button>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={() => { toggleActive(item.id); onClose(); }}
+                className="px-4 py-2 rounded-lg bg-white/10 text-white/80 text-sm border border-white/15 hover:bg-white/15 transition-colors"
+              >
+                השבת
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => { onClose(); router.push("/catalog"); }}
+              onClick={() => { onClose(); router.push(`/catalog?edit=${item.id}`); }}
               className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
             >
-              ✏ ערוך מוצר
+              ✏ ערוך פרטים
             </button>
           </div>
         </div>
