@@ -6,7 +6,10 @@ import { useCatalogContext } from "@/context/CatalogContext";
 import type { CatalogItem, CatalogFormState, CatalogItemType, LinkedProductEntry } from "@/types/catalog";
 import { TYPE_LABELS, TYPE_COLORS, UNIT_OPTIONS, DIMENSION_UNIT_OPTIONS, LENGTH_UNITS, AREA_UNITS, NO_DIMENSION_UNITS } from "@/types/catalog";
 import { getSupabase } from "@/lib/supabase/client";
-import { getSourceType, SOURCE_BADGE, REVIEW_BADGE, resolveProductImage, getCategoryIcon } from "@/components/CatalogShowcase/constants";
+import {
+  getSourceType, SOURCE_BADGE, REVIEW_BADGE, resolveProductImage,
+  isUnresolvedImage, UNRESOLVED_IMAGE_LABEL,
+} from "@/components/CatalogShowcase/constants";
 
 function getSourceLabel(metadata: Record<string, unknown> | undefined): string | null {
   const sources = metadata?.sources as Array<{ type: string }> | undefined;
@@ -280,7 +283,7 @@ function ItemCard({ item, onEdit, onToggle, onDelete }: {
   const sourceBadge = SOURCE_BADGE[sourceType];
   const reviewState = item.metadata?.review_state as string | undefined;
   const reviewBadge = reviewState ? REVIEW_BADGE[reviewState] : null;
-  const categoryIcon = getCategoryIcon(item.category);
+  const unresolved = isUnresolvedImage(item.metadata);
 
   function handleCardClick() {
     onEdit(item.id);
@@ -303,28 +306,39 @@ function ItemCard({ item, onEdit, onToggle, onDelete }: {
         !item.isActive ? "opacity-55 border-gray-100" : "border-gray-200"
       }`}
     >
-      {/* Product image */}
-      <div className="h-32 bg-gray-50 flex items-center justify-center border-b border-gray-100 relative overflow-hidden">
-        {imgUrl ? (
+      {/* Product image — real photo when available, professional placeholder otherwise */}
+      <div className="h-32 bg-gradient-to-br from-slate-100 to-slate-50 flex flex-col items-center justify-center gap-1 border-b border-gray-100 relative overflow-hidden">
+        {imgUrl && !unresolved ? (
           <img
             src={imgUrl}
             alt={item.name}
             loading="lazy"
             className="w-full h-full object-cover"
             onError={(e) => {
+              // Hide the broken image and rely on the placeholder layer rendered below.
               const el = e.target as HTMLImageElement;
               el.style.display = "none";
               const parent = el.parentElement;
               if (parent) {
-                const span = document.createElement("span");
-                span.className = "text-4xl";
-                span.textContent = categoryIcon;
-                parent.appendChild(span);
+                const ph = document.createElement("div");
+                ph.className = "flex flex-col items-center justify-center text-center gap-1 w-full h-full text-slate-400";
+                ph.innerHTML = `
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="opacity-60"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  <span class="text-[10px] font-medium px-1">${UNRESOLVED_IMAGE_LABEL}</span>
+                `;
+                parent.appendChild(ph);
               }
             }}
           />
         ) : (
-          <span className="text-4xl">{categoryIcon}</span>
+          <>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 opacity-60">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="9" cy="9" r="2"/>
+              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+            </svg>
+            <span className="text-[10px] font-medium text-slate-500 px-1 text-center">{UNRESOLVED_IMAGE_LABEL}</span>
+          </>
         )}
       </div>
 

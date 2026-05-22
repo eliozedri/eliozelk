@@ -7,8 +7,9 @@ import { TYPE_LABELS } from "@/types/catalog";
 import { useCatalogContext } from "@/context/CatalogContext";
 import {
   getSourceType, SOURCE_BADGE, STATUS_BADGE, REVIEW_BADGE,
-  resolveDetailImage, getCategoryIcon,
+  resolveDetailImage,
   isBrandedSupplierImage, BRANDED_OVERLAY_LABEL,
+  isUnresolvedImage, UNRESOLVED_IMAGE_LABEL,
 } from "./constants";
 
 interface Props {
@@ -26,7 +27,7 @@ export function ProductModal({ item, onClose }: Props) {
   const statusBadge = STATUS_BADGE[item.isActive ? "active" : "inactive"];
   const reviewState = item.metadata?.review_state as string | undefined;
   const reviewBadge = reviewState ? REVIEW_BADGE[reviewState] : null;
-  const categoryIcon = getCategoryIcon(item.category);
+  const unresolved = isUnresolvedImage(item.metadata);
   const isExternalSupplier = sourceType === "external";
   const specs = item.metadata?.specs as Record<string, string | boolean | number | undefined> | undefined;
   const specVariants = item.metadata?.spec_variants as Array<Record<string, string>> | undefined;
@@ -66,7 +67,7 @@ export function ProductModal({ item, onClose }: Props) {
       <div className="relative bg-[#1a2d4a] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg overflow-hidden shadow-2xl">
         {/* Image */}
         <div className="h-48 sm:h-56 bg-white/5 flex items-center justify-center relative overflow-hidden border-b border-white/7">
-          {imgUrl ? (
+          {imgUrl && !unresolved ? (
             <>
               <img
                 src={imgUrl}
@@ -77,10 +78,13 @@ export function ProductModal({ item, onClose }: Props) {
                   el.style.display = "none";
                   const parent = el.parentElement;
                   if (parent) {
-                    const span = document.createElement("span");
-                    span.className = "text-6xl opacity-40";
-                    span.textContent = categoryIcon;
-                    parent.appendChild(span);
+                    const div = document.createElement("div");
+                    div.className = "flex flex-col items-center justify-center gap-2 text-white/40";
+                    div.innerHTML = `
+                      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                      <span class="text-sm font-medium">${UNRESOLVED_IMAGE_LABEL}</span>
+                    `;
+                    parent.appendChild(div);
                   }
                 }}
               />
@@ -92,7 +96,14 @@ export function ProductModal({ item, onClose }: Props) {
               )}
             </>
           ) : (
-            <span className="text-6xl opacity-40">{categoryIcon}</span>
+            <div className="flex flex-col items-center justify-center gap-2 text-white/40">
+              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="9" cy="9" r="2"/>
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+              </svg>
+              <span className="text-sm font-medium">{UNRESOLVED_IMAGE_LABEL}</span>
+            </div>
           )}
           {/* Close button */}
           <button

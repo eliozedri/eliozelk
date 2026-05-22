@@ -110,3 +110,22 @@ export function isBrandedSupplierImage(
 }
 
 export const BRANDED_OVERLAY_LABEL = 'מקור ספק — אינו מאושר';
+
+/**
+ * Returns true when the row has no real product image and the UI should
+ * render a "תמונה דורשת השלמה" placeholder instead of an emoji.
+ */
+export function isUnresolvedImage(metadata?: Record<string, unknown>): boolean {
+  const images = metadata?.images as Record<string, unknown> | undefined;
+  if (!images?.thumb) return true;
+  const matchType = metadata?.image_match_type as string | undefined;
+  if (matchType === 'needs_review' || matchType === 'fallback_placeholder'
+      || matchType === 'missing_image' || matchType === 'invalid_logo_or_banner'
+      || matchType === 'invalid_icon_or_emoji') return true;
+  const status = images.image_status as string | undefined;
+  if (status === 'missing_image' || status === 'needs_real_product_image'
+      || status === 'fallback_placeholder') return true;
+  return false;
+}
+
+export const UNRESOLVED_IMAGE_LABEL = 'תמונה דורשת השלמה';

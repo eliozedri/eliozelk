@@ -3,8 +3,9 @@
 import type { CatalogItem } from "@/types/catalog";
 import {
   getSourceType, SOURCE_BADGE, STATUS_BADGE, REVIEW_BADGE,
-  resolveProductImage, getCategoryIcon,
+  resolveProductImage,
   isBrandedSupplierImage, BRANDED_OVERLAY_LABEL,
+  isUnresolvedImage, UNRESOLVED_IMAGE_LABEL,
 } from "./constants";
 
 interface Props {
@@ -19,7 +20,7 @@ export function ProductCard({ item, onClick }: Props) {
   const statusBadge = STATUS_BADGE[item.isActive ? "active" : "inactive"];
   const reviewState = item.metadata?.review_state as string | undefined;
   const reviewBadge = reviewState ? REVIEW_BADGE[reviewState] : null;
-  const categoryIcon = getCategoryIcon(item.category);
+  const unresolved = isUnresolvedImage(item.metadata);
   const specs = item.metadata?.specs as Record<string, unknown> | undefined;
   const dimensions = specs?.dimensions as string | undefined;
   const branded = isBrandedSupplierImage(item.metadata);
@@ -36,9 +37,9 @@ export function ProductCard({ item, onClick }: Props) {
           : "bg-white/2 border-white/5 opacity-55"
         }`}
     >
-      {/* Image */}
+      {/* Image — real photo, branded-overlay, or "needs image" placeholder */}
       <div className="h-28 bg-white/5 flex items-center justify-center border-b border-white/5 relative overflow-hidden">
-        {imgUrl ? (
+        {imgUrl && !unresolved ? (
           <>
             <img
               src={imgUrl}
@@ -50,10 +51,13 @@ export function ProductCard({ item, onClick }: Props) {
                 el.style.display = "none";
                 const parent = el.parentElement;
                 if (parent) {
-                  const span = document.createElement("span");
-                  span.className = "text-3xl opacity-50";
-                  span.textContent = categoryIcon;
-                  parent.appendChild(span);
+                  const div = document.createElement("div");
+                  div.className = "flex flex-col items-center justify-center text-center gap-1 w-full h-full text-white/35";
+                  div.innerHTML = `
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                    <span class="text-[9px] font-medium px-1">${UNRESOLVED_IMAGE_LABEL}</span>
+                  `;
+                  parent.appendChild(div);
                 }
               }}
             />
@@ -68,7 +72,14 @@ export function ProductCard({ item, onClick }: Props) {
             )}
           </>
         ) : (
-          <span className="text-3xl opacity-50">{categoryIcon}</span>
+          <div className="flex flex-col items-center justify-center gap-1 text-white/40 text-center px-2">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-70">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="9" cy="9" r="2"/>
+              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+            </svg>
+            <span className="text-[9px] font-medium">{UNRESOLVED_IMAGE_LABEL}</span>
+          </div>
         )}
       </div>
 
