@@ -52,8 +52,9 @@ def parse_args() -> argparse.Namespace:
         help="Rendering DPI (150=fast, 300=default, 600=deep)"
     )
     parser.add_argument(
-        "--mode", choices=["fast", "deep", "tile"], default="fast",
-        help="Scan mode: fast=patches only, deep=full-page grid OCR too, tile=tile-based high-res scan"
+        "--mode", choices=["fast", "deep", "tile", "zone", "zone-fast"], default="fast",
+        help="Scan mode: fast=patches only, deep=full-page grid OCR too, tile=tile-based high-res scan, "
+             "zone=zone-aware tile scan (skip excluded zones), zone-fast=zone mode with Tesseract-only"
     )
     parser.add_argument(
         "--ocr", choices=["all", "tesseract", "easyocr", "paddleocr"], default="all",
@@ -75,6 +76,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tile-dpi", type=int, default=150,
         help="DPI per tile (default: 150)"
+    )
+    # --- Zone mode arguments ---
+    parser.add_argument(
+        "--right-strip-pct", type=float, default=0.22,
+        help="Fraction of page width to exclude as right strip (legend/notes). Default: 0.22"
+    )
+    parser.add_argument(
+        "--bottom-strip-pct", type=float, default=0.18,
+        help="Fraction of page height to exclude as bottom strip (title block). Default: 0.18"
+    )
+    parser.add_argument(
+        "--top-strip-pct", type=float, default=0.08,
+        help="Fraction of page height to mark as secondary (top revision block). Default: 0.08"
+    )
+    parser.add_argument(
+        "--frame-margin-pct", type=float, default=0.03,
+        help="Fraction of page dimensions for frame border exclusion. Default: 0.03"
+    )
+    parser.add_argument(
+        "--density-threshold", type=float, default=0.25,
+        help="Ink density above which a density cell is considered 'excluded'. Default: 0.25"
+    )
+    parser.add_argument(
+        "--skip-density", action="store_true", default=False,
+        help="Skip density pass; use geometric zone classification only"
     )
     return parser.parse_args()
 
@@ -2553,6 +2579,782 @@ def _write_tile_outputs(
     log(f"  Wrote {cands_path.name} ({merged_count} candidates)")
 
 
+# ====================================================================
+# Zone-Aware Mode (v0.3)
+# ====================================================================
+
+def _build_zone_map(
+    page_w_pt: float,
+    page_h_pt: float,
+    n_rows: int,
+    n_cols: int,
+    tile_overlap: float,
+    right_strip_pct: float,
+    bottom_strip_pct: float,
+    top_strip_pct: float,
+    frame_margin_pct: float,
+    pdf_path: Path,
+    page_idx: int,
+    density_threshold: float,
+    skip_density: bool,
+    debug_dir: Path,
+) -> Tuple[Dict[str, Dict], Optional[str], float]:
+    """
+    Classify each tile in the NxM grid as primary/secondary/excluded.
+
+    Geometric pass (always): right_strip, bottom_strip, top_strip, frame_margin.
+    Density pass (optional, ~30 DPI thumbnail with 8x4 blob density grid).
+
+    Boundary safety: a tile that geometrically lands in an excluded zone but has
+    low actual content density is promoted to 'secondary' (kept with Tesseract-only),
+    not silently dropped.
+
+    Returns: (tile_classification_dict, density_map_png_path, elapsed_ms)
+    """
+    import fitz
+    import cv2
+    import numpy as np
+
+    t_start = time.perf_counter()
+
+    right_strip_x0 = page_w_pt * (1 - right_strip_pct)
+    bottom_strip_y0 = page_h_pt * (1 - bottom_strip_pct)
+    top_strip_y1 = page_h_pt * top_strip_pct
+    frame_x0 = page_w_pt * frame_margin_pct
+    frame_y0 = page_h_pt * frame_margin_pct
+    frame_x1 = page_w_pt * (1 - frame_margin_pct)
+    frame_y1 = page_h_pt * (1 - frame_margin_pct)
+
+    def excl_overlap(tile_rect_pt) -> Tuple[float, str]:
+        tx0, ty0, tx1, ty1 = tile_rect_pt
+        tile_area = max(1e-6, (tx1 - tx0) * (ty1 - ty0))
+        results = []
+        if tx1 > right_strip_x0:
+            ox = max(0.0, min(tx1, page_w_pt) - max(tx0, right_strip_x0))
+            oy = max(0.0, ty1 - ty0)
+            results.append((ox * oy / tile_area, "right_strip"))
+        if ty1 > bottom_strip_y0:
+            ox = max(0.0, tx1 - tx0)
+            oy = max(0.0, min(ty1, page_h_pt) - max(ty0, bottom_strip_y0))
+            results.append((ox * oy / tile_area, "bottom_strip"))
+        inner_ox = max(0.0, min(tx1, frame_x1) - max(tx0, frame_x0))
+        inner_oy = max(0.0, min(ty1, frame_y1) - max(ty0, frame_y0))
+        frame_frac = max(0.0, (tile_area - inner_ox * inner_oy) / tile_area)
+        if frame_frac > 0.01:
+            results.append((frame_frac, "frame_margin"))
+        if not results:
+            return (0.0, "")
+        results.sort(reverse=True)
+        return results[0]
+
+    def top_overlap(tile_rect_pt) -> float:
+        tx0, ty0, tx1, ty1 = tile_rect_pt
+        tile_area = max(1e-6, (tx1 - tx0) * (ty1 - ty0))
+        if ty0 < top_strip_y1:
+            ox = tx1 - tx0
+            oy = max(0.0, min(ty1, top_strip_y1) - max(ty0, 0.0))
+            return ox * oy / tile_area
+        return 0.0
+
+    # ---- Density pass (optional) ----
+    density_grid = None
+    density_map_path: Optional[str] = None
+    if not skip_density:
+        try:
+            density_dpi = 30
+            doc = fitz.open(str(pdf_path))
+            page = doc[page_idx]
+            mat = fitz.Matrix(density_dpi / 72, density_dpi / 72)
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            doc.close()
+            arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+            gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY) if arr.shape[2] >= 3 else arr[:, :, 0]
+            thresh = (gray < 180).astype(np.uint8)
+            d_rows, d_cols = 4, 8
+            h, w = thresh.shape
+            cell_h = h / d_rows
+            cell_w = w / d_cols
+            density_grid = np.zeros((d_rows, d_cols), dtype=np.float32)
+            for r in range(d_rows):
+                for c in range(d_cols):
+                    y0 = int(r * cell_h); y1 = int((r + 1) * cell_h)
+                    x0 = int(c * cell_w); x1 = int((c + 1) * cell_w)
+                    cell = thresh[y0:y1, x0:x1]
+                    density_grid[r, c] = float(cell.sum()) / max(1, cell.size)
+            dens_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            for r in range(d_rows):
+                for c in range(d_cols):
+                    y0 = int(r * cell_h); y1 = int((r + 1) * cell_h)
+                    x0 = int(c * cell_w); x1 = int((c + 1) * cell_w)
+                    d = float(density_grid[r, c])
+                    if d > density_threshold:
+                        color = (0, 0, 200)
+                    elif d > 0.08:
+                        color = (0, 200, 255)
+                    else:
+                        color = (0, 200, 0)
+                    cv2.rectangle(dens_img, (x0, y0), (x1, y1), color, 2)
+                    cv2.putText(dens_img, f"{d:.2f}", (x0 + 3, y0 + 14),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            density_map_path = str(debug_dir / "zone_density_map.png")
+            cv2.imwrite(density_map_path, dens_img)
+        except Exception as e:
+            log(f"  WARNING: density pass failed: {e}", indent=1)
+            density_grid = None
+
+    # ---- Per-tile classification ----
+    tile_w_pt_base = page_w_pt / n_cols
+    tile_h_pt_base = page_h_pt / n_rows
+    ovlp_w = tile_w_pt_base * tile_overlap
+    ovlp_h = tile_h_pt_base * tile_overlap
+
+    tile_classification: Dict[str, Dict] = {}
+    for row in range(n_rows):
+        for col in range(n_cols):
+            tile_id = f"tile_{row:02d}_{col:02d}"
+            x0_pt = max(0.0, col * tile_w_pt_base - ovlp_w)
+            y0_pt = max(0.0, row * tile_h_pt_base - ovlp_h)
+            x1_pt = min(page_w_pt, (col + 1) * tile_w_pt_base + ovlp_w)
+            y1_pt = min(page_h_pt, (row + 1) * tile_h_pt_base + ovlp_h)
+            tile_rect_pt = (x0_pt, y0_pt, x1_pt, y1_pt)
+
+            ovr, ovr_zone = excl_overlap(tile_rect_pt)
+            top_ovr = top_overlap(tile_rect_pt)
+
+            tile_density = 0.0
+            if density_grid is not None:
+                d_rows, d_cols = density_grid.shape
+                c0 = max(0, min(int(x0_pt / page_w_pt * d_cols), d_cols - 1))
+                c1 = max(c0 + 1, min(int(x1_pt / page_w_pt * d_cols) + 1, d_cols))
+                r0 = max(0, min(int(y0_pt / page_h_pt * d_rows), d_rows - 1))
+                r1 = max(r0 + 1, min(int(y1_pt / page_h_pt * d_rows) + 1, d_rows))
+                tile_density = float(density_grid[r0:r1, c0:c1].mean())
+
+            classification = "primary"
+            reason = "default"
+            zones_overlapping: List[str] = []
+
+            if ovr > 0.8:
+                if density_grid is not None and tile_density < 0.15:
+                    classification = "secondary"
+                    reason = f"{ovr_zone} (overlap={ovr:.2f}, low_density={tile_density:.2f}, promoted)"
+                else:
+                    classification = "excluded"
+                    reason = f"{ovr_zone} (overlap={ovr:.2f})"
+                zones_overlapping.append(ovr_zone)
+            elif ovr >= 0.2:
+                classification = "secondary"
+                reason = f"partial_{ovr_zone} (overlap={ovr:.2f})"
+                zones_overlapping.append(ovr_zone)
+            elif top_ovr > 0.5:
+                classification = "secondary"
+                reason = f"top_strip (overlap={top_ovr:.2f})"
+                zones_overlapping.append("top_strip")
+            elif density_grid is not None and tile_density > density_threshold:
+                classification = "excluded"
+                reason = f"high_density (density={tile_density:.2f})"
+
+            zone_weight = 1.0 if classification == "primary" else (0.6 if classification == "secondary" else 0.0)
+
+            tile_classification[tile_id] = {
+                "tile_id": tile_id,
+                "row": row,
+                "col": col,
+                "classification": classification,
+                "reason": reason,
+                "zones_overlapping": zones_overlapping,
+                "excl_overlap": round(ovr, 3),
+                "top_overlap": round(top_ovr, 3),
+                "density": round(tile_density, 3),
+                "zone_weight": zone_weight,
+            }
+
+    elapsed_ms = (time.perf_counter() - t_start) * 1000
+    return tile_classification, density_map_path, elapsed_ms
+
+
+def run_zone_mode(
+    pdf_path: Path,
+    page_idx: int,
+    run_dir: Path,
+    ocr_choice: str,
+    tile_grid_str: str,
+    tile_overlap: float,
+    tile_dpi: int,
+    max_tiles: Optional[int],
+    right_strip_pct: float,
+    bottom_strip_pct: float,
+    top_strip_pct: float,
+    frame_margin_pct: float,
+    density_threshold: float,
+    skip_density: bool,
+    fast: bool,
+) -> int:
+    """
+    Zone-aware tile scan (Engine B v0.3).
+
+    - Classify tiles as primary/secondary/excluded (geometric + optional density).
+    - Skip excluded tiles entirely (no render/OCR/detection — runtime saving).
+    - Secondary tiles: Tesseract-only OCR (lightweight) + zone_weight=0.6.
+    - Primary tiles: full OCR (per --ocr) + zone_weight=1.0.
+
+    fast=True forces Tesseract-only across ALL tiles (zone-fast mode), to measure
+    the absolute Fast Scan runtime floor with no neural OCR.
+
+    Boundary safety: excluded tiles with low actual content density are promoted
+    to secondary (kept with light OCR), not silently dropped.
+    """
+    import fitz
+
+    t_total_start = time.perf_counter()
+    mode_label = "Zone-Fast" if fast else "Zone"
+
+    log(f"\n============================================================")
+    log(f"Engine B — {mode_label} Mode (v0.3)")
+    log(f"============================================================")
+    log(f"PDF       : {pdf_path.name}")
+    log(f"Page      : {page_idx}")
+    log(f"Tile grid : {tile_grid_str}")
+    log(f"Tile DPI  : {tile_dpi}")
+    log(f"OCR       : {'tesseract-only (forced)' if fast else ocr_choice}")
+    log(f"Density   : {'skipped' if skip_density else 'enabled'}")
+    if max_tiles:
+        log(f"MaxTiles  : {max_tiles}")
+    log(f"")
+
+    n_rows, n_cols = _parse_tile_grid(tile_grid_str)
+
+    # Page geometry
+    log("Step 1: Reading page geometry ...")
+    doc = fitz.open(str(pdf_path))
+    if page_idx >= len(doc):
+        log(f"  ERROR: PDF has {len(doc)} pages; index {page_idx} out of range.")
+        doc.close()
+        return 1
+    page = doc[page_idx]
+    page_rect = page.rect
+    doc.close()
+    page_w_pt = page_rect.width
+    page_h_pt = page_rect.height
+    log(f"  Page: {page_w_pt:.1f} x {page_h_pt:.1f} pt "
+        f"({page_w_pt/72*25.4:.0f} x {page_h_pt/72*25.4:.0f} mm)")
+
+    output_dir = run_dir / "outputs"
+    debug_dir = output_dir / "image_scan_debug"
+    tile_debug_dir = debug_dir / "tiles"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    tile_debug_dir.mkdir(parents=True, exist_ok=True)
+
+    # Zone classification
+    log("\nStep 2: Classifying tiles by zone ...")
+    tile_classification, density_map_path, zone_ms = _build_zone_map(
+        page_w_pt=page_w_pt, page_h_pt=page_h_pt,
+        n_rows=n_rows, n_cols=n_cols, tile_overlap=tile_overlap,
+        right_strip_pct=right_strip_pct, bottom_strip_pct=bottom_strip_pct,
+        top_strip_pct=top_strip_pct, frame_margin_pct=frame_margin_pct,
+        pdf_path=pdf_path, page_idx=page_idx,
+        density_threshold=density_threshold, skip_density=skip_density,
+        debug_dir=debug_dir,
+    )
+    log(f"  zone classification: {zone_ms:.0f}ms")
+    cls_counts = {"primary": 0, "secondary": 0, "excluded": 0}
+    for tc in tile_classification.values():
+        cls_counts[tc["classification"]] += 1
+    log(f"  primary={cls_counts['primary']}, secondary={cls_counts['secondary']}, excluded={cls_counts['excluded']}")
+    if density_map_path:
+        log(f"  density map: {Path(density_map_path).name}")
+
+    # Persist classification immediately so even partial runs leave evidence
+    cls_path = output_dir / "image_scan_zone_classification.json"
+    with open(cls_path, "w") as fh:
+        json.dump({
+            "page_w_pt": page_w_pt,
+            "page_h_pt": page_h_pt,
+            "tile_grid": tile_grid_str,
+            "fast_mode": fast,
+            "tiles": list(tile_classification.values()),
+            "summary": cls_counts,
+            "params": {
+                "right_strip_pct": right_strip_pct,
+                "bottom_strip_pct": bottom_strip_pct,
+                "top_strip_pct": top_strip_pct,
+                "frame_margin_pct": frame_margin_pct,
+                "density_threshold": density_threshold,
+                "skip_density": skip_density,
+            },
+        }, fh, indent=2)
+    log(f"  Saved {cls_path.name}")
+
+    # OCR engines
+    log("\nStep 3: Initializing OCR engines ...")
+    effective_ocr_choice = "tesseract" if fast else ocr_choice
+    available_engines = _check_ocr_availability(effective_ocr_choice)
+    for eng, avail in available_engines.items():
+        log(f"  {eng}: {'available' if avail else 'not available'}", indent=1)
+    ocr_engines_full = _init_ocr_engines(available_engines)
+    # Tesseract-only variant for secondary tiles
+    light_avail = {k: (v if k == "tesseract" else False) for k, v in available_engines.items()}
+    ocr_engines_light = _init_ocr_engines(light_avail)
+
+    # Per-tile processing
+    run_slug = run_dir.name
+    page_w_px = page_w_pt * tile_dpi / 72
+    page_h_px = page_h_pt * tile_dpi / 72
+
+    per_tile_stats: List[Dict] = []
+    all_poles: List[Dict] = []
+    all_shapes: List[Dict] = []
+    all_ocr: List[Dict] = []
+    all_ocr_comparison: List[Dict] = []
+
+    total_tiles = n_rows * n_cols
+    tiles_processed = 0
+    tiles_skipped = 0
+    tile_w_pt_base = page_w_pt / n_cols
+    tile_h_pt_base = page_h_pt / n_rows
+    ovlp_w = tile_w_pt_base * tile_overlap
+    ovlp_h = tile_h_pt_base * tile_overlap
+
+    log(f"\nStep 4: Processing tiles ({n_rows}x{n_cols} = {total_tiles}) ...")
+    stopped = False
+    for row in range(n_rows):
+        if stopped:
+            break
+        for col in range(n_cols):
+            tile_id = f"tile_{row:02d}_{col:02d}"
+            tc = tile_classification[tile_id]
+            classification = tc["classification"]
+
+            if max_tiles is not None and (tiles_processed + tiles_skipped) >= max_tiles:
+                log(f"  --max-tiles={max_tiles} reached. Stopping.")
+                stopped = True
+                break
+
+            if classification == "excluded":
+                log(f"  [{tile_id}] EXCLUDED — {tc['reason']} (skipping)", indent=1)
+                per_tile_stats.append({
+                    "tile_id": tile_id, "row": row, "col": col,
+                    "classification": "excluded", "reason": tc["reason"], "skipped": True,
+                    "render_ms": 0, "ocr_ms": 0, "pole_ms": 0, "shape_ms": 0,
+                    "poles": 0, "ocr_codes": 0, "shapes": 0, "total_ms": 0, "error": None,
+                })
+                tiles_skipped += 1
+                continue
+
+            t_tile_start = time.perf_counter()
+            x0_pt = max(0.0, col * tile_w_pt_base - ovlp_w)
+            y0_pt = max(0.0, row * tile_h_pt_base - ovlp_h)
+            x1_pt = min(page_w_pt, (col + 1) * tile_w_pt_base + ovlp_w)
+            y1_pt = min(page_h_pt, (row + 1) * tile_h_pt_base + ovlp_h)
+            tile_rect = fitz.Rect(x0_pt, y0_pt, x1_pt, y1_pt)
+            tile_origin_x_px = x0_pt * tile_dpi / 72
+            tile_origin_y_px = y0_pt * tile_dpi / 72
+
+            log(f"  [{tile_id}] {classification.upper()} — {tc['reason']}", indent=1)
+
+            try:
+                tile_img, render_ms = render_tile(pdf_path, page_idx, tile_rect, tile_dpi)
+            except Exception as e:
+                log(f"    ERROR render: {e}", indent=2)
+                per_tile_stats.append({
+                    "tile_id": tile_id, "row": row, "col": col,
+                    "classification": classification, "reason": tc["reason"], "skipped": False,
+                    "render_ms": 0, "ocr_ms": 0, "pole_ms": 0, "shape_ms": 0,
+                    "poles": 0, "ocr_codes": 0, "shapes": 0, "total_ms": 0, "error": str(e),
+                })
+                tiles_processed += 1
+                continue
+
+            try:
+                tile_poles, pole_ms = detect_poles_tile(tile_img, tile_dpi)
+            except Exception as e:
+                log(f"    ERROR poles: {e}", indent=2)
+                tile_poles, pole_ms = [], 0.0
+
+            try:
+                tile_shapes, shape_ms = detect_shapes_tile(tile_img, tile_dpi)
+            except Exception as e:
+                log(f"    ERROR shapes: {e}", indent=2)
+                tile_shapes, shape_ms = [], 0.0
+
+            # Route OCR engines by classification + fast flag
+            if fast or classification == "secondary":
+                ocr_to_use = ocr_engines_light
+                ocr_route = "tesseract-only"
+            else:
+                ocr_to_use = ocr_engines_full
+                ocr_route = "full"
+
+            try:
+                tile_ocr_results, tile_ocr_cmp, ocr_ms = _ocr_tile(tile_img, ocr_to_use, tile_dpi)
+            except Exception as e:
+                log(f"    ERROR ocr: {e}", indent=2)
+                tile_ocr_results, tile_ocr_cmp, ocr_ms = [], [], 0.0
+
+            codes_found = sum(1 for o in tile_ocr_results if o.get("text"))
+            log(f"    poles={len(tile_poles)} shapes={len(tile_shapes)} codes={codes_found} "
+                f"render={render_ms:.0f}ms ocr={ocr_ms:.0f}ms ({ocr_route})", indent=2)
+
+            try:
+                save_tile_debug_image(
+                    tile_img, tile_poles, tile_ocr_results, tile_shapes,
+                    tile_debug_dir, row, col
+                )
+            except Exception as e:
+                log(f"    WARNING debug img: {e}", indent=2)
+
+            shifted_poles, shifted_shapes, shifted_ocr = _offset_candidates(
+                tile_poles, tile_shapes, tile_ocr_results,
+                tile_origin_x_px, tile_origin_y_px
+            )
+            zw = tc["zone_weight"]
+            for p in shifted_poles:
+                p["tile_id"] = tile_id; p["zone_class"] = classification; p["zone_weight"] = zw
+            for s in shifted_shapes:
+                s["tile_id"] = tile_id; s["zone_class"] = classification; s["zone_weight"] = zw
+            for o in shifted_ocr:
+                o["tile_id"] = tile_id; o["zone_class"] = classification; o["zone_weight"] = zw
+            for c in tile_ocr_cmp:
+                c["tile_id"] = tile_id
+
+            all_poles.extend(shifted_poles)
+            all_shapes.extend(shifted_shapes)
+            all_ocr.extend(shifted_ocr)
+            all_ocr_comparison.extend(tile_ocr_cmp)
+
+            tile_total_ms = (time.perf_counter() - t_tile_start) * 1000
+            per_tile_stats.append({
+                "tile_id": tile_id, "row": row, "col": col,
+                "classification": classification, "reason": tc["reason"], "skipped": False,
+                "render_ms": round(render_ms, 0),
+                "pole_ms": round(pole_ms, 0),
+                "shape_ms": round(shape_ms, 0),
+                "ocr_ms": round(ocr_ms, 0),
+                "ocr_route": ocr_route,
+                "poles": len(tile_poles), "ocr_codes": codes_found, "shapes": len(tile_shapes),
+                "total_ms": round(tile_total_ms, 0), "error": None,
+            })
+            tiles_processed += 1
+
+    log(f"\n  Processed: {tiles_processed}, Skipped(excluded): {tiles_skipped}")
+    log(f"  Raw: poles={len(all_poles)}, shapes={len(all_shapes)}, ocr={len(all_ocr)}")
+
+    log(f"\nStep 5: Spatial association ...")
+    try:
+        raw_candidates, assoc_ms = spatial_association(
+            all_poles, all_ocr, all_shapes, tile_dpi, run_slug
+        )
+    except Exception as e:
+        log(f"  ERROR assoc: {e}")
+        traceback.print_exc()
+        raw_candidates, assoc_ms = [], 0.0
+    raw_count = len(raw_candidates)
+    log(f"  Raw candidates: {raw_count} (assoc {assoc_ms:.0f}ms)")
+
+    # Annotate candidates with zone metadata from underlying poles
+    pole_meta: Dict[Tuple[float, float], Tuple[str, str, float]] = {}
+    for p in all_poles:
+        key = (round(p.get("center_x", 0.0), 1), round(p.get("center_y", 0.0), 1))
+        pole_meta[key] = (
+            p.get("tile_id", "unknown"),
+            p.get("zone_class", "primary"),
+            float(p.get("zone_weight", 1.0)),
+        )
+    for c in raw_candidates:
+        pc = c.get("pole_center")
+        if pc:
+            key = (round(pc[0], 1), round(pc[1], 1))
+            tid, zclass, zw = pole_meta.get(key, ("unknown", "primary", 1.0))
+        else:
+            tid, zclass, zw = ("unknown", "primary", 1.0)
+        c["tile_id"] = tid
+        c["zone_class"] = zclass
+        c["zone_weight"] = zw
+        base_conf = c.get("overall_confidence", 0) or 0
+        c["adjusted_confidence"] = round(base_conf * zw, 1)
+        if zw < 1.0:
+            c["zone_note"] = "boundary_tile"
+
+    log(f"\nStep 6: Deduplication (30px radius) ...")
+    merged_candidates = _dedup_candidates(raw_candidates, dedup_radius_px=30.0)
+    pre_filter = len(merged_candidates)
+
+    final_candidates = [c for c in merged_candidates if c.get("adjusted_confidence", 0) >= 20]
+    filtered_out = pre_filter - len(final_candidates)
+    log(f"  After dedup: {pre_filter}; after conf>=20 filter: {len(final_candidates)} (-{filtered_out})")
+
+    total_elapsed_s = time.perf_counter() - t_total_start
+
+    log(f"\nStep 7: Writing zone outputs ...")
+    _write_zone_outputs(
+        run_dir=run_dir,
+        candidates=final_candidates,
+        raw_count=raw_count,
+        merged_count=pre_filter,
+        ocr_comparison=all_ocr_comparison,
+        per_tile_stats=per_tile_stats,
+        tile_classification=tile_classification,
+        tiles_processed=tiles_processed,
+        tiles_skipped=tiles_skipped,
+        total_tiles=total_tiles,
+        tile_grid_str=tile_grid_str,
+        tile_dpi=tile_dpi,
+        available_engines=available_engines,
+        ocr_choice=effective_ocr_choice,
+        total_elapsed_s=total_elapsed_s,
+        page_idx=page_idx,
+        page_w_px=page_w_px,
+        page_h_px=page_h_px,
+        density_map_path=density_map_path,
+        fast=fast,
+        zone_classification_ms=zone_ms,
+    )
+
+    needs_review = sum(1 for c in final_candidates if c.get("requires_review"))
+    with_code = sum(1 for c in final_candidates if c.get("sign_code_text"))
+    high_conf = sum(1 for c in final_candidates if c.get("adjusted_confidence", 0) >= 70)
+    fp_red_v01 = (2224 - len(final_candidates)) / 2224 * 100 if len(final_candidates) <= 2224 else 0.0
+    fp_red_v02 = (416 - len(final_candidates)) / 416 * 100 if len(final_candidates) <= 416 else 0.0
+
+    log(f"\n============================================================")
+    log(f"DONE — Engine B {mode_label}")
+    log(f"============================================================")
+    log(f"  Grid: {tile_grid_str}, DPI: {tile_dpi}")
+    log(f"  Tiles: processed={tiles_processed}, excluded/skipped={tiles_skipped}/{total_tiles}")
+    log(f"  Raw candidates: {raw_count}  | After dedup: {pre_filter}  | After conf filter: {len(final_candidates)}")
+    log(f"  FP reduction vs full-page (2224): {fp_red_v01:.1f}%")
+    log(f"  FP reduction vs tile mode (416): {fp_red_v02:.1f}%")
+    log(f"  With sign code: {with_code}  | High conf (adj>=70): {high_conf}  | Requires review: {needs_review}")
+    log(f"  Total elapsed: {total_elapsed_s:.1f}s")
+    log(f"  Fast Scan ≤30s? {'YES' if total_elapsed_s <= 30 else 'NO'}")
+    log(f"")
+    log(f"  Output files:")
+    log(f"    outputs/image_scan_zone_filtered_candidates.json")
+    log(f"    outputs/image_scan_zone_classification.json")
+    log(f"    outputs/image_scan_zone_filter_report.md")
+    log(f"    outputs/image_scan_zone_filter_report.html")
+    if density_map_path:
+        log(f"    outputs/image_scan_debug/zone_density_map.png")
+    log(f"    outputs/image_scan_debug/tiles/ (annotated tiles for processed tiles)")
+    log(f"")
+    return 0
+
+
+def _write_zone_outputs(
+    run_dir: Path,
+    candidates: List[Dict],
+    raw_count: int,
+    merged_count: int,
+    ocr_comparison: List[Dict],
+    per_tile_stats: List[Dict],
+    tile_classification: Dict,
+    tiles_processed: int,
+    tiles_skipped: int,
+    total_tiles: int,
+    tile_grid_str: str,
+    tile_dpi: int,
+    available_engines: Dict[str, bool],
+    ocr_choice: str,
+    total_elapsed_s: float,
+    page_idx: int,
+    page_w_px: float,
+    page_h_px: float,
+    density_map_path: Optional[str],
+    fast: bool,
+    zone_classification_ms: float,
+) -> None:
+    """Write zone-mode outputs: filtered candidates JSON, MD report, HTML report."""
+    output_dir = run_dir / "outputs"
+
+    # Candidates JSON
+    cand_path = output_dir / "image_scan_zone_filtered_candidates.json"
+    with open(cand_path, "w") as fh:
+        json.dump(candidates, fh, indent=2, cls=_NumpyEncoder)
+    log(f"  Saved {cand_path.name}")
+
+    cls_counts = {"primary": 0, "secondary": 0, "excluded": 0}
+    for tc in tile_classification.values():
+        cls_counts[tc["classification"]] += 1
+
+    fp_red_v01 = (2224 - len(candidates)) / 2224 * 100 if len(candidates) <= 2224 else 0.0
+    fp_red_v02 = (416 - len(candidates)) / 416 * 100 if len(candidates) <= 416 else 0.0
+    with_code = sum(1 for c in candidates if c.get("sign_code_text"))
+    high_conf = sum(1 for c in candidates if c.get("adjusted_confidence", 0) >= 70)
+    needs_review = sum(1 for c in candidates if c.get("requires_review"))
+    mode_label = "Zone-Fast" if fast else "Zone"
+
+    # MD report
+    md = [
+        f"# Image Scan — Zone-Aware Report ({mode_label})",
+        "",
+        f"**Run dir:** `{run_dir}`",
+        f"**Page:** {page_idx}  ",
+        f"**Tile grid:** {tile_grid_str}  ",
+        f"**Tile DPI:** {tile_dpi}  ",
+        f"**OCR:** {ocr_choice}  ",
+        f"**Density refinement:** {'enabled' if density_map_path else 'disabled/failed'}",
+        "",
+        "## Zone Classification Summary",
+        "",
+        f"- primary: {cls_counts['primary']}",
+        f"- secondary: {cls_counts['secondary']}",
+        f"- excluded: {cls_counts['excluded']}",
+        f"- classification time: {zone_classification_ms:.0f}ms",
+        "",
+        "### Per-tile classification",
+        "",
+        "| Tile | Class | Reason | Density |",
+        "|---|---|---|---|",
+    ]
+    for tc in tile_classification.values():
+        md.append(f"| {tc['tile_id']} | {tc['classification']} | {tc['reason']} | {tc.get('density', 0):.2f} |")
+
+    md.extend([
+        "",
+        "## Per-Tile Timing",
+        "",
+        "| Tile | Class | OCR route | Render(ms) | OCR(ms) | Poles | Codes | Shapes | Total(ms) |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ])
+    for st in per_tile_stats:
+        if st.get("skipped"):
+            md.append(f"| {st['tile_id']} | excluded(skip) | — | — | — | — | — | — | 0 |")
+        else:
+            md.append(
+                f"| {st['tile_id']} | {st['classification']} | {st.get('ocr_route', '?')} | "
+                f"{st.get('render_ms', 0):.0f} | {st.get('ocr_ms', 0):.0f} | "
+                f"{st.get('poles', 0)} | {st.get('ocr_codes', 0)} | {st.get('shapes', 0)} | "
+                f"{st.get('total_ms', 0):.0f} |"
+            )
+
+    md.extend([
+        "",
+        "## Candidate Reduction Summary",
+        "",
+        "| Stage | Candidates |",
+        "|---|---|",
+        f"| Full-page scan (v0.1) | 2224 |",
+        f"| Tile mode (v0.2) | 416 |",
+        f"| Zone {mode_label} (this run) — raw | {raw_count} |",
+        f"| Zone {mode_label} (this run) — after dedup | {merged_count} |",
+        f"| Zone {mode_label} (this run) — after conf filter | {len(candidates)} |",
+        f"| **FP reduction vs full-page** | **{fp_red_v01:.1f}%** |",
+        f"| FP reduction vs tile mode | {fp_red_v02:.1f}% |",
+        "",
+        "## OCR Engines",
+        "",
+    ])
+    for eng, avail in available_engines.items():
+        md.append(f"- **{eng}**: {'used' if avail else 'not loaded'}")
+
+    bottleneck = "OCR on primary tiles" if not fast else "tile render + Tesseract dispatch"
+    md.extend([
+        "",
+        "## Fast Scan Assessment",
+        "",
+        f"- Mode: {mode_label}",
+        f"- Tesseract-only forced (all tiles): {fast}",
+        f"- Total runtime: **{total_elapsed_s:.1f}s**",
+        f"- Is 20–30s achievable? **{'YES' if total_elapsed_s <= 30 else 'NO'}**",
+        f"- Bottleneck: {bottleneck}",
+        "",
+        "## Outputs",
+        "",
+        f"- `outputs/image_scan_zone_filtered_candidates.json` ({len(candidates)} candidates)",
+        f"- `outputs/image_scan_zone_classification.json`",
+        f"- `outputs/image_scan_zone_filter_report.md`",
+        f"- `outputs/image_scan_zone_filter_report.html`",
+    ])
+    if density_map_path:
+        md.append(f"- `outputs/image_scan_debug/zone_density_map.png`")
+    md.append(f"- `outputs/image_scan_debug/tiles/` (debug images for processed tiles)")
+    md.append("")
+    md.append("## Honest Notes")
+    md.append("")
+    md.append("- Candidates from secondary tiles carry `zone_weight=0.6` and `zone_note=boundary_tile`.")
+    md.append("- Excluded tiles were not rendered, not OCR'd, not detected — they may contain valid signs that this run will not catch.")
+    md.append("- Boundary safety: excluded tiles with low actual content density were promoted to secondary.")
+    md.append("- This run is research-only. Detection corrections from review do NOT auto-approve BOQ (see spec §9).")
+    md.append("")
+
+    md_path = output_dir / "image_scan_zone_filter_report.md"
+    with open(md_path, "w") as fh:
+        fh.write("\n".join(md) + "\n")
+    log(f"  Saved {md_path.name}")
+
+    # HTML report
+    html = [
+        "<!DOCTYPE html><html><head><meta charset='utf-8'>",
+        f"<title>Zone Scan — {mode_label}</title>",
+        "<style>body{font-family:system-ui,sans-serif;max-width:1200px;margin:1em auto;padding:0 1em;color:#222}",
+        "table{border-collapse:collapse;width:100%;font-size:13px}td,th{border:1px solid #ccc;padding:4px 8px;text-align:left}",
+        ".primary{background:#dfffd6}.secondary{background:#fff5b3}.excluded{background:#ffd6d6}",
+        "h2{margin-top:1.5em;border-bottom:1px solid #ddd;padding-bottom:0.3em}",
+        ".ok{color:#080;font-weight:bold}.bad{color:#a00;font-weight:bold}",
+        "img{max-width:100%;border:1px solid #ccc;display:block;margin:0.5em 0}</style>",
+        "</head><body>",
+        f"<h1>Zone Scan Report — {mode_label}</h1>",
+        f"<p><b>Run:</b> {run_dir.name}<br>",
+        f"<b>Grid:</b> {tile_grid_str} | <b>DPI:</b> {tile_dpi} | <b>OCR:</b> {ocr_choice} | <b>Density:</b> {'enabled' if density_map_path else 'disabled'}</p>",
+        "<h2>Summary</h2><ul>",
+        f"<li>Tiles classified: primary={cls_counts['primary']}, secondary={cls_counts['secondary']}, excluded={cls_counts['excluded']}</li>",
+        f"<li>Candidates after filtering: <b>{len(candidates)}</b></li>",
+        f"<li>FP reduction vs v0.1 (2224): <b>{fp_red_v01:.1f}%</b></li>",
+        f"<li>FP reduction vs v0.2 (416): {fp_red_v02:.1f}%</li>",
+        f"<li>With sign code: {with_code} | High conf (adj≥70): {high_conf} | Requires review: {needs_review}</li>",
+        f"<li>Total elapsed: <b>{total_elapsed_s:.1f}s</b></li>",
+        f"<li>Fast Scan (≤30s)? <span class='{'ok' if total_elapsed_s <= 30 else 'bad'}'>{'YES' if total_elapsed_s <= 30 else 'NO'}</span></li>",
+        "</ul>",
+    ]
+    if density_map_path:
+        try:
+            with open(density_map_path, "rb") as fh:
+                b64 = base64.b64encode(fh.read()).decode("ascii")
+            html.append("<h2>Zone Density Map (30 DPI thumbnail, 8×4 grid)</h2>")
+            html.append(f"<img src='data:image/png;base64,{b64}'/>")
+        except Exception:
+            pass
+
+    html.append("<h2>Tile Classification</h2><table><tr><th>Tile</th><th>Class</th><th>Reason</th><th>Density</th></tr>")
+    for tc in tile_classification.values():
+        html.append(
+            f"<tr class='{tc['classification']}'><td>{tc['tile_id']}</td><td>{tc['classification']}</td>"
+            f"<td>{tc['reason']}</td><td>{tc.get('density', 0):.2f}</td></tr>"
+        )
+    html.append("</table>")
+
+    html.append("<h2>Per-Tile Timing</h2><table><tr><th>Tile</th><th>Class</th><th>OCR</th><th>Render</th><th>OCR ms</th><th>Poles</th><th>Codes</th><th>Shapes</th><th>Total</th></tr>")
+    for st in per_tile_stats:
+        if st.get("skipped"):
+            html.append(
+                f"<tr class='excluded'><td>{st['tile_id']}</td><td>excluded(skip)</td>"
+                f"<td colspan=6>—</td><td>0ms</td></tr>"
+            )
+        else:
+            html.append(
+                f"<tr class='{st['classification']}'><td>{st['tile_id']}</td><td>{st['classification']}</td>"
+                f"<td>{st.get('ocr_route', '?')}</td>"
+                f"<td>{st.get('render_ms', 0):.0f}ms</td><td>{st.get('ocr_ms', 0):.0f}ms</td>"
+                f"<td>{st.get('poles', 0)}</td><td>{st.get('ocr_codes', 0)}</td><td>{st.get('shapes', 0)}</td>"
+                f"<td>{st.get('total_ms', 0):.0f}ms</td></tr>"
+            )
+    html.append("</table>")
+
+    html.append("<h2>Honest Notes</h2><ul>")
+    html.append("<li>Candidates from secondary tiles carry <code>zone_weight=0.6</code>.</li>")
+    html.append("<li>Excluded tiles were not rendered/OCR'd — may contain valid signs missed by this run.</li>")
+    html.append("<li>Boundary safety: low-density excluded tiles were promoted to secondary.</li>")
+    html.append("<li>Detection corrections do NOT auto-approve BOQ (spec §9 — Learning Visual Teaching Loop).</li>")
+    html.append("</ul>")
+    html.append("</body></html>")
+
+    html_path = output_dir / "image_scan_zone_filter_report.html"
+    with open(html_path, "w") as fh:
+        fh.write("\n".join(html))
+    log(f"  Saved {html_path.name}")
+
+
 # --- Main ---
 
 def main() -> int:
@@ -2611,6 +3413,26 @@ def main() -> int:
             tile_overlap=args.tile_overlap,
             tile_dpi=args.tile_dpi,
             max_tiles=args.max_tiles,
+        )
+
+    # --- Zone mode dispatch (v0.3) ---
+    if args.mode in ("zone", "zone-fast"):
+        return run_zone_mode(
+            pdf_path=pdf_path,
+            page_idx=args.page,
+            run_dir=run_dir,
+            ocr_choice=args.ocr,
+            tile_grid_str=args.tile_grid,
+            tile_overlap=args.tile_overlap,
+            tile_dpi=args.tile_dpi,
+            max_tiles=args.max_tiles,
+            right_strip_pct=args.right_strip_pct,
+            bottom_strip_pct=args.bottom_strip_pct,
+            top_strip_pct=args.top_strip_pct,
+            frame_margin_pct=args.frame_margin_pct,
+            density_threshold=args.density_threshold,
+            skip_density=args.skip_density,
+            fast=(args.mode == "zone-fast"),
         )
 
     output_dir = run_dir / "outputs"
