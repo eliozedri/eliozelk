@@ -41,6 +41,85 @@ td, th {
   text-align: right;
 }
 
+/* ─── Holographic Catalog Animations ─────────────── */
+@keyframes holoOrbitSpin {
+  to { transform: rotateX(70deg) rotate(360deg); }
+}
+@keyframes holoOrbitSpinRev {
+  to { transform: rotateX(70deg) rotate(-360deg); }
+}
+@keyframes holoScanMove {
+  from { transform: translateY(-40px); }
+  to   { transform: translateY(40px); }
+}
+@keyframes holoFloat {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-10px); }
+}
+@keyframes holoPulseRing {
+  0%, 100% { opacity: 0.5; box-shadow: 0 0 10px 2px currentColor; }
+  50%       { opacity: 1;   box-shadow: 0 0 32px 8px currentColor; }
+}
+@keyframes holoSpinRing {
+  to { transform: rotate(360deg); }
+}
+
+/* Panel status spinning ring indicator */
+.holo-status-ring {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-right-color: currentColor;
+  animation: holoSpinRing 1.4s linear infinite;
+  flex-shrink: 0;
+}
+
+.holo-orbit {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(94, 255, 245, 0.28);
+  pointer-events: none;
+}
+.holo-orbit-a {
+  width: 88%;
+  height: 88%;
+  transform: rotateX(70deg);
+  animation: holoOrbitSpin 16s linear infinite;
+}
+.holo-orbit-b {
+  width: 62%;
+  height: 62%;
+  transform: rotateX(70deg);
+  animation: holoOrbitSpinRev 10s linear infinite;
+  border-color: rgba(168, 85, 247, 0.22);
+}
+
+/* ─── Holographic grid overlay ───────────────────── */
+.holo-grid-overlay {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(6, 182, 212, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6, 182, 212, 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 75%);
+}
+
+/* ─── Holographic scanline overlay ───────────────── */
+.holo-scanlines {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.15;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,0.14) 0 1px, transparent 1px 6px);
+  animation: holoScanMove 9s linear infinite;
+}
+
 /* Print styles */
 @media print {
   .no-print {
