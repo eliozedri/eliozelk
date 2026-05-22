@@ -1,7 +1,9 @@
 # Plan Scanner — Tooling & Performance Audit
-**Date:** 2026-05-21  
-**Scope:** research/cad-pdf-intelligence pipeline  
+**Date:** 2026-05-21 (updated 2026-05-22)
+**Scope:** research/cad-pdf-intelligence pipeline
 **Status:** Research-only. No production UI/DB/flows changed.
+
+> **Cross-reference (added 2026-05-22):** Tool selection for the Image-Based Engine (Engine B) must be evaluated in the context of the **Image-Based Visual Teaching Loop / Agent Learning Principle** — see Section 9 of `PLAN_SCANNER_IMAGE_BASED_ENGINE_SPEC.md`. A tool's true value depends on whether its errors are catchable via human review questions, not only on raw accuracy. An OCR engine that misreads but produces a low-confidence flag is more useful than one that misreads with high confidence, because the teaching loop can correct the former.
 
 ---
 

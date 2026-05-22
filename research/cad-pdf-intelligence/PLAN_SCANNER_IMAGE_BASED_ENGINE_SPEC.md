@@ -344,7 +344,149 @@ spatial association → evidence crops → output generation → timing summary
 
 ---
 
-## 9. Next Steps
+## 9. Image-Based Visual Teaching Loop / Agent Learning Principle
+
+**This section is a core principle of the Image-Based Plan Scanner, not an optional enhancement.**
+
+### 9.1 Why this principle exists
+
+The Image-Based engine analyzes the plan as a flat 2D image. Even at 150 DPI tile resolution with multiple OCR engines, the engine will routinely encounter ambiguous visual elements:
+
+- A small dark dot — is it a pole, a dimension endpoint, or noise?
+- A short line near a pole — is it a tick mark (signaling another sign on the pole) or unrelated geometry?
+- A nearby 3-digit number — does it belong to this pole, or is it a length dimension?
+- A nearby triangle — is it a sign symbol or a callout arrow?
+- A cluster of marks — is it one assembly or several?
+
+**The engine must not guess silently.** Silent guessing produces confident-looking output that downstream consumers (BOQ aggregation, ordering, billing) cannot tell apart from verified data. Once it enters a BOQ, an unverified guess is indistinguishable from ground truth.
+
+The correct behavior is to **flag uncertainty as a review question with an evidence crop**, and let a human answer once — then learn from that answer.
+
+### 9.2 The teaching loop
+
+```
+visual scan → uncertain candidate
+            → evidence crop generated
+            → user question created
+            → user answers OR marks the plan manually
+            → answer saved as teaching example
+            → applied to current scan
+            → optionally promoted to project/company rule
+            → improved scanner on next run
+```
+
+### 9.3 Question types the engine must support
+
+The engine produces one of these question types per uncertain candidate:
+
+| Question type | Hebrew example | What it resolves |
+|---|---|---|
+| `is_pole` | "האם הנקודה הזו היא עמוד תמרור?" | dot vs noise vs dimension mark |
+| `tick_count` | "כמה תמרורים מותקנים על העמוד הזה לפי הסימון?" | number of signs on a pole |
+| `is_tick_mark` | "האם הקו הקטן ליד הנקודה מסמן תמרור נוסף על אותו עמוד?" | tick vs unrelated line |
+| `code_belongs_to` | "האם המספר 433 שייך לעמוד/תמרור הזה?" | code-to-pole association |
+| `is_real_sign` | "האם זה סימון תמרור או רעש/רקע?" | sign vs background artifact |
+| `include_in_boq` | "האם הסימון הזה צריך להיכלל בכתב הכמויות?" | inclusion in final order |
+
+### 9.4 User-initiated training
+
+Beyond answering questions the engine asks, the user can **actively train** by marking the plan directly. Future UI must support:
+
+- **Mark pole** — assert that this point IS a sign pole
+- **Mark sign code text** — assert that this text region IS a sign code (and which sign it belongs to)
+- **Mark tick marks** — assert which short lines are tick marks for which pole
+- **Mark sign symbol** — assert that this shape IS a sign of given type
+- **Mark wrong detection** — reject a false-positive candidate the engine produced
+- **Mark ignore/noise region** — exclude an area from future scanning of this plan
+- **Mark association** — explicitly link a sign code to a specific pole
+- **Mark sign count on pole** — set the number of signs on a specific pole
+
+Each manual marking becomes a teaching example with the same data structure as an engine-asked question.
+
+### 9.5 Future-compatible output fields
+
+The candidate record (Section 5) must be extended to support teaching loop integration. These fields are **planned for the next POC iteration** — they are NOT in the current candidate JSON, but the schema should evolve to include them:
+
+```json
+{
+  "review_question_id": "q_p0_c012_is_pole",
+  "evidence_crop_path": "outputs/image_scan_debug/evidence_crop_012.png",
+  "crop_bbox": [x1, y1, x2, y2],
+  "page_number": 0,
+
+  "candidate_type": "pole_candidate | tick_candidate | sign_symbol_candidate | sign_code_candidate | assembly_candidate",
+  "system_guess": "pole",
+  "confidence": 0.62,
+
+  "allowed_answers": ["pole", "noise", "dimension_mark", "other"],
+
+  "user_answer": null,
+  "user_marking_geometry": null,
+  "corrected_label": null,
+  "corrected_association": null,
+
+  "correction_scope": "current_plan_only | project_rule | company_rule_candidate | company_rule_approved",
+  "correction_status": "pending | answered | applied | promoted",
+
+  "learned_rule_candidate": null,
+  "requires_review": true,
+  "audit_notes": []
+}
+```
+
+### 9.6 Learning scopes
+
+Every correction has a scope that controls how far it propagates:
+
+| Scope | Meaning | Promoted by |
+|---|---|---|
+| `current_plan_only` | Default. Correction applies to this plan only. Lost when plan archived. | Auto |
+| `project_rule` | Correction applies to all plans in this project (multi-PDF projects). | User explicitly |
+| `company_rule_candidate` | Correction suggests a general convention worth applying globally; pending review. | User flags |
+| `company_rule_approved` | Reviewed and approved by admin as a company-wide detection rule. | Admin only |
+
+Promotion is **never automatic** — it requires explicit user action. This protects against one anomalous plan polluting global detection rules.
+
+### 9.7 Hard boundary: human correction does NOT auto-approve BOQ
+
+This is critical and must remain enforced:
+
+- A user answering "yes, this is a pole" improves **detection confidence** for that candidate.
+- It does **NOT** mark the candidate as approved for BOQ inclusion.
+- BOQ approval remains a **separate workflow** with its own approval gate.
+- The teaching loop is a detection-quality mechanism, not an order-approval mechanism.
+
+Conflating these would let a high-frequency user accidentally approve thousands of BOQ line items by answering detection questions. Keep them separate.
+
+### 9.8 Where this principle is enforced
+
+This principle must be reflected in:
+
+1. **PLAN_SCANNER_IMAGE_BASED_ENGINE_SPEC.md** — this document (Section 9)
+2. **PLAN_SCANNER_TOOLING_AND_PERFORMANCE_AUDIT.md** — must reference the learning-loop assumption when evaluating OCR engine choices (a tool's value increases if its errors are catchable via review questions)
+3. **Future Teaching Loop / Review Queue docs** — extend `25_teaching_loop_answer_pack.py` and `14_build_review_queue.py` patterns to image-engine candidates
+4. **POC reports** — every image scan report must document how many candidates were marked `requires_review` and the breakdown of `candidate_type`
+5. **Future UI design** — the manual-marking surface must exist before the image engine is exposed to production users
+
+### 9.9 Practical impact on current POC
+
+The current POC (`35_image_based_plan_scanner_poc.py`) already emits:
+- `evidence_crop_path` per candidate
+- `requires_review: bool`
+- `review_reason` text
+- `overall_confidence` numeric score
+
+These are the **foundation** of the teaching loop. The next POC iteration must add:
+- `candidate_type` field with the values above
+- `review_question_id` per uncertain candidate
+- `allowed_answers` per question type
+- Output of a `image_scan_review_questions.json` file ready for UI consumption
+
+No DB schema, no production UI, no migrations required yet — this is research-only schema preparation.
+
+---
+
+## 10. Next Steps
 
 1. **Run POC on both available test plans** and validate candidate count vs Engine A
 2. **Tune pole detection thresholds** based on actual plan scale and line weight
