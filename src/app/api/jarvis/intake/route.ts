@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   parseJarvisIntakeRequest,
+  type JarvisIntakeRequest,
   type JarvisIntakeResponse,
 } from "./intake-contract";
+import {
+  attemptLiveIntakeWrite,
+  type LiveIntakeOutcome,
+} from "./live-intake";
 
 /**
  * POST /api/jarvis/intake?v=1
@@ -118,44 +124,127 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     } satisfies JarvisIntakeResponse);
   }
 
-  // ── Dry-run gate (Phase 2.0g: always true) ──────────────────────────────
+  // ── Three-gate live-write check (Phase 2.0l) ────────────────────────────
+  // All three must align for a live write to even be attempted:
+  //   1. JARVIS_INTAKE_LIVE = "true"
+  //   2. parsed.parsed.recommended_action ∈ JARVIS_INTAKE_ALLOWED_ACTIONS
+  //   3. body.dry_run !== true
+  // Any one of these missing → fall through to the dry-run response below.
   const liveAllowed = process.env.JARVIS_INTAKE_LIVE === "true";
+  const allowedActions = parseAllowedActions(process.env.JARVIS_INTAKE_ALLOWED_ACTIONS);
   const requestedDryRun = parsed.parsed.dry_run !== false;
-  const effectiveDryRun = !liveAllowed || requestedDryRun;
+  const actionAllowed = allowedActions.has(parsed.parsed.recommended_action);
+
+  let liveOutcome: LiveIntakeOutcome | null = null;
+  const safetyNotes: string[] = ["owner_approval_recorded_on_jarvis"];
+
+  if (liveAllowed && actionAllowed && !requestedDryRun) {
+    // All gates pass — actually attempt the write. Any DB error stays
+    // local to this branch; the dry-run fallback runs if the live
+    // attempt was blocked or failed gracefully.
+    try {
+      liveOutcome = await attemptLiveIntakeWrite(
+        getServiceSupabase(),
+        parsed.parsed,
+      );
+    } catch (err) {
+      const msg = (err as Error).message ?? "unknown_error";
+      liveOutcome = { kind: "failed", reason: msg.slice(0, 200) };
+    }
+  } else {
+    // Build a precise list of safety notes for why live didn't run.
+    if (!liveAllowed) safetyNotes.push("live_mode_disabled");
+    if (!actionAllowed) safetyNotes.push("action_not_allowed_for_live");
+    if (requestedDryRun) safetyNotes.push("dry_run_requested");
+  }
 
   // ── Build response ──────────────────────────────────────────────────────
-  // The handler stops here in Phase 2.0g. No DB mutation. We echo the
-  // detected action + missing-info hint (always empty here since the
-  // schema validator already caught the required fields).
-  const safetyNotes: string[] = [
-    "phase_2_0g_dry_run",
-    "no_db_writes",
-    "owner_approval_recorded_on_jarvis",
-  ];
-  if (!liveAllowed) safetyNotes.push("live_mode_disabled");
+  const effectiveDryRun = liveOutcome === null;
+  const messageToOwner = buildOwnerMessage(parsed.parsed, effectiveDryRun, liveOutcome);
 
-  const messageToOwner = buildOwnerMessage(parsed.parsed, effectiveDryRun);
+  // Common safety notes
+  safetyNotes.push("no_business_table_writes");
+
+  let status: JarvisIntakeResponse["status"] = "accepted";
+  let agent_task_id: string | null = null;
+  let duplicate_warning: string | null = null;
+  let operationRequestReference: string | null =
+    parsed.parsed.owner_approval.jarvis_approval_id;
+
+  if (liveOutcome) {
+    if (liveOutcome.kind === "queued") {
+      status = "queued";
+      // The intake-record id (NOT an agent_tasks id — we deliberately
+      // don't write to agent_tasks in this phase) is surfaced as the
+      // reference so JARVIS can correlate later.
+      operationRequestReference = liveOutcome.recordId;
+      agent_task_id = null;
+      safetyNotes.push("intake_record_created");
+    } else if (liveOutcome.kind === "already_processed") {
+      status = "already_processed";
+      operationRequestReference = liveOutcome.recordId;
+      agent_task_id = null;
+      safetyNotes.push("idempotent_replay");
+    } else if (liveOutcome.kind === "duplicate_blocked") {
+      status = "needs_clarification";
+      duplicate_warning = liveOutcome.warning;
+      safetyNotes.push("duplicate_blocked");
+    } else if (liveOutcome.kind === "failed") {
+      status = "failed";
+      safetyNotes.push("live_write_failed");
+    }
+  }
 
   const response: JarvisIntakeResponse = {
     request_id: parsed.parsed.request_id,
-    agent_task_id: null,
-    status: "accepted",
+    agent_task_id,
+    status,
     resolved_customer_id: null,
-    resolved_order_id: null,
+    resolved_order_id: liveOutcome?.kind === "duplicate_blocked"
+      ? (liveOutcome.relatedWorkOrderId ?? null)
+      : null,
     detected_action: parsed.parsed.recommended_action,
     dry_run: effectiveDryRun,
     missing_fields: [],
-    duplicate_warning: null,
+    duplicate_warning,
     message_to_owner: messageToOwner,
-    operation_request_reference: parsed.parsed.owner_approval.jarvis_approval_id,
+    operation_request_reference: operationRequestReference,
     safety_notes: safetyNotes,
-    notes: effectiveDryRun
-      ? "dry_run echo — Elkayam validated the request but did not persist anything"
-      : "live mode — Elkayam would have inserted agent_tasks (not yet wired)",
+    notes: buildNotes(effectiveDryRun, liveOutcome),
     responded_at: respondedAt,
   };
 
   return jsonResponse(200, response);
+}
+
+function parseAllowedActions(raw: string | undefined): Set<string> {
+  if (!raw || raw.trim().length === 0) return new Set();
+  return new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0),
+  );
+}
+
+function buildNotes(
+  dryRun: boolean,
+  outcome: LiveIntakeOutcome | null,
+): string {
+  if (dryRun) {
+    return "dry_run echo — Elkayam validated the request but did not persist anything";
+  }
+  if (!outcome) return "live mode requested but no outcome — unexpected";
+  if (outcome.kind === "queued") {
+    return `live intake record created: ${outcome.recordId}. agent_tasks dispatch is a separate future step.`;
+  }
+  if (outcome.kind === "already_processed") {
+    return `idempotent replay: same request_id already on record (${outcome.recordId}).`;
+  }
+  if (outcome.kind === "duplicate_blocked") {
+    return `duplicate_blocked: ${outcome.warning}`;
+  }
+  return `live_write_failed: ${outcome.reason}`;
 }
 
 // ── Other methods get 405 ──────────────────────────────────────────────────
@@ -207,6 +296,7 @@ function buildFailureResponse(args: {
 function buildOwnerMessage(
   body: { recommended_action: string; extracted_entities: Record<string, unknown> },
   dryRun: boolean,
+  outcome: LiveIntakeOutcome | null = null,
 ): string {
   const action = body.recommended_action;
   const customer =
@@ -226,10 +316,22 @@ function buildOwnerMessage(
               ? "create a task draft"
               : "perform a business action";
   const target = customer ? ` for ${customer}` : "";
+
   if (dryRun) {
     return `Dry-run accepted: JARVIS asked Elkayam to ${verb}${target}. No record was created.`;
   }
-  return `Accepted: Elkayam will ${verb}${target}.`;
+
+  // Live path — describe what happened to the intake record specifically.
+  if (outcome?.kind === "duplicate_blocked") {
+    return `Intake blocked: an existing open order was found${target}. Owner clarification needed before creating another draft.`;
+  }
+  if (outcome?.kind === "already_processed") {
+    return `Already on record${target} — no new intake row was created (idempotent).`;
+  }
+  if (outcome?.kind === "failed") {
+    return `Live intake attempt failed${target}. No business records were modified.`;
+  }
+  return `Live intake recorded${target}. The draft sits in jarvis_intake_records and will be dispatched in a future phase.`;
 }
 
 function extractRequestId(req: NextRequest): string | null {
