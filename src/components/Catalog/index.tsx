@@ -844,6 +844,8 @@ export function CatalogPage() {
   const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
   const [filterMissingCost, setFilterMissingCost] = useState(false);
   const [filterCategory, setFilterCategory] = useState("all");
+  const [filterImage, setFilterImage] = useState<"all" | "real" | "missing" | "needs_review">("all");
+  const [filterPrice, setFilterPrice] = useState<"all" | "with_price" | "without_price">("all");
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -906,9 +908,24 @@ export function CatalogPage() {
       if (filterActive === "inactive" && item.isActive) return false;
       if (filterMissingCost && !(["material", "product"].includes(item.type) && item.costPrice == null)) return false;
       if (filterCategory !== "all" && item.category !== filterCategory) return false;
+      // Image filters — uses the same isUnresolvedImage rule as the cards,
+      // so "with real image" excludes emoji/icon/placeholder rows.
+      if (filterImage !== "all") {
+        const unresolved = isUnresolvedImage(item.metadata);
+        const matchType = (item.metadata as Record<string, unknown> | undefined)?.image_match_type as string | undefined;
+        if (filterImage === "real"          && unresolved) return false;
+        if (filterImage === "missing"       && !unresolved) return false;
+        if (filterImage === "needs_review"  && matchType !== "needs_review" && matchType !== "category_relevant_image" && matchType !== "service_relevant_image") return false;
+      }
+      // Price filters — defaultPrice OR costPrice present
+      if (filterPrice !== "all") {
+        const hasPrice = item.defaultPrice != null || item.costPrice != null;
+        if (filterPrice === "with_price"    && !hasPrice) return false;
+        if (filterPrice === "without_price" && hasPrice)  return false;
+      }
       return true;
     });
-  }, [items, search, filterType, filterActive, filterMissingCost, filterCategory]);
+  }, [items, search, filterType, filterActive, filterMissingCost, filterCategory, filterImage, filterPrice]);
 
   const stats = useMemo(() => {
     const activeCount = items.filter((i) => i.isActive).length;
@@ -1015,6 +1032,27 @@ export function CatalogPage() {
                 <option value="all">פעיל / לא פעיל</option>
                 <option value="active">פעילים בלבד</option>
                 <option value="inactive">לא פעילים</option>
+              </select>
+              <select
+                value={filterImage}
+                onChange={(e) => setFilterImage(e.target.value as typeof filterImage)}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                title="סינון לפי תמונת מוצר"
+              >
+                <option value="all">כל המוצרים</option>
+                <option value="real">עם תמונה אמיתית</option>
+                <option value="missing">ללא תמונה אמיתית</option>
+                <option value="needs_review">תמונה לבדיקה</option>
+              </select>
+              <select
+                value={filterPrice}
+                onChange={(e) => setFilterPrice(e.target.value as typeof filterPrice)}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                title="סינון לפי מחיר"
+              >
+                <option value="all">כל המחירים</option>
+                <option value="with_price">עם מחיר</option>
+                <option value="without_price">ללא מחיר</option>
               </select>
               <button
                 type="button"
