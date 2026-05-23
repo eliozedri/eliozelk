@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { motion, useMotionValue, useSpring, useTransform, AnimatePresence } from "framer-motion";
-import { HOLO_PRODUCTS } from "../../data";
+import { catalogItemsToHoloProducts } from "../../data";
 import type { HoloProduct } from "../../types";
+import { useCatalogContext } from "@/context/CatalogContext";
 import { HeroChrome } from "./HeroChrome";
 
 /**
@@ -25,9 +26,16 @@ const SPRING = { stiffness: 90, damping: 18, mass: 1 };
 /* ============================================================ */
 
 export function V04TacticalHero() {
-  const [activeId, setActiveId] = useState<string>(HOLO_PRODUCTS[0].id);
-  const product = HOLO_PRODUCTS.find((p) => p.id === activeId) ?? HOLO_PRODUCTS[0];
-  const idx = HOLO_PRODUCTS.findIndex((p) => p.id === activeId);
+  const { items } = useCatalogContext();
+  // Live catalog (active items only) — no mock data, no fabricated inventory.
+  const products = useMemo(
+    () => catalogItemsToHoloProducts(items.filter((i) => i.isActive)),
+    [items],
+  );
+
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const product = products.find((p) => p.id === activeId) ?? products[0] ?? null;
+  const idx = Math.max(0, products.findIndex((p) => p.id === product?.id));
 
   const stageRef = useRef<HTMLDivElement>(null);
   const px = useMotionValue(0.5);
@@ -37,8 +45,14 @@ export function V04TacticalHero() {
   const rY = useTransform(sx, [0, 1], [-6, 6]);
   const rX = useTransform(sy, [0, 1], [4, -4]);
 
-  const prev = useCallback(() => setActiveId(HOLO_PRODUCTS[(idx - 1 + HOLO_PRODUCTS.length) % HOLO_PRODUCTS.length].id), [idx]);
-  const next = useCallback(() => setActiveId(HOLO_PRODUCTS[(idx + 1) % HOLO_PRODUCTS.length].id), [idx]);
+  const prev = useCallback(() => {
+    if (products.length === 0) return;
+    setActiveId(products[(idx - 1 + products.length) % products.length].id);
+  }, [idx, products]);
+  const next = useCallback(() => {
+    if (products.length === 0) return;
+    setActiveId(products[(idx + 1) % products.length].id);
+  }, [idx, products]);
 
   // keyboard nav
   useEffect(() => {
@@ -49,6 +63,17 @@ export function V04TacticalHero() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [prev, next]);
+
+  // Empty / loading — catalog not yet loaded or no active items.
+  if (!product) {
+    return (
+      <div dir="rtl" style={{ width: "100%", height: "100vh", background: "#0a0b07", color: SAND, fontFamily: "'Menlo','JetBrains Mono','Consolas',monospace", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+        <div style={{ fontSize: 48 }}>📦</div>
+        <p style={{ color: ORANGE, fontSize: 13, letterSpacing: "0.2em", margin: 0 }}>טוען קטלוג…</p>
+        <p style={{ color: SAND, opacity: 0.55, fontSize: 11, margin: 0 }}>אם אין פריטים פעילים, הוסף פריטים במסך הקטלוג.</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -68,7 +93,7 @@ export function V04TacticalHero() {
       <HeroChrome label="V04 · Tactical Field Equipment" />
 
       <TacticalBackdrop />
-      <TopHeader idx={idx} total={HOLO_PRODUCTS.length} product={product} />
+      <TopHeader idx={idx} total={products.length} product={product} />
 
       <main
         style={{
@@ -253,7 +278,13 @@ export function V04TacticalHero() {
 
         {/* RIGHT */}
         <aside style={{ display: "flex", flexDirection: "column", gap: 10, overflowY: "auto", scrollbarWidth: "thin" }}>
-          {/* HEALTH BADGE — top of right column */}
+          {/* Inventory is not managed in the system yet — show the truth, never fabricate. */}
+          <Block label="STOCK">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: SAND, opacity: 0.75 }} dir="rtl">לא מנוהל כרגע</span>
+              <span style={{ fontSize: 10, color: SAND, opacity: 0.4 }}>N/A</span>
+            </div>
+          </Block>
           {product.inventory && (
             <StockHealthBadge inv={product.inventory} unit={product.unit} />
           )}
@@ -308,20 +339,20 @@ export function V04TacticalHero() {
       <footer style={{ position: "relative", zIndex: 5, padding: "10px 16px 14px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 12 }}>
           <span style={{ fontSize: 10, color: ORANGE, letterSpacing: "0.18em" }}>
-            EQUIPMENT MANIFEST · {HOLO_PRODUCTS.length} UNITS
+            EQUIPMENT MANIFEST · {products.length} UNITS
           </span>
           <span style={{ fontSize: 10, color: SAND, opacity: 0.5 }} dir="ltr">
             ←  ARROW KEYS · CLICK TO TARGET  →
           </span>
           <span style={{ fontSize: 10, color: SAND, opacity: 0.6 }}>
-            SLOT {String(idx + 1).padStart(2, "0")} / {String(HOLO_PRODUCTS.length).padStart(2, "0")}
+            SLOT {String(idx + 1).padStart(2, "0")} / {String(products.length).padStart(2, "0")}
           </span>
         </div>
 
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <NavBtn onClick={prev} label="‹" />
           <div style={{ flex: 1, display: "flex", gap: 4, overflowX: "auto", paddingBottom: 4 }}>
-            {HOLO_PRODUCTS.map((p, i) => {
+            {products.map((p, i) => {
               const isActive = i === idx;
               const inv = p.inventory;
               const underMin = inv ? inv.total < inv.minimum : false;
