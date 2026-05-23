@@ -61,6 +61,69 @@ describe("work-diary draft persistence round-trip", () => {
     expect(reopenedAgain.paintingItems[1]).toMatchObject({ id: "p2", quantity: 3 });
   });
 
+  it("preserves the FULL draft state (teams, security, notes, billing, time, photos, signature)", () => {
+    const d = createEmptyDiary("WD-2026-050");
+    const diary: WorkDiary = {
+      ...d,
+      customerName: "נתיבי ישראל",
+      siteName: "כביש 6",
+      contactName: "מאיר",
+      contactPhone: "050-0000000",
+      crewLeaderName: "אבי",
+      crewMembers: ["דני", "יוסי", "רון"],
+      generalNotes: "עבודת לילה, הוסט מסלול",
+      // item-level quantities + notes
+      paintingItems: [
+        { id: "p1", name: "קו הפרדה", unit: "מ\"א", white: "120", orange: "", notes: "מקטע צפוני" } as never,
+      ],
+      poleItems: [{ id: "po1", name: "עמוד", unit: "יח׳", supply: "4", install: "4", notes: "" } as never],
+      signItems: [{ id: "s1", regular: "2", install: "2", signSize: "60", notes: "ב-37" } as never],
+      // teams
+      securityTeams: {
+        arrowBoards: [{ quantity: "2", notes: "צומת" }],
+        inspectors: [{ quantity: "1", notes: "" }],
+      },
+      additionalTeams: {
+        crane: { quantity: "1", notes: "הרמת שילוט" },
+        sweeper: { quantity: "", notes: "" },
+        other: [{ id: "o1", description: "גנרטור", quantity: "1", notes: "" }],
+      },
+      // billing + time + cost
+      isBillable: true,
+      billedAmount: 8500,
+      billingNotes: "לפי הזמנה",
+      travelTimeHours: 1.5,
+      setupTimeHours: 0.5,
+      executionTimeHours: 6,
+      materialCost: 1200,
+      // attachments + signature
+      photos: [{ id: "ph1", url: "blob://x", caption: "לפני", takenAt: "2026-05-23T20:00:00.000Z" } as never],
+      companySignature: {
+        signerName: "אבי", signerRole: "מנהל עבודה", signerEmail: "a@x.co",
+        location: "כביש 6", signedAt: "2026-05-23T22:00:00.000Z", dataUrl: "data:image/png;base64,AAAA",
+      },
+    };
+
+    const recovered = fromRow(toRow(diary) as Record<string, unknown>);
+
+    expect(recovered.crewMembers).toEqual(["דני", "יוסי", "רון"]);
+    expect(recovered.generalNotes).toBe("עבודת לילה, הוסט מסלול");
+    expect(recovered.paintingItems[0]).toMatchObject({ white: "120", notes: "מקטע צפוני" });
+    expect(recovered.poleItems[0]).toMatchObject({ supply: "4", install: "4" });
+    expect(recovered.signItems[0]).toMatchObject({ regular: "2", signSize: "60" });
+    expect(recovered.securityTeams).toEqual(diary.securityTeams);
+    expect(recovered.additionalTeams).toEqual(diary.additionalTeams);
+    expect(recovered.isBillable).toBe(true);
+    expect(recovered.billedAmount).toBe(8500);
+    expect(recovered.billingNotes).toBe("לפי הזמנה");
+    expect(recovered.travelTimeHours).toBe(1.5);
+    expect(recovered.executionTimeHours).toBe(6);
+    expect(recovered.materialCost).toBe(1200);
+    expect(recovered.photos).toHaveLength(1);
+    expect(recovered.photos[0]).toMatchObject({ caption: "לפני" });
+    expect(recovered.companySignature?.dataUrl).toBe("data:image/png;base64,AAAA");
+  });
+
   it("defensively defaults missing item arrays to [] (legacy/partial rows)", () => {
     // A row whose blob predates the item-array keys must not hydrate undefined.
     const legacyRow: Record<string, unknown> = {
