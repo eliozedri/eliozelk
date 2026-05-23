@@ -1,7 +1,7 @@
-import { HolographicCatalogPage } from "@/components/HolographicCatalog";
+import { V04TacticalHero } from "@/components/HolographicCatalog/design-lab/heroes/v04-tactical-hero";
 
-export const metadata = { title: "קטלוג הולוגרפי | אלקיים" };
+export const metadata = { title: "קטלוג תצוגה | אלקיים" };
 
 export default function Page() {
-  return <HolographicCatalogPage />;
+  return <V04TacticalHero />;
 }

@@ -82,7 +82,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "catalog", href: "/catalog", label: "קטלוג מוצרים ופריטים", icon: <Database className={ICON_CLS} />, matchFn: (p) => p === "/catalog" || (p.startsWith("/catalog") && !p.startsWith("/catalog-showcase") && !p.startsWith("/catalog-holo")) },
       { tabId: "catalog", href: "/catalog-showcase", label: "קטלוג חזותי", icon: <LayoutGrid className={ICON_CLS} />, matchFn: (p) => p.startsWith("/catalog-showcase"), noBadge: true },
-      { tabId: "catalog", href: "/holographic-catalog", label: "קטלוג הולוגרפי", icon: <Layers className={ICON_CLS} />, matchFn: (p) => p.startsWith("/holographic-catalog"), noBadge: true },
+      { tabId: "catalog", href: "/holographic-catalog", label: "קטלוג תצוגה", icon: <Layers className={ICON_CLS} />, matchFn: (p) => p.startsWith("/holographic-catalog"), noBadge: true },
     ],
   },
   {
