@@ -1,32 +1,39 @@
 import { describe, it, expect } from "vitest";
-import { mainMenu, restrictedScreen, helpScreen, CB } from "../messages";
+import { mainMenu, restrictedScreen, helpScreen, adminAlert, CB, CB_ADMIN_OK } from "../messages";
 import type { TeamBotUser } from "../types";
 
-function user(role: TeamBotUser["role"], status: TeamBotUser["status"] = "active"): TeamBotUser {
+function user(role: TeamBotUser["role"], status: TeamBotUser["status"] = "approved"): TeamBotUser {
   return {
     id: "u1",
     telegram_user_id: "12345",
+    chat_id: "12345",
     telegram_username: "elio",
     display_name: "אליו",
+    first_name: "אליו",
+    last_name: null,
     role,
     status,
   };
 }
 
-function buttonDatas(kb: { inline_keyboard: { callback_data: string }[][] }): string[] {
-  return kb.inline_keyboard.flat().map((b) => b.callback_data);
+function buttonDatas(kb: { inline_keyboard: { callback_data?: string }[][] }): string[] {
+  return kb.inline_keyboard
+    .flat()
+    .map((b) => b.callback_data)
+    .filter((d): d is string => Boolean(d));
 }
 
 describe("restrictedScreen (default-deny)", () => {
-  it("shows the user's Telegram id and the lock header", () => {
-    const s = restrictedScreen("987654321", "new");
-    expect(s.text).toContain("הגישה לבוט מוגבלת");
+  it("pending shows the await-approval message + the user's Telegram id, no buttons", () => {
+    const s = restrictedScreen("987654321", "pending");
+    expect(s.text).toContain("ממתינה לאישור מנהל");
     expect(s.text).toContain("987654321");
+    expect(s.keyboard.inline_keyboard).toHaveLength(0);
   });
 
-  it("offers a code-entry button for pending users, none for blocked", () => {
-    expect(buttonDatas(restrictedScreen("1", "pending").keyboard)).toContain(CB.ENTER_CODE);
-    expect(buttonDatas(restrictedScreen("1", "blocked").keyboard)).toHaveLength(0);
+  it("rejected and inactive show distinct messages", () => {
+    expect(restrictedScreen("1", "rejected").text).toContain("נדחתה");
+    expect(restrictedScreen("1", "inactive").text).toContain("הושבת");
   });
 });
 
@@ -44,17 +51,25 @@ describe("mainMenu role gating", () => {
     expect(datas).not.toContain(CB.ADMIN_REQUESTS);
   });
 
-  it("viewer sees only open orders + help (no order intake, no admin)", () => {
+  it("viewer sees only open orders + help", () => {
     const datas = buttonDatas(mainMenu(user("viewer")).keyboard);
     expect(datas).toContain(CB.ORDERS);
     expect(datas).toContain(CB.HELP);
     expect(datas).not.toContain(CB.CATALOG);
-    expect(datas).not.toContain(CB.ADMIN_REQUESTS);
   });
 });
 
 describe("helpScreen", () => {
   it("mentions the Telegram-origin labelling", () => {
     expect(helpScreen(user("authorized_user")).text).toContain("הזמנה דרך הבוט מהטלגרם");
+  });
+});
+
+describe("adminAlert", () => {
+  it("includes the requester details and an approve button carrying their id", () => {
+    const s = adminAlert(user("viewer", "pending"));
+    expect(s.text).toContain("בקשת גישה חדשה");
+    expect(s.text).toContain("12345");
+    expect(buttonDatas(s.keyboard)).toContain(`${CB_ADMIN_OK}12345`);
   });
 });

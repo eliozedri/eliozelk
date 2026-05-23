@@ -33,15 +33,19 @@ export type TgUpdate = {
 // ── Domain ──────────────────────────────────────────────────────────────────
 
 export type TeamBotRole = "admin" | "authorized_user" | "viewer";
-export type TeamBotStatus = "pending" | "active" | "blocked";
+export type TeamBotStatus = "pending" | "approved" | "rejected" | "inactive";
 
 export type TeamBotUser = {
   id: string;
   telegram_user_id: string;
+  chat_id: string | null;
   telegram_username: string | null;
   display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   role: TeamBotRole;
   status: TeamBotStatus;
+  requested_at?: string | null;
 };
 
 export type CartLine = {

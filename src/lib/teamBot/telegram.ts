@@ -11,7 +11,7 @@ import "server-only";
 
 const API_BASE = "https://api.telegram.org";
 
-export type InlineButton = { text: string; callback_data: string };
+export type InlineButton = { text: string; callback_data?: string; url?: string };
 export type InlineKeyboard = { inline_keyboard: InlineButton[][] };
 
 export function botToken(): string | null {

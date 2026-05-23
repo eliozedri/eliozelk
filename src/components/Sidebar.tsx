@@ -249,6 +249,10 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           <SidebarLink href="/access" label="הרשאות גישה" active={pathname.startsWith("/access")} icon={<ShieldPlus className={ICON_CLS} />} onClick={handleNavClick}
             onGuardedNavigate={isDirtyGuard ? guardedNavigate : undefined} />
         )}
+        {canManageAccess && (
+          <SidebarLink href="/team-bot-users" label="גישת בוט טלגרם" active={pathname.startsWith("/team-bot-users")} icon={<Send className={ICON_CLS} />} onClick={handleNavClick}
+            onGuardedNavigate={isDirtyGuard ? guardedNavigate : undefined} />
+        )}
         {canSeeTab("integrations") && (
           <SidebarLink href="/integrations" label="אינטגרציות" active={pathname.startsWith("/integrations")} icon={<Cable className={ICON_CLS} />} onClick={handleNavClick}
             onGuardedNavigate={isDirtyGuard ? guardedNavigate : undefined} />

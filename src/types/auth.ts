@@ -53,7 +53,8 @@ export type TabId =
   | "access"
   | "integrations"
   | "plan-scanner"
-  | "team-bot-orders";
+  | "team-bot-orders"
+  | "team-bot-users";
 
 export const ALL_TABS: { id: TabId; label: string; path: string; section: string }[] = [
   { id: "dashboard", label: "לוח בקרה", path: "/", section: "ניהול" },
@@ -74,6 +75,7 @@ export const ALL_TABS: { id: TabId; label: string; path: string; section: string
   { id: "cost-settings", label: "תעריפי עלות", path: "/cost-settings", section: "ניתוח" },
   { id: "agents", label: "מרכז פיקוד דיגיטלי", path: "/agents", section: "בינה מלאכותית" },
   { id: "access", label: "הרשאות גישה", path: "/access", section: "מערכת" },
+  { id: "team-bot-users", label: "גישת בוט טלגרם", path: "/team-bot-users", section: "מערכת" },
   { id: "integrations", label: "אינטגרציות", path: "/integrations", section: "מערכת" },
   { id: "plan-scanner", label: "סורק תוכניות", path: "/plan-scanner", section: "מחקר ותכנון" },
 ];

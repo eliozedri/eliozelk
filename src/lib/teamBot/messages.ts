@@ -1,4 +1,4 @@
-import type { InlineKeyboard } from "./telegram";
+import type { InlineButton, InlineKeyboard } from "./telegram";
 import type { CartLine, TeamBotRole, TeamBotUser } from "./types";
 
 /**
@@ -26,6 +26,10 @@ export const CB = {
   SKIP_NOTES: "submit:skipnotes",
 } as const;
 
+// Telegram-admin approval callbacks (verified against the env allowlist).
+export const CB_ADMIN_OK = "tbadm:ok:"; // tbadm:ok:<telegram_user_id>
+export const CB_ADMIN_NO = "tbadm:no:"; // tbadm:no:<telegram_user_id>
+
 // Dynamic callback-data prefixes (followed by an id / slug / index).
 export const CB_DEPT = "dept:"; //  dept:<slug>
 export const CB_DEPT_PAGE = "dp:"; // dp:<slug>:<page>
@@ -41,12 +45,14 @@ export const navRow = [
 
 export function restrictedScreen(
   telegramUserId: string,
-  status: "pending" | "blocked" | "new",
+  status: "pending" | "rejected" | "inactive",
 ): { text: string; keyboard: InlineKeyboard } {
   const statusLine =
-    status === "blocked"
-      ? "החשבון שלך חסום. פנה למנהל."
-      : "הבקשה שלך נשלחה למנהל לאישור.\nאפשר גם להזין קוד כניסה שקיבלת מהמנהל.";
+    status === "rejected"
+      ? "בקשת הגישה שלך נדחתה. לפרטים פנה למנהל."
+      : status === "inactive"
+        ? "החשבון שלך הושבת. לחידוש גישה פנה למנהל."
+        : "הבקשה שלך לגישה לבוט התקבלה וממתינה לאישור מנהל.";
 
   const text =
     `🔒 הגישה לבוט מוגבלת\n${RULE}\n` +
@@ -54,13 +60,56 @@ export function restrictedScreen(
     `${statusLine}\n\n` +
     `מזהה Telegram שלך:\n${telegramUserId}`;
 
-  const keyboard: InlineKeyboard = {
-    inline_keyboard:
-      status === "blocked"
-        ? []
-        : [[{ text: "🔑 הזנת קוד כניסה", callback_data: CB.ENTER_CODE }]],
-  };
-  return { text, keyboard };
+  return { text, keyboard: { inline_keyboard: [] } };
+}
+
+/** Sent to a brand-new user the moment their request is created. */
+export const newRequestAck =
+  "הבקשה שלך לגישה לבוט התקבלה וממתינה לאישור מנהל.";
+
+// ── Admin alert (new access request) ─────────────────────────────────────────
+
+export function adminAlert(user: {
+  telegram_user_id: string;
+  telegram_username: string | null;
+  display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  requested_at?: string | null;
+}): { text: string; keyboard: InlineKeyboard } {
+  const fullName =
+    [user.first_name, user.last_name].filter(Boolean).join(" ").trim() ||
+    user.display_name ||
+    "—";
+  const uname = user.telegram_username ? `@${user.telegram_username}` : "—";
+  const when = user.requested_at
+    ? new Date(user.requested_at).toLocaleString("he-IL")
+    : "—";
+
+  const text =
+    `🔔 בקשת גישה חדשה לבוט הצוות\n${RULE}\n` +
+    `שם: ${fullName}\n` +
+    `שם משתמש: ${uname}\n` +
+    `מזהה Telegram: ${user.telegram_user_id}\n` +
+    `התקבלה: ${when}`;
+
+  const rows: InlineButton[][] = [
+    [
+      { text: "✅ אשר משתמש", callback_data: `${CB_ADMIN_OK}${user.telegram_user_id}` },
+      { text: "🚫 דחה משתמש", callback_data: `${CB_ADMIN_NO}${user.telegram_user_id}` },
+    ],
+  ];
+  const webUrl = process.env.TEAM_BOT_WEB_URL;
+  if (webUrl) {
+    rows.push([{ text: "🖥 פתח במערכת", url: `${webUrl.replace(/\/$/, "")}/team-bot-users` }]);
+  }
+  return { text, keyboard: { inline_keyboard: rows } };
+}
+
+export function adminDecisionApplied(approved: boolean, name: string): string {
+  return approved
+    ? `✅ ${name} אושר/ה. נשלחה הודעה למשתמש.`
+    : `🚫 ${name} נדחה/תה.`;
 }
 
 export const promptEnterCode =
@@ -144,8 +193,8 @@ export function adminRequestsScreen(
     const label = u.display_name || u.telegram_username || u.telegram_user_id;
     lines.push(`• ${label}  (ID: ${u.telegram_user_id})`);
     rows.push([
-      { text: `✅ אשר ${label}`.slice(0, 40), callback_data: `adm:ok:${u.telegram_user_id}` },
-      { text: "🚫 חסום", callback_data: `adm:no:${u.telegram_user_id}` },
+      { text: `✅ אשר ${label}`.slice(0, 40), callback_data: `${CB_ADMIN_OK}${u.telegram_user_id}` },
+      { text: "🚫 דחה", callback_data: `${CB_ADMIN_NO}${u.telegram_user_id}` },
     ]);
   }
   rows.push([{ text: "🏠 תפריט ראשי", callback_data: CB.HOME }]);

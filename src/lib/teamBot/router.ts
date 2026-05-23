@@ -2,20 +2,27 @@ import "server-only";
 import { sendMessage } from "./telegram";
 import { ack, respond, sendNew, type Ctx } from "./reply";
 import {
+  approveUser,
   createAccessCode,
+  getUserChatId,
+  isAdminTelegramId,
   listPendingUsers,
+  logEvent,
   redeemAccessCode,
+  rejectUser,
   resolveOrCreateUser,
-  setUserStatus,
 } from "./auth";
 import { clearSession, loadSession, resetFlow, saveSession } from "./sessions";
 import {
   CB,
+  CB_ADMIN_NO,
+  CB_ADMIN_OK,
   CB_CART_RM,
   CB_DEPT,
   CB_DEPT_PAGE,
   CB_ITEM,
   ROLE_LABELS,
+  adminDecisionApplied,
   adminRequestsScreen,
   cancelledMessage,
   codeInvalidMessage,
@@ -52,7 +59,7 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
   const chat = update.message?.chat ?? update.callback_query?.message?.chat;
   if (!from || from.is_bot || !chat) return;
 
-  const user = await resolveOrCreateUser(from);
+  const user = await resolveOrCreateUser(from, chat.id);
   const ctx: Ctx = {
     chatId: chat.id,
     telegramUserId: String(from.id),
@@ -67,13 +74,20 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
   const text = (update.message?.text ?? "").trim();
   const data = update.callback_query?.data ?? "";
 
-  // Gate 1: not active → restricted surface + code redemption only.
-  if (user.status !== "active") {
+  // ── Admin approval callbacks — security-checked against the env allowlist,
+  //    independent of the caller's stored role or status. ─────────────────────
+  if (data.startsWith(CB_ADMIN_OK) || data.startsWith(CB_ADMIN_NO)) {
+    await handleAdminApproval(ctx, data);
+    return;
+  }
+
+  // ── Gate 1: not approved → restricted surface only ──────────────────────────
+  if (user.status !== "approved") {
     await handleUnauthorized(ctx, { text, data });
     return;
   }
 
-  // Gate 2: active users — commands take precedence over any in-progress flow.
+  // ── Gate 2: approved users ──────────────────────────────────────────────────
   if (text === "/start" || text === "/menu") {
     await resetFlow(ctx.telegramUserId, await loadSession(ctx.telegramUserId));
     await sendMain(ctx);
@@ -95,13 +109,46 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
     await handleCallback(ctx, data);
     return;
   }
-
   if (text) {
     await handleActiveText(ctx, text);
   }
 }
 
-// ── Active free-text routing (depends on the conversation flow) ────────────────
+// ── Secure admin approval ───────────────────────────────────────────────────────
+
+async function handleAdminApproval(ctx: Ctx, data: string): Promise<void> {
+  // Do NOT trust the button: the action is allowed only if the CALLER's
+  // Telegram id is in the configured admin allowlist.
+  if (!isAdminTelegramId(ctx.telegramUserId)) {
+    await logEvent(ctx.telegramUserId, "unauthorized_admin_action", { data });
+    await respond(ctx, "⛔ פעולה זו זמינה למנהלים מורשים בלבד.");
+    return;
+  }
+
+  const approve = data.startsWith(CB_ADMIN_OK);
+  const targetId = data.slice((approve ? CB_ADMIN_OK : CB_ADMIN_NO).length);
+
+  if (approve) {
+    await approveUser(targetId, ctx.telegramUserId, "authorized_user");
+    const chatId = (await getUserChatId(targetId)) ?? targetId;
+    await sendMessage(
+      chatId,
+      `✅ קיבלת גישה לבוט הצוות של אלקיים כ־${ROLE_LABELS.authorized_user}.\nשלח /start כדי להתחיל.`,
+    ).catch(() => {});
+  } else {
+    await rejectUser(targetId, ctx.telegramUserId);
+  }
+  await logEvent(ctx.telegramUserId, approve ? "user_approved" : "user_rejected", { targetId });
+
+  await respond(ctx, adminDecisionApplied(approve, targetId), {
+    inline_keyboard: [
+      [{ text: "🔐 בקשות נוספות", callback_data: CB.ADMIN_REQUESTS }],
+      [{ text: "🏠 תפריט ראשי", callback_data: CB.HOME }],
+    ],
+  });
+}
+
+// ── Active free-text routing ───────────────────────────────────────────────────
 
 async function handleActiveText(ctx: Ctx, text: string): Promise<void> {
   const session = await loadSession(ctx.telegramUserId);
@@ -121,34 +168,30 @@ async function handleActiveText(ctx: Ctx, text: string): Promise<void> {
   }
 }
 
-// ── Unauthorized handling ─────────────────────────────────────────────────────
+// ── Unauthorized handling (pending / rejected / inactive) ──────────────────────
 
 async function handleUnauthorized(ctx: Ctx, input: { text: string; data: string }): Promise<void> {
-  const { text, data } = input;
+  const { text } = input;
 
+  // Secondary onboarding path: /code <CODE> still works for issued codes.
   if (text.startsWith("/code")) {
     const code = text.slice("/code".length).trim();
     if (code) return void (await tryRedeem(ctx, code));
   }
-
-  if (data === CB.ENTER_CODE) {
+  if (input.data === CB.ENTER_CODE) {
     const session = await loadSession(ctx.telegramUserId);
     await saveSession(ctx.telegramUserId, { ...session, flow: "awaiting_code" });
     await respond(ctx, promptEnterCode);
     return;
   }
-
   if (text && !text.startsWith("/")) {
     const session = await loadSession(ctx.telegramUserId);
-    if (session.flow === "awaiting_code") {
-      return void (await tryRedeem(ctx, text));
-    }
+    if (session.flow === "awaiting_code") return void (await tryRedeem(ctx, text));
   }
 
-  const screen = restrictedScreen(
-    ctx.telegramUserId,
-    ctx.user.status === "blocked" ? "blocked" : "pending",
-  );
+  const status =
+    ctx.user.status === "rejected" ? "rejected" : ctx.user.status === "inactive" ? "inactive" : "pending";
+  const screen = restrictedScreen(ctx.telegramUserId, status);
   await respond(ctx, screen.text, screen.keyboard);
 }
 
@@ -162,11 +205,11 @@ async function tryRedeem(ctx: Ctx, code: string): Promise<void> {
   }
   await clearSession(ctx.telegramUserId);
   await sendMessage(ctx.chatId, codeResultMessage(result.role));
-  ctx.user = { ...ctx.user, status: "active", role: result.role };
+  ctx.user = { ...ctx.user, status: "approved", role: result.role };
   await sendMain(ctx);
 }
 
-// ── Active callback dispatch ───────────────────────────────────────────────────
+// ── Approved-user callback dispatch ────────────────────────────────────────────
 
 async function handleCallback(ctx: Ctx, data: string): Promise<void> {
   if (data === CB.HOME) {
@@ -186,14 +229,12 @@ async function handleCallback(ctx: Ctx, data: string): Promise<void> {
     return;
   }
 
-  // ── Order intake (catalog + cart) — order-capable roles only ───────────────
   if (isIntakeCallback(data)) {
     if (!canOrder(ctx.user)) return void (await sendMain(ctx));
     await handleIntakeCallback(ctx, data);
     return;
   }
 
-  // ── Open orders (read-only) — any active role ──────────────────────────────
   if (data === CB.ORDERS) {
     await listOpenOrders(ctx);
     return;
@@ -203,16 +244,16 @@ async function handleCallback(ctx: Ctx, data: string): Promise<void> {
     return;
   }
 
-  // ── Admin ──────────────────────────────────────────────────────────────────
+  // Admin features — gated by the env allowlist (defense in depth).
   if (data === CB.ADMIN_REQUESTS) {
-    if (ctx.user.role !== "admin") return void (await sendMain(ctx));
+    if (!isAdminTelegramId(ctx.telegramUserId)) return void (await sendMain(ctx));
     const pending = await listPendingUsers();
     const s = adminRequestsScreen(pending);
     await respond(ctx, s.text, s.keyboard);
     return;
   }
   if (data === CB.ADMIN_NEWCODE) {
-    if (ctx.user.role !== "admin") return void (await sendMain(ctx));
+    if (!isAdminTelegramId(ctx.telegramUserId)) return void (await sendMain(ctx));
     const code = await createAccessCode({
       role: "authorized_user",
       maxUses: 1,
@@ -221,28 +262,9 @@ async function handleCallback(ctx: Ctx, data: string): Promise<void> {
     });
     await respond(
       ctx,
-      `➕ קוד גישה חדש (חד-פעמי, תקף 72 שעות, תפקיד: משתמש מורשה):\n\n${code}\n\nשלח אותו לעובד. הוא יזין אותו בלחיצה על "התחל" בבוט.`,
+      `➕ קוד גישה חדש (חד-פעמי, תקף 72 שעות, תפקיד: משתמש מורשה):\n\n${code}\n\nשלח אותו לעובד. הוא יזין אותו עם /code בבוט.`,
       { inline_keyboard: [[{ text: "🏠 תפריט ראשי", callback_data: CB.HOME }]] },
     );
-    return;
-  }
-  if (data.startsWith("adm:ok:") || data.startsWith("adm:no:")) {
-    if (ctx.user.role !== "admin") return void (await sendMain(ctx));
-    const approve = data.startsWith("adm:ok:");
-    const targetId = data.slice("adm:ok:".length);
-    await setUserStatus(targetId, approve ? "active" : "blocked", {
-      role: approve ? "authorized_user" : undefined,
-      approvedBy: ctx.telegramUserId,
-    });
-    if (approve) {
-      await sendMessage(
-        targetId,
-        `✅ קיבלת גישה לבוט הצוות של אלקיים כ־${ROLE_LABELS.authorized_user}.\nשלח /start כדי להתחיל.`,
-      ).catch(() => {});
-    }
-    const pending = await listPendingUsers();
-    const s = adminRequestsScreen(pending);
-    await respond(ctx, s.text, s.keyboard);
     return;
   }
 
@@ -274,7 +296,6 @@ async function handleIntakeCallback(ctx: Ctx, data: string): Promise<void> {
   if (data === CB.SKIP_CITY) return void (await enterCity(ctx, null));
   if (data === CB.SKIP_NOTES) return void (await enterNotes(ctx, null));
 
-  // dp:<slug>:<page>  — check before dept: (distinct prefixes, but explicit)
   if (data.startsWith(CB_DEPT_PAGE)) {
     const rest = data.slice(CB_DEPT_PAGE.length);
     const lastColon = rest.lastIndexOf(":");
