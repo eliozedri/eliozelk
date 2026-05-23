@@ -856,6 +856,13 @@ export function CatalogPage() {
   const [editSupplierId, setEditSupplierId] = useState("");
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
 
+  // Image-upload state for the card-view edit drawer
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
+  const [pendingImagePreviewUrl, setPendingImagePreviewUrl] = useState<string | null>(null);
+  const [imageUploadBusy, setImageUploadBusy] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState<string | null>(null);
+  const [imageStatusOverride, setImageStatusOverride] = useState<string>("");
+
   useEffect(() => {
     const db = getSupabase();
     if (!db) return;
@@ -955,7 +962,21 @@ export function CatalogPage() {
     // rendered as an overlay drawer so the user stays in context.
   }
 
-  function saveEdit(id: string) {
+  async function saveEdit(id: string) {
+    // If the user picked a new image, upload it FIRST. The API writes the
+    // metadata.images block server-side, so we let it complete before
+    // we touch the rest of the row via updateItem (which doesn't touch images).
+    if (pendingImageFile) {
+      const ok = await uploadPendingImage(id);
+      if (!ok) return;
+      if (pendingImagePreviewUrl) URL.revokeObjectURL(pendingImagePreviewUrl);
+      setPendingImageFile(null);
+      setPendingImagePreviewUrl(null);
+      // The catalog context cached the old metadata. Hard-refresh so the
+      // card and the showcase pick up the new public URL.
+      window.location.reload();
+      return;
+    }
     updateItem(id, editForm, editLinked);
     const minQty = parseFloat(editMinQty) || 0;
     updateStockConfig(id, minQty, editSupplierId || null);
@@ -967,6 +988,95 @@ export function CatalogPage() {
 
   function cancelEdit() {
     setEditingId(null);
+    if (pendingImagePreviewUrl) URL.revokeObjectURL(pendingImagePreviewUrl);
+    setPendingImageFile(null);
+    setPendingImagePreviewUrl(null);
+    setImageUploadError(null);
+    setImageStatusOverride("");
+  }
+
+  // Image upload helpers ───────────────────────────────────────────────────────
+  async function getAuthToken(): Promise<string> {
+    const db = getSupabase();
+    if (!db) return "";
+    const { data: { session } } = await db.auth.getSession();
+    return session?.access_token ?? "";
+  }
+
+  function pickImageFile(file: File | null) {
+    setImageUploadError(null);
+    if (pendingImagePreviewUrl) URL.revokeObjectURL(pendingImagePreviewUrl);
+    if (!file) {
+      setPendingImageFile(null);
+      setPendingImagePreviewUrl(null);
+      return;
+    }
+    if (!/^image\/(jpeg|jpg|png|webp)$/.test(file.type)) {
+      setImageUploadError(`סוג קובץ לא נתמך: ${file.type}`);
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setImageUploadError("הקובץ גדול מ-10MB");
+      return;
+    }
+    setPendingImageFile(file);
+    setPendingImagePreviewUrl(URL.createObjectURL(file));
+  }
+
+  async function uploadPendingImage(productId: string): Promise<boolean> {
+    if (!pendingImageFile) return true;     // nothing to upload — OK
+    setImageUploadBusy(true);
+    setImageUploadError(null);
+    try {
+      const tok = await getAuthToken();
+      const form = new FormData();
+      form.append("file", pendingImageFile);
+      form.append("productId", productId);
+      const res = await fetch("/api/catalog/upload-image", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok}` },
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setImageUploadError(data.error ?? "שגיאה בהעלאת התמונה");
+        return false;
+      }
+      return true;
+    } catch {
+      setImageUploadError("שגיאת רשת — נסה שוב");
+      return false;
+    } finally {
+      setImageUploadBusy(false);
+    }
+  }
+
+  async function removeImage(productId: string) {
+    if (!confirm("להסיר את תמונת המוצר?")) return;
+    setImageUploadBusy(true);
+    setImageUploadError(null);
+    try {
+      const tok = await getAuthToken();
+      const res = await fetch("/api/catalog/upload-image", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tok}`,
+        },
+        body: JSON.stringify({ productId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setImageUploadError(data.error ?? "שגיאה בהסרת התמונה");
+        return;
+      }
+      // Reflect the cleared state by reloading the page so the catalog context refetches.
+      window.location.reload();
+    } catch {
+      setImageUploadError("שגיאת רשת — נסה שוב");
+    } finally {
+      setImageUploadBusy(false);
+    }
   }
 
   function updateEditForm(field: keyof CatalogFormState, value: string) {
@@ -1146,55 +1256,108 @@ export function CatalogPage() {
                   </div>
 
                   <div className="px-5 py-4 space-y-4">
-                    {/* Image preview + status */}
-                    <div className="flex gap-4 items-start">
-                      <div className="shrink-0">
-                        {thumb ? (
-                          <img src={thumb} alt={editingItem.name}
-                            className="w-28 h-28 object-cover rounded-lg border border-gray-200 bg-gray-50" />
-                        ) : (
-                          <div className="w-28 h-28 rounded-lg border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-3xl text-gray-300">
-                            🖼
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0 text-xs space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${editingItem.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                            {editingItem.isActive ? "● פעיל" : "○ לא פעיל"}
-                          </span>
-                          {isSupplier && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
-                              מקור ספק חיצוני
-                            </span>
-                          )}
-                          {imageStatus && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                              image_status={imageStatus}
-                            </span>
-                          )}
-                        </div>
-                        {sources?.[0]?.url && (
-                          <div>
-                            <span className="text-gray-500">מקור: </span>
-                            <a href={sources[0].url} target="_blank" rel="noopener noreferrer"
-                              className="text-blue-600 underline truncate max-w-xs inline-block align-middle">
-                              {sources[0].note ?? sources[0].url}
-                            </a>
-                          </div>
-                        )}
-                        <p className="text-[10px] text-gray-400">
-                          להחלפת תמונה — שמרו תמונה ב-public/catalog/elkayam/&lt;קטגוריה&gt;/&lt;מוצר&gt;/original/ ועדכנו את metadata.images.thumb דרך עורך הפריט.
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-2 shrink-0">
+                    {/* Image section: preview + upload + clear + status */}
+                    <div className="rounded-lg border border-gray-200 bg-gray-50/40 p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-gray-800">תמונת מוצר</h3>
                         <button
                           type="button"
                           onClick={() => { toggleActive(editingItem.id); }}
                           className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${editingItem.isActive ? "bg-white border-gray-300 text-gray-700 hover:bg-gray-50" : "bg-green-600 border-green-700 text-white hover:bg-green-700"}`}
                         >
-                          {editingItem.isActive ? "השבת" : "✓ הפעל"}
+                          {editingItem.isActive ? "השבת מוצר" : "✓ הפעל מוצר"}
                         </button>
+                      </div>
+                      <div className="flex gap-4 items-start">
+                        <div className="shrink-0">
+                          {pendingImagePreviewUrl ? (
+                            <div className="relative">
+                              <img src={pendingImagePreviewUrl} alt="תצוגה מקדימה"
+                                className="w-28 h-28 object-cover rounded-lg border-2 border-blue-400 bg-white shadow-sm" />
+                              <span className="absolute -top-2 -right-2 text-[9px] font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded">חדש</span>
+                            </div>
+                          ) : thumb ? (
+                            <img src={thumb} alt={editingItem.name}
+                              className="w-28 h-28 object-cover rounded-lg border border-gray-200 bg-white" />
+                          ) : (
+                            <div className="w-28 h-28 rounded-lg border-2 border-dashed border-gray-300 bg-white flex flex-col items-center justify-center text-gray-300 gap-1">
+                              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                              <span className="text-[10px]">אין תמונה</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${editingItem.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                              {editingItem.isActive ? "● פעיל" : "○ לא פעיל"}
+                            </span>
+                            {isSupplier && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                                מקור ספק חיצוני
+                              </span>
+                            )}
+                            {imageStatus && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                                {imageStatus}
+                              </span>
+                            )}
+                          </div>
+                          {sources?.[0]?.url && (
+                            <div className="text-xs">
+                              <span className="text-gray-500">מקור: </span>
+                              <a href={sources[0].url} target="_blank" rel="noopener noreferrer"
+                                className="text-blue-600 underline truncate max-w-xs inline-block align-middle">
+                                {sources[0].note ?? sources[0].url}
+                              </a>
+                            </div>
+                          )}
+                          {/* Upload controls */}
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <label className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium cursor-pointer inline-flex items-center gap-1">
+                              📷 {thumb || pendingImagePreviewUrl ? "החלף תמונה" : "העלה תמונת מוצר"}
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/jpg,image/png,image/webp"
+                                className="hidden"
+                                onChange={(e) => pickImageFile(e.target.files?.[0] ?? null)}
+                                disabled={imageUploadBusy}
+                              />
+                            </label>
+                            {pendingImagePreviewUrl && (
+                              <button
+                                type="button"
+                                onClick={() => pickImageFile(null)}
+                                className="px-3 py-1.5 rounded-lg border border-gray-300 text-xs text-gray-600 hover:bg-white"
+                                disabled={imageUploadBusy}
+                              >
+                                בטל בחירה
+                              </button>
+                            )}
+                            {thumb && !pendingImagePreviewUrl && (
+                              <button
+                                type="button"
+                                onClick={() => removeImage(editingItem.id)}
+                                className="px-3 py-1.5 rounded-lg border border-red-300 bg-white text-xs text-red-600 hover:bg-red-50"
+                                disabled={imageUploadBusy}
+                              >
+                                הסר תמונה
+                              </button>
+                            )}
+                          </div>
+                          {imageUploadError && (
+                            <p className="text-[11px] text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
+                              {imageUploadError}
+                            </p>
+                          )}
+                          {pendingImagePreviewUrl && (
+                            <p className="text-[10px] text-blue-700 bg-blue-50 border border-blue-100 rounded px-2 py-1">
+                              תצוגה מקדימה בלבד. התמונה תישמר רק בלחיצה על "שמור".
+                            </p>
+                          )}
+                          <p className="text-[10px] text-gray-400">
+                            פורמטים: jpg, png, webp · מקסימום 10MB · התמונה תישמר ב-Supabase Storage ותהיה זמינה מיידית בקטלוג.
+                          </p>
+                        </div>
                       </div>
                     </div>
 
@@ -1244,11 +1407,14 @@ export function CatalogPage() {
                   </div>
 
                   <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-200 sticky bottom-0 bg-white rounded-b-2xl">
+                    {imageUploadBusy && <span className="text-xs text-blue-600 mr-auto">מעלה תמונה...</span>}
                     <button type="button" onClick={cancelEdit}
-                      className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50">
+                      className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
+                      disabled={imageUploadBusy}>
                       ביטול
                     </button>
                     <button type="button" onClick={() => saveEdit(editingItem.id)}
+                      disabled={imageUploadBusy}
                       className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
                       שמור
                     </button>
