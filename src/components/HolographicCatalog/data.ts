@@ -4,23 +4,12 @@
  * TO ADD REAL PRODUCT IMAGES:
  *   Place transparent PNG files in: /public/catalog/transparent/
  *   Each file name must match the `id` field below plus ".png"
- *   Examples:
- *     /public/catalog/transparent/speed-bump.png
- *     /public/catalog/transparent/cat-eyes.png
- *     /public/catalog/transparent/cones.png
- *     /public/catalog/transparent/cone-sleeves.png
- *     /public/catalog/transparent/arrow-board.png
- *     /public/catalog/transparent/sign.png
- *     /public/catalog/transparent/jersey-barrier.png
- *     /public/catalog/transparent/marking-machine.png
- *     /public/catalog/transparent/thermoplastic.png
- *     /public/catalog/transparent/flashing-light.png
- *     /public/catalog/transparent/safety-rail.png
  *
  * TO CONNECT SUPABASE:
  *   Replace this array with data from useCatalog() and map
  *   CatalogItem fields → HoloProduct shape.
  *   metadata.specs maps to specs[], metadata.images.full maps to imageUrl.
+ *   `inventory` field comes from inventory_movements + active orders.
  */
 
 import type { HoloProduct } from "./types";
@@ -50,6 +39,16 @@ export const HOLO_PRODUCTS: HoloProduct[] = [
     ],
     tags: ["Advanced Marking Solutions", "בטיחות דרכים", "גומי"],
     accentColor: "#06b6d4",
+    inventory: {
+      total: 158, available: 124, reserved: 22, inProduction: 19, inTransit: 15, minimum: 60,
+      usagePerMonth: 38,
+      reservations: [
+        { orderId: "ORD-441", qty: 22, site: "כביש 6, מחלף 12", customer: "נתיבי ישראל", due: "2026-06-04" },
+        { orderId: "ORD-447", qty: 12, site: "פארק מיט\"ב", customer: "עיריית פתח־תקווה", due: "2026-06-11" },
+      ],
+      recentMovement: { date: "2026-05-21", type: "in", qty: 24, ref: "PO #4419 · ARC Rubber" },
+      nextReorder: { date: "2026-06-15", qty: 60, supplier: "ARC Rubber" },
+    },
   },
   {
     id: "cat-eyes",
@@ -75,6 +74,14 @@ export const HOLO_PRODUCTS: HoloProduct[] = [
     ],
     tags: ["סימון", "רפלקטיבי", "נתיבים"],
     accentColor: "#a78bfa",
+    inventory: {
+      total: 420, available: 380, reserved: 40, inProduction: 0, inTransit: 0, minimum: 100,
+      usagePerMonth: 65,
+      reservations: [
+        { orderId: "ORD-452", qty: 40, site: "כביש 4 צפון", customer: "נתיבי ישראל", due: "2026-06-08" },
+      ],
+      recentMovement: { date: "2026-05-19", type: "out", qty: 60, ref: "DEL-2210" },
+    },
   },
   {
     id: "cones",
@@ -100,6 +107,16 @@ export const HOLO_PRODUCTS: HoloProduct[] = [
     ],
     tags: ["הסדרי תנועה", "PVC", "שטח"],
     accentColor: "#f97316",
+    inventory: {
+      total: 245, available: 125, reserved: 80, inProduction: 0, inTransit: 40, minimum: 50,
+      usagePerMonth: 90,
+      reservations: [
+        { orderId: "ORD-441", qty: 35, site: "כביש 6, מחלף 12", customer: "נתיבי ישראל", due: "2026-06-04" },
+        { orderId: "ORD-447", qty: 25, site: "פארק מיט\"ב",   customer: "עיריית פתח־תקווה", due: "2026-06-11" },
+        { orderId: "ORD-453", qty: 20, site: "חניון מרכזי",    customer: "צ.מ.ח. נדל\"ן",        due: "2026-06-02" },
+      ],
+      recentMovement: { date: "2026-05-22", type: "out", qty: 30, ref: "DEL-2218" },
+    },
   },
   {
     id: "cone-sleeves",
@@ -124,6 +141,14 @@ export const HOLO_PRODUCTS: HoloProduct[] = [
     ],
     tags: ["רפלקטיבי", "ראות לילה", "בטיחות"],
     accentColor: "#fbbf24",
+    inventory: {
+      total: 380, available: 260, reserved: 120, inProduction: 0, inTransit: 0, minimum: 100,
+      usagePerMonth: 55,
+      reservations: [
+        { orderId: "ORD-441", qty: 80, site: "כביש 6, מחלף 12",  customer: "נתיבי ישראל", due: "2026-06-04" },
+        { orderId: "ORD-453", qty: 40, site: "חניון מרכזי",        customer: "צ.מ.ח. נדל\"ן",  due: "2026-06-02" },
+      ],
+    },
   },
   {
     id: "arrow-board",
@@ -149,6 +174,13 @@ export const HOLO_PRODUCTS: HoloProduct[] = [
     ],
     tags: ["LED", "הסדרי תנועה", "ת״י מאושר"],
     accentColor: "#06b6d4",
+    inventory: {
+      total: 2, available: 1, reserved: 1, inProduction: 0, inTransit: 0, minimum: 2,
+      usagePerMonth: 1,
+      reservations: [
+        { orderId: "ORD-441", qty: 1, site: "כביש 6, מחלף 12", customer: "נתיבי ישראל", due: "2026-06-04" },
+      ],
+    },
   },
   {
     id: "sign",
@@ -174,6 +206,13 @@ export const HOLO_PRODUCTS: HoloProduct[] = [
     ],
     tags: ["תמרור", "אלומיניום", "ת״י 855"],
     accentColor: "#ef4444",
+    inventory: {
+      total: 34, available: 27, reserved: 5, inProduction: 0, inTransit: 2, minimum: 15,
+      usagePerMonth: 12,
+      reservations: [
+        { orderId: "ORD-449", qty: 5, site: "צומת קציר", customer: "מ.מ. קציר־חריש", due: "2026-06-09" },
+      ],
+    },
   },
   {
     id: "jersey-barrier",
@@ -199,6 +238,14 @@ export const HOLO_PRODUCTS: HoloProduct[] = [
     ],
     tags: ["בטון", "מחסום", "כבד"],
     accentColor: "#64748b",
+    inventory: {
+      total: 4, available: 3, reserved: 1, inProduction: 0, inTransit: 0, minimum: 5,
+      usagePerMonth: 2,
+      reservations: [
+        { orderId: "ORD-455", qty: 1, site: "אזור תעשייה צפוני", customer: "א.ג. ייזום", due: "2026-06-06" },
+      ],
+      nextReorder: { date: "2026-06-10", qty: 6, supplier: "בטון אחים בע\"מ" },
+    },
   },
   {
     id: "marking-machine",
@@ -224,6 +271,13 @@ export const HOLO_PRODUCTS: HoloProduct[] = [
     ],
     tags: ["ציוד שטח", "סימון", "ציוד מקצועי"],
     accentColor: "#10b981",
+    inventory: {
+      total: 3, available: 0, reserved: 2, inProduction: 0, inTransit: 0, minimum: 2,
+      reservations: [
+        { orderId: "ORD-447", qty: 1, site: "פארק מיט\"ב",  customer: "עיריית פתח־תקווה", due: "2026-06-11" },
+        { orderId: "ORD-449", qty: 1, site: "צומת קציר",    customer: "מ.מ. קציר־חריש",   due: "2026-06-09" },
+      ],
+    },
   },
   {
     id: "thermoplastic",
@@ -249,6 +303,15 @@ export const HOLO_PRODUCTS: HoloProduct[] = [
     ],
     tags: ["חומר", "תרמופלסטי", "סימון"],
     accentColor: "#eab308",
+    inventory: {
+      total: 850, available: 530, reserved: 320, inProduction: 0, inTransit: 0, minimum: 200,
+      usagePerMonth: 320,
+      reservations: [
+        { orderId: "ORD-447", qty: 180, site: "פארק מיט\"ב", customer: "עיריית פתח־תקווה", due: "2026-06-11" },
+        { orderId: "ORD-449", qty: 140, site: "צומת קציר",    customer: "מ.מ. קציר־חריש",   due: "2026-06-09" },
+      ],
+      nextReorder: { date: "2026-06-01", qty: 400, supplier: "TexMark" },
+    },
   },
   {
     id: "flashing-light",
@@ -274,6 +337,15 @@ export const HOLO_PRODUCTS: HoloProduct[] = [
     ],
     tags: ["LED", "סולארי", "אזהרה"],
     accentColor: "#f59e0b",
+    inventory: {
+      total: 87, available: 27, reserved: 60, inProduction: 0, inTransit: 0, minimum: 30,
+      usagePerMonth: 22,
+      reservations: [
+        { orderId: "ORD-441", qty: 30, site: "כביש 6, מחלף 12", customer: "נתיבי ישראל", due: "2026-06-04" },
+        { orderId: "ORD-447", qty: 20, site: "פארק מיט\"ב",       customer: "עיריית פתח־תקווה", due: "2026-06-11" },
+        { orderId: "ORD-453", qty: 10, site: "חניון מרכזי",         customer: "צ.מ.ח. נדל\"ן",        due: "2026-06-02" },
+      ],
+    },
   },
   {
     id: "safety-rail",
@@ -299,5 +371,12 @@ export const HOLO_PRODUCTS: HoloProduct[] = [
     ],
     tags: ["מחסום", "נייד", "HDPE"],
     accentColor: "#f97316",
+    inventory: {
+      total: 60, available: 25, reserved: 35, inProduction: 0, inTransit: 0, minimum: 20,
+      usagePerMonth: 12,
+      reservations: [
+        { orderId: "ORD-453", qty: 35, site: "חניון מרכזי", customer: "צ.מ.ח. נדל\"ן", due: "2026-06-02" },
+      ],
+    },
   },
 ];

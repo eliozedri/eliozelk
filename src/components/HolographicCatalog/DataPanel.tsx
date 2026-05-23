@@ -229,37 +229,140 @@ export function RightPanel({ product }: RightPanelProps) {
 
           <Divider />
 
-          {/* metrics section — matches reference 2×2 number grid */}
-          <p style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.16em", textTransform: "uppercase", color: `${accent}99`, marginBottom: 10 }}>
-            נתוני מלאי
+          {/* INVENTORY BREAKDOWN — richer per-product stock view */}
+          <p style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.16em", textTransform: "uppercase", color: `${accent}99`, marginBottom: 8 }}>
+            פירוט מלאי
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 8px" }}>
-            {product.metrics.map((m) => (
-              <div
-                key={m.label}
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 12,
-                  border: `1px solid ${accent}18`,
-                  background: `${accent}0a`,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 4,
-                  alignItems: "flex-end",
-                }}
-              >
-                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.36)" }}>{m.label}</span>
-                <strong style={{
-                  fontSize: 17, color: "#fff", fontWeight: 700,
-                  lineHeight: 1, fontVariantNumeric: "tabular-nums",
-                }}>
-                  {m.value}
-                </strong>
+          {product.inventory ? (
+            <InventoryBreakdown inv={product.inventory} accent={accent} />
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              {product.metrics.map((m) => (
+                <MetricCell key={m.label} label={m.label} value={m.value} accent={accent} />
+              ))}
+            </div>
+          )}
+
+          {/* ACTIVE RESERVATIONS — visible operational data */}
+          {product.inventory?.reservations && product.inventory.reservations.length > 0 && (
+            <>
+              <Divider />
+              <p style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.16em", textTransform: "uppercase", color: `${accent}99`, marginBottom: 8 }}>
+                שמור לעבודות פעילות
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {product.inventory.reservations.slice(0, 3).map((r) => (
+                  <div
+                    key={r.orderId}
+                    style={{
+                      padding: "7px 10px",
+                      borderRadius: 8,
+                      border: `1px solid ${accent}22`,
+                      background: "rgba(255,255,255,0.03)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#fff" }}>{r.site ?? r.orderId}</span>
+                      <span style={{ fontSize: 12, color: accent, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                        {r.qty}
+                        <span style={{ fontSize: 8, marginInlineStart: 3, opacity: 0.6 }}>{product.unit}</span>
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "rgba(255,255,255,0.45)" }}>
+                      <span style={{ fontFamily: "monospace" }}>{r.orderId}</span>
+                      {r.due && <span>הספקה {r.due.slice(5)}</span>}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </GlassPanel>
       </motion.div>
     </AnimatePresence>
   );
+}
+
+/* ── small reusable inventory primitives ─────────────────────────── */
+
+function MetricCell({ label, value, accent }: { label: string; value: string | number; accent: string }) {
+  return (
+    <div
+      style={{
+        padding: "10px 12px",
+        borderRadius: 12,
+        border: `1px solid ${accent}18`,
+        background: `${accent}0a`,
+        display: "flex",
+        flexDirection: "column",
+        gap: 4,
+        alignItems: "flex-end",
+      }}
+    >
+      <span style={{ fontSize: 9, color: "rgba(255,255,255,0.36)" }}>{label}</span>
+      <strong style={{ fontSize: 17, color: "#fff", fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function InventoryBreakdown({
+  inv,
+  accent,
+}: {
+  inv: NonNullable<HoloProduct["inventory"]>;
+  accent: string;
+}) {
+  const lines: { label: string; value: number; color: string; pct: number }[] = [
+    { label: "זמין",      value: inv.available,    color: "#22c55e", pct: pct(inv.available, inv.total) },
+    { label: "שמור לעבודות", value: inv.reserved,  color: accent,    pct: pct(inv.reserved, inv.total) },
+    { label: "בייצור",   value: inv.inProduction, color: "#a855f7", pct: pct(inv.inProduction, inv.total) },
+    { label: "במשלוח",   value: inv.inTransit,    color: "#f59e0b", pct: pct(inv.inTransit, inv.total) },
+  ];
+  const underMin = inv.total < inv.minimum;
+  return (
+    <>
+      {/* total + minimum line */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.45)" }}>
+          סה״כ במלאי · מינ׳ {inv.minimum}
+        </span>
+        <span style={{ fontSize: 22, fontWeight: 700, color: underMin ? "#ef4444" : "#fff", fontVariantNumeric: "tabular-nums" }}>
+          {inv.total}
+        </span>
+      </div>
+      {/* stacked breakdown */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {lines.map((l) => (
+          <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", flex: "0 0 84px" }}>{l.label}</span>
+            <div style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(255,255,255,0.05)", overflow: "hidden", position: "relative" }}>
+              <div style={{ position: "absolute", inset: 0, width: `${l.pct}%`, background: l.color, boxShadow: `0 0 6px ${l.color}80` }} />
+            </div>
+            <span style={{ fontSize: 11, color: "#fff", fontWeight: 700, fontVariantNumeric: "tabular-nums", flex: "0 0 32px", textAlign: "left" }}>
+              {l.value}
+            </span>
+          </div>
+        ))}
+      </div>
+      {/* footer line */}
+      {inv.usagePerMonth !== undefined && (
+        <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", fontSize: 9, color: "rgba(255,255,255,0.42)" }}>
+          <span>קצב חודשי · {inv.usagePerMonth}</span>
+          {inv.nextReorder && (
+            <span>הזמנה הבאה · {inv.nextReorder.qty} · {inv.nextReorder.date.slice(5)}</span>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+function pct(part: number, whole: number): number {
+  if (!whole) return 0;
+  return Math.min(100, Math.round((part / whole) * 100));
 }
