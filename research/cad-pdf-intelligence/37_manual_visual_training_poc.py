@@ -2,32 +2,26 @@
 """
 37_manual_visual_training_poc.py
 ================================
-Engine C v0.2 — Manual Onboarding / Human-Trained Visual Agent (POC)
+Engine C v0.3 — Manual-First Human-Trained Visual Agent (POC)
 
 Strategic pivot (2026-05-23):
-The automatic detection POC (script 36 v0.1.1) was validated and found NOT
-reliable enough as a primary detector. Too many wrong candidates even at
-high confidence. The correct path is **manual teaching first, detection
-second**: the user walks through a 7-step wizard to mark concrete examples
-on the plan, and only then does the agent search for similar items.
+Automatic detection (Engine B / Engine C v0.1–v0.2) is not reliable enough
+as a primary detector. The new direction: manual teaching first, detection
+second. The user walks through a 9-step wizard to mark concrete examples
+on the plan; only then does the agent search for similar items. Narrow
+scope: 3 target outputs only — pole / sign count / sign code or symbol.
 
-Workflow (see PLAN_SCANNER_VISUAL_LEARNING_AGENT_SPEC.md §4.5):
+Wizard (see PLAN_SCANNER_MANUAL_TRAINING_AGENT_SPEC.md §3):
 
-  Step 1: Mark 3–5 pole examples       (user)
-  Step 2: Mark tick mark examples       (user)
-  Step 3: Mark sign code examples       (user)
-  Step 4: Mark code↔pole associations   (user)
-  Step 5: Mark ignore regions           (user)
-  Step 6: Apply learned pattern         (system) ← this POC
-  Step 7: Review candidates             (user)   ← this POC emits a review queue
-
-This script:
-  - Reads a wizard-organized examples file (schema v2.0, grouped by step)
-  - Validates each step's min_examples
-  - Writes wizard_state.json reflecting current progress
-  - Extracts rules per step (only from completed steps)
-  - In Step 6, applies rules to find candidates
-  - In Step 7, emits a review queue with evidence crops
+  step_1_upload_plan              (system) render or load page
+  step_2_teach_pole_appearance    (user)   5–10 pole points
+  step_3_teach_sign_count         (user)   5–10 tick/sign-count examples
+  step_4_teach_sign_code          (user)   5–10 sign code rectangles
+  step_5_teach_sign_symbol        (user)   OPTIONAL — 0+ sign-symbol rects
+  step_6_teach_associations       (user)   at least 1 association
+  step_7_apply_learning           (system) ← this POC runs detection
+  step_8_review_results           (system) ← this POC emits review queue
+  step_9_save_learning            (system) scope choice (UI step, not run here)
 
 Inputs:
   --plan-run-dir       runs/<plan_id>/
@@ -39,11 +33,12 @@ Inputs:
   --min-tick-pole-px   tick must be >= this from a pole (default 3)
   --max-tick-pole-px   tick must be <= this from a pole (default 80)
 
-Outputs (all under run_dir/outputs/manual_visual_training/):
+Outputs — all under run_dir/outputs/manual_training/:
   - wizard_state.json
   - visual_learning_rules.json
-  - visual_agent_candidates_from_training.json
+  - visual_agent_candidates.json   (and ...from_training.json alias for v0.2)
   - visual_review_questions.json
+  - visual_training_examples.example.json   (copy of input for traceability)
   - manual_training_report.md
   - manual_training_report.html
   - evidence_crops/
@@ -105,14 +100,32 @@ def log(msg: str, indent: int = 0) -> None:
 # ====================================================================
 
 WIZARD_STEP_ORDER = [
-    "step_1_pole_marker",
-    "step_2_tick_marks",
-    "step_3_sign_codes",
-    "step_4_associations",
-    "step_5_ignore_regions",
-    "step_6_apply_pattern",
-    "step_7_review",
+    "step_1_upload_plan",                # system: render/load
+    "step_2_teach_pole_appearance",       # user: 5–10 pole points
+    "step_3_teach_sign_count",            # user: 5–10 tick/sign-count examples
+    "step_4_teach_sign_code",             # user: 5–10 sign code examples
+    "step_5_teach_sign_symbol",           # user: OPTIONAL, 0+ sign symbol examples
+    "step_6_teach_associations",          # user: at least 1 association
+    "step_7_apply_learning",              # system: run detection
+    "step_8_review_results",              # system: present review queue
+    "step_9_save_learning",               # system: scope choice (not run here)
 ]
+
+# Steps that the user must complete before detection can run (step 5 optional).
+WIZARD_USER_REQUIRED_STEPS = [
+    "step_2_teach_pole_appearance",
+    "step_3_teach_sign_count",
+    "step_4_teach_sign_code",
+    "step_6_teach_associations",
+]
+
+# Steps that are system actions (not user marking).
+WIZARD_SYSTEM_STEPS = {
+    "step_1_upload_plan",
+    "step_7_apply_learning",
+    "step_8_review_results",
+    "step_9_save_learning",
+}
 
 
 def validate_wizard_state(wizard_data: Dict) -> Tuple[Dict, List[str]]:
@@ -130,7 +143,8 @@ def validate_wizard_state(wizard_data: Dict) -> Tuple[Dict, List[str]]:
 
     for step_id in WIZARD_STEP_ORDER:
         step = steps.get(step_id, {})
-        if step.get("system_step"):
+        # System steps don't have user examples
+        if step.get("system_step") or step_id in WIZARD_SYSTEM_STEPS:
             counts[step_id] = 0
             continue
         n = len(step.get("examples", []))
@@ -139,21 +153,24 @@ def validate_wizard_state(wizard_data: Dict) -> Tuple[Dict, List[str]]:
         if n >= min_n:
             completed.append(step_id)
             last_completed = step_id
-        elif n > 0:
+        elif n > 0 and not step.get("optional"):
             warnings_list.append(
                 f"{step_id}: only {n} examples, below min={min_n} (cannot complete this step yet)"
             )
+        # Optional step (e.g. sign_symbol with min_examples=0) is always "complete"
+        if step.get("optional") and step_id not in completed:
+            completed.append(step_id)
 
-    # Determine current step: first user step not yet completed; if all user
-    # steps complete, current_step = "step_6_apply_pattern"
-    current_step = "step_6_apply_pattern"
-    for step_id in WIZARD_STEP_ORDER[:5]:
+    # Determine current step: first REQUIRED user step not yet completed; if all
+    # required user steps complete, current_step = "step_7_apply_learning"
+    current_step = "step_7_apply_learning"
+    for step_id in WIZARD_USER_REQUIRED_STEPS:
         if step_id not in completed:
             current_step = step_id
             break
 
     ready_for_apply = all(
-        step_id in completed for step_id in WIZARD_STEP_ORDER[:5]
+        step_id in completed for step_id in WIZARD_USER_REQUIRED_STEPS
     )
 
     state = {
@@ -250,61 +267,103 @@ def safe_crop(img, x0, y0, x1, y1):
 def extract_rules_from_wizard(
     wizard_data: Dict, completed_steps: List[str], img_bgr, templates_dir: Path
 ) -> List[Dict]:
+    """
+    v0.3: extract rules from the new wizard step IDs.
+      step_2_teach_pole_appearance → pole_marker_rule
+      step_3_teach_sign_count      → tick_count_rule
+      step_4_teach_sign_code       → sign_code_text_rule
+      step_5_teach_sign_symbol     → sign_symbol_rule (optional)
+      step_6_teach_associations    → pole_to_code_association_rule
+                                    + pole_to_symbol_association_rule
+      supporting_examples.ignore_regions → ignore_region_rule
+      supporting_examples.noise_background → noise_background_rule (drop zone)
+      supporting_examples.wrong_detection → tracked as negative examples
+    """
     import cv2
     templates_dir.mkdir(parents=True, exist_ok=True)
     rules: List[Dict] = []
-    steps = wizard_data["steps"]
+    steps = wizard_data.get("steps", {})
+    supporting = wizard_data.get("supporting_examples", {})
 
-    # Step 1 → pole rule
-    if "step_1_pole_marker" in completed_steps:
-        rule_id = "r_pole_step1"
-        patches = []
-        sizes = []
-        for e in steps["step_1_pole_marker"]["examples"]:
-            g = e["geometry"]
-            if g["type"] != "point":
+    def _crop_patch(cx: int, cy: int, half: int, ex_id: str, rule_id: str) -> Optional[Dict]:
+        patch = safe_crop(img_bgr, cx - half, cy - half, cx + half, cy + half)
+        if patch is None or patch.size == 0:
+            return None
+        patch_path = templates_dir / f"{rule_id}_{ex_id}.png"
+        cv2.imwrite(str(patch_path), patch)
+        return {
+            "training_example_id": ex_id,
+            "patch_path": str(patch_path),
+            "patch_size_px": [patch.shape[1], patch.shape[0]],
+            "center_xy": [cx, cy],
+        }
+
+    def _crop_rect(bb, ex_id: str, rule_id: str) -> Optional[Dict]:
+        x0, y0, x1, y1 = bb
+        patch = safe_crop(img_bgr, x0, y0, x1, y1)
+        if patch is None or patch.size == 0:
+            return None
+        patch_path = templates_dir / f"{rule_id}_{ex_id}.png"
+        cv2.imwrite(str(patch_path), patch)
+        return {
+            "training_example_id": ex_id,
+            "patch_path": str(patch_path),
+            "bbox": [int(x0), int(y0), int(x1), int(y1)],
+            "size_px": [int(x1 - x0), int(y1 - y0)],
+        }
+
+    # Build pole_lookup (used by tick / symbol distance learning)
+    pole_lookup: Dict[str, Tuple[float, float]] = {}
+    pole_step = steps.get("step_2_teach_pole_appearance", {})
+    for pe in pole_step.get("examples", []):
+        g = pe.get("geometry", {})
+        if g.get("type") == "point":
+            pole_lookup[pe["training_example_id"]] = (float(g["x"]), float(g["y"]))
+
+    # --- pole_marker_rule ---
+    if "step_2_teach_pole_appearance" in completed_steps:
+        rule_id = "r_pole_marker"
+        patches: List[Dict] = []
+        sizes: List[int] = []
+        for e in pole_step.get("examples", []):
+            g = e.get("geometry", {})
+            if g.get("type") != "point":
                 continue
             cx, cy = int(g["x"]), int(g["y"])
-            patch_size = int(g.get("radius", 8)) * 2
-            sizes.append(patch_size)
-            patch = safe_crop(img_bgr, cx - patch_size, cy - patch_size, cx + patch_size, cy + patch_size)
-            if patch is None or patch.size == 0:
-                continue
-            patch_path = templates_dir / f"{rule_id}_{e['training_example_id']}.png"
-            cv2.imwrite(str(patch_path), patch)
-            patches.append({
-                "training_example_id": e["training_example_id"],
-                "patch_path": str(patch_path),
-                "patch_size_px": [patch.shape[1], patch.shape[0]],
-                "center_xy": [cx, cy],
-            })
+            half = int(g.get("radius", 8)) * 2
+            sizes.append(half * 2)
+            pm = _crop_patch(cx, cy, half, e["training_example_id"], rule_id)
+            if pm:
+                patches.append(pm)
         if patches:
             rules.append({
                 "rule_id": rule_id,
-                "step_id": "step_1_pole_marker",
+                "step_id": "step_2_teach_pole_appearance",
+                "rule_type": "pole_marker_rule",
                 "label_type": "pole_dot",
+                "source_examples": [p["training_example_id"] for p in patches],
                 "derived_from_examples": [p["training_example_id"] for p in patches],
                 "scope": "current_plan_only",
                 "template_kind": "image_patches",
                 "patches": patches,
-                "avg_size_px": int(sum(sizes) / max(1, len(sizes))) if sizes else 16,
+                "visual_features": {
+                    "template_patch_paths": [p["patch_path"] for p in patches],
+                    "avg_size_px": int(sum(sizes) / max(1, len(sizes))) if sizes else 16,
+                },
                 "min_match_score": 0.65,
+                "created_from_user_training": True,
+                "requires_review": True,
             })
 
-    # Step 2 → tick rule (carries learned tick→pole distance from associations)
-    if "step_2_tick_marks" in completed_steps:
-        rule_id = "r_tick_step2"
-        patches = []
-        lengths = []
-        tick_pole_distances = []
-        # Build pole lookup if step 1 was done
-        pole_lookup = {}
-        if "step_1_pole_marker" in completed_steps:
-            for pe in steps["step_1_pole_marker"]["examples"]:
-                pole_lookup[pe["training_example_id"]] = (pe["geometry"]["x"], pe["geometry"]["y"])
-        for e in steps["step_2_tick_marks"]["examples"]:
-            g = e["geometry"]
-            if g["type"] != "line":
+    # --- tick_count_rule ---
+    if "step_3_teach_sign_count" in completed_steps:
+        rule_id = "r_sign_count_tick"
+        patches: List[Dict] = []
+        lengths: List[int] = []
+        tick_pole_distances: List[float] = []
+        for e in steps["step_3_teach_sign_count"].get("examples", []):
+            g = e.get("geometry", {})
+            if g.get("type") != "line":
                 continue
             x0, y0, x1, y1 = int(g["x0"]), int(g["y0"]), int(g["x1"]), int(g["y1"])
             length = max(1, int(((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5))
@@ -313,26 +372,20 @@ def extract_rules_from_wizard(
             if assoc_pole and assoc_pole in pole_lookup:
                 px, py = pole_lookup[assoc_pole]
                 tcx, tcy = (x0 + x1) / 2, (y0 + y1) / 2
-                d = ((tcx - px) ** 2 + (tcy - py) ** 2) ** 0.5
-                tick_pole_distances.append(d)
+                tick_pole_distances.append(((tcx - px) ** 2 + (tcy - py) ** 2) ** 0.5)
             xmin, xmax = min(x0, x1) - 4, max(x0, x1) + 4
             ymin, ymax = min(y0, y1) - 4, max(y0, y1) + 4
-            patch = safe_crop(img_bgr, xmin, ymin, xmax, ymax)
-            if patch is None or patch.size == 0:
-                continue
-            patch_path = templates_dir / f"{rule_id}_{e['training_example_id']}.png"
-            cv2.imwrite(str(patch_path), patch)
-            patches.append({
-                "training_example_id": e["training_example_id"],
-                "patch_path": str(patch_path),
-                "length_px": length,
-                "bbox": [xmin, ymin, xmax, ymax],
-            })
+            pm = _crop_rect((xmin, ymin, xmax, ymax), e["training_example_id"], rule_id)
+            if pm:
+                pm["length_px"] = length
+                patches.append(pm)
         if patches:
             rules.append({
                 "rule_id": rule_id,
-                "step_id": "step_2_tick_marks",
-                "label_type": "tick_mark",
+                "step_id": "step_3_teach_sign_count",
+                "rule_type": "tick_count_rule",
+                "label_type": "sign_count_tick",
+                "source_examples": [p["training_example_id"] for p in patches],
                 "derived_from_examples": [p["training_example_id"] for p in patches],
                 "scope": "current_plan_only",
                 "template_kind": "image_patches",
@@ -343,89 +396,142 @@ def extract_rules_from_wizard(
                     if tick_pole_distances else None
                 ),
                 "min_match_score": 0.55,
+                "created_from_user_training": True,
+                "requires_review": True,
             })
 
-    # Step 3 → sign code rule
-    if "step_3_sign_codes" in completed_steps:
-        rule_id = "r_code_step3"
-        regions = []
-        known_codes = []
-        for e in steps["step_3_sign_codes"]["examples"]:
-            g = e["geometry"]
-            if g["type"] != "rectangle":
+    # --- sign_code_text_rule ---
+    if "step_4_teach_sign_code" in completed_steps:
+        rule_id = "r_sign_code_text"
+        regions: List[Dict] = []
+        known_codes: List[str] = []
+        for e in steps["step_4_teach_sign_code"].get("examples", []):
+            g = e.get("geometry", {})
+            if g.get("type") != "rectangle":
                 continue
-            x0, y0, x1, y1 = int(g["x0"]), int(g["y0"]), int(g["x1"]), int(g["y1"])
-            patch = safe_crop(img_bgr, x0, y0, x1, y1)
-            if patch is None or patch.size == 0:
-                continue
-            patch_path = templates_dir / f"{rule_id}_{e['training_example_id']}.png"
-            cv2.imwrite(str(patch_path), patch)
-            regions.append({
-                "training_example_id": e["training_example_id"],
-                "patch_path": str(patch_path),
-                "bbox": [x0, y0, x1, y1],
-                "size_px": [x1 - x0, y1 - y0],
-                "label_value": e.get("label_value", ""),
-            })
-            if e.get("label_value"):
-                known_codes.append(e["label_value"])
+            pm = _crop_rect((g["x0"], g["y0"], g["x1"], g["y1"]),
+                            e["training_example_id"], rule_id)
+            if pm:
+                pm["label_value"] = e.get("label_value", "")
+                regions.append(pm)
+                if e.get("label_value"):
+                    known_codes.append(e["label_value"])
         if regions:
             rules.append({
                 "rule_id": rule_id,
-                "step_id": "step_3_sign_codes",
+                "step_id": "step_4_teach_sign_code",
+                "rule_type": "sign_code_text_rule",
                 "label_type": "sign_code_text",
+                "source_examples": [r["training_example_id"] for r in regions],
                 "derived_from_examples": [r["training_example_id"] for r in regions],
                 "scope": "current_plan_only",
                 "template_kind": "text_regions",
                 "regions": regions,
                 "known_codes": known_codes,
                 "min_match_score": 0.50,
+                "created_from_user_training": True,
+                "requires_review": True,
             })
 
-    # Step 4 → code↔pole association rule
-    if "step_4_associations" in completed_steps:
-        rule_id = "r_assoc_step4"
-        distances = []
-        angles = []
-        for e in steps["step_4_associations"]["examples"]:
-            g = e["geometry"]
-            if g["type"] != "association":
-                continue
-            f = g["from"]
-            t = g["to"]
-            fx, fy = float(f["x"]), float(f["y"])
-            tx, ty = float(t["x"]), float(t["y"])
-            d = ((fx - tx) ** 2 + (fy - ty) ** 2) ** 0.5
-            distances.append(d)
-            angles.append(math.degrees(math.atan2(ty - fy, tx - fx)))
-        if distances:
-            avg_d = sum(distances) / len(distances)
-            avg_a = sum(angles) / len(angles)
-            rules.append({
-                "rule_id": rule_id,
-                "step_id": "step_4_associations",
-                "label_type": "code_to_pole_association",
-                "derived_from_examples": [
-                    e["training_example_id"] for e in steps["step_4_associations"]["examples"]
-                ],
-                "scope": "current_plan_only",
-                "template_kind": "association",
-                "association_rule": {
-                    "from_label": "sign_code_text",
-                    "to_label": "pole_dot",
-                    "max_distance_px": int(avg_d * 1.8),
-                    "preferred_direction_deg": round(avg_a, 1),
-                    "direction_tolerance_deg": 60,
-                },
-            })
+    # --- sign_symbol_rule (optional) ---
+    if "step_5_teach_sign_symbol" in completed_steps:
+        symbol_examples = steps.get("step_5_teach_sign_symbol", {}).get("examples", [])
+        if symbol_examples:
+            rule_id = "r_sign_symbol"
+            regions: List[Dict] = []
+            symbol_pole_distances: List[float] = []
+            for e in symbol_examples:
+                g = e.get("geometry", {})
+                if g.get("type") != "rectangle":
+                    continue
+                pm = _crop_rect((g["x0"], g["y0"], g["x1"], g["y1"]),
+                                e["training_example_id"], rule_id)
+                if pm:
+                    pm["label_value"] = e.get("label_value", "")
+                    regions.append(pm)
+                    assoc_pole = e.get("associated_pole_id")
+                    if assoc_pole and assoc_pole in pole_lookup:
+                        px, py = pole_lookup[assoc_pole]
+                        scx = (g["x0"] + g["x1"]) / 2
+                        scy = (g["y0"] + g["y1"]) / 2
+                        symbol_pole_distances.append(((scx - px) ** 2 + (scy - py) ** 2) ** 0.5)
+            if regions:
+                rules.append({
+                    "rule_id": rule_id,
+                    "step_id": "step_5_teach_sign_symbol",
+                    "rule_type": "sign_symbol_rule",
+                    "label_type": "sign_symbol",
+                    "source_examples": [r["training_example_id"] for r in regions],
+                    "derived_from_examples": [r["training_example_id"] for r in regions],
+                    "scope": "current_plan_only",
+                    "template_kind": "image_patches",
+                    "regions": regions,
+                    "learned_symbol_to_pole_distance_px": (
+                        int(sum(symbol_pole_distances) / len(symbol_pole_distances))
+                        if symbol_pole_distances else None
+                    ),
+                    "min_match_score": 0.55,
+                    "created_from_user_training": True,
+                    "requires_review": True,
+                })
 
-    # Step 5 → ignore regions
-    if "step_5_ignore_regions" in completed_steps:
-        rule_id = "r_ignore_step5"
-        rects = []
-        for e in steps["step_5_ignore_regions"]["examples"]:
-            g = e["geometry"]
-            if g["type"] != "rectangle":
+    # --- pole_to_code_association_rule + pole_to_symbol_association_rule ---
+    if "step_6_teach_associations" in completed_steps:
+        assoc_examples = steps["step_6_teach_associations"].get("examples", [])
+        # Group by label_type per association
+        for assoc_kind, output_rule_type, from_label, to_label in [
+            ("pole_to_code_association", "pole_to_code_association_rule",
+             "sign_code_text", "pole_dot"),
+            ("pole_to_symbol_association", "pole_to_symbol_association_rule",
+             "sign_symbol", "pole_dot"),
+        ]:
+            distances: List[float] = []
+            angles: List[float] = []
+            source_ids: List[str] = []
+            for e in assoc_examples:
+                if e.get("label_type") != assoc_kind:
+                    continue
+                g = e.get("geometry", {})
+                if g.get("type") != "association":
+                    continue
+                f = g["from"]; t = g["to"]
+                fx, fy = float(f["x"]), float(f["y"])
+                tx, ty = float(t["x"]), float(t["y"])
+                d = ((fx - tx) ** 2 + (fy - ty) ** 2) ** 0.5
+                distances.append(d)
+                angles.append(math.degrees(math.atan2(ty - fy, tx - fx)))
+                source_ids.append(e["training_example_id"])
+            if distances:
+                avg_d = sum(distances) / len(distances)
+                avg_a = sum(angles) / len(angles)
+                rules.append({
+                    "rule_id": f"r_{assoc_kind}",
+                    "step_id": "step_6_teach_associations",
+                    "rule_type": output_rule_type,
+                    "label_type": assoc_kind,
+                    "source_examples": source_ids,
+                    "derived_from_examples": source_ids,
+                    "scope": "current_plan_only",
+                    "template_kind": "association",
+                    "association_rule": {
+                        "from_label": from_label,
+                        "to_label": to_label,
+                        "max_distance_px": max(20, int(avg_d * 1.8)),
+                        "preferred_direction_deg": round(avg_a, 1),
+                        "direction_tolerance_deg": 60,
+                    },
+                    "created_from_user_training": True,
+                    "requires_review": True,
+                })
+
+    # --- ignore_region_rule (from supporting_examples.ignore_regions) ---
+    ignore_examples = supporting.get("ignore_regions", [])
+    if ignore_examples:
+        rule_id = "r_ignore_region"
+        rects: List[Dict] = []
+        for e in ignore_examples:
+            g = e.get("geometry", {})
+            if g.get("type") != "rectangle":
                 continue
             rects.append({
                 "training_example_id": e["training_example_id"],
@@ -435,12 +541,44 @@ def extract_rules_from_wizard(
         if rects:
             rules.append({
                 "rule_id": rule_id,
-                "step_id": "step_5_ignore_regions",
+                "step_id": "supporting",
+                "rule_type": "ignore_region_rule",
                 "label_type": "ignore_region",
+                "source_examples": [r["training_example_id"] for r in rects],
                 "derived_from_examples": [r["training_example_id"] for r in rects],
                 "scope": "current_plan_only",
                 "template_kind": "polygons",
                 "rectangles": rects,
+                "created_from_user_training": True,
+                "requires_review": False,
+            })
+
+    # --- noise_background_rule (from supporting_examples.noise_background) ---
+    noise_examples = supporting.get("noise_background", [])
+    if noise_examples:
+        rule_id = "r_noise_background"
+        rects: List[Dict] = []
+        for e in noise_examples:
+            g = e.get("geometry", {})
+            if g.get("type") != "rectangle":
+                continue
+            rects.append({
+                "training_example_id": e["training_example_id"],
+                "bbox": [int(g["x0"]), int(g["y0"]), int(g["x1"]), int(g["y1"])],
+            })
+        if rects:
+            rules.append({
+                "rule_id": rule_id,
+                "step_id": "supporting",
+                "rule_type": "noise_background_rule",
+                "label_type": "noise_background",
+                "source_examples": [r["training_example_id"] for r in rects],
+                "derived_from_examples": [r["training_example_id"] for r in rects],
+                "scope": "current_plan_only",
+                "template_kind": "polygons",
+                "rectangles": rects,
+                "created_from_user_training": True,
+                "requires_review": False,
             })
 
     return rules
@@ -590,10 +728,16 @@ QUESTION_TEXTS = {
         "question_type": "is_pole",
         "allowed_answers": ["yes_pole", "no_noise", "no_dimension_mark", "other"],
     },
-    "tick_candidate": {
+    "tick_candidate": {  # legacy alias for sign_count_tick
         "he": "האם הקו הקטן הזה מסמן תמרור נוסף על אותו עמוד?",
         "en": "Does this short line mark an additional sign on the same pole?",
         "question_type": "is_tick_mark",
+        "allowed_answers": ["yes_tick", "no_unrelated_line", "other"],
+    },
+    "sign_count_tick_candidate": {
+        "he": "האם הקו הקטן הזה מסמן תמרור נוסף על אותו עמוד?",
+        "en": "Does this short line mark an additional sign on the same pole?",
+        "question_type": "is_sign_count_tick",
         "allowed_answers": ["yes_tick", "no_unrelated_line", "other"],
     },
     "sign_code_candidate": {
@@ -601,6 +745,24 @@ QUESTION_TEXTS = {
         "en": "Does this number belong to the pole/sign?",
         "question_type": "is_sign_code",
         "allowed_answers": ["yes_sign_code", "no_unrelated_number", "no_dimension", "other"],
+    },
+    "sign_symbol_candidate": {
+        "he": "האם זה סימון גרפי של תמרור?",
+        "en": "Is this the graphic symbol of a sign?",
+        "question_type": "is_sign_symbol",
+        "allowed_answers": ["yes_sign_symbol", "no_unrelated_shape", "no_callout", "other"],
+    },
+    "assembly_candidate": {
+        "he": "האם השיוך הזה בין עמוד/מספר/תמרור נכון?",
+        "en": "Is this pole/code/sign assembly correct?",
+        "question_type": "is_assembly",
+        "allowed_answers": ["yes_correct", "no_wrong_pole", "no_wrong_code", "no_wrong_symbol", "other"],
+    },
+    "noise_candidate": {
+        "he": "האם זה רעש/רקע שיש להתעלם ממנו?",
+        "en": "Is this background noise that should be ignored?",
+        "question_type": "is_noise",
+        "allowed_answers": ["yes_noise", "no_real_detection", "other"],
     },
 }
 
@@ -678,7 +840,7 @@ def write_md_report(out_path: Path, wizard_state: Dict, rules: List[Dict],
     for sid in WIZARD_STEP_ORDER:
         n = wizard_state.get("steps_per_count", {}).get(sid, 0)
         done = "✓ complete" if sid in wizard_state.get("steps_completed", []) else "pending"
-        if sid in ("step_6_apply_pattern", "step_7_review"):
+        if sid in ("step_1_upload_plan", "step_7_apply_learning", "step_8_review_results", "step_9_save_learning"):
             done = "system step"
         md.append(f"| {sid} | {n} | {done} |")
 
@@ -760,7 +922,7 @@ def write_html_report(out_path: Path, wizard_state: Dict, rules: List[Dict],
         n = wizard_state.get("steps_per_count", {}).get(sid, 0)
         cls = "done" if sid in wizard_state.get("steps_completed", []) else "pending"
         status = "✓ complete" if cls == "done" else "pending"
-        if sid in ("step_6_apply_pattern", "step_7_review"):
+        if sid in ("step_1_upload_plan", "step_7_apply_learning", "step_8_review_results", "step_9_save_learning"):
             cls = "sys"; status = "system step"
         html.append(f"<tr><td>{sid}</td><td>{n}</td><td class='{cls}'>{status}</td></tr>")
     html.append("</table>")
@@ -814,7 +976,7 @@ def main() -> int:
         log(f"ERROR: Wizard examples file not found: {examples_path}")
         return 1
 
-    out_root = run_dir / "outputs" / "manual_visual_training"
+    out_root = run_dir / "outputs" / "manual_training"
     templates_dir = out_root / "templates"
     evidence_dir = out_root / "evidence_crops"
     debug_dir = run_dir / "outputs" / "image_scan_debug"
@@ -929,31 +1091,36 @@ def main() -> int:
                 "confidence": round(m["match_score"], 3),
                 "learned_from_examples": pole_rule["derived_from_examples"],
                 "matched_rule_ids": [pole_rule["rule_id"]],
-                "step_origin": "step_1_pole_marker",
+                "step_origin": "step_2_teach_pole_appearance",
                 "associated_candidates": [],
                 "audit_notes": [],
             }
             candidates.append(cand)
             pole_cands.append(cand)
 
-    # Apply tick rule with pole-distance filter
-    tick_rule = next((r for r in rules if r["label_type"] == "tick_mark"), None)
+    # Apply sign-count tick rule with pole-distance filter
+    # (v0.3: label_type renamed from tick_mark → sign_count_tick; we still
+    #  accept the legacy name for backward compat.)
+    tick_rule = next(
+        (r for r in rules if r["label_type"] in ("sign_count_tick", "tick_mark")),
+        None,
+    )
     if tick_rule:
         matches, ms = template_matches(img_bgr, tick_rule, ignore_rects,
                                        args.match_threshold * 0.85, args.max_candidates_per_rule)
         # Wrap as candidates for filter
         tick_cands_pre = [{
             "candidate_id": new_id(),
-            "candidate_type": "tick_candidate",
+            "candidate_type": "sign_count_tick_candidate",
             "page_number": args.page,
             "bbox": m["bbox"],
             "centroid": m["centroid"],
             "geometry": {"type": "line_region", "bbox": m["bbox"]},
-            "system_guess": "tick",
+            "system_guess": "sign_count_tick",
             "confidence": round(m["match_score"], 3),
             "learned_from_examples": tick_rule["derived_from_examples"],
             "matched_rule_ids": [tick_rule["rule_id"]],
-            "step_origin": "step_2_tick_marks",
+            "step_origin": "step_3_teach_sign_count",
             "associated_candidates": [],
             "audit_notes": [],
         } for m in matches]
@@ -996,17 +1163,61 @@ def main() -> int:
                 "confidence": round(m["match_score"], 3),
                 "learned_from_examples": code_rule["derived_from_examples"],
                 "matched_rule_ids": [code_rule["rule_id"]],
-                "step_origin": "step_3_sign_codes",
+                "step_origin": "step_4_teach_sign_code",
                 "associated_candidates": [],
                 "audit_notes": [],
             }
             candidates.append(cand)
             code_cands.append(cand)
 
-    # Apply associations
-    assoc_rule = next((r for r in rules if r["label_type"] == "code_to_pole_association"), None)
-    n_links = associate_codes_to_poles(pole_cands, code_cands, assoc_rule)
-    log(f"  Associations: {n_links} code↔pole pairs", indent=1)
+    # Apply sign_symbol rule (optional — only if step 5 had examples)
+    symbol_cands: List[Dict] = []
+    symbol_rule = next((r for r in rules if r["label_type"] == "sign_symbol"), None)
+    if symbol_rule:
+        synth = dict(symbol_rule)
+        synth["patches"] = [
+            {
+                "training_example_id": r["training_example_id"],
+                "patch_path": r["patch_path"],
+                "patch_size_px": r["size_px"],
+            }
+            for r in symbol_rule.get("regions", [])
+        ]
+        matches, ms = template_matches(img_bgr, synth, ignore_rects,
+                                       args.match_threshold * 0.85, args.max_candidates_per_rule)
+        log(f"  Symbol rule: {len(matches)} matches ({ms:.0f}ms)", indent=1)
+        for m in matches:
+            cand = {
+                "candidate_id": new_id(),
+                "candidate_type": "sign_symbol_candidate",
+                "page_number": args.page,
+                "bbox": m["bbox"],
+                "centroid": m["centroid"],
+                "geometry": {"type": "rectangle", "bbox": m["bbox"]},
+                "system_guess": "sign_symbol",
+                "confidence": round(m["match_score"], 3),
+                "learned_from_examples": symbol_rule["derived_from_examples"],
+                "matched_rule_ids": [symbol_rule["rule_id"]],
+                "step_origin": "step_5_teach_sign_symbol",
+                "associated_candidates": [],
+                "audit_notes": [],
+            }
+            candidates.append(cand)
+            symbol_cands.append(cand)
+
+    # Apply associations — both code→pole and symbol→pole
+    assoc_code_rule = next(
+        (r for r in rules if r["label_type"] == "pole_to_code_association"), None
+    )
+    n_links_code = associate_codes_to_poles(pole_cands, code_cands, assoc_code_rule)
+    log(f"  Associations (code↔pole): {n_links_code}", indent=1)
+
+    assoc_symbol_rule = next(
+        (r for r in rules if r["label_type"] == "pole_to_symbol_association"), None
+    )
+    n_links_symbol = associate_codes_to_poles(pole_cands, symbol_cands, assoc_symbol_rule)
+    log(f"  Associations (symbol↔pole): {n_links_symbol}", indent=1)
+    n_links = n_links_code + n_links_symbol
 
     # Evidence + review questions
     log(f"\nStep 7 (system): Generating evidence crops and review queue ...")
@@ -1029,20 +1240,34 @@ def main() -> int:
     log(f"  Review questions: {len(review_questions)}")
 
     # Write outputs
-    cand_out = out_root / "visual_agent_candidates_from_training.json"
+    # Canonical name (per Manual Training Agent spec); a legacy v0.2 alias is
+    # also written so older consumers don't break.
+    cand_payload = {
+        "schema_version": "1.0",
+        "validation_status": "Algorithmic POC output — NOT human validated.",
+        "engine": "engine_c_v0.3_manual_first",
+        "plan_id": wizard_state.get("plan_id"),
+        "page_number": args.page,
+        "image_path": page_img_path,
+        "image_size_px": [w, h],
+        "image_dpi": args.dpi,
+        "wizard_origin": True,
+        "candidates": candidates,
+    }
+    cand_out = out_root / "visual_agent_candidates.json"
     with open(cand_out, "w", encoding="utf-8") as fh:
-        json.dump({
-            "schema_version": "1.0",
-            "validation_status": "Algorithmic POC output — NOT human validated.",
-            "plan_id": wizard_state.get("plan_id"),
-            "page_number": args.page,
-            "image_path": page_img_path,
-            "image_size_px": [w, h],
-            "image_dpi": args.dpi,
-            "wizard_origin": True,
-            "candidates": candidates,
-        }, fh, indent=2)
+        json.dump(cand_payload, fh, indent=2)
     log(f"  Saved {cand_out.name}")
+    # Legacy v0.2 alias
+    legacy_cand_out = out_root / "visual_agent_candidates_from_training.json"
+    with open(legacy_cand_out, "w", encoding="utf-8") as fh:
+        json.dump(cand_payload, fh, indent=2)
+
+    # Copy the input training examples into the run for traceability
+    example_copy_path = out_root / "visual_training_examples.example.json"
+    with open(example_copy_path, "w", encoding="utf-8") as fh:
+        json.dump(wizard_data, fh, indent=2, ensure_ascii=False)
+    log(f"  Saved {example_copy_path.name} (input copy for traceability)")
 
     q_out = out_root / "visual_review_questions.json"
     with open(q_out, "w", encoding="utf-8") as fh:
@@ -1083,14 +1308,15 @@ def main() -> int:
     log("  Detection corrections improve future scans but do NOT auto-approve BOQ.")
     log("")
     log("  Output files:")
-    log(f"    outputs/manual_visual_training/wizard_state.json")
-    log(f"    outputs/manual_visual_training/visual_learning_rules.json")
-    log(f"    outputs/manual_visual_training/visual_agent_candidates_from_training.json")
-    log(f"    outputs/manual_visual_training/visual_review_questions.json")
-    log(f"    outputs/manual_visual_training/manual_training_report.md")
-    log(f"    outputs/manual_visual_training/manual_training_report.html")
-    log(f"    outputs/manual_visual_training/evidence_crops/  ({len(candidates)} crops)")
-    log(f"    outputs/manual_visual_training/templates/")
+    log(f"    outputs/manual_training/wizard_state.json")
+    log(f"    outputs/manual_training/visual_learning_rules.json")
+    log(f"    outputs/manual_training/visual_agent_candidates.json (+ legacy alias visual_agent_candidates_from_training.json)")
+    log(f"    outputs/manual_training/visual_training_examples.example.json (copy of input for traceability)")
+    log(f"    outputs/manual_training/visual_review_questions.json")
+    log(f"    outputs/manual_training/manual_training_report.md")
+    log(f"    outputs/manual_training/manual_training_report.html")
+    log(f"    outputs/manual_training/evidence_crops/  ({len(candidates)} crops)")
+    log(f"    outputs/manual_training/templates/")
     return 0
 
 

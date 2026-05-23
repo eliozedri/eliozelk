@@ -5,15 +5,17 @@
 **Predecessors:** Engine A (vector/CAD-PDF, scripts 01–34), Engine B (image-based, script 35)
 **This document is the canonical reference for Engine C.**
 
-> ## ⚠ Strategic Pivot — 2026-05-23
+> ## ⚠ Strategic Pivot — 2026-05-23 (and narrowed scope in v0.3)
 >
-> The fully-automatic detection POC (`36_visual_learning_agent_poc.py` v0.1.1, commit `fc99f5a`) was **validated and found not reliable enough** to serve as the primary detection path. On the test plan, the top 20 pole candidates produced too many uncertain or wrong items even at confidence ≥ 0.85. Template matching on a single training point is not sufficient to bootstrap detection on a new plan style.
+> **Step 1 (v0.2 pivot):** The fully-automatic detection POC (`36_visual_learning_agent_poc.py` v0.1.1, commit `fc99f5a`) was validated and found not reliable enough. New direction: a guided wizard where the user marks examples first, the agent learns rules, then detection runs.
 >
-> **New primary direction: Manual Onboarding / Human-Trained Visual Agent (Engine C v0.2).** Instead of expecting the agent to read the plan on its own, the user is walked through a guided **7-step wizard** to manually mark examples. The agent extracts rules from those markings, finds similar items, and asks the user to confirm/correct. CAPTCHA-style.
+> **Step 2 (v0.3 scope narrowing — current canonical doc): [`PLAN_SCANNER_MANUAL_TRAINING_AGENT_SPEC.md`](PLAN_SCANNER_MANUAL_TRAINING_AGENT_SPEC.md)**
 >
-> See new **Section 4.5 — Manual Onboarding / Human-Trained Visual Agent** for the canonical workflow. The fully-automatic POC (v0.1.1) remains in the repo but is **not the primary path** and its accuracy claims are explicitly downgraded.
+> Engine C v0.3 narrows the scope further: **only three target outputs** — (1) pole, (2) number of signs on the pole, (3) which sign (code or symbol). Each teaching step now expects **5–10 examples** (was 3 in v0.2). A new optional `step_5_teach_sign_symbol` was added. Output directory renamed to `outputs/manual_training/`. The canonical doc for the manual-first direction is now `PLAN_SCANNER_MANUAL_TRAINING_AGENT_SPEC.md`.
 >
-> POC for the manual workflow: `37_manual_visual_training_poc.py`
+> Section 4.5 below documents the v0.2 7-step wizard; v0.3 expands it to 9 steps with the new naming. See the manual-training spec for the current authoritative list.
+>
+> POC for the manual workflow: `37_manual_visual_training_poc.py` (now v0.3).
 
 > **Core principle:** Engine C is a *human-trained visual agent*, not an automated detector. The user teaches the agent by marking examples on the plan image. The agent learns rules from those markings and applies them to find similar elements. When uncertain, it asks the user a focused question. This is the foundational direction documented in [PLAN_SCANNER_IMAGE_BASED_ENGINE_SPEC.md §9](PLAN_SCANNER_IMAGE_BASED_ENGINE_SPEC.md) — Engine C is the production-track implementation of that principle.
 

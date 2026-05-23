@@ -353,7 +353,9 @@ spatial association → evidence crops → output generation → timing summary
 
 > **Production track (updated 2026-05-23):** This principle is implemented as **Engine C — Visual Learning Agent**, documented in [`PLAN_SCANNER_VISUAL_LEARNING_AGENT_SPEC.md`](PLAN_SCANNER_VISUAL_LEARNING_AGENT_SPEC.md). Engine C is the operational realization of everything in this section. Engine B (this script) provides the *image rendering and detection primitives* that Engine C builds upon.
 >
-> **Strategic pivot:** Engine C v0.1.1 (automatic detection via `36_visual_learning_agent_poc.py`) was validated and found insufficient as a primary detector. The current primary path is the **Manual Onboarding Wizard** (Engine C v0.2, `37_manual_visual_training_poc.py`) — the user teaches the system step-by-step before detection runs. See Engine C spec §4.5 for the canonical workflow.
+> **Strategic pivot:** Engine C v0.1.1 (automatic detection via `36_visual_learning_agent_poc.py`) was validated and found insufficient as a primary detector. The current primary path is the **Manual-First Human-Trained Visual Agent** (Engine C v0.3) — narrowed to 3 target outputs (pole / sign count / sign code-or-symbol), 5–10 examples per teaching step, optional sign_symbol step added.
+>
+> **Canonical reference (2026-05-23):** [`PLAN_SCANNER_MANUAL_TRAINING_AGENT_SPEC.md`](PLAN_SCANNER_MANUAL_TRAINING_AGENT_SPEC.md). POC: `37_manual_visual_training_poc.py` v0.3.
 
 ### 9.1 Why this principle exists
 

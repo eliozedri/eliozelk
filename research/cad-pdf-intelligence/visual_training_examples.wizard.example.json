@@ -1,113 +1,161 @@
 {
-  "schema_version": "2.0",
-  "wizard_version": "1.0",
+  "schema_version": "3.0",
+  "engine": "engine_c_v0.3_manual_first",
+  "wizard_version": "2.0",
   "plan_id": "poc_plan_50_448_02_400_20260520_223259",
   "page_number": 0,
   "image_dpi": 150,
   "image_source": "rendered_from_pdf",
   "pdf_filename": "50-448-02-400.pdf",
   "author": "sample_for_poc",
-  "purpose": "Sample wizard-organized training examples for Engine C v0.2 (Manual Onboarding Wizard). Examples are grouped by wizard step. The POC consumes this file. Real-world examples will be produced by the future marking UI.",
+  "purpose": "Sample wizard-organized training examples for Engine C v0.3 (Manual-First). Examples organized by wizard step with new label_types. Pole/tick/code now show 5 examples each per v0.3 spec. Sign symbol is optional. Coordinates point to real pole locations from Engine B output so the POC's template matching has something to find. Real-world examples will be produced by the future marking UI.",
   "wizard_state": {
-    "current_step": "complete",
+    "current_step": "step_7_apply_learning",
     "steps_completed": [
-      "step_1_pole_marker",
-      "step_2_tick_marks",
-      "step_3_sign_codes",
-      "step_4_associations",
-      "step_5_ignore_regions"
+      "step_1_upload_plan",
+      "step_2_teach_pole_appearance",
+      "step_3_teach_sign_count",
+      "step_4_teach_sign_code",
+      "step_5_teach_sign_symbol",
+      "step_6_teach_associations"
     ],
     "ready_for_apply": true
   },
   "steps": {
-    "step_1_pole_marker": {
+    "step_1_upload_plan": {
       "order": 1,
+      "system_step": true,
+      "system_action": "render_or_load",
+      "prompt_he": "העלה תוכנית (PDF או תמונה) לסריקה.",
+      "prompt_en": "Upload a plan (PDF or image) to scan."
+    },
+    "step_2_teach_pole_appearance": {
+      "order": 2,
       "label_type": "pole_dot",
       "geometry_type": "point",
-      "min_examples": 3,
-      "max_examples": 8,
-      "prompt_he": "סמן 3–5 דוגמאות של עמודי תמרור בתוכנית.",
-      "prompt_en": "Mark 3–5 examples of sign poles in the plan.",
+      "min_examples": 5,
+      "max_examples": 10,
+      "prompt_he": "סמן 5–10 דוגמאות של עמודי תמרור בתוכנית.",
+      "prompt_en": "Mark 5–10 examples of sign poles in the plan.",
       "user_action": "click_on_pole_point",
       "examples": [
         {
           "training_example_id": "te_pole_001",
           "geometry": {"type": "point", "x": 2952, "y": 1330, "radius": 8},
-          "user_notes": "First pole — clear dot in center map body",
+          "user_notes": "Pole #1 — center map body",
           "confidence_source": "human_labeled",
           "scope": "current_plan_only",
-          "created_at": "2026-05-23T00:00:00",
+          "created_at": "2026-05-23T05:00:00",
           "audit_notes": ""
         },
         {
           "training_example_id": "te_pole_002",
           "geometry": {"type": "point", "x": 3674, "y": 1266, "radius": 8},
-          "user_notes": "Second pole — same visual style",
+          "user_notes": "Pole #2 — same visual style",
           "confidence_source": "human_labeled",
           "scope": "current_plan_only",
-          "created_at": "2026-05-23T00:00:08",
+          "created_at": "2026-05-23T05:00:08",
           "audit_notes": ""
         },
         {
           "training_example_id": "te_pole_003",
           "geometry": {"type": "point", "x": 2684, "y": 1265, "radius": 8},
-          "user_notes": "Third pole — reinforces template",
+          "user_notes": "Pole #3 — reinforces template",
           "confidence_source": "human_labeled",
           "scope": "current_plan_only",
-          "created_at": "2026-05-23T00:00:15",
+          "created_at": "2026-05-23T05:00:15",
           "audit_notes": ""
         },
         {
           "training_example_id": "te_pole_004",
           "geometry": {"type": "point", "x": 2986, "y": 1128, "radius": 8},
-          "user_notes": "Fourth pole — different region of the map",
+          "user_notes": "Pole #4 — different region of the map",
           "confidence_source": "human_labeled",
           "scope": "current_plan_only",
-          "created_at": "2026-05-23T00:00:22",
+          "created_at": "2026-05-23T05:00:22",
+          "audit_notes": ""
+        },
+        {
+          "training_example_id": "te_pole_005",
+          "geometry": {"type": "point", "x": 3585, "y": 1045, "radius": 8},
+          "user_notes": "Pole #5 — meets v0.3 minimum of 5 examples",
+          "confidence_source": "human_labeled",
+          "scope": "current_plan_only",
+          "created_at": "2026-05-23T05:00:30",
           "audit_notes": ""
         }
       ]
     },
-    "step_2_tick_marks": {
-      "order": 2,
-      "label_type": "tick_mark",
+    "step_3_teach_sign_count": {
+      "order": 3,
+      "label_type": "sign_count_tick",
       "geometry_type": "line",
-      "min_examples": 2,
-      "max_examples": 6,
-      "prompt_he": "סמן דוגמאות של קווים קטנים ליד עמוד שמייצגים תמרורים על אותו עמוד.",
-      "prompt_en": "Mark examples of short lines near a pole that represent signs on that pole.",
-      "user_action": "draw_short_line",
+      "min_examples": 5,
+      "max_examples": 10,
+      "prompt_he": "סמן 5–10 דוגמאות שמראות איך התוכנית מציינת כמה תמרורים נמצאים על עמוד.",
+      "prompt_en": "Mark 5–10 examples of how the plan indicates how many signs are on a pole.",
+      "user_action": "draw_short_line_near_pole",
       "examples": [
         {
           "training_example_id": "te_tick_001",
           "geometry": {"type": "line", "x0": 2960, "y0": 1322, "x1": 2970, "y1": 1322},
           "associated_pole_id": "te_pole_001",
-          "user_notes": "Single tick mark on pole 001 — one sign mounted",
+          "user_notes": "Single tick on pole 001 — one sign mounted",
           "confidence_source": "human_labeled",
           "scope": "current_plan_only",
-          "created_at": "2026-05-23T00:00:30",
+          "created_at": "2026-05-23T05:00:45",
           "audit_notes": ""
         },
         {
           "training_example_id": "te_tick_002",
           "geometry": {"type": "line", "x0": 3684, "y0": 1258, "x1": 3694, "y1": 1258},
           "associated_pole_id": "te_pole_002",
-          "user_notes": "Tick on pole 002 — same length, same orientation",
+          "user_notes": "Tick on pole 002 — same length/orientation",
           "confidence_source": "human_labeled",
           "scope": "current_plan_only",
-          "created_at": "2026-05-23T00:00:37",
+          "created_at": "2026-05-23T05:00:52",
+          "audit_notes": ""
+        },
+        {
+          "training_example_id": "te_tick_003",
+          "geometry": {"type": "line", "x0": 2692, "y0": 1257, "x1": 2702, "y1": 1257},
+          "associated_pole_id": "te_pole_003",
+          "user_notes": "Tick on pole 003",
+          "confidence_source": "human_labeled",
+          "scope": "current_plan_only",
+          "created_at": "2026-05-23T05:00:59",
+          "audit_notes": ""
+        },
+        {
+          "training_example_id": "te_tick_004",
+          "geometry": {"type": "line", "x0": 2994, "y0": 1120, "x1": 3004, "y1": 1120},
+          "associated_pole_id": "te_pole_004",
+          "user_notes": "Tick on pole 004",
+          "confidence_source": "human_labeled",
+          "scope": "current_plan_only",
+          "created_at": "2026-05-23T05:01:06",
+          "audit_notes": ""
+        },
+        {
+          "training_example_id": "te_tick_005",
+          "geometry": {"type": "line", "x0": 3593, "y0": 1037, "x1": 3603, "y1": 1037},
+          "associated_pole_id": "te_pole_005",
+          "user_notes": "Tick on pole 005 — meets v0.3 minimum",
+          "confidence_source": "human_labeled",
+          "scope": "current_plan_only",
+          "created_at": "2026-05-23T05:01:13",
           "audit_notes": ""
         }
       ]
     },
-    "step_3_sign_codes": {
-      "order": 3,
+    "step_4_teach_sign_code": {
+      "order": 4,
       "label_type": "sign_code_text",
       "geometry_type": "rectangle",
-      "min_examples": 2,
-      "max_examples": 8,
-      "prompt_he": "סמן מספרי תמרורים שמופיעים ליד עמודים.",
-      "prompt_en": "Mark sign code numbers that appear near poles.",
+      "min_examples": 5,
+      "max_examples": 10,
+      "prompt_he": "סמן 5–10 דוגמאות של מספרי תמרורים ליד עמודים.",
+      "prompt_en": "Mark 5–10 examples of sign code numbers near poles.",
       "user_action": "draw_box_around_number",
       "examples": [
         {
@@ -115,10 +163,10 @@
           "geometry": {"type": "rectangle", "x0": 2980, "y0": 1290, "x1": 3020, "y1": 1310},
           "associated_pole_id": "te_pole_001",
           "label_value": "402",
-          "user_notes": "Sign code '402' near pole 001",
+          "user_notes": "Code 402 near pole 001",
           "confidence_source": "human_labeled",
           "scope": "current_plan_only",
-          "created_at": "2026-05-23T00:00:45",
+          "created_at": "2026-05-23T05:01:25",
           "audit_notes": ""
         },
         {
@@ -126,97 +174,182 @@
           "geometry": {"type": "rectangle", "x0": 3702, "y0": 1226, "x1": 3742, "y1": 1246},
           "associated_pole_id": "te_pole_002",
           "label_value": "079",
-          "user_notes": "Sign code '079' near pole 002",
+          "user_notes": "Code 079 near pole 002",
           "confidence_source": "human_labeled",
           "scope": "current_plan_only",
-          "created_at": "2026-05-23T00:00:52",
+          "created_at": "2026-05-23T05:01:32",
+          "audit_notes": ""
+        },
+        {
+          "training_example_id": "te_code_003",
+          "geometry": {"type": "rectangle", "x0": 2712, "y0": 1225, "x1": 2752, "y1": 1245},
+          "associated_pole_id": "te_pole_003",
+          "label_value": "402",
+          "user_notes": "Code 402 near pole 003",
+          "confidence_source": "human_labeled",
+          "scope": "current_plan_only",
+          "created_at": "2026-05-23T05:01:39",
+          "audit_notes": ""
+        },
+        {
+          "training_example_id": "te_code_004",
+          "geometry": {"type": "rectangle", "x0": 3014, "y0": 1088, "x1": 3054, "y1": 1108},
+          "associated_pole_id": "te_pole_004",
+          "label_value": "660",
+          "user_notes": "Code 660 near pole 004",
+          "confidence_source": "human_labeled",
+          "scope": "current_plan_only",
+          "created_at": "2026-05-23T05:01:46",
+          "audit_notes": ""
+        },
+        {
+          "training_example_id": "te_code_005",
+          "geometry": {"type": "rectangle", "x0": 3613, "y0": 1005, "x1": 3653, "y1": 1025},
+          "associated_pole_id": "te_pole_005",
+          "label_value": "347",
+          "user_notes": "Code 347 near pole 005 — meets v0.3 minimum",
+          "confidence_source": "human_labeled",
+          "scope": "current_plan_only",
+          "created_at": "2026-05-23T05:01:53",
           "audit_notes": ""
         }
       ]
     },
-    "step_4_associations": {
-      "order": 4,
-      "label_type": "code_to_pole_association",
-      "geometry_type": "association",
-      "min_examples": 1,
-      "max_examples": 8,
-      "prompt_he": "חבר בין עמוד למספר התמרור ששייך אליו.",
-      "prompt_en": "Link a pole to the sign code number that belongs to it.",
-      "user_action": "click_pole_then_click_code",
+    "step_5_teach_sign_symbol": {
+      "order": 5,
+      "label_type": "sign_symbol",
+      "geometry_type": "rectangle",
+      "min_examples": 0,
+      "max_examples": 10,
+      "optional": true,
+      "prompt_he": "סמן 5–10 דוגמאות של הסימון הגרפי של התמרור עצמו, אם הוא מופיע בתוכנית.",
+      "prompt_en": "Mark 5–10 examples of the sign's visual symbol, if it appears on the plan.",
+      "user_action": "draw_box_around_symbol",
       "examples": [
         {
-          "training_example_id": "te_assoc_001",
+          "training_example_id": "te_symbol_001",
+          "geometry": {"type": "rectangle", "x0": 2935, "y0": 1310, "x1": 2975, "y1": 1350},
+          "associated_pole_id": "te_pole_001",
+          "label_value": "circular_sign_glyph",
+          "user_notes": "Sign symbol near pole 001 (synthetic — adjust if real shape differs)",
+          "confidence_source": "human_labeled",
+          "scope": "current_plan_only",
+          "created_at": "2026-05-23T05:02:05",
+          "audit_notes": "optional step — may be skipped if the plan has no rendered symbols"
+        },
+        {
+          "training_example_id": "te_symbol_002",
+          "geometry": {"type": "rectangle", "x0": 3657, "y0": 1246, "x1": 3697, "y1": 1286},
+          "associated_pole_id": "te_pole_002",
+          "label_value": "circular_sign_glyph",
+          "user_notes": "Sign symbol near pole 002",
+          "confidence_source": "human_labeled",
+          "scope": "current_plan_only",
+          "created_at": "2026-05-23T05:02:12",
+          "audit_notes": ""
+        }
+      ]
+    },
+    "step_6_teach_associations": {
+      "order": 6,
+      "label_type": "pole_to_code_association",
+      "geometry_type": "association",
+      "min_examples": 1,
+      "max_examples": 10,
+      "prompt_he": "חבר בין עמוד למספר התמרור / סימון תמרור / כמות תמרורים שלו.",
+      "prompt_en": "Link a pole to its sign code / sign symbol / sign count.",
+      "user_action": "click_pole_then_click_target",
+      "examples": [
+        {
+          "training_example_id": "te_assoc_code_001",
+          "label_type": "pole_to_code_association",
           "geometry": {
             "type": "association",
             "from": {"type": "point", "x": 3000, "y": 1300, "ref": "te_code_001"},
             "to": {"type": "point", "x": 2952, "y": 1330, "ref": "te_pole_001"}
           },
-          "user_notes": "Code 402 belongs to pole 001 — distance ~50px, up-right of pole",
+          "user_notes": "Code 402 → pole 001 (distance ~50px)",
           "confidence_source": "human_labeled",
           "scope": "current_plan_only",
-          "created_at": "2026-05-23T00:01:00",
+          "created_at": "2026-05-23T05:02:25",
           "audit_notes": ""
         },
         {
-          "training_example_id": "te_assoc_002",
+          "training_example_id": "te_assoc_code_002",
+          "label_type": "pole_to_code_association",
           "geometry": {
             "type": "association",
             "from": {"type": "point", "x": 3722, "y": 1236, "ref": "te_code_002"},
             "to": {"type": "point", "x": 3674, "y": 1266, "ref": "te_pole_002"}
           },
-          "user_notes": "Code 079 belongs to pole 002 — similar offset",
+          "user_notes": "Code 079 → pole 002",
           "confidence_source": "human_labeled",
           "scope": "current_plan_only",
-          "created_at": "2026-05-23T00:01:08",
-          "audit_notes": ""
-        }
-      ]
-    },
-    "step_5_ignore_regions": {
-      "order": 5,
-      "label_type": "ignore_region",
-      "geometry_type": "rectangle",
-      "min_examples": 1,
-      "max_examples": 6,
-      "prompt_he": "סמן אזורים שלא צריך לנתח: כותרת, מקרא, טבלאות, מסגרות, רעש.",
-      "prompt_en": "Mark regions to ignore: title block, legend, tables, frame, noise.",
-      "user_action": "draw_box_around_ignore_zone",
-      "examples": [
-        {
-          "training_example_id": "te_ignore_001",
-          "geometry": {"type": "rectangle", "x0": 8200, "y0": 4500, "x1": 9450, "y1": 5314},
-          "label_value": "title_block",
-          "user_notes": "Title block bottom-right — do not detect here",
-          "confidence_source": "human_labeled",
-          "scope": "current_plan_only",
-          "created_at": "2026-05-23T00:01:15",
+          "created_at": "2026-05-23T05:02:32",
           "audit_notes": ""
         },
         {
-          "training_example_id": "te_ignore_002",
-          "geometry": {"type": "rectangle", "x0": 7900, "y0": 0, "x1": 9450, "y1": 4500},
-          "label_value": "right_legend_strip",
-          "user_notes": "Right legend/notes strip — not part of the map drawing body",
+          "training_example_id": "te_assoc_symbol_001",
+          "label_type": "pole_to_symbol_association",
+          "geometry": {
+            "type": "association",
+            "from": {"type": "point", "x": 2955, "y": 1330, "ref": "te_symbol_001"},
+            "to": {"type": "point", "x": 2952, "y": 1330, "ref": "te_pole_001"}
+          },
+          "user_notes": "Symbol → pole 001 (very small offset)",
           "confidence_source": "human_labeled",
           "scope": "current_plan_only",
-          "created_at": "2026-05-23T00:01:22",
+          "created_at": "2026-05-23T05:02:40",
           "audit_notes": ""
         }
       ]
     },
-    "step_6_apply_pattern": {
-      "order": 6,
-      "system_step": true,
-      "system_action": "run_detection",
-      "prompt_he": "החל את הדפוס הנלמד וחפש מועמדים דומים.",
-      "prompt_en": "Apply the learned pattern and search for similar candidates."
-    },
-    "step_7_review": {
+    "step_7_apply_learning": {
       "order": 7,
       "system_step": true,
+      "system_action": "run_detection",
+      "prompt_he": "הפעל את הדפוס הנלמד וחפש מועמדים דומים בתוכנית.",
+      "prompt_en": "Apply the learned pattern and search for similar candidates."
+    },
+    "step_8_review_results": {
+      "order": 8,
+      "system_step": true,
       "system_action": "present_review_queue",
-      "prompt_he": "סקור את המועמדים שנמצאו ואשר/דחה כל אחד.",
-      "prompt_en": "Review the found candidates and approve/reject each one."
+      "prompt_he": "סקור את המועמדים שנמצאו, אשר/דחה/תקן.",
+      "prompt_en": "Review the found candidates, approve/reject/correct."
+    },
+    "step_9_save_learning": {
+      "order": 9,
+      "system_step": true,
+      "system_action": "save_rules_at_chosen_scope",
+      "prompt_he": "שמור את הכללים שנלמדו ב-scope הרצוי (current_plan_only / project_rule / company_rule_candidate).",
+      "prompt_en": "Save learned rules at the chosen scope (current_plan_only / project_rule / company_rule_candidate)."
     }
+  },
+  "supporting_examples": {
+    "ignore_regions": [
+      {
+        "training_example_id": "te_ignore_001",
+        "label_type": "ignore_region",
+        "geometry": {"type": "rectangle", "x0": 8200, "y0": 4500, "x1": 9450, "y1": 5314},
+        "label_value": "title_block",
+        "user_notes": "Title block bottom-right — do not detect here",
+        "confidence_source": "human_labeled",
+        "scope": "current_plan_only",
+        "created_at": "2026-05-23T05:03:00",
+        "audit_notes": ""
+      },
+      {
+        "training_example_id": "te_ignore_002",
+        "label_type": "ignore_region",
+        "geometry": {"type": "rectangle", "x0": 7900, "y0": 0, "x1": 9450, "y1": 4500},
+        "label_value": "right_legend_strip",
+        "user_notes": "Right legend/notes strip — not part of the map drawing body",
+        "confidence_source": "human_labeled",
+        "scope": "current_plan_only",
+        "created_at": "2026-05-23T05:03:07",
+        "audit_notes": ""
+      }
+    ]
   }
 }
