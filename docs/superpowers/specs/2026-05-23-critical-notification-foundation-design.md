@@ -281,8 +281,19 @@ machine:
 
 The gate decides modal-vs-banner by comparing the current `pathname` to the related entity's route
 (`relatedEntityHref(type, id)`). Phase 1 routes: `work_order`/`order_problem` → `/orders`,
-`work_diary` → `/work-diary`. Deep-linking to the specific record is best-effort; navigating to the
-module route counts as "opened." `related_opened_at` is recorded on the button click regardless.
+`work_diary` → `/work-diary`.
+
+**TEMPORARY (Phase 1 compromise — must be documented as such):** navigating to the *module route*
+(e.g. `/orders`) counts as "opened" for order-related notifications; deep-linking to the *specific*
+record is not yet required. `related_opened_at` is recorded on the open-item button click regardless.
+
+**Preserve the strict deep-link path:** `relatedEntityHref(type, id)` must be a single resolver that
+already takes both `related_entity_type` and `related_entity_id`, and the "opened" check must be a
+single predicate function. This keeps a clean upgrade path so a later phase can require the user to
+open the *exact* order / work diary / field issue (e.g. `/orders?orderId=<id>` with the page opening
+that record, and `related_opened_at` set only once that specific record is in view) without
+reworking the gate or the schema. The implementation must not hard-code module-route assumptions
+anywhere outside this single resolver/predicate pair.
 
 **Coexistence:** the `CriticalAlertGate` takes visual precedence over the existing
 draft-protection modal (`NavigationGuardProvider`). Both can mount; the critical gate wins z-order.
