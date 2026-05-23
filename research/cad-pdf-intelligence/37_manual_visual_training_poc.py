@@ -462,11 +462,25 @@ def template_matches(
     img_bgr, rule: Dict, ignore_rects: List[Dict],
     threshold: float, max_candidates: int,
 ) -> Tuple[List[Dict], float]:
+    """
+    Template matching with bounded work:
+      1. cv2.matchTemplate per template patch.
+      2. Hard cap raw matches per patch (top K by score) BEFORE building dicts,
+         so a low-specificity tick template cannot produce millions of matches
+         that then explode the dedup loop.
+      3. Sort + spatial dedup using a coarse grid (O(N) instead of O(N²)).
+    """
     import cv2
     import numpy as np
     t = time.perf_counter()
     img_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     threshold = max(threshold, rule.get("min_match_score", threshold))
+
+    # Hard ceiling on per-patch raw matches to avoid O(N²) blowup downstream.
+    # A non-specific template (short tick line) on a large page can produce
+    # millions of matches above 0.5 — we keep only the top K by score per patch.
+    RAW_CAP_PER_PATCH = max(2000, max_candidates * 4)
+
     raw: List[Dict] = []
     for patch_meta in rule.get("patches", []) or rule.get("regions", []):
         patch_path = patch_meta["patch_path"]
@@ -481,7 +495,15 @@ def template_matches(
         except cv2.error:
             continue
         ys, xs = np.where(res >= threshold)
-        for (y, x) in zip(ys, xs):
+        if len(ys) == 0:
+            continue
+        scores = res[ys, xs]
+        if len(ys) > RAW_CAP_PER_PATCH:
+            top_idx = np.argpartition(-scores, RAW_CAP_PER_PATCH)[:RAW_CAP_PER_PATCH]
+            ys = ys[top_idx]
+            xs = xs[top_idx]
+            scores = scores[top_idx]
+        for y, x, s in zip(ys.tolist(), xs.tolist(), scores.tolist()):
             cx = int(x + tw / 2)
             cy = int(y + th / 2)
             if in_ignore(cx, cy, ignore_rects):
@@ -489,20 +511,25 @@ def template_matches(
             raw.append({
                 "centroid": [cx, cy],
                 "bbox": [int(x), int(y), int(x + tw), int(y + th)],
-                "match_score": float(res[y, x]),
+                "match_score": float(s),
                 "source_patch": patch_meta["training_example_id"],
             })
-    # Sort by score, dedup close matches
+
+    # Spatial dedup via coarse 8px grid: O(N) instead of O(N²)
     raw.sort(key=lambda c: -c["match_score"])
+    GRID = 8
+    occupied = set()
     dedup: List[Dict] = []
     for c in raw:
-        cx, cy = c["centroid"]
-        close = any(
-            (cx - d["centroid"][0]) ** 2 + (cy - d["centroid"][1]) ** 2 < 64
-            for d in dedup
-        )
-        if not close:
-            dedup.append(c)
+        gx = c["centroid"][0] // GRID
+        gy = c["centroid"][1] // GRID
+        # Check this cell + 8 neighbors (3x3 around)
+        nearby = any((gx + dx, gy + dy) in occupied
+                     for dx in (-1, 0, 1) for dy in (-1, 0, 1))
+        if nearby:
+            continue
+        occupied.add((gx, gy))
+        dedup.append(c)
         if len(dedup) >= max_candidates:
             break
     return dedup, (time.perf_counter() - t) * 1000
