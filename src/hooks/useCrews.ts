@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import type { Crew } from "@/types/crew";
 import { getSupabase } from "@/lib/supabase/client";
+import { isNewerOrRecent } from "@/lib/supabase/realtimeMerge";
 
 function fromRow(r: Record<string, unknown>): Crew {
   return {
@@ -38,12 +39,6 @@ function toRow(c: Crew) {
     created_at: c.createdAt,
     updated_at: c.updatedAt,
   };
-}
-
-function isNewerOrRecent(existing: string, incoming: string, toleranceMs = 5000): boolean {
-  try {
-    return new Date(incoming).getTime() > new Date(existing).getTime() - toleranceMs;
-  } catch { return true; }
 }
 
 export function useCrews() {

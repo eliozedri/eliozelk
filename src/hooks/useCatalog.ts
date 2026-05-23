@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { nanoid } from "nanoid";
 import type { CatalogItem, CatalogFormState, LinkedProductEntry } from "@/types/catalog";
 import { getSupabase } from "@/lib/supabase/client";
+import { isNewerOrRecent } from "@/lib/supabase/realtimeMerge";
 
 function fromRow(r: Record<string, unknown>): CatalogItem {
   return {
@@ -53,12 +54,6 @@ function toRow(item: CatalogItem) {
     created_at: item.createdAt,
     updated_at: item.updatedAt,
   };
-}
-
-function isNewerOrRecent(existing: string, incoming: string, toleranceMs = 5000): boolean {
-  try {
-    return new Date(incoming).getTime() > new Date(existing).getTime() - toleranceMs;
-  } catch { return true; }
 }
 
 export function useCatalog() {

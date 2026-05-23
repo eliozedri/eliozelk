@@ -10,6 +10,7 @@ import type {
   FabricationStatus, AccountingStatus,
 } from "@/types/workOrder";
 import { getSupabase } from "@/lib/supabase/client";
+import { isNewerOrRecent } from "@/lib/supabase/realtimeMerge";
 import { canTransition, canMarkReadyForInstallation } from "@/lib/workflowEngine";
 
 // ── Column map: TypeScript field → SQL column name ───────────────────
@@ -234,15 +235,6 @@ function generateOrderNumberLocal(orders: WorkOrder[]): string {
   return `${prefix}${String(next).padStart(3, "0")}`;
 }
 
-// ── Realtime freshness guard ───────────────────────────────────────────
-// Tolerates ±5s clock skew between client and server so that a legitimate
-// remote update is never silently dropped just because our optimistic
-// timestamp was stamped with a slightly-ahead client clock.
-function isNewerOrRecent(existing: string, incoming: string, toleranceMs = 5000): boolean {
-  try {
-    return new Date(incoming).getTime() > new Date(existing).getTime() - toleranceMs;
-  } catch { return true; }
-}
 
 // ── Fire-and-forget activity insert ────────────────────────────────────
 // Activities are append-only and loaded on demand — no state update needed.

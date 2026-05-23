@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkDiary, WorkDiaryStatus, DiaryApprovalStatus } from "@/types/workDiary";
 import { createEmptyDiary, normalizeSecurityTeams } from "@/types/workDiary";
 import { getSupabase } from "@/lib/supabase/client";
+import { isNewerOrRecent } from "@/lib/supabase/realtimeMerge";
 
 export function fromRow(r: Record<string, unknown>): WorkDiary {
   const data = (r.data ?? {}) as Partial<WorkDiary>;
@@ -59,15 +60,6 @@ export function toRow(d: WorkDiary) {
     created_at: d.createdAt,
     updated_at: d.updatedAt,
   };
-}
-
-// Apply incoming update if it's newer than or within clock-skew tolerance of existing.
-// Strictly greater-than would silently drop legitimate remote updates when the local
-// optimistic timestamp (client clock) is slightly ahead of the server clock.
-function isNewerOrRecent(existing: string, incoming: string, toleranceMs = 5000): boolean {
-  try {
-    return new Date(incoming).getTime() > new Date(existing).getTime() - toleranceMs;
-  } catch { return true; }
 }
 
 function generateDiaryNumberLocal(diaries: WorkDiary[]): string {
