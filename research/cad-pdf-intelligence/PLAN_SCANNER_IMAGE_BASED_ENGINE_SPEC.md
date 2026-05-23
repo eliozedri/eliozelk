@@ -351,7 +351,9 @@ spatial association → evidence crops → output generation → timing summary
 
 **This section is a core principle of the Image-Based Plan Scanner, not an optional enhancement.**
 
-> **Production track:** This principle is now implemented as **Engine C — Visual Learning Agent**, documented in [`PLAN_SCANNER_VISUAL_LEARNING_AGENT_SPEC.md`](PLAN_SCANNER_VISUAL_LEARNING_AGENT_SPEC.md). Engine C is the operational realization of everything in this section: rule extraction from user markings, evidence crops, review questions, learning scopes, hard BOQ boundary. Engine B (this script) provides the *image rendering and detection primitives* that Engine C builds upon. The POC is `36_visual_learning_agent_poc.py`.
+> **Production track (updated 2026-05-23):** This principle is implemented as **Engine C — Visual Learning Agent**, documented in [`PLAN_SCANNER_VISUAL_LEARNING_AGENT_SPEC.md`](PLAN_SCANNER_VISUAL_LEARNING_AGENT_SPEC.md). Engine C is the operational realization of everything in this section. Engine B (this script) provides the *image rendering and detection primitives* that Engine C builds upon.
+>
+> **Strategic pivot:** Engine C v0.1.1 (automatic detection via `36_visual_learning_agent_poc.py`) was validated and found insufficient as a primary detector. The current primary path is the **Manual Onboarding Wizard** (Engine C v0.2, `37_manual_visual_training_poc.py`) — the user teaches the system step-by-step before detection runs. See Engine C spec §4.5 for the canonical workflow.
 
 ### 9.1 Why this principle exists
 

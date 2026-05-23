@@ -1,9 +1,19 @@
 # Plan Scanner — Visual Learning Agent Spec (Engine C)
 
-**Date:** 2026-05-22
+**Date:** 2026-05-22 (updated 2026-05-23 — strategic pivot to Manual Onboarding)
 **Status:** Research-only. No production UI/DB/flows changed.
 **Predecessors:** Engine A (vector/CAD-PDF, scripts 01–34), Engine B (image-based, script 35)
 **This document is the canonical reference for Engine C.**
+
+> ## ⚠ Strategic Pivot — 2026-05-23
+>
+> The fully-automatic detection POC (`36_visual_learning_agent_poc.py` v0.1.1, commit `fc99f5a`) was **validated and found not reliable enough** to serve as the primary detection path. On the test plan, the top 20 pole candidates produced too many uncertain or wrong items even at confidence ≥ 0.85. Template matching on a single training point is not sufficient to bootstrap detection on a new plan style.
+>
+> **New primary direction: Manual Onboarding / Human-Trained Visual Agent (Engine C v0.2).** Instead of expecting the agent to read the plan on its own, the user is walked through a guided **7-step wizard** to manually mark examples. The agent extracts rules from those markings, finds similar items, and asks the user to confirm/correct. CAPTCHA-style.
+>
+> See new **Section 4.5 — Manual Onboarding / Human-Trained Visual Agent** for the canonical workflow. The fully-automatic POC (v0.1.1) remains in the repo but is **not the primary path** and its accuracy claims are explicitly downgraded.
+>
+> POC for the manual workflow: `37_manual_visual_training_poc.py`
 
 > **Core principle:** Engine C is a *human-trained visual agent*, not an automated detector. The user teaches the agent by marking examples on the plan image. The agent learns rules from those markings and applies them to find similar elements. When uncertain, it asks the user a focused question. This is the foundational direction documented in [PLAN_SCANNER_IMAGE_BASED_ENGINE_SPEC.md §9](PLAN_SCANNER_IMAGE_BASED_ENGINE_SPEC.md) — Engine C is the production-track implementation of that principle.
 
@@ -86,6 +96,107 @@ Every user marking is one of these types. Each becomes a structured training exa
 - Polygon (list of (x, y) vertices)
 - Line/segment (x0, y0, x1, y1)
 - Association (linking two existing markings together)
+
+---
+
+## 4.5 Manual Onboarding / Human-Trained Visual Agent (PRIMARY PATH — added 2026-05-23)
+
+> This section supersedes Section 5 as the primary workflow. Section 5 is retained for the conceptual loop but the operational entry point is now the wizard defined here.
+
+### 4.5.1 Why this is the primary path now
+
+The v0.1.1 automatic POC produced 240 pole candidates, 45 sign code candidates, and 17 associations from 9 hand-authored training examples. Human spot-check found too many of those candidates were wrong — even at high confidence (≥ 0.85). The agent cannot reliably bootstrap from sparse user markings via pure pixel-similarity template matching.
+
+The correct framing: **do not ask the system to detect on its own.** Ask the user to teach it, step by step, what each object looks like on **this specific plan**. Detection runs only AFTER teaching is complete. The user always sees and approves what the agent found.
+
+This is similar to CAPTCHA training: the user labels concrete visual examples, and the system learns patterns from them — not from training data, not from general models.
+
+### 4.5.2 The 7-Step Wizard
+
+Each step has a Hebrew + English prompt, a `label_type`, an expected `geometry_type`, and a min/max number of examples the user should provide before advancing. The wizard tracks completion in `wizard_state.json`.
+
+| # | Step ID | label_type | Geometry | Min | Prompt (HE) | Prompt (EN) |
+|---|---|---|---|---|---|---|
+| 1 | `step_1_pole_marker` | `pole_dot` | point | 3 | "סמן 3–5 דוגמאות של עמודי תמרור בתוכנית." | "Mark 3–5 examples of sign poles in the plan." |
+| 2 | `step_2_tick_marks` | `tick_mark` | line | 2 | "סמן דוגמאות של קווים קטנים ליד עמוד שמייצגים תמרורים על אותו עמוד." | "Mark examples of short lines near a pole that represent signs on that pole." |
+| 3 | `step_3_sign_codes` | `sign_code_text` | rectangle | 2 | "סמן מספרי תמרורים שמופיעים ליד עמודים." | "Mark sign code numbers that appear near poles." |
+| 4 | `step_4_associations` | `code_to_pole_association` | association | 1 | "חבר בין עמוד למספר התמרור ששייך אליו." | "Link a pole to the sign code number that belongs to it." |
+| 5 | `step_5_ignore_regions` | `ignore_region` | rectangle | 1 | "סמן אזורים שלא צריך לנתח: כותרת, מקרא, טבלאות, מסגרות, רעש." | "Mark regions to ignore: title block, legend, tables, frame, noise." |
+| 6 | `step_6_apply_pattern` | — | (system) | — | "החל את הדפוס הנלמד וחפש מועמדים דומים." | "Apply the learned pattern and search for similar candidates." |
+| 7 | `step_7_review` | — | (system) | — | "סקור את המועמדים שנמצאו ואשר/דחה כל אחד." | "Review the found candidates and approve/reject each one." |
+
+Steps 1–5 are **user-driven** (manual marking). Steps 6–7 are **system-driven** (detection + review queue). The wizard advances only when the previous step's `min_examples` is met.
+
+### 4.5.3 What the system learns from steps 1–5
+
+After steps 1–5 complete, the rule extractor derives:
+
+- **From pole_dot examples**: average dot size, contrast against background, circularity, pixel patch template
+- **From tick_mark examples**: average tick length, orientation distribution, typical tick→pole distance (paired with associated pole), padded line patch
+- **From sign_code_text examples**: bounding box size range, pixel patch of the digit string, typical code→pole distance and direction (paired via Step 4)
+- **From code_to_pole_associations**: average distance, preferred direction, direction tolerance
+- **From ignore_region**: exclusion polygons applied during detection
+
+The rules are written to `visual_learning_rules.json` so they can be inspected, edited, or carried forward to future scans of the same project.
+
+### 4.5.4 What the system does in step 6
+
+Only after the user finishes steps 1–5, step 6 runs:
+
+1. Render the plan page as image (if not already)
+2. Apply ignore regions as exclusion mask
+3. For each learned rule (pole, tick, code): run pixel-similarity search across the page
+4. Drop tick candidates whose nearest pole is outside the learned tick→pole distance range
+5. Form associations using the learned code→pole distance and direction
+6. Score each candidate (template match × association presence)
+7. Emit:
+   - High-confidence candidates → accepted (still pending human review for BOQ)
+   - Low-confidence candidates → review questions with evidence crops
+
+### 4.5.5 What the user does in step 7
+
+Step 7 presents the candidates one at a time as evidence crops with HE/EN questions:
+
+- "האם זו נקודת עמוד תמרור?" / "Is this a sign pole point?"
+- "האם המספר הזה שייך לעמוד/לתמרור?" / "Does this number belong to the pole/sign?"
+- "האם השיוך הזה בין עמוד/מספר/תמרור נכון?" / "Is this pole/code/sign assembly correct?"
+
+For each, the user answers from the predefined `allowed_answers` list, OR adds a new training example (e.g. marks a new pole the system missed, or marks a wrong detection). Each answer is appended to the training examples file so the next run of step 6 starts with more information.
+
+### 4.5.6 Wizard state file
+
+`wizard_state.json` tracks where the user is in the process:
+
+```json
+{
+  "schema_version": "1.0",
+  "wizard_version": "1.0",
+  "plan_id": "...",
+  "page_number": 0,
+  "current_step": "step_3_sign_codes",
+  "steps_completed": ["step_1_pole_marker", "step_2_tick_marks"],
+  "steps_per_count": {
+    "step_1_pole_marker": 4,
+    "step_2_tick_marks": 3,
+    "step_3_sign_codes": 0
+  },
+  "ready_for_apply": false,
+  "last_updated": "2026-05-23T..."
+}
+```
+
+The wizard is **resumable** — the user can leave and come back, and step 6 only runs when all of 1–5 are complete (or partial mode with a warning).
+
+### 4.5.7 Hard rules (unchanged from §13)
+
+- Human teaching improves detection only — **NOT** BOQ approval
+- Agent never guesses silently — uncertainty → evidence crop + review question
+- All rules scoped `current_plan_only` by default; promotion is explicit
+- All candidates traceable to specific training examples
+
+### 4.5.8 What this section supersedes
+
+Section 5 ("User Teaching Workflow") remains as the high-level conceptual loop. The operational entry point is now this section's wizard. Section 14 ("POC Implementation, script 36") is retained but its POC is marked v0.1.1 — superseded by `37_manual_visual_training_poc.py` (Engine C v0.2).
 
 ---
 
@@ -418,7 +529,18 @@ The comparison layer is documented but **not implemented in this POC**.
 
 ---
 
-## 14. POC Implementation (script 36)
+## 14. POC Implementation
+
+> ### Status as of 2026-05-23
+>
+> | POC | File | Status |
+> |---|---|---|
+> | **v0.2 — Manual Onboarding Wizard (PRIMARY)** | `37_manual_visual_training_poc.py` | New primary path. Reads wizard-organized examples, validates per-step completeness, applies rules only after teaching, emits review queue. **Use this.** |
+> | v0.1.1 — Automatic detection (DOWNGRADED) | `36_visual_learning_agent_poc.py` | Retained for reference. **Not reliable enough** to use as primary detector — validation found too many false positives even at high confidence. Useful as a comparison baseline only. |
+>
+> The remainder of this section describes the v0.1.1 POC (kept for historical completeness). For the current direction see Section 4.5 and the script 37 documentation in its file header.
+
+### 14.1 Script 36 (v0.1.1) — automatic detection, superseded
 
 **File:** `research/cad-pdf-intelligence/36_visual_learning_agent_poc.py`
 
