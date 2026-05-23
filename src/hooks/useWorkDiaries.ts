@@ -24,6 +24,8 @@ function fromRow(r: Record<string, unknown>): WorkDiary {
     approvedBy: (r.approved_by as string | null | undefined) ?? data.approvedBy,
     approvedAt: (r.approved_at as string | null | undefined) ?? data.approvedAt,
     rejectionReason: (r.rejection_reason as string | null | undefined) ?? data.rejectionReason,
+    internalEmailedAt: (r.internal_emailed_at as string | null | undefined) ?? null,
+    internalEmailError: (r.internal_email_error as string | null | undefined) ?? null,
     crewMembers: Array.isArray(data.crewMembers) ? data.crewMembers : [],
     securityTeams: data.securityTeams ? normalizeSecurityTeams(data.securityTeams) : undefined,
   } as WorkDiary;
@@ -43,6 +45,8 @@ function toRow(d: WorkDiary) {
     approved_by: d.approvedBy ?? null,
     approved_at: d.approvedAt ?? null,
     rejection_reason: d.rejectionReason ?? null,
+    internal_emailed_at: d.internalEmailedAt ?? null,
+    internal_email_error: d.internalEmailError ?? null,
     data: d,
     created_at: d.createdAt,
     updated_at: d.updatedAt,

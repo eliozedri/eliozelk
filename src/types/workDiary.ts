@@ -189,6 +189,12 @@ export interface WorkDiary {
   // ─── Security & additional teams ─────────────────────────
   securityTeams?: SecurityTeams;
   additionalTeams?: AdditionalTeams;
+
+  // ─── Internal archive email audit ────────────────────────
+  /** ISO timestamp set when the automatic archive email to elkayam.yomanim@gmail.com succeeded. */
+  internalEmailedAt?: string | null;
+  /** Last archive-email failure reason. Cleared when archive succeeds. */
+  internalEmailError?: string | null;
 }
 
 // ── Seed factories ──────────────────────────────────────────
