@@ -19,13 +19,23 @@ import {
   DOC_GOLD,
 } from "@/lib/pdfBrand";
 
-Font.register({
-  family: "Heebo",
-  fonts: [
-    { src: "/fonts/Heebo-Regular.ttf", fontWeight: 400 },
-    { src: "/fonts/Heebo-Bold.ttf", fontWeight: 700 },
-  ],
-});
+// Font.register is now called explicitly by callers (registerHeeboFontsForClient
+// in the browser; registerHeeboFontsForNode in renderWorkDiaryToBuffer). Doing it
+// at module load with browser-relative URLs hijacked the server-side absolute-
+// path re-registration that the Vercel function needs.
+
+let heeboClientRegistered = false;
+export function registerHeeboFontsForClient() {
+  if (heeboClientRegistered) return;
+  Font.register({
+    family: "Heebo",
+    fonts: [
+      { src: "/fonts/Heebo-Regular.ttf", fontWeight: 400 },
+      { src: "/fonts/Heebo-Bold.ttf", fontWeight: 700 },
+    ],
+  });
+  heeboClientRegistered = true;
+}
 
 const PRIMARY = DOC_PRIMARY;
 const LIGHT = DOC_LIGHT;

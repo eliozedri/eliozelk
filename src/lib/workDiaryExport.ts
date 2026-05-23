@@ -141,11 +141,12 @@ export function exportWorkDiaryCSV(diary: WorkDiary): void {
 
 export async function exportWorkDiaryPDF(diary: WorkDiary): Promise<void> {
   const { pdf } = await import("@react-pdf/renderer");
-  const { WorkDiaryDocument } = await import(
+  const { WorkDiaryDocument, registerHeeboFontsForClient } = await import(
     "@/components/pdf/WorkDiaryDocument"
   );
   const { createElement } = await import("react");
 
+  registerHeeboFontsForClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const blob = await pdf(createElement(WorkDiaryDocument, { diary }) as any).toBlob();
   const url = URL.createObjectURL(blob);
