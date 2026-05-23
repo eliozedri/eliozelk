@@ -45,6 +45,35 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const db = getServiceSupabase();
+
+  // When a department slug is given we always filter at the
+  // category-string level so pagination is per-department rather than
+  // per-global page. With ~108 active rows this is comfortable; if
+  // the catalog grows we can switch to pre-computed `in (categories)`
+  // with periodic refreshes.
+  let candidateIds: string[] | null = null;
+  if (departmentSlug) {
+    const idQuery = db
+      .from("catalog_items")
+      .select("id,category")
+      .eq("is_active", true);
+    const { data: catRows, error: catErr } = await idQuery;
+    if (catErr) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "db_read_failed",
+          message: catErr.message.slice(0, 200),
+          responded_at: new Date().toISOString(),
+        },
+        { status: 500 },
+      );
+    }
+    candidateIds = (catRows ?? [])
+      .filter((r) => categoryToDepartment(String(r.category ?? "")) === departmentSlug)
+      .map((r) => String(r.id));
+  }
+
   let query = db
     .from("catalog_items")
     .select(
@@ -52,6 +81,24 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       { count: "exact" },
     )
     .eq("is_active", true);
+
+  if (candidateIds !== null) {
+    if (candidateIds.length === 0) {
+      // No active items in this department — short-circuit so we don't
+      // call `.in('id', [])` (which Postgres treats as `id in ()` — invalid).
+      return NextResponse.json({
+        ok: true,
+        department: departmentSlug,
+        search: search || null,
+        items: [],
+        total: 0,
+        page,
+        limit,
+        responded_at: new Date().toISOString(),
+      });
+    }
+    query = query.in("id", candidateIds);
+  }
 
   if (search.length > 0) {
     query = query.or(`name.ilike.%${search}%,description.ilike.%${search}%`);
@@ -73,15 +120,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Department filter happens server-side via the category mapping.
-  // (We could push this into the SQL with `in (...)` but the category
-  // strings are messy + the mapping is server-owned.)
-  let rows = data ?? [];
-  if (departmentSlug) {
-    rows = rows.filter(
-      (r) => categoryToDepartment(String(r.category ?? "")) === departmentSlug,
-    );
-  }
+  const rows = data ?? [];
 
   return NextResponse.json({
     ok: true,

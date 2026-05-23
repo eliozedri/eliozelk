@@ -24,6 +24,12 @@ function buildQuery(filtered: Row[]): unknown {
   const builder: Record<string, unknown> = {
     eq: (col: string, val: unknown) =>
       buildQuery(filtered.filter((r) => (r as unknown as Record<string, unknown>)[col] === val)),
+    in: (col: string, vals: unknown[]) => {
+      const set = new Set(vals);
+      return buildQuery(
+        filtered.filter((r) => set.has((r as unknown as Record<string, unknown>)[col])),
+      );
+    },
     or: (_clause: string) => buildQuery(filtered),
     order: () => buildQuery(filtered),
     range: () => Promise.resolve(result),
