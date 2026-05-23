@@ -185,12 +185,15 @@ export function createRun({ slug, originalFilename, buffer, planName }: CreateRu
 } {
   const runDir = getRunDir(slug);
   const subdirs = ["source", "outputs", "artifacts", "logs", "state"];
+  // Turbopack would otherwise trace `path.join(runDir, sub)` as a dynamic
+  // filesystem pattern and bundle ~27k files into this function — blowing
+  // Vercel's 250MB output-asset limit. Build the path with concat instead.
   for (const sub of subdirs) {
-    fs.mkdirSync(path.join(runDir, sub), { recursive: true });
+    fs.mkdirSync(`${runDir}/${sub}`, { recursive: true });
   }
 
   const storedFilename = sanitizeStoredFilename(originalFilename);
-  const sourcePath = path.join(runDir, "source", storedFilename);
+  const sourcePath = `${runDir}/source/${storedFilename}`;
   fs.writeFileSync(sourcePath, buffer);
 
   const checksum = createHash("sha256").update(buffer).digest("hex");
