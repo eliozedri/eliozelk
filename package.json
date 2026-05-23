@@ -9,6 +9,9 @@
     "lint": "eslint",
     "generate:signs": "tsx scripts/generateSignsFromKnowledgeBase.ts",
     "audit:signs": "tsx scripts/auditSignsData.ts",
+    "team-bot:set-webhook": "tsx scripts/teamBot/set-webhook.ts",
+    "team-bot:delete-webhook": "tsx scripts/teamBot/delete-webhook.ts",
+    "team-bot:bootstrap-admin": "tsx scripts/teamBot/create-bootstrap-admin.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
