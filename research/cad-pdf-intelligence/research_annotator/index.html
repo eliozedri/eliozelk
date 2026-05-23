@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="utf-8" />
+  <title>Plan Scanner — Manual Training Annotator (Engine C v0.3, Slice 1)</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="top-bar">
+    <div class="title">סורק תוכניות — סמן ידני (Manual Training Annotator)</div>
+    <div class="banner">
+      <b>⚠ Algorithmic POC output — NOT human validated.</b>
+      Detection corrections improve future scans but do <b>NOT</b> auto-approve BOQ.
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="wizard" id="wizard"></aside>
+
+    <section class="stage-wrap">
+      <div class="toolbar" id="toolbar"></div>
+      <div id="stage-container"></div>
+      <div class="stage-info" id="stageInfo"></div>
+    </section>
+  </main>
+
+  <!-- First-screen overlay (shown until image loaded) -->
+  <div id="firstScreen" class="first-screen">
+    <div class="first-screen-card">
+      <h1>כדי להתחיל, למד את הסורק איך נראים עמודים ותמרורים בתוכנית הזו.</h1>
+      <p class="sub">To start, teach the scanner what poles and signs look like in this plan.</p>
+      <p class="sub">המערכת אינה מזהה אוטומטית — אתה מלמד אותה דוגמא אחר דוגמא.</p>
+      <button id="loadImageBtn">טען את תמונת התוכנית</button>
+      <p class="note">הקובץ visual_training_examples.wizard.json יישמר אוטומטית לתיקיית הריצה בכל סימון.</p>
+    </div>
+  </div>
+
+  <script src="/static/vendor/konva.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
