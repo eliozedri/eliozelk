@@ -201,10 +201,25 @@ export function useWorkDiaries() {
       db.from("work_diaries")
         .update({ status: "submitted", submitted_at: now, updated_at: now, data: updated })
         .eq("id", id)
-        .then(({ error }) => {
+        .then(async ({ error }) => {
           if (error) {
             console.error("[diaries] submit failed:", error.message);
             setDiaries(prev => prev.map(d => d.id === id ? original : d));
+            return;
+          }
+          // Fire-and-forget archive email. Failures are recorded on the diary
+          // row (internal_email_error) and the banner picks them up via realtime;
+          // we never block submit success on the email side-effect.
+          try {
+            const { data: { session } } = await db.auth.getSession();
+            const token = session?.access_token;
+            if (!token) return;
+            await fetch(`/api/work-diary/${id}/archive-email`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          } catch (e) {
+            console.warn("[diaries] archive-email kickoff failed:", e);
           }
         });
     }

@@ -175,19 +175,19 @@ export function DocumentTab({ diary, onChange, disabled = false, signatureError 
         />
       </div>
 
-      {/* Signatures */}
+      {/* Signatures — worker signature (ראש צוות) is mandatory for submission */}
       <SignatureBlock
         title="חתימת קבלן / מפקח"
         sig={diary.customerSignature}
-        onChange={(sig) => { onChange({ customerSignature: sig }); if (sig.dataUrl) onSignatureChange?.(); }}
+        onChange={(sig) => onChange({ customerSignature: sig })}
         disabled={disabled}
-        hasError={signatureError}
       />
       <SignatureBlock
-        title="חתימת ראש צוות"
+        title="חתימת ראש צוות (חובה)"
         sig={diary.companySignature}
-        onChange={(sig) => onChange({ companySignature: sig })}
+        onChange={(sig) => { onChange({ companySignature: sig }); if (sig.dataUrl) onSignatureChange?.(); }}
         disabled={disabled}
+        hasError={signatureError}
       />
     </div>
   );

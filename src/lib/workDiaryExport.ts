@@ -156,19 +156,3 @@ export async function exportWorkDiaryPDF(diary: WorkDiary): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
-export function openEmailDraft(diary: WorkDiary): void {
-  const subject = encodeURIComponent(
-    `יומן עבודה ${diary.diaryNumber} — ${diary.customerName}`
-  );
-  const body = encodeURIComponent(
-    `שלום,\n\nמצורף יומן עבודה מס׳ ${diary.diaryNumber}.\n\nפרטים:\n` +
-      `לקוח: ${diary.customerName}\n` +
-      `אתר: ${diary.siteName}\n` +
-      `תאריך: ${diary.executionDate}\n` +
-      (diary.startTime || diary.endTime
-        ? `שעות: ${diary.startTime} — ${diary.endTime}\n`
-        : "") +
-      `\nאלקיים סימון כבישים בע״מ`
-  );
-  window.location.href = `mailto:?subject=${subject}&body=${body}`;
-}

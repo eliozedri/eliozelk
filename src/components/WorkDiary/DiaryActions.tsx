@@ -14,7 +14,6 @@ interface Props {
   onSaveDraft: () => void;
   onSubmit: () => void;
   onExportPDF: () => void;
-  onEmail: () => void;
   onApprove?: () => void;
   onReject?: (reason: string) => void;
   saving?: boolean;
@@ -31,7 +30,6 @@ export function DiaryActions({
   onSaveDraft,
   onSubmit,
   onExportPDF,
-  onEmail,
   onApprove,
   onReject,
   saving,
@@ -145,17 +143,8 @@ export function DiaryActions({
             {exporting ? "מייצא..." : "PDF"}
           </button>
 
-          <button
-            type="button"
-            onClick={onEmail}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-              <polyline points="22,6 12,13 2,6" />
-            </svg>
-            שלח במייל
-          </button>
+          {/* "שלח במייל" mailto button removed — replaced by PostSubmitBanner +
+              CustomerEmailDialog server-side flow. */}
 
           {/* Manager: approve / reject when pending */}
           {canApprove && isPendingApproval && !showRejectInput && (

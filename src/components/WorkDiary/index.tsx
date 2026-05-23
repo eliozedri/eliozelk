@@ -18,7 +18,9 @@ import { DiaryActions } from "./DiaryActions";
 import { ProfitabilityPanel } from "./ProfitabilityPanel";
 import { SecurityTeamsTab } from "./SecurityTeamsTab";
 import { AdditionalTeamsTab } from "./AdditionalTeamsTab";
-import { exportWorkDiaryPDF, openEmailDraft } from "@/lib/workDiaryExport";
+import { PostSubmitBanner } from "./PostSubmitBanner";
+import { CustomerEmailDialog } from "./CustomerEmailDialog";
+import { exportWorkDiaryPDF } from "@/lib/workDiaryExport";
 import { getSupabase } from "@/lib/supabase/client";
 
 function DiaryIcon({ className }: { className?: string }) {
@@ -186,6 +188,7 @@ export function WorkDiaryForm() {
   const [exporting, setExporting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [signatureError, setSignatureError] = useState(false);
+  const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
 
   // Track whether this diary has been persisted to DB yet
   const [savedToDB, setSavedToDB] = useState(false);
@@ -268,7 +271,7 @@ export function WorkDiaryForm() {
       setActiveTab("header");
       return;
     }
-    if (!diary.customerSignature?.dataUrl) {
+    if (!diary.companySignature?.dataUrl) {
       setSignatureError(true);
       setActiveTab("docs");
       return;
@@ -323,12 +326,6 @@ export function WorkDiaryForm() {
     } finally {
       setExporting(false);
     }
-  }
-
-  async function handleEmail() {
-    if (!diary) return;
-    await handleExportPDF();
-    openEmailDraft(diary);
   }
 
   // ── Draft protection via NavigationGuardContext ───────────────────────────
@@ -426,6 +423,16 @@ export function WorkDiaryForm() {
         </div>
       </div>
 
+      <PostSubmitBanner
+        diary={diary}
+        onOpenCustomerDialog={() => setCustomerDialogOpen(true)}
+      />
+      <CustomerEmailDialog
+        diaryId={diary.id}
+        open={customerDialogOpen}
+        onClose={() => setCustomerDialogOpen(false)}
+      />
+
       <DiaryActions
         status={diary.status}
         diaryNumber={diary.diaryNumber !== "—" ? diary.diaryNumber : "יומן חדש"}
@@ -436,7 +443,6 @@ export function WorkDiaryForm() {
         onSaveDraft={handleSaveDraft}
         onSubmit={handleSubmit}
         onExportPDF={handleExportPDF}
-        onEmail={handleEmail}
         onApprove={() => {
           if (!diary || !profile || !savedToDB) return;
           approveDiary(diary.id, profile.name);
