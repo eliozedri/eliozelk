@@ -4,6 +4,7 @@ import { loadSession, saveSession, clearSession } from "./sessions";
 import { activeIdSet, getItem, listDepartments, listItems } from "./catalog";
 import { createOrderDraft } from "./drafts";
 import {
+  CB,
   addedToCart,
   cartScreen,
   cityPrompt,
@@ -170,6 +171,19 @@ export async function enterNotes(ctx: Ctx, text: string | null): Promise<void> {
 
 async function finalize(ctx: Ctx): Promise<void> {
   const session = await loadSession(ctx.telegramUserId);
+
+  // Guard against empty/duplicate submissions (e.g. a repeated tap on the
+  // "skip & send" button after the session was already cleared by the first
+  // finalize). Nothing to submit unless there is a cart or free-text body.
+  const hasContent =
+    session.cart.length > 0 || Boolean(session.draft?.notes && session.draft.notes.trim());
+  if (!hasContent) {
+    await clearSession(ctx.telegramUserId);
+    await sendNew(ctx, "אין מה לשלוח — הסל ריק. בנה הזמנה מהקטלוג.", {
+      inline_keyboard: [[{ text: "📚 לקטלוג", callback_data: CB.CATALOG }]],
+    });
+    return;
+  }
 
   // Re-validate is_active for every cart item at submit time.
   const ids = session.cart.map((l) => l.catalog_item_id);

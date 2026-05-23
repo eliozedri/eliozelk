@@ -38,24 +38,28 @@ describe("restrictedScreen (default-deny)", () => {
 });
 
 describe("mainMenu role gating", () => {
-  it("admin sees order intake + admin controls", () => {
+  it("admin sees order intake (incl. my-drafts) + admin controls", () => {
     const datas = buttonDatas(mainMenu(user("admin")).keyboard);
     expect(datas).toEqual(
-      expect.arrayContaining([CB.CATALOG, CB.CART, CB.FREETEXT, CB.ORDERS, CB.ADMIN_REQUESTS, CB.ADMIN_NEWCODE]),
+      expect.arrayContaining([
+        CB.CATALOG, CB.CART, CB.FREETEXT, CB.MY_DRAFTS, CB.ORDERS, CB.ADMIN_REQUESTS, CB.ADMIN_NEWCODE,
+      ]),
     );
   });
 
-  it("authorized_user sees order intake but NOT admin controls", () => {
+  it("authorized_user sees order intake + my-drafts but NOT admin controls", () => {
     const datas = buttonDatas(mainMenu(user("authorized_user")).keyboard);
     expect(datas).toContain(CB.CATALOG);
+    expect(datas).toContain(CB.MY_DRAFTS);
     expect(datas).not.toContain(CB.ADMIN_REQUESTS);
   });
 
-  it("viewer sees only open orders + help", () => {
+  it("viewer sees only system open orders + help (no intake, no my-drafts)", () => {
     const datas = buttonDatas(mainMenu(user("viewer")).keyboard);
     expect(datas).toContain(CB.ORDERS);
     expect(datas).toContain(CB.HELP);
     expect(datas).not.toContain(CB.CATALOG);
+    expect(datas).not.toContain(CB.MY_DRAFTS);
   });
 });
 

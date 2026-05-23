@@ -16,6 +16,7 @@ export const CB = {
   CART: "menu:cart",
   FREETEXT: "menu:freetext",
   ORDERS: "menu:orders",
+  MY_DRAFTS: "menu:mydrafts",
   HELP: "menu:help",
   ADMIN_REQUESTS: "menu:admin_requests",
   ADMIN_NEWCODE: "menu:admin_newcode",
@@ -35,6 +36,14 @@ export const CB_DEPT = "dept:"; //  dept:<slug>
 export const CB_DEPT_PAGE = "dp:"; // dp:<slug>:<page>
 export const CB_ITEM = "it:"; //    it:<itemId>
 export const CB_CART_RM = "crm:"; // crm:<index>
+export const CB_DRAFT = "drf:"; //  drf:<draftId>
+
+// Hebrew labels for a bot draft's review status (team_bot_order_drafts.status).
+export const DRAFT_STATUS_LABELS: Record<string, string> = {
+  pending_review: "ממתינה לאישור הצוות",
+  promoted: "אושרה והפכה להזמנה",
+  rejected: "נדחתה",
+};
 
 export const navRow = [
   { text: "🏠 תפריט ראשי", callback_data: CB.HOME },
@@ -143,8 +152,9 @@ export function mainMenu(user: TeamBotUser): { text: string; keyboard: InlineKey
     rows.push([{ text: "📚 קטלוג ובניית הזמנה", callback_data: CB.CATALOG }]);
     rows.push([{ text: "🛒 הסל שלי", callback_data: CB.CART }]);
     rows.push([{ text: "📋 הזמנה בטקסט חופשי", callback_data: CB.FREETEXT }]);
+    rows.push([{ text: "🧾 ההזמנות שלי מהבוט", callback_data: CB.MY_DRAFTS }]);
   }
-  rows.push([{ text: "📂 הזמנות פתוחות", callback_data: CB.ORDERS }]);
+  rows.push([{ text: "📂 הזמנות פתוחות במערכת", callback_data: CB.ORDERS }]);
   rows.push([{ text: "❓ עזרה", callback_data: CB.HELP }]);
 
   if (user.role === "admin") {
@@ -163,10 +173,15 @@ export function helpScreen(user: TeamBotUser): { text: string; keyboard: InlineK
     "הבוט מאפשר:",
     canOrder ? "• בניית הזמנה מתוך הקטלוג הפעיל ושליחתה כטיוטה" : null,
     canOrder ? "• שליחת הזמנה בטקסט חופשי" : null,
-    "• צפייה בהזמנות פתוחות (לקריאה בלבד)",
+    canOrder ? "• 🧾 ההזמנות שלי מהבוט — הטיוטות ששלחת והסטטוס שלהן" : null,
+    "• 📂 הזמנות פתוחות במערכת — הזמנות עבודה פעילות (לקריאה בלבד)",
     "",
-    "כל הזמנה שנשלחת דרך הבוט נרשמת כ\"הזמנה דרך הבוט מהטלגרם\"",
-    "ועוברת לאישור הצוות במשרד לפני שהיא הופכת להזמנה רשמית.",
+    "שים לב — שתי תצוגות שונות:",
+    "🧾 \"ההזמנות שלי מהבוט\" = מה ששלחת דרך הבוט (טיוטות שממתינות לאישור).",
+    "📂 \"הזמנות פתוחות במערכת\" = הזמנות עבודה רשמיות שכבר קיימות במערכת.",
+    "טיוטה מהבוט מופיעה תחת \"הזמנות פתוחות\" רק לאחר שהצוות אישר אותה.",
+    "",
+    "כל הזמנה שנשלחת דרך הבוט נרשמת כ\"הזמנה דרך הבוט מהטלגרם\".",
     "",
     "פקודות: /start — התחלה,  /menu — תפריט ראשי,  /cancel — ביטול",
   ].filter(Boolean) as string[];

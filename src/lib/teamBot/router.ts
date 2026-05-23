@@ -20,6 +20,7 @@ import {
   CB_CART_RM,
   CB_DEPT,
   CB_DEPT_PAGE,
+  CB_DRAFT,
   CB_ITEM,
   ROLE_LABELS,
   adminDecisionApplied,
@@ -47,7 +48,7 @@ import {
   startFreetext,
   startSubmit,
 } from "./intake";
-import { listOpenOrders, openOrderDetail } from "./orders";
+import { listMyDrafts, listOpenOrders, openMyDraftDetail, openOrderDetail } from "./orders";
 import type { TeamBotUser, TgUpdate, TgUser } from "./types";
 
 function canOrder(user: TeamBotUser): boolean {
@@ -241,6 +242,16 @@ async function handleCallback(ctx: Ctx, data: string): Promise<void> {
   }
   if (data.startsWith("ord:")) {
     await openOrderDetail(ctx, data.slice("ord:".length));
+    return;
+  }
+  if (data === CB.MY_DRAFTS) {
+    if (!canOrder(ctx.user)) return void (await sendMain(ctx));
+    await listMyDrafts(ctx);
+    return;
+  }
+  if (data.startsWith(CB_DRAFT)) {
+    if (!canOrder(ctx.user)) return void (await sendMain(ctx));
+    await openMyDraftDetail(ctx, data.slice(CB_DRAFT.length));
     return;
   }
 
