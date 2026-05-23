@@ -148,6 +148,9 @@ function fromRow(r: Record<string, unknown>): WorkOrder {
     miscRows:      Array.isArray(blob.miscRows)      ? blob.miscRows      : [],
     accessoryRows: Array.isArray(blob.accessoryRows) ? blob.accessoryRows : [],
     serviceRows:   Array.isArray(blob.serviceRows)   ? blob.serviceRows   : [],
+    // Intake provenance
+    source:      (r.source as string | null) ?? "web",
+    sourceRef:   (r.source_ref as string | null) ?? null,
     // Joined arrays (present in fetchAll response, empty in realtime payloads)
     problems:    ((r.order_problems as Record<string, unknown>[]) ?? []).map(fromProblemRow),
     activities:  [], // Loaded on demand from order_activities (not in main subscription)

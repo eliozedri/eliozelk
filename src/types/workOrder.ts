@@ -266,6 +266,10 @@ export interface WorkOrder {
   invoicedBy?: string | null;
   invoiceNumber?: string | null;
   billedAmount?: number | null;
+  // Intake provenance — 'web' (default) | 'telegram_bot'. Stays attached so a
+  // Telegram-origin order remains traceable as "הזמנה דרך הבוט מהטלגרם".
+  source?: string;
+  sourceRef?: string | null;
 }
 
 // ─── Status config ───────────────────────────────────────────────────────────

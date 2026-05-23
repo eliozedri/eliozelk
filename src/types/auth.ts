@@ -52,7 +52,8 @@ export type TabId =
   | "agents"
   | "access"
   | "integrations"
-  | "plan-scanner";
+  | "plan-scanner"
+  | "team-bot-orders";
 
 export const ALL_TABS: { id: TabId; label: string; path: string; section: string }[] = [
   { id: "dashboard", label: "לוח בקרה", path: "/", section: "ניהול" },
@@ -64,6 +65,7 @@ export const ALL_TABS: { id: TabId; label: string; path: string; section: string
   { id: "catalog", label: "מוצרים ושירותים", path: "/catalog", section: "מחלקות" },
   { id: "accounting", label: "הנהלת חשבונות", path: "/accounting", section: "מחלקות" },
   { id: "supplier-documents", label: "סריקת מסמך", path: "/supplier-documents", section: "ניהול" },
+  { id: "team-bot-orders", label: "הזמנות מהבוט", path: "/team-bot-orders", section: "ניהול" },
   { id: "workmap", label: "מפת עבודות", path: "/workmap", section: "בקרת שטח" },
   { id: "schedule", label: "סידור שבועי", path: "/schedule", section: "בקרת שטח" },
   { id: "crews", label: "צוותי שטח", path: "/crews", section: "בקרת שטח" },

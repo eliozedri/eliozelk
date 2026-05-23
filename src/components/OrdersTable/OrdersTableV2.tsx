@@ -262,6 +262,14 @@ function V2Row({
             <span className="font-mono text-[11px] text-gray-400 tracking-tight">
               {order.orderNumber}
             </span>
+            {order.source === "telegram_bot" && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-700 shrink-0"
+                title="הזמנה דרך הבוט מהטלגרם"
+              >
+                📱 טלגרם
+              </span>
+            )}
             {order.jobName && order.customer && (
               <span className="text-[11px] text-gray-500 truncate">{order.customer}</span>
             )}
