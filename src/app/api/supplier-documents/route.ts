@@ -1,21 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { requireAuth, requireAction } from "@/lib/auth/apiAuth";
 import { nanoid } from "nanoid";
 import type { SupplierDocumentType, PaymentStatus, UserDocumentCard } from "@/types/supplierDocument";
 
-async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const db = getServiceSupabase();
-  const { data: { user }, error } = await db.auth.getUser(token);
-  if (error || !user) return null;
-  return user.id;
-}
-
 // GET /api/supplier-documents — list documents with optional filters
 export async function GET(req: NextRequest) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
 
   const db = getServiceSupabase();
   const { searchParams } = req.nextUrl;
@@ -49,16 +41,16 @@ export async function GET(req: NextRequest) {
 
 // POST /api/supplier-documents — create a new document record (manual or post-upload)
 export async function POST(req: NextRequest) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAction(req, "upload_supplier_document");
+  if (!auth.ok) return auth.response;
 
   const db = getServiceSupabase();
   const { data: profile } = await db
     .from("profiles")
     .select("name")
-    .eq("id", userId)
+    .eq("id", auth.user.id)
     .single();
-  const createdBy = (profile as { name?: string } | null)?.name ?? userId;
+  const createdBy = (profile as { name?: string } | null)?.name ?? auth.user.id;
 
   let body: {
     documentType?: SupplierDocumentType;

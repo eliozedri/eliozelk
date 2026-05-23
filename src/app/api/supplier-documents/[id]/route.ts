@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { requireAuth, requireAction } from "@/lib/auth/apiAuth";
 import type { SupplierDocumentType, PaymentStatus, InventoryLineAction } from "@/types/supplierDocument";
 
 // ── camelCase mappers (Supabase returns snake_case) ───────────────────────────
@@ -73,22 +74,13 @@ function mapLineToCamelCase(line: Record<string, any>) {
   };
 }
 
-async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const db = getServiceSupabase();
-  const { data: { user }, error } = await db.auth.getUser(token);
-  if (error || !user) return null;
-  return user.id;
-}
-
 // GET /api/supplier-documents/[id] — full document with lines and supplier
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const db = getServiceSupabase();
@@ -141,8 +133,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAction(req, "review_supplier_document");
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const db = getServiceSupabase();
@@ -150,9 +142,9 @@ export async function PATCH(
   const { data: profile } = await db
     .from("profiles")
     .select("name")
-    .eq("id", userId)
+    .eq("id", auth.user.id)
     .single();
-  const userName = (profile as { name?: string } | null)?.name ?? userId;
+  const userName = (profile as { name?: string } | null)?.name ?? auth.user.id;
 
   // Verify document exists and is not posted/archived
   const { data: existing } = await db

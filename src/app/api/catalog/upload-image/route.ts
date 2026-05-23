@@ -21,6 +21,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { requireAction } from "@/lib/auth/apiAuth";
 
 const BUCKET = "catalog-product-images";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -30,15 +31,6 @@ const ALLOWED_TYPES = new Set([
   "image/png",
   "image/webp",
 ]);
-
-async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const db = getServiceSupabase();
-  const { data: { user }, error } = await db.auth.getUser(token);
-  if (error || !user) return null;
-  return user.id;
-}
 
 async function ensureBucket(db: ReturnType<typeof getServiceSupabase>): Promise<void> {
   const { data: buckets } = await db.storage.listBuckets();
@@ -59,8 +51,9 @@ function safeExt(filename: string, mime: string): string {
 }
 
 export async function POST(req: NextRequest) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAction(req, "manage_catalog");
+  if (!auth.ok) return auth.response;
+  const userId = auth.user.id;
 
   let formData: FormData;
   try {
@@ -164,8 +157,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAction(req, "manage_catalog");
+  if (!auth.ok) return auth.response;
+  const userId = auth.user.id;
 
   let body: { productId?: string };
   try {

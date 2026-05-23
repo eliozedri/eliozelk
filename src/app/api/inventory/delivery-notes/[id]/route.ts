@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
-
-async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const admin = getServiceSupabase();
-  const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return null;
-  return user.id;
-}
+import { requireAuth, requireAction } from "@/lib/auth/apiAuth";
 
 // GET /api/inventory/delivery-notes/[id] — note + items
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const db = getServiceSupabase();
@@ -29,8 +21,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 // PATCH /api/inventory/delivery-notes/[id] — update fields or counted quantities
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAction(req, "post_supplier_document");
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const db = getServiceSupabase();

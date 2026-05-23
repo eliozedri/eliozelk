@@ -12,10 +12,23 @@ const update = vi.fn(() => ({ eq: updateEq }));
 vi.mock("@/lib/supabase/server", () => ({
   getServiceSupabase: () => ({
     auth: { getUser },
-    from: () => ({
-      select: () => ({ eq: () => ({ single }) }),
-      update,
-    }),
+    from: (table: string) =>
+      table === "profiles"
+        ? {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: () =>
+                  Promise.resolve({
+                    data: { id: "u1", role: "master", is_active: true, allowed_tabs: ["*"], action_permissions: ["*"] },
+                    error: null,
+                  }),
+              }),
+            }),
+          }
+        : {
+            select: () => ({ eq: () => ({ single }) }),
+            update,
+          },
   }),
 }));
 

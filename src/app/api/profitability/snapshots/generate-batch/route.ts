@@ -4,22 +4,14 @@ import { calculateOrderProfitability } from "@/lib/profitability";
 import type { DiaryForProfitability, InventoryConsumptionInput } from "@/lib/profitability";
 import { DEFAULT_COST_RATES } from "@/types/costRates";
 import type { CostRates } from "@/types/costRates";
-
-async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const admin = getServiceSupabase();
-  const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return null;
-  return user.id;
-}
+import { requireRole } from "@/lib/auth/apiAuth";
 
 // POST /api/profitability/snapshots/generate-batch
 // Body: { statuses?: string[] }  — optional status filter, default all non-cancelled
 // Returns: { generated, skipped, failed, durationMs }
 export async function POST(req: NextRequest) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireRole(req, ["office_manager", "finance_manager"]);
+  if (!auth.ok) return auth.response;
 
   const start = Date.now();
   let statuses: string[] | undefined;

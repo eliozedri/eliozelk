@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { requireRole } from "@/lib/auth/apiAuth";
 import { syncConsumptionForOrder } from "@/lib/inventory/consumption";
-
-async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const admin = getServiceSupabase();
-  const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return null;
-  return user.id;
-}
 
 export async function POST(req: NextRequest) {
   const db = getServiceSupabase();
 
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Called as a side-effect of diary approval — restrict to the roles that can
+  // approve diaries (office_manager + master).
+  const auth = await requireRole(req, ["office_manager"]);
+  if (!auth.ok) return auth.response;
 
   let orderId: string, diaryId: string;
   try {

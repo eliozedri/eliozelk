@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
 // ── Minimal WhatsApp Cloud API types ─────────────────────────────────────────
@@ -45,10 +46,46 @@ export async function GET(req: NextRequest) {
   return new Response("Forbidden", { status: 403 });
 }
 
+// ── Inbound signature validation ──────────────────────────────────────────────
+// Meta signs every webhook POST with HMAC-SHA256 of the raw body using the app
+// secret, sent as `X-Hub-Signature-256: sha256=<hex>`. Validating it is the only
+// thing that proves a POST actually came from Meta and not a forged caller.
+
+function isValidSignature(rawBody: string, header: string | null, appSecret: string): boolean {
+  if (!header) return false;
+  const expected =
+    "sha256=" + crypto.createHmac("sha256", appSecret).update(rawBody, "utf8").digest("hex");
+  const a = Buffer.from(header);
+  const b = Buffer.from(expected);
+  // Length check first so timingSafeEqual never throws on mismatched lengths.
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 // ── POST — Inbound messages ───────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const payload = await req.json().catch(() => null) as WaWebhookPayload | null;
+  // Read the raw body BEFORE parsing — HMAC must be computed over the exact bytes.
+  const rawBody = await req.text();
+
+  const appSecret = process.env.WHATSAPP_APP_SECRET;
+  if (appSecret) {
+    const signature = req.headers.get("x-hub-signature-256");
+    if (!isValidSignature(rawBody, signature, appSecret)) {
+      console.warn("[whatsapp] rejected inbound POST: invalid or missing X-Hub-Signature-256");
+      return NextResponse.json({ ok: false, error: "invalid signature" }, { status: 401 });
+    }
+  } else {
+    // No secret configured → cannot verify authenticity. Process for backward
+    // compatibility but make the gap loud. Set WHATSAPP_APP_SECRET to enforce.
+    console.warn("[whatsapp] WHATSAPP_APP_SECRET not set — inbound signature validation DISABLED");
+  }
+
+  let payload: WaWebhookPayload | null = null;
+  try {
+    payload = rawBody ? (JSON.parse(rawBody) as WaWebhookPayload) : null;
+  } catch {
+    payload = null;
+  }
   if (!payload) return NextResponse.json({ ok: true });
 
   try {

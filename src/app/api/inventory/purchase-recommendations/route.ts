@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
-
-async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const admin = getServiceSupabase();
-  const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return null;
-  return user.id;
-}
+import { requireAuth, requireAction } from "@/lib/auth/apiAuth";
 
 // GET /api/inventory/purchase-recommendations — list active recommendations
 export async function GET(req: NextRequest) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
 
   const url = new URL(req.url);
   const statusFilter = url.searchParams.get("status") ?? "active"; // "active" = non-resolved/dismissed
@@ -37,8 +29,8 @@ export async function GET(req: NextRequest) {
 
 // POST /api/inventory/purchase-recommendations — create manual recommendation
 export async function POST(req: NextRequest) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAction(req, "manage_catalog");
+  if (!auth.ok) return auth.response;
 
   const db = getServiceSupabase();
   let body: {
@@ -74,7 +66,7 @@ export async function POST(req: NextRequest) {
     status:               "draft",
     reason:               body.reason ?? "המלצה ידנית",
     source_type:          "manual",
-    created_by:           userId,
+    created_by:           auth.user.id,
     created_at:           now,
     updated_at:           now,
   }).select("id").single();

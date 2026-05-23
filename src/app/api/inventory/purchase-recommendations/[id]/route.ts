@@ -1,21 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
-
-async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const admin = getServiceSupabase();
-  const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return null;
-  return user.id;
-}
+import { requireAction } from "@/lib/auth/apiAuth";
 
 // PATCH /api/inventory/purchase-recommendations/[id]
 // Allowed actions: approve_internal | dismiss | update_quantity
 // Strictly forbidden: sending external messages, creating purchase orders, modifying stock.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAction(req, "manage_catalog");
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const db = getServiceSupabase();
@@ -43,7 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (body.action === "approve_internal") {
     // Internal approval only — no external message, no purchase order
-    update = { ...update, status: "approved_internal", approved_by: userId, approved_at: now };
+    update = { ...update, status: "approved_internal", approved_by: auth.user.id, approved_at: now };
   } else if (body.action === "dismiss") {
     update = { ...update, status: "dismissed", dismissed_reason: body.dismissReason ?? "user_dismissed" };
   } else if (body.action === "update_quantity") {

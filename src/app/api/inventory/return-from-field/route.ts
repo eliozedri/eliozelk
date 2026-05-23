@@ -1,21 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { requireAction } from "@/lib/auth/apiAuth";
 import { returnFromField } from "@/lib/inventory/returnFromField";
 
-async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const admin = getServiceSupabase();
-  const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return null;
-  return user.id;
-}
-
 export async function POST(req: NextRequest) {
-  const db = getServiceSupabase();
+  const auth = await requireAction(req, "manage_catalog");
+  if (!auth.ok) return auth.response;
 
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const db = getServiceSupabase();
 
   let orderId: string, catalogItemId: string, orderItemKey: string, returnedQty: number, notes: string;
   try {
@@ -43,8 +35,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Get user display name for audit
-  const { data: profile } = await db.from("profiles").select("name").eq("id", userId).single();
-  const returnedBy = (profile as { name?: string } | null)?.name ?? userId;
+  const { data: profile } = await db.from("profiles").select("name").eq("id", auth.user.id).single();
+  const returnedBy = (profile as { name?: string } | null)?.name ?? auth.user.id;
 
   const result = await returnFromField(db, {
     orderId, catalogItemId, orderItemKey, returnedQty, notes, returnedBy,

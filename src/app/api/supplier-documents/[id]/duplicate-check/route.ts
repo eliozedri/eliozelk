@@ -1,23 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { requireAction } from "@/lib/auth/apiAuth";
 import { runDuplicateCheck } from "@/lib/supplierDocuments/duplicateCheck";
-
-async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const db = getServiceSupabase();
-  const { data: { user }, error } = await db.auth.getUser(token);
-  if (error || !user) return null;
-  return user.id;
-}
 
 // POST /api/supplier-documents/[id]/duplicate-check
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAction(req, "review_supplier_document");
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
   const db = getServiceSupabase();

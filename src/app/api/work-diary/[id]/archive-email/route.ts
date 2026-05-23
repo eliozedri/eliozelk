@@ -1,25 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { requireAction } from "@/lib/auth/apiAuth";
 import { sendWorkDiaryEmail } from "@/lib/email/sendWorkDiaryEmail";
 import type { WorkDiary } from "@/types/workDiary";
 
 export const maxDuration = 30;
 
-async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const admin = getServiceSupabase();
-  const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return null;
-  return user.id;
-}
-
 export async function POST(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAction(req, "submit_diary");
+  if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;
   const db = getServiceSupabase();

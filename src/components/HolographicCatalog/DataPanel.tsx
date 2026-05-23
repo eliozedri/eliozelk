@@ -229,17 +229,29 @@ export function RightPanel({ product }: RightPanelProps) {
 
           <Divider />
 
-          {/* INVENTORY BREAKDOWN — richer per-product stock view */}
-          <p style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.16em", textTransform: "uppercase", color: `${accent}99`, marginBottom: 8 }}>
-            פירוט מלאי
-          </p>
+          {/* INVENTORY — shown only when real data exists; never fabricated. */}
           {product.inventory ? (
-            <InventoryBreakdown inv={product.inventory} accent={accent} />
+            <>
+              <p style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.16em", textTransform: "uppercase", color: `${accent}99`, marginBottom: 8 }}>
+                פירוט מלאי
+              </p>
+              <InventoryBreakdown inv={product.inventory} accent={accent} />
+            </>
+          ) : product.metrics.length > 0 ? (
+            <>
+              <p style={{ fontSize: 9, fontFamily: "monospace", letterSpacing: "0.16em", textTransform: "uppercase", color: `${accent}99`, marginBottom: 8 }}>
+                נתונים
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {product.metrics.map((m) => (
+                  <MetricCell key={m.label} label={m.label} value={m.value} accent={accent} />
+                ))}
+              </div>
+            </>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              {product.metrics.map((m) => (
-                <MetricCell key={m.label} label={m.label} value={m.value} accent={accent} />
-              ))}
+            <div style={{ padding: "10px 12px", borderRadius: 10, border: "1px dashed rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.02)", display: "flex", flexDirection: "column", gap: 3, alignItems: "flex-end" }}>
+              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.30)", fontFamily: "monospace", letterSpacing: "0.12em", textTransform: "uppercase" }}>מלאי</span>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", fontWeight: 600 }}>לא מנוהל במערכת כרגע</span>
             </div>
           )}
 

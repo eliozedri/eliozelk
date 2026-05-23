@@ -1,19 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
-
-async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
-  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  const admin = getServiceSupabase();
-  const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return null;
-  return user.id;
-}
+import { requireAuth, requireAction } from "@/lib/auth/apiAuth";
 
 // GET /api/inventory/delivery-notes — list all non-cancelled notes
 export async function GET(req: NextRequest) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
 
   const db = getServiceSupabase();
   const { data, error } = await db.from("delivery_notes")
@@ -28,8 +20,9 @@ export async function GET(req: NextRequest) {
 
 // POST /api/inventory/delivery-notes — create draft delivery note
 export async function POST(req: NextRequest) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireAction(req, "manage_catalog");
+  if (!auth.ok) return auth.response;
+  const userId = auth.user.id;
 
   let body: {
     supplierName?: string;

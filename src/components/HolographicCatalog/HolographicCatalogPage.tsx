@@ -1,17 +1,50 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { HolographicBackground } from "./HolographicBackground";
 import { HolographicStage } from "./HolographicStage";
 import { ProductCarousel } from "./ProductCarousel";
 import { LeftPanel, RightPanel } from "./DataPanel";
-import { HOLO_PRODUCTS } from "./data";
+import { catalogItemsToHoloProducts } from "./data";
+import { useCatalogContext } from "@/context/CatalogContext";
 
 export function HolographicCatalogPage() {
-  const [activeId, setActiveId] = useState<string>(HOLO_PRODUCTS[0].id);
-  const activeProduct = HOLO_PRODUCTS.find((p) => p.id === activeId) ?? HOLO_PRODUCTS[0];
-  const accent = activeProduct.accentColor ?? "#06b6d4";
+  const { items } = useCatalogContext();
+  // Live catalog (active items only) — no mock data, no fabricated inventory.
+  const products = useMemo(
+    () => catalogItemsToHoloProducts(items.filter((i) => i.isActive)),
+    [items],
+  );
+
+  const [activeId, setActiveId] = useState<string | null>(null);
   const handleSelect = useCallback((id: string) => setActiveId(id), []);
+
+  const activeProduct =
+    products.find((p) => p.id === activeId) ?? products[0] ?? null;
+  const accent = activeProduct?.accentColor ?? "#06b6d4";
+
+  // Empty / loading state — catalog not yet loaded or no active items.
+  if (!activeProduct) {
+    return (
+      <div
+        dir="rtl"
+        style={{
+          position: "relative", width: "100%", height: "100vh", overflow: "hidden",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          flexDirection: "column", gap: 14, background: "#030b18",
+        }}
+      >
+        <HolographicBackground />
+        <div style={{ position: "relative", zIndex: 10, fontSize: 64, lineHeight: 1 }}>🗂️</div>
+        <p style={{ position: "relative", zIndex: 10, color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: 700 }}>
+          הקטלוג נטען…
+        </p>
+        <p style={{ position: "relative", zIndex: 10, color: "rgba(255,255,255,0.35)", fontSize: 11 }}>
+          אם אין פריטים פעילים בקטלוג, הוסף פריטים במסך הקטלוג.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -71,7 +104,7 @@ export function HolographicCatalogPage() {
         </div>
 
         <p style={{ fontSize: 8, fontFamily: "monospace", color: "rgba(255,255,255,0.15)", letterSpacing: "0.16em", textTransform: "uppercase" }}>
-          v1.0 · {HOLO_PRODUCTS.length} פריטים
+          v1.0 · {products.length} פריטים
         </p>
       </header>
 
@@ -130,7 +163,7 @@ export function HolographicCatalogPage() {
           boxShadow: `0 0 14px 3px ${accent}20`,
         }} />
 
-        <ProductCarousel products={HOLO_PRODUCTS} activeId={activeId} onSelect={handleSelect} />
+        <ProductCarousel products={products} activeId={activeProduct.id} onSelect={handleSelect} />
       </footer>
     </div>
   );

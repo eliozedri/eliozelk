@@ -5,7 +5,7 @@ import type { WorkDiary, WorkDiaryStatus, DiaryApprovalStatus } from "@/types/wo
 import { createEmptyDiary, normalizeSecurityTeams } from "@/types/workDiary";
 import { getSupabase } from "@/lib/supabase/client";
 
-function fromRow(r: Record<string, unknown>): WorkDiary {
+export function fromRow(r: Record<string, unknown>): WorkDiary {
   const data = (r.data ?? {}) as Partial<WorkDiary>;
   return {
     ...data,
@@ -27,11 +27,19 @@ function fromRow(r: Record<string, unknown>): WorkDiary {
     internalEmailedAt: (r.internal_emailed_at as string | null | undefined) ?? null,
     internalEmailError: (r.internal_email_error as string | null | undefined) ?? null,
     crewMembers: Array.isArray(data.crewMembers) ? data.crewMembers : [],
+    // Defensive hydration: the line-item arrays live only in the JSONB `data`
+    // blob. A legacy/partial row whose blob predates these keys would otherwise
+    // hydrate them as undefined and blank the item tabs (.map on undefined) when
+    // a draft is reopened for editing. Default to [] to guarantee they survive.
+    paintingItems: Array.isArray(data.paintingItems) ? data.paintingItems : [],
+    poleItems: Array.isArray(data.poleItems) ? data.poleItems : [],
+    signItems: Array.isArray(data.signItems) ? data.signItems : [],
+    photos: Array.isArray(data.photos) ? data.photos : [],
     securityTeams: data.securityTeams ? normalizeSecurityTeams(data.securityTeams) : undefined,
   } as WorkDiary;
 }
 
-function toRow(d: WorkDiary) {
+export function toRow(d: WorkDiary) {
   return {
     id: d.id,
     diary_number: d.diaryNumber,

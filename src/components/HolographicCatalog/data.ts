@@ -1,18 +1,61 @@
 /**
- * HOLOGRAPHIC CATALOG — MOCK DATASET
+ * HOLOGRAPHIC CATALOG DATA
  *
- * TO ADD REAL PRODUCT IMAGES:
- *   Place transparent PNG files in: /public/catalog/transparent/
- *   Each file name must match the `id` field below plus ".png"
+ * The production page (HolographicCatalogPage) renders LIVE catalog data from
+ * Supabase via `catalogItemsToHoloProducts` below — it does NOT use HOLO_PRODUCTS.
  *
- * TO CONNECT SUPABASE:
- *   Replace this array with data from useCatalog() and map
- *   CatalogItem fields → HoloProduct shape.
- *   metadata.specs maps to specs[], metadata.images.full maps to imageUrl.
- *   `inventory` field comes from inventory_movements + active orders.
+ * HOLO_PRODUCTS is a static SAMPLE dataset kept ONLY for the /holographic-catalog
+ * /design-lab visual sandbox (not linked in the app nav). It is not real data.
+ *
+ * IMPORTANT — inventory is NOT managed in the system yet. The live mapper never
+ * fabricates stock numbers: `inventory` is left undefined and availability is
+ * shown as "לא מנוהל כרגע".
  */
 
-import type { HoloProduct } from "./types";
+import type { HoloProduct, HoloSpec, HoloStatus } from "./types";
+import type { CatalogItem } from "@/types/catalog";
+
+// ── Live mapping: Supabase CatalogItem → HoloProduct ─────────────────────────
+
+function statusFromActive(active: boolean): HoloStatus {
+  return active ? "active" : "inactive";
+}
+
+export function catalogItemToHoloProduct(item: CatalogItem): HoloProduct {
+  const images = (item.metadata?.images ?? {}) as { thumb?: string; full?: string };
+  const imageUrl = images.full ?? images.thumb ?? "";
+
+  const specs: HoloSpec[] = [];
+  if (item.dimensionValue) {
+    specs.push({
+      label: "מידות",
+      value: `${item.dimensionValue}${item.dimensionUnit ? " " + item.dimensionUnit : ""}`,
+    });
+  }
+  if (item.category) specs.push({ label: "קטגוריה", value: item.category });
+
+  return {
+    id: item.id,
+    title: item.name,
+    category: item.category || "כללי",
+    imageUrl,
+    description: item.description || "",
+    status: statusFromActive(item.isActive),
+    unit: item.unitOfMeasure || "יחידה",
+    // No live inventory module yet — do not imply stock tracking exists.
+    inventoryLabel: "לא מנוהל כרגע",
+    specs,
+    metrics: [], // never fabricate operational numbers
+    tags: item.category ? [item.category] : [],
+    inventory: undefined, // no fake stock breakdown / reservations
+  };
+}
+
+export function catalogItemsToHoloProducts(items: CatalogItem[]): HoloProduct[] {
+  return items.map(catalogItemToHoloProduct);
+}
+
+// ── Design-lab sample data only (NOT used by the production page) ─────────────
 
 export const HOLO_PRODUCTS: HoloProduct[] = [
   {
