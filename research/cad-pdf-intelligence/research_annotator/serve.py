@@ -3,17 +3,30 @@
 serve.py — local Python helper for the manual training annotator.
 
 Binds to 127.0.0.1 only. Serves:
-  GET  /                   → index.html
-  GET  /static/*           → annotator JS/CSS + vendored Konva
-  GET  /image              → the rendered plan PNG for the selected run
-  GET  /image-info         → JSON: width, height, dpi (from filename or stat)
-  GET  /examples           → existing visual_training_examples.wizard.json
-                             or {"empty": true} if none yet
-  PUT  /examples           → write the JSON body to
-                             outputs/manual_training/visual_training_examples.wizard.json
-                             (atomic rename; pretty-printed)
-  POST /render-page        → render a PDF page at a given DPI into the run's
-                             outputs/image_scan_debug/ if no image exists yet
+  GET  /                          → index.html
+  GET  /static/*                  → annotator JS/CSS + vendored Konva
+  GET  /image                     → the rendered plan PNG for the selected run
+  GET  /image-info                → JSON: width, height, dpi
+  GET  /examples                  → existing visual_training_examples.wizard.json
+                                    or {"empty": true} if none yet
+  PUT  /examples                  → write JSON body to
+                                    outputs/manual_training/visual_training_examples.wizard.json
+                                    (atomic rename; pretty-printed)
+  POST /render-page               → render a PDF page at a given DPI
+
+  -- Slice 3 (Close the teaching loop) --
+  POST /run-detection             → spawn 37_manual_visual_training_poc.py in a
+                                    background thread; returns {job_id, status}
+  GET  /run-status                → read current detection status from
+                                    outputs/manual_training/.detection_run.json
+                                    {status: pending|running|complete|failed,
+                                     stdout_tail, exit_code, paths, ...}
+  GET  /candidates                → outputs/manual_training/visual_agent_candidates.json
+  GET  /review-questions          → outputs/manual_training/visual_review_questions.json
+  GET  /evidence-crop/<fn>        → outputs/manual_training/evidence_crops/<fn>
+  GET  /review-answers            → existing review-answers file or {empty: true}
+  PUT  /review-answers            → write JSON body to
+                                    outputs/manual_training/visual_review_answers.wizard.json
 
 Usage:
   .venv/bin/python research_annotator/serve.py \\
@@ -27,13 +40,21 @@ Safety:
   - Writes ONLY to <run_dir>/outputs/manual_training/.
   - Will NOT touch any production DB, API route, or paid service.
   - Will NOT permanently archive the uploaded plan.
+  - Detection subprocess inherits the venv from the parent process; no
+    external network access required.
 """
 
 import argparse
 import json
 import os
+import re
+import shutil
+import subprocess
 import sys
 import tempfile
+import threading
+import time
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Optional
@@ -43,6 +64,13 @@ RUN_DIR: Path = Path(".")
 SCRIPT_DIR: Path = Path(__file__).parent.resolve()
 IMAGE_PATH: Optional[Path] = None
 IMAGE_INFO: dict = {}
+PYTHON_EXE: str = sys.executable
+SCRIPT37_PATH: Path = Path(".")  # set in main()
+
+# Detection state (in-memory + persisted to .detection_run.json)
+DETECTION_LOCK = threading.Lock()
+DETECTION_STATE: dict = {"status": "none"}
+STDOUT_TAIL_MAX = 80  # last N lines kept in memory + status file
 
 
 # ----- HTTP handler --------------------------------------------------
@@ -104,30 +132,85 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json(200, {"empty": True, "message": "no examples saved yet"})
             return
 
+        # ----- Slice 3 endpoints -----
+        if path == "/run-status":
+            self._send_json(200, _read_status())
+            return
+
+        if path == "/candidates":
+            p = _output_dir() / "visual_agent_candidates.json"
+            if p.exists():
+                self._serve_static(p, "application/json; charset=utf-8")
+            else:
+                self._send_json(404, {"error": "no candidates yet — run detection first"})
+            return
+
+        if path == "/review-questions":
+            p = _output_dir() / "visual_review_questions.json"
+            if p.exists():
+                self._serve_static(p, "application/json; charset=utf-8")
+            else:
+                self._send_json(404, {"error": "no review questions yet — run detection first"})
+            return
+
+        if path == "/review-answers":
+            p = _review_answers_path()
+            if p.exists():
+                self._serve_static(p, "application/json; charset=utf-8")
+            else:
+                self._send_json(200, {"empty": True, "message": "no review answers yet"})
+            return
+
+        if path.startswith("/evidence-crop/"):
+            fn = path[len("/evidence-crop/"):]
+            # Reject path traversal
+            if "/" in fn or ".." in fn or fn.startswith("."):
+                self._send_json(400, {"error": "invalid crop name"}); return
+            target = (_output_dir() / "evidence_crops" / fn).resolve()
+            if (_output_dir() / "evidence_crops") not in target.parents:
+                self._send_json(403, {"error": "path escape"}); return
+            if not target.exists():
+                self._send_json(404, {"error": "crop not found", "name": fn}); return
+            self._serve_static(target, "image/png")
+            return
+
         self._send_json(404, {"error": "not found", "path": path})
 
     # ----- PUT -----
     def do_PUT(self):
-        if self.path != "/examples":
-            self._send_json(404, {"error": "not found"}); return
-        body = self._read_body()
-        if not body:
-            self._send_json(400, {"error": "empty body"}); return
-        try:
-            payload = json.loads(body.decode("utf-8"))
-        except Exception as e:
-            self._send_json(400, {"error": "invalid json", "detail": str(e)}); return
-        # Minimal schema sanity check
-        if not isinstance(payload, dict):
-            self._send_json(400, {"error": "root must be object"}); return
-        _atomic_write_json(_examples_path(), payload)
-        self._send_json(200, {
-            "saved": True,
-            "path": str(_examples_path()),
-            "bytes": len(body),
-        })
+        if self.path == "/examples":
+            body = self._read_body()
+            if not body:
+                self._send_json(400, {"error": "empty body"}); return
+            try:
+                payload = json.loads(body.decode("utf-8"))
+            except Exception as e:
+                self._send_json(400, {"error": "invalid json", "detail": str(e)}); return
+            if not isinstance(payload, dict):
+                self._send_json(400, {"error": "root must be object"}); return
+            _atomic_write_json(_examples_path(), payload)
+            self._send_json(200, {
+                "saved": True, "path": str(_examples_path()), "bytes": len(body),
+            })
+            return
+        if self.path == "/review-answers":
+            body = self._read_body()
+            if not body:
+                self._send_json(400, {"error": "empty body"}); return
+            try:
+                payload = json.loads(body.decode("utf-8"))
+            except Exception as e:
+                self._send_json(400, {"error": "invalid json", "detail": str(e)}); return
+            if not isinstance(payload, dict):
+                self._send_json(400, {"error": "root must be object"}); return
+            _atomic_write_json(_review_answers_path(), payload)
+            self._send_json(200, {
+                "saved": True, "path": str(_review_answers_path()), "bytes": len(body),
+            })
+            return
+        self._send_json(404, {"error": "not found"})
 
-    # ----- POST (render-page) -----
+    # ----- POST -----
     def do_POST(self):
         if self.path == "/render-page":
             body = self._read_body()
@@ -145,6 +228,34 @@ class Handler(BaseHTTPRequestHandler):
             IMAGE_PATH = out["path"]
             IMAGE_INFO = out["info"]
             self._send_json(200, {"rendered": True, **out["info"]})
+            return
+        if self.path == "/run-detection":
+            # If a detection job is already running, refuse to start another.
+            with DETECTION_LOCK:
+                cur = dict(DETECTION_STATE)
+            if cur.get("status") == "running":
+                self._send_json(409, {
+                    "error": "another detection is already running",
+                    "job_id": cur.get("job_id"),
+                    "started_at": cur.get("started_at"),
+                })
+                return
+            # Refuse if the wizard file is not present
+            if not _examples_path().exists():
+                self._send_json(412, {
+                    "error": "no training examples saved yet — PUT /examples first",
+                })
+                return
+            job_id = _make_job_id()
+            t = threading.Thread(target=_run_detection_subprocess,
+                                 args=(job_id,), daemon=True)
+            t.start()
+            self._send_json(200, {
+                "job_id": job_id,
+                "status": "pending",
+                "examples_file": str(_examples_path()),
+                "started_at": datetime.utcnow().isoformat() + "Z",
+            })
             return
         self._send_json(404, {"error": "not found"})
 
@@ -172,8 +283,147 @@ def _guess_ctype(p: Path) -> str:
     }.get(ext, "application/octet-stream")
 
 
+def _output_dir() -> Path:
+    return RUN_DIR / "outputs" / "manual_training"
+
+
 def _examples_path() -> Path:
-    return RUN_DIR / "outputs" / "manual_training" / "visual_training_examples.wizard.json"
+    return _output_dir() / "visual_training_examples.wizard.json"
+
+
+def _review_answers_path() -> Path:
+    return _output_dir() / "visual_review_answers.wizard.json"
+
+
+def _status_path() -> Path:
+    return _output_dir() / ".detection_run.json"
+
+
+def _make_job_id() -> str:
+    return "job_" + datetime.utcnow().strftime("%Y%m%dT%H%M%SZ") + "_" + str(int(time.time() * 1000) % 10000)
+
+
+def _read_status() -> dict:
+    """Return current detection status. Prefer in-memory state, fall back to file."""
+    with DETECTION_LOCK:
+        if DETECTION_STATE.get("status") and DETECTION_STATE["status"] != "none":
+            return dict(DETECTION_STATE)
+    p = _status_path()
+    if not p.exists():
+        return {"status": "none"}
+    try:
+        with open(p, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return {"status": "none"}
+
+
+def _write_status(state: dict):
+    """Persist current detection state to disk (best-effort, atomic)."""
+    p = _status_path()
+    try:
+        _atomic_write_json(p, state)
+    except Exception:
+        pass
+
+
+def _update_status(updates: dict):
+    """Merge `updates` into in-memory + disk status (thread-safe)."""
+    with DETECTION_LOCK:
+        DETECTION_STATE.update(updates)
+        snapshot = dict(DETECTION_STATE)
+    _write_status(snapshot)
+
+
+def _detect_step_from_line(line: str) -> Optional[str]:
+    """Recognize script 37's progress lines (e.g. 'Step C: Extracting rules ...')."""
+    m = re.match(r"^\s*(Step [A-Z0-9]+(?:\s|$).*)", line)
+    if m:
+        return m.group(1).strip()
+    if "Pole rule:" in line or "Tick rule:" in line or "Code rule:" in line or "Symbol rule:" in line:
+        return line.strip()
+    if line.strip().startswith("DONE") or line.startswith("============"):
+        return None
+    return None
+
+
+def _run_detection_subprocess(job_id: str):
+    """Spawn script 37 and stream its output into the detection state."""
+    started_at = datetime.utcnow().isoformat() + "Z"
+    cmd = [
+        PYTHON_EXE, str(SCRIPT37_PATH),
+        "--plan-run-dir", str(RUN_DIR),
+        "--wizard-examples", str(_examples_path()),
+    ]
+    _update_status({
+        "job_id": job_id,
+        "status": "running",
+        "started_at": started_at,
+        "completed_at": None,
+        "exit_code": None,
+        "cmd": cmd,
+        "current_step": "starting…",
+        "stdout_tail": [],
+        "error": None,
+        "result_paths": None,
+    })
+    print(f"[serve] [{job_id}] detection started: {' '.join(cmd)}", flush=True)
+
+    stdout_tail: list = []
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1,
+        )
+        with DETECTION_LOCK:
+            DETECTION_STATE["pid"] = proc.pid
+        for raw in proc.stdout:
+            line = raw.rstrip("\n")
+            stdout_tail.append(line)
+            if len(stdout_tail) > STDOUT_TAIL_MAX:
+                stdout_tail = stdout_tail[-STDOUT_TAIL_MAX:]
+            step = _detect_step_from_line(line)
+            updates = {"stdout_tail": list(stdout_tail)}
+            if step:
+                updates["current_step"] = step
+            _update_status(updates)
+        exit_code = proc.wait()
+        result_paths = {
+            "candidates":      str(_output_dir() / "visual_agent_candidates.json"),
+            "review_questions": str(_output_dir() / "visual_review_questions.json"),
+            "rules":           str(_output_dir() / "visual_learning_rules.json"),
+            "report_md":       str(_output_dir() / "manual_training_report.md"),
+            "report_html":     str(_output_dir() / "manual_training_report.html"),
+        }
+        if exit_code == 0:
+            _update_status({
+                "status": "complete",
+                "completed_at": datetime.utcnow().isoformat() + "Z",
+                "exit_code": exit_code,
+                "current_step": "done",
+                "result_paths": result_paths,
+            })
+            print(f"[serve] [{job_id}] detection complete (exit 0)", flush=True)
+        else:
+            _update_status({
+                "status": "failed",
+                "completed_at": datetime.utcnow().isoformat() + "Z",
+                "exit_code": exit_code,
+                "current_step": f"failed (exit {exit_code})",
+                "error": f"script 37 exited with code {exit_code}",
+                "result_paths": result_paths,
+            })
+            print(f"[serve] [{job_id}] detection FAILED (exit {exit_code})", flush=True)
+    except Exception as e:
+        _update_status({
+            "status": "failed",
+            "completed_at": datetime.utcnow().isoformat() + "Z",
+            "current_step": "failed",
+            "error": f"subprocess exception: {e}",
+            "stdout_tail": list(stdout_tail),
+        })
+        print(f"[serve] [{job_id}] detection EXCEPTION: {e}", flush=True)
 
 
 def _atomic_write_json(target: Path, payload: dict):
@@ -265,11 +515,15 @@ def main() -> int:
     parser.add_argument("--dpi", type=int, default=150, help="DPI for rendering if no image present yet (default 150)")
     args = parser.parse_args()
 
-    global RUN_DIR, IMAGE_PATH, IMAGE_INFO
+    global RUN_DIR, IMAGE_PATH, IMAGE_INFO, SCRIPT37_PATH
     RUN_DIR = Path(args.plan_run_dir).resolve()
     if not RUN_DIR.exists():
         print(f"ERROR: --plan-run-dir not found: {RUN_DIR}", file=sys.stderr)
         return 1
+    # Locate script 37 alongside research_annotator/ (in research/cad-pdf-intelligence/)
+    SCRIPT37_PATH = (SCRIPT_DIR.parent / "37_manual_visual_training_poc.py").resolve()
+    if not SCRIPT37_PATH.exists():
+        print(f"WARNING: script 37 not found at {SCRIPT37_PATH} — /run-detection will fail", file=sys.stderr)
 
     # Try to pre-render so /image works on first GET; if PDF rendering fails
     # (e.g. fitz not installed), the user can still POST /render-page later or

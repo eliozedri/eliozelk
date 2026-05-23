@@ -2,7 +2,7 @@
 <html dir="rtl" lang="he">
 <head>
   <meta charset="utf-8" />
-  <title>Plan Scanner — Manual Training Annotator (Engine C v0.3, Slice 2)</title>
+  <title>Plan Scanner — Manual Training Annotator (Engine C v0.3, Slice 3)</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -104,6 +104,64 @@
           <div><b>training_example_id:</b> <span id="detailIdLong">—</span></div>
           <div><b>confidence_source:</b> human_labeled</div>
           <div><b>created_at:</b> <span id="detailCreatedAt">—</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Review panel — replaces detail panel when in review mode (Slice 3) -->
+    <aside class="review-panel hidden" id="reviewPanel" aria-hidden="true">
+      <div class="detail-head">
+        <div class="title">סקירה ידנית / Manual review</div>
+        <button class="close-btn" id="reviewClose" title="Esc">×</button>
+      </div>
+      <div class="review-body" id="reviewBody">
+        <!-- Run-detection status block (only visible while running OR if no questions yet) -->
+        <div class="review-status hidden" id="reviewStatus">
+          <div class="status-label" id="reviewStatusLabel">Status: —</div>
+          <div class="status-step" id="reviewStatusStep"></div>
+          <div class="status-log" id="reviewStatusLog"></div>
+        </div>
+
+        <!-- Question paginator -->
+        <div class="review-nav hidden" id="reviewNav">
+          <button id="reviewPrev" title="Previous">←</button>
+          <span class="review-counter" id="reviewCounter">0 / 0</span>
+          <button id="reviewNext" title="Next">→</button>
+        </div>
+
+        <!-- Active question -->
+        <div class="review-question hidden" id="reviewQuestion">
+          <div class="q-meta" id="qMeta"></div>
+          <div class="q-crop" id="qCrop"><div class="q-crop-placeholder">no crop</div></div>
+          <div class="q-text-he" id="qTextHe">—</div>
+          <div class="q-text-en" id="qTextEn">—</div>
+          <div class="q-confidence" id="qConfidence">—</div>
+
+          <!-- Answer buttons -->
+          <div class="q-actions">
+            <button class="answer-btn confirm" id="answerConfirm">✓ מאשר / Confirm</button>
+            <button class="answer-btn reject" id="answerReject">✗ דוחה / Reject</button>
+            <button class="answer-btn correct" id="answerCorrect">תקן / Correct</button>
+            <button class="answer-btn noise" id="answerNoise">רעש / Noise</button>
+          </div>
+
+          <!-- Optional note -->
+          <div class="field">
+            <label for="answerNote">הערה (אופציונלי) / Note</label>
+            <textarea id="answerNote" dir="rtl" lang="he" rows="2"
+                      placeholder="למה הוא נכון / שגוי? תוסיף הסבר חופשי."></textarea>
+          </div>
+
+          <div class="audit">
+            <div><b>question_id:</b> <span id="qIdLong">—</span></div>
+            <div><b>answered:</b> <span id="qAnswered">no</span></div>
+          </div>
+        </div>
+
+        <!-- Empty-state message (no questions yet) -->
+        <div class="review-empty" id="reviewEmpty">
+          <p>אין שאלות לסקירה עדיין.</p>
+          <p>הפעל את הזיהוי לפי הדוגמאות שלימדת.</p>
         </div>
       </div>
     </aside>

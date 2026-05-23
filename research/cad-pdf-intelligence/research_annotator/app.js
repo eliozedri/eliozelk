@@ -142,6 +142,16 @@ const App = {
   shiftHeld: false,
   spaceHeld: false,
   panStart: null,
+
+  // ----- Slice 3 — Close the teaching loop -----
+  mode: 'edit',                       // 'edit' | 'review'
+  detection: null,                    // { jobId, status, currentStep, stdoutTail, exitCode, ... }
+  detectionPollTimer: null,
+  candidates: [],                     // visual_agent_candidates.json → candidates
+  reviewQuestions: [],                // visual_review_questions.json → questions
+  reviewAnswers: {},                  // {review_question_id: answerObj}
+  activeQuestionIdx: 0,
+  correctingQuestionId: null,         // when user clicked "Correct" — return to this Q after edits
 };
 
 // ====================================================================
@@ -151,6 +161,7 @@ async function boot() {
   buildWizardPanel();
   buildToolbar();
   wireDetailPanel();
+  wireReviewPanel();
   wireGlobalKeys();
 
   const info = await fetchJSON('/image-info');
@@ -163,10 +174,14 @@ async function boot() {
     initBlankExamples();
   }
 
+  // Slice 3: hydrate any prior review session
+  await hydrateReviewState();
+
   document.getElementById('loadImageBtn').addEventListener('click', loadImageAndInit);
   refreshWizard();
   refreshToolbar();
   refreshStageInfo();
+  refreshRunButton();
 }
 
 async function loadImageAndInit() {
@@ -433,6 +448,7 @@ function addPointMarking(pos) {
   selectById(id);
   queueSave();
   refreshWizard();
+  recordCorrectionIfPending(id, step.labelType);
 }
 
 function addLineMarking(p0, p1) {
@@ -448,6 +464,7 @@ function addLineMarking(p0, p1) {
   selectById(id);
   queueSave();
   refreshWizard();
+  recordCorrectionIfPending(id, step.labelType);
 }
 
 function addRectMarking(x0, y0, w, h) {
@@ -463,6 +480,7 @@ function addRectMarking(x0, y0, w, h) {
   selectById(id);
   queueSave();
   refreshWizard();
+  recordCorrectionIfPending(id, step.labelType);
 }
 
 function newExample({ id, step, geometry, labelType }) {
@@ -1183,6 +1201,24 @@ function buildToolbar() {
   download.textContent = 'Download JSON';
   download.addEventListener('click', downloadJSON);
   tb.appendChild(download);
+
+  // Slice 3: Run detection button + mode toggle
+  const runBtn = document.createElement('button');
+  runBtn.className = 'run-btn';
+  runBtn.id = 'runDetectionBtn';
+  runBtn.textContent = '▶ הפעל זיהוי';
+  runBtn.addEventListener('click', startDetection);
+  tb.appendChild(runBtn);
+
+  const modeBtn = document.createElement('button');
+  modeBtn.className = 'mode-toggle';
+  modeBtn.id = 'modeToggleBtn';
+  modeBtn.textContent = '📋 סקירה';
+  modeBtn.addEventListener('click', () => {
+    if (App.mode === 'review') setMode('edit');
+    else setMode('review');
+  });
+  tb.appendChild(modeBtn);
 }
 
 function setTool(toolId) {
@@ -1481,6 +1517,482 @@ function flash(msg) {
   const el = document.createElement('div'); el.className = 'flash-msg'; el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2400);
+}
+
+// ====================================================================
+// Slice 3 — Close the Teaching Loop
+// (run detection → load candidates → review queue → save answers)
+// ====================================================================
+
+// --- Mode switching: 'edit' (detail panel) vs 'review' (review panel) ---
+function setMode(newMode) {
+  if (newMode === App.mode) return;
+  if (newMode === 'review') {
+    // Close edit panel; open review panel
+    closeDetailPanel();
+    openReviewPanel();
+    deselectAll();
+  } else {
+    // Close review panel
+    closeReviewPanel();
+  }
+  App.mode = newMode;
+  refreshModeToggle();
+}
+
+function refreshModeToggle() {
+  const btn = document.getElementById('modeToggleBtn');
+  if (!btn) return;
+  btn.classList.toggle('active', App.mode === 'review');
+  const total = App.reviewQuestions.length;
+  const answered = Object.keys(App.reviewAnswers).length;
+  if (total > 0) {
+    btn.textContent = `📋 סקירה (${answered}/${total})`;
+  } else {
+    btn.textContent = '📋 סקירה';
+  }
+}
+
+function openReviewPanel() {
+  const panel = document.getElementById('reviewPanel');
+  const layout = document.getElementById('layout');
+  panel.classList.remove('hidden');
+  layout.classList.add('review-open');
+  panel.setAttribute('aria-hidden', 'false');
+  renderReviewPanel();
+}
+
+function closeReviewPanel() {
+  const panel = document.getElementById('reviewPanel');
+  const layout = document.getElementById('layout');
+  panel.classList.add('hidden');
+  layout.classList.remove('review-open');
+  panel.setAttribute('aria-hidden', 'true');
+}
+
+// Override openDetailPanel/closeDetailPanel was unchanged; we just ensure
+// the review panel toggles correctly through setMode().
+
+// --- Run detection ---
+function refreshRunButton() {
+  const btn = document.getElementById('runDetectionBtn');
+  if (!btn) return;
+  // Disabled until enough examples exist (required steps met)
+  const payload = buildPayload();
+  const ready = payload.wizard_state?.ready_for_apply;
+  const running = App.detection && App.detection.status === 'running';
+  const failed = App.detection && App.detection.status === 'failed';
+  btn.classList.toggle('running', !!running);
+  btn.classList.toggle('failed', !!failed);
+  btn.disabled = !ready || !!running;
+  if (running) {
+    btn.textContent = '⏳ זיהוי רץ…';
+  } else if (failed) {
+    btn.textContent = '⚠ נכשל — נסה שוב';
+  } else if (ready) {
+    btn.textContent = '▶ הפעל זיהוי';
+  } else {
+    btn.textContent = '▶ הפעל זיהוי (חסר דוגמאות)';
+  }
+}
+
+async function startDetection() {
+  if (!buildPayload().wizard_state?.ready_for_apply) {
+    flash('עוד אין מספיק דוגמאות / Need more training examples first');
+    return;
+  }
+  // Ensure the latest examples are flushed before starting
+  await flushSaveNow();
+  try {
+    const res = await fetch('/run-detection', { method: 'POST' });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      flash('שגיאה בהתחלת זיהוי: ' + (j.error || res.status));
+      return;
+    }
+    const j = await res.json();
+    App.detection = {
+      jobId: j.job_id, status: j.status, currentStep: 'starting…',
+      stdoutTail: [], exitCode: null, startedAt: j.started_at,
+    };
+    setMode('review');
+    renderReviewPanel();  // show the live status
+    refreshRunButton();
+    startPollingDetection();
+    flash('זיהוי התחיל / Detection started');
+  } catch (e) {
+    flash('שגיאה: ' + e.message);
+  }
+}
+
+function startPollingDetection() {
+  if (App.detectionPollTimer) clearInterval(App.detectionPollTimer);
+  App.detectionPollTimer = setInterval(pollDetectionStatus, 1000);
+}
+
+function stopPollingDetection() {
+  if (App.detectionPollTimer) { clearInterval(App.detectionPollTimer); App.detectionPollTimer = null; }
+}
+
+async function pollDetectionStatus() {
+  try {
+    const s = await fetchJSON('/run-status');
+    if (!s || s.status === 'none') return;
+    App.detection = {
+      jobId: s.job_id, status: s.status, currentStep: s.current_step,
+      stdoutTail: s.stdout_tail || [], exitCode: s.exit_code,
+      startedAt: s.started_at, completedAt: s.completed_at, error: s.error,
+      resultPaths: s.result_paths,
+    };
+    renderReviewPanel();
+    refreshRunButton();
+    if (s.status === 'complete') {
+      stopPollingDetection();
+      await loadDetectionResults();
+      refreshModeToggle();
+      flash('הזיהוי הסתיים / Detection complete — load review queue');
+    } else if (s.status === 'failed') {
+      stopPollingDetection();
+      flash('הזיהוי נכשל / Detection failed: ' + (s.error || 'see status panel'));
+    }
+  } catch (e) {
+    console.error('poll failed', e);
+  }
+}
+
+async function loadDetectionResults() {
+  const cands = await fetchJSON('/candidates');
+  const qs = await fetchJSON('/review-questions');
+  App.candidates = cands?.candidates || [];
+  App.reviewQuestions = qs?.questions || [];
+  await hydrateReviewState();
+  App.activeQuestionIdx = 0;
+  renderReviewPanel();
+}
+
+async function hydrateReviewState() {
+  const ra = await fetchJSON('/review-answers');
+  App.reviewAnswers = {};
+  if (ra && !ra.empty && Array.isArray(ra.answers)) {
+    ra.answers.forEach(a => { App.reviewAnswers[a.review_question_id] = a; });
+  }
+  // Try to also load any prior candidates + questions (in case the user
+  // already ran detection in a previous session)
+  if (!App.candidates.length) {
+    const cands = await fetchJSON('/candidates');
+    if (cands?.candidates) App.candidates = cands.candidates;
+  }
+  if (!App.reviewQuestions.length) {
+    const qs = await fetchJSON('/review-questions');
+    if (qs?.questions) App.reviewQuestions = qs.questions;
+  }
+}
+
+// --- Render the review panel ---
+function wireReviewPanel() {
+  document.getElementById('reviewClose').addEventListener('click', () => setMode('edit'));
+  document.getElementById('reviewPrev').addEventListener('click', () => navigateReview(-1));
+  document.getElementById('reviewNext').addEventListener('click', () => navigateReview(+1));
+  document.getElementById('answerConfirm').addEventListener('click', () => submitAnswer('confirm'));
+  document.getElementById('answerReject').addEventListener('click', () => submitAnswer('reject'));
+  document.getElementById('answerCorrect').addEventListener('click', () => startCorrectionFlow());
+  document.getElementById('answerNoise').addEventListener('click', () => submitAnswer('noise'));
+}
+
+function renderReviewPanel() {
+  if (App.mode !== 'review') return;
+  const statusEl = document.getElementById('reviewStatus');
+  const statusLabel = document.getElementById('reviewStatusLabel');
+  const statusStep = document.getElementById('reviewStatusStep');
+  const statusLog = document.getElementById('reviewStatusLog');
+  const navEl = document.getElementById('reviewNav');
+  const qEl = document.getElementById('reviewQuestion');
+  const emptyEl = document.getElementById('reviewEmpty');
+
+  // Status block: show while running OR if last run failed
+  const det = App.detection;
+  if (det && (det.status === 'running' || det.status === 'failed' || det.status === 'pending')) {
+    statusEl.classList.remove('hidden');
+    statusLabel.textContent = `Status: ${det.status}` + (det.jobId ? ` · ${det.jobId}` : '');
+    statusStep.textContent = det.currentStep || '';
+    statusLog.textContent = (det.stdoutTail || []).slice(-15).join('\n');
+  } else {
+    statusEl.classList.add('hidden');
+  }
+
+  const total = App.reviewQuestions.length;
+  if (total === 0) {
+    emptyEl.classList.remove('hidden');
+    navEl.classList.add('hidden');
+    qEl.classList.add('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+  navEl.classList.remove('hidden');
+  qEl.classList.remove('hidden');
+
+  // Clamp index
+  if (App.activeQuestionIdx < 0) App.activeQuestionIdx = 0;
+  if (App.activeQuestionIdx >= total) App.activeQuestionIdx = total - 1;
+
+  document.getElementById('reviewCounter').textContent =
+    `${App.activeQuestionIdx + 1} / ${total}`;
+  document.getElementById('reviewPrev').disabled = App.activeQuestionIdx === 0;
+  document.getElementById('reviewNext').disabled = App.activeQuestionIdx >= total - 1;
+
+  renderActiveQuestion();
+}
+
+function renderActiveQuestion() {
+  const q = App.reviewQuestions[App.activeQuestionIdx];
+  if (!q) return;
+  const cand = App.candidates.find(c => c.candidate_id === q.candidate_id);
+  const meta = `candidate_id: ${q.candidate_id}` +
+               `\ncandidate_type: ${cand?.candidate_type || '?'}` +
+               `\nsystem_guess: ${q.system_guess || '?'}`;
+  document.getElementById('qMeta').textContent = meta;
+  document.getElementById('qIdLong').textContent = q.review_question_id;
+  document.getElementById('qTextHe').textContent = q.question_text_he || '—';
+  document.getElementById('qTextEn').textContent = q.question_text_en || '—';
+  const conf = q.confidence ?? cand?.confidence ?? null;
+  document.getElementById('qConfidence').textContent =
+    conf !== null ? `confidence: ${(+conf).toFixed(3)}` : 'confidence: —';
+
+  // Evidence crop image (lazy-loaded from /evidence-crop/<fn>)
+  const cropContainer = document.getElementById('qCrop');
+  cropContainer.innerHTML = '';
+  let cropFn = null;
+  const cropPath = q.evidence_crop_path || cand?.evidence_crop_path;
+  if (cropPath) {
+    // Take just the filename (we serve from a known dir)
+    cropFn = cropPath.split('/').pop();
+  }
+  if (cropFn) {
+    const img = document.createElement('img');
+    img.src = '/evidence-crop/' + encodeURIComponent(cropFn);
+    img.alt = q.candidate_id;
+    img.onerror = () => {
+      cropContainer.innerHTML = '<div class="q-crop-placeholder">crop not found</div>';
+    };
+    cropContainer.appendChild(img);
+  } else {
+    cropContainer.innerHTML = '<div class="q-crop-placeholder">no crop available</div>';
+  }
+
+  // Note field
+  const prevAnswer = App.reviewAnswers[q.review_question_id];
+  document.getElementById('answerNote').value = prevAnswer?.notes || '';
+  document.getElementById('qAnswered').textContent = prevAnswer ? 'yes — ' + prevAnswer.user_answer : 'no';
+
+  // Highlight which answer button was used (if already answered)
+  ['confirm', 'reject', 'correct', 'noise'].forEach(kind => {
+    const btn = document.getElementById('answer' + kind.charAt(0).toUpperCase() + kind.slice(1));
+    if (!btn) return;
+    btn.classList.toggle('answered', prevAnswer?.user_answer === answerToCanonical(kind, q));
+  });
+}
+
+function navigateReview(delta) {
+  // Save current note before moving
+  saveNoteToCurrentAnswer();
+  App.activeQuestionIdx += delta;
+  renderReviewPanel();
+}
+
+function saveNoteToCurrentAnswer() {
+  const q = App.reviewQuestions[App.activeQuestionIdx];
+  if (!q) return;
+  const note = document.getElementById('answerNote').value;
+  const prev = App.reviewAnswers[q.review_question_id];
+  if (prev && (prev.notes || '') !== note) {
+    prev.notes = note;
+    queueSaveReviewAnswers();
+  }
+}
+
+// Map button kind → canonical user_answer string per question type
+function answerToCanonical(kind, q) {
+  // q.allowed_answers e.g. ['yes_pole', 'no_noise', 'no_dimension_mark', 'other']
+  const allowed = q.allowed_answers || [];
+  if (kind === 'confirm') {
+    return allowed.find(a => a.startsWith('yes_')) || 'confirm';
+  }
+  if (kind === 'reject') {
+    return allowed.find(a => a.startsWith('no_')) || 'reject';
+  }
+  if (kind === 'correct') return 'correct';
+  if (kind === 'noise') {
+    return allowed.find(a => a.includes('noise')) || 'noise';
+  }
+  return kind;
+}
+
+function submitAnswer(kind) {
+  const q = App.reviewQuestions[App.activeQuestionIdx];
+  if (!q) return;
+  const cand = App.candidates.find(c => c.candidate_id === q.candidate_id);
+  const userAnswer = answerToCanonical(kind, q);
+  const note = document.getElementById('answerNote').value;
+
+  const answer = {
+    review_question_id: q.review_question_id,
+    candidate_id: q.candidate_id,
+    user_answer: userAnswer,
+    answer_kind: kind,  // 'confirm' | 'reject' | 'correct' | 'noise'
+    candidate_type: cand?.candidate_type || null,
+    system_guess: q.system_guess || cand?.system_guess || null,
+    confidence: q.confidence ?? cand?.confidence ?? null,
+    corrected_label_type: null,
+    corrected_geometry: null,
+    corrected_training_example_id: null,
+    notes: note,
+    scope: 'current_plan_only',
+    created_at: nowIso(),
+  };
+
+  // For "noise" — also create a wrong_detection example covering the candidate bbox
+  if (kind === 'noise' && cand?.bbox) {
+    const newId = nextId('te_wrong_');
+    const wrongEx = {
+      training_example_id: newId,
+      page_number: App.imageInfo?.page_number ?? 0,
+      label_type: 'wrong_detection',
+      label_value: 'rejected_candidate:' + (cand.candidate_id || ''),
+      geometry_type: 'rectangle',
+      geometry: { type: 'rectangle',
+                   x0: cand.bbox[0], y0: cand.bbox[1],
+                   x1: cand.bbox[2], y1: cand.bbox[3] },
+      user_description: note || 'נדחה כרעש — המערכת זיהתה בטעות / Rejected as noise',
+      user_notes: '',
+      associated_pole_id: null,
+      confidence_source: 'human_labeled',
+      scope: 'current_plan_only',
+      created_at: nowIso(),
+      audit_notes: [`auto-generated from review answer to ${q.review_question_id}`],
+    };
+    // Persist as an ignore_region-style entry under supporting_examples
+    // (script 37 doesn't yet have a wrong_detection bucket, but we still record it)
+    App.ignoreRegions.push(wrongEx);
+    answer.corrected_training_example_id = newId;
+    drawPolygon(wrongEx);  // visual feedback on canvas
+    queueSave();
+    refreshWizard();
+  }
+
+  App.reviewAnswers[q.review_question_id] = answer;
+  queueSaveReviewAnswers();
+  flash('תשובה נשמרה / Saved: ' + userAnswer);
+  renderActiveQuestion();
+  refreshModeToggle();
+
+  // Auto-advance to next unanswered question
+  setTimeout(() => {
+    const nextIdx = findNextUnansweredIdx(App.activeQuestionIdx);
+    if (nextIdx !== -1 && nextIdx !== App.activeQuestionIdx) {
+      App.activeQuestionIdx = nextIdx;
+      renderReviewPanel();
+    }
+  }, 350);
+}
+
+function findNextUnansweredIdx(fromIdx) {
+  for (let i = fromIdx + 1; i < App.reviewQuestions.length; i++) {
+    const q = App.reviewQuestions[i];
+    if (!App.reviewAnswers[q.review_question_id]) return i;
+  }
+  return -1;
+}
+
+// --- Correction sub-flow ---
+function startCorrectionFlow() {
+  const q = App.reviewQuestions[App.activeQuestionIdx];
+  if (!q) return;
+  const cand = App.candidates.find(c => c.candidate_id === q.candidate_id);
+  if (!cand) { flash('מועמד לא נמצא / Candidate not found'); return; }
+  App.correctingQuestionId = q.review_question_id;
+  // Switch to edit mode and ask the user to mark the corrected example.
+  // Use the current wizard step's tool as the default, but the user can pick
+  // any tool. The next marking they create will be linked to this question
+  // as `corrected_training_example_id`.
+  setMode('edit');
+  flash('סמן את התיקון על התוכנית / Mark the correction on the plan');
+}
+
+// Hook into addExampleToBucket via the existing add functions to capture
+// corrections. We patch them by checking App.correctingQuestionId after
+// each marking is added.
+function recordCorrectionIfPending(newExampleId, newLabelType) {
+  if (!App.correctingQuestionId) return;
+  const q = App.reviewQuestions.find(r => r.review_question_id === App.correctingQuestionId);
+  if (!q) { App.correctingQuestionId = null; return; }
+  const cand = App.candidates.find(c => c.candidate_id === q.candidate_id);
+  const note = document.getElementById('answerNote').value || '';
+  const answer = {
+    review_question_id: q.review_question_id,
+    candidate_id: q.candidate_id,
+    user_answer: 'correct',
+    answer_kind: 'correct',
+    candidate_type: cand?.candidate_type || null,
+    system_guess: q.system_guess || cand?.system_guess || null,
+    confidence: q.confidence ?? cand?.confidence ?? null,
+    corrected_label_type: newLabelType,
+    corrected_geometry: null,  // referenced via training_example_id
+    corrected_training_example_id: newExampleId,
+    notes: note,
+    scope: 'current_plan_only',
+    created_at: nowIso(),
+  };
+  App.reviewAnswers[q.review_question_id] = answer;
+  queueSaveReviewAnswers();
+  App.correctingQuestionId = null;
+  flash('תיקון נשמר / Correction saved → ' + newExampleId);
+  refreshModeToggle();
+  // Return to review mode at the same question
+  setTimeout(() => { setMode('review'); }, 400);
+}
+
+// --- Save review answers ---
+let _reviewSaveTimer = null;
+function queueSaveReviewAnswers() {
+  if (_reviewSaveTimer) clearTimeout(_reviewSaveTimer);
+  _reviewSaveTimer = setTimeout(async () => {
+    const payload = {
+      schema_version: '1.0',
+      engine: 'engine_c_v0.3_manual_first',
+      annotator_version: 'slice3',
+      plan_id: App.imageInfo?.plan_id || null,
+      page_number: App.imageInfo?.page_number ?? 0,
+      saved_at: nowIso(),
+      answers: Object.values(App.reviewAnswers),
+    };
+    try {
+      const res = await fetch('/review-answers', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    } catch (e) {
+      console.error('saveReviewAnswers failed', e);
+    }
+  }, 250);
+}
+
+// Flush pending save NOW (used before kicking off detection)
+function flushSaveNow() {
+  return new Promise(async (resolve) => {
+    if (App.saveTimer) { clearTimeout(App.saveTimer); App.saveTimer = null; }
+    try {
+      const payload = buildPayload();
+      const res = await fetch('/examples', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) setSaveStatus('saved');
+    } catch (e) {
+      console.error('flushSaveNow failed', e);
+    }
+    resolve();
+  });
 }
 
 // ====================================================================

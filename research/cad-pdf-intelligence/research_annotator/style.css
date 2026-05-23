@@ -23,7 +23,8 @@ html, body {
   height: calc(100vh - 48px);
   transition: grid-template-columns 200ms ease;
 }
-.layout.detail-open {
+.layout.detail-open,
+.layout.review-open {
   grid-template-columns: 320px 1fr 360px;
 }
 .wizard {
@@ -270,4 +271,123 @@ html, body {
   70%  { opacity: 1; }
   100% { opacity: 0; }
 }
+
+/* ====================================================================
+ * Slice 3 — Run-detection button + status indicator
+ * ==================================================================== */
+.toolbar .run-btn {
+  margin-inline-start: 8px;
+  padding: 4px 12px; border-radius: 4px;
+  background: #1a8a3a; color: #fff; cursor: pointer;
+  border: 1px solid #1a8a3a; font-size: 12px; font-weight: 600;
+}
+.toolbar .run-btn[disabled] {
+  background: #555; border-color: #555; cursor: not-allowed; opacity: 0.6;
+}
+.toolbar .run-btn.running {
+  background: #c80; border-color: #c80;
+  cursor: wait;
+}
+.toolbar .run-btn.failed { background: #c33; border-color: #c33; }
+.toolbar .mode-toggle {
+  padding: 4px 10px; border-radius: 4px;
+  background: #444; color: #ddd; cursor: pointer;
+  border: 1px solid #555; font-size: 12px;
+  margin-inline-start: 6px;
+}
+.toolbar .mode-toggle.active { background: #2a72d4; border-color: #2a72d4; color: #fff; }
+
+/* ====================================================================
+ * Slice 3 — Review panel
+ * ==================================================================== */
+.review-panel {
+  border-inline-start: 1px solid #ddd;
+  background: #f7f8fa;
+  overflow-y: auto;
+  font-size: 13px;
+  display: flex; flex-direction: column;
+  width: 360px;
+}
+.review-panel.hidden { display: none; }
+.review-body { padding: 14px; }
+
+.review-status {
+  border: 1px solid #c80; background: #fff7e0;
+  border-radius: 6px; padding: 10px 12px; margin-bottom: 14px;
+  font-size: 12px;
+}
+.review-status.hidden { display: none; }
+.review-status .status-label {
+  font-weight: 600; color: #c80; margin-bottom: 4px;
+}
+.review-status .status-step {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: #444;
+  margin-bottom: 6px;
+}
+.review-status .status-log {
+  background: #fff; border: 1px solid #ddd; border-radius: 4px;
+  padding: 4px 6px; font-size: 10px; max-height: 100px; overflow-y: auto;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; line-height: 1.4; white-space: pre-wrap;
+}
+
+.review-nav {
+  display: flex; justify-content: center; align-items: center; gap: 14px;
+  margin-bottom: 12px;
+}
+.review-nav.hidden { display: none; }
+.review-nav button {
+  padding: 4px 10px; font-size: 14px;
+  border: 1px solid #aaa; background: #fff; border-radius: 4px; cursor: pointer;
+}
+.review-nav button[disabled] { opacity: 0.4; cursor: not-allowed; }
+.review-counter { font-weight: 600; color: #555; font-size: 13px; }
+
+.review-question.hidden { display: none; }
+.review-question .q-meta {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
+  color: #555; margin-bottom: 8px;
+}
+.review-question .q-crop {
+  border: 1px solid #ccc; background: #fff; border-radius: 4px;
+  margin-bottom: 10px; padding: 4px; text-align: center;
+  min-height: 80px; display: flex; align-items: center; justify-content: center;
+}
+.review-question .q-crop img {
+  max-width: 100%; max-height: 240px; display: block; margin: 0 auto;
+}
+.review-question .q-crop-placeholder {
+  color: #aaa; font-size: 12px; padding: 30px;
+}
+.review-question .q-text-he {
+  font-size: 14px; font-weight: 600; line-height: 1.4; margin: 6px 0; color: #222;
+}
+.review-question .q-text-en {
+  font-size: 12px; color: #777; line-height: 1.4; margin: 4px 0 10px;
+}
+.review-question .q-confidence {
+  font-size: 11px; color: #555; margin-bottom: 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.review-question .q-actions {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 10px 0 14px;
+}
+.review-question .answer-btn {
+  padding: 8px 8px; font-size: 12px;
+  border-radius: 4px; cursor: pointer; font-weight: 600; border: 1px solid transparent;
+}
+.review-question .answer-btn.confirm { background: #1a8a3a; color: #fff; border-color: #1a8a3a; }
+.review-question .answer-btn.confirm:hover { background: #166e30; }
+.review-question .answer-btn.reject  { background: #c33;    color: #fff; border-color: #c33; }
+.review-question .answer-btn.reject:hover { background: #a02525; }
+.review-question .answer-btn.correct { background: #c80;    color: #fff; border-color: #c80; }
+.review-question .answer-btn.correct:hover { background: #a96b00; }
+.review-question .answer-btn.noise   { background: #555;    color: #fff; border-color: #555; }
+.review-question .answer-btn.noise:hover   { background: #333; }
+.review-question .answer-btn.answered { outline: 3px solid #2a72d4; outline-offset: -1px; }
+
+.review-empty {
+  color: #888; font-size: 13px; padding: 30px 8px; text-align: center; line-height: 1.6;
+}
+.review-empty.hidden { display: none; }
+
 
