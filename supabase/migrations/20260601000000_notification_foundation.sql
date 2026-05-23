@@ -113,7 +113,7 @@ create policy notif_recipients_read_own on public.notification_recipients
   for select to authenticated
   using (
     user_id = auth.uid()
-    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'master')
+    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'master' and coalesce(p.is_active, true) = true)
   );
 
 drop policy if exists notifications_read on public.notifications;
@@ -124,7 +124,7 @@ create policy notifications_read on public.notifications
       select 1 from public.notification_recipients nr
       where nr.notification_id = notifications.id and nr.user_id = auth.uid()
     )
-    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'master')
+    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'master' and coalesce(p.is_active, true) = true)
   );
 
 drop policy if exists notif_acks_read_own on public.notification_acknowledgements;
@@ -132,7 +132,7 @@ create policy notif_acks_read_own on public.notification_acknowledgements
   for select to authenticated
   using (
     user_id = auth.uid()
-    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'master')
+    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'master' and coalesce(p.is_active, true) = true)
   );
 -- No INSERT/UPDATE/DELETE policies => default-deny for clients.
 -- Triggers (SECURITY DEFINER) and service-role API routes bypass RLS.
