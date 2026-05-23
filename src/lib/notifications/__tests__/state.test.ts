@@ -63,6 +63,10 @@ describe("isOpenedSatisfied / canAcknowledge", () => {
     const v = toView(rec({ status: "acknowledged", related_opened_at: "x" }), row());
     expect(canAcknowledge(v)).toBe(false);
   });
+  it("is false for notifications that do not require ack (by design)", () => {
+    const v = toView(rec({ related_opened_at: "2026-06-01T11:00:00Z" }), row({ requires_ack: false }));
+    expect(canAcknowledge(v)).toBe(false);
+  });
 });
 
 describe("pickPendingCritical", () => {
@@ -70,7 +74,7 @@ describe("pickPendingCritical", () => {
     expect(pickPendingCritical([])).toBeNull();
     const a = toView(rec({ id: "a" }), row({ id: "na", created_at: "2026-06-01T10:00:00Z" }));
     const b = toView(rec({ id: "b" }), row({ id: "nb", created_at: "2026-06-01T09:00:00Z" }));
-    const ackd = toView(rec({ id: "c", status: "acknowledged" }), row({ id: "nc" }));
+    const ackd = toView(rec({ id: "c", notification_id: "nc", status: "acknowledged" }), row({ id: "nc" }));
     expect(pickPendingCritical([a, b, ackd])?.recipientId).toBe("b");
   });
   it("ignores non-blocking notifications", () => {
@@ -85,6 +89,11 @@ describe("unseenCount", () => {
     const b = toView(rec({ id: "b", status: "delivered" }), row({ id: "nb" }));
     const c = toView(rec({ id: "c", status: "seen" }), row({ id: "nc" }));
     expect(unseenCount([a, b, c])).toBe(2);
+  });
+  it("does not count escalated, failed, acknowledged, or expired", () => {
+    const views = (["escalated", "failed", "acknowledged", "expired"] as const).map((status, i) =>
+      toView(rec({ id: `r${i}`, notification_id: `n${i}`, status }), row({ id: `n${i}` })));
+    expect(unseenCount(views)).toBe(0);
   });
 });
 

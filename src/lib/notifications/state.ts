@@ -54,6 +54,9 @@ export function canAcknowledge(v: NotificationView): boolean {
   return isOpenedSatisfied(v);
 }
 
+// Scope: blocking criticals that still need acknowledgement — drives the
+// CriticalAlertGate. Intentionally narrower than unseenCount (which is the
+// bell badge and counts any not-yet-seen notification regardless of severity).
 export function pickPendingCritical(views: NotificationView[]): NotificationView | null {
   const pending = views.filter(
     v => v.blocking && v.requiresAck && v.status !== "acknowledged" && v.status !== "expired",
@@ -64,6 +67,8 @@ export function pickPendingCritical(views: NotificationView[]): NotificationView
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
 }
 
+// Scope: bell-badge count of not-yet-seen notifications of ANY severity —
+// deliberately broader than pickPendingCritical.
 export function unseenCount(views: NotificationView[]): number {
   return views.filter(v => v.status === "pending" || v.status === "delivered").length;
 }
