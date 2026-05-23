@@ -1,157 +1,169 @@
-/* Plan Scanner — Manual Training Annotator (Engine C v0.3, Slice 1)
+/* Plan Scanner — Manual Training Annotator (Engine C v0.3, Slice 2)
  *
- * Uses Konva (vendored locally at /static/vendor/konva.min.js) to render the
- * plan image and capture user markings.
+ * The marker/annotation tool is the CORE TEACHING INTERFACE of the Manual
+ * Training Agent. Every marking captures geometry + label_type + a free
+ * Hebrew description (`user_description`) + notes + scope. The user teaches
+ * the scanner by marking objects on the plan and describing what they are.
  *
- * Slice 1 tools:
- *   P — point (pole_dot)
- *   T — line (sign_count_tick)
- *   C — rectangle small (sign_code_text)
- *   S — rectangle medium (sign_symbol)
- *
- * Markings are stored in IMAGE-PIXEL space (not screen px). Zoom/pan only
- * affects display; the saved coordinates are stable. Every change auto-saves
- * to the run dir via PUT /examples.
- *
- * Slice 2 will add: select/edit/delete, drag handles, polygon for ignore_region,
- * association lines, review-queue panel.
+ * Slice 2 adds:
+ *   - Detail panel (label_type editable, user_description, user_notes, scope,
+ *     associated_pole_id, delete) — opens on create AND on selection
+ *   - Selection (V tool, Shift+click while another tool is active)
+ *   - Move/resize via Konva.Transformer (rects) or drag (points/polygons/lines)
+ *   - Delete/Backspace removes selected; cascades to associations
+ *   - Association tool (A): two-click pole↔code or pole↔symbol; dashed line
+ *   - Polygon tool (G): sequential clicks; Enter/double-click to close;
+ *     for ignore_region / noise_background
+ *   - Persists all of the above in visual_training_examples.wizard.json
  */
 'use strict';
 
-// ---------------------------------------------------------------
-// Wizard step definitions (mirrors PLAN_SCANNER_MANUAL_TRAINING_AGENT_SPEC.md §3)
-// ---------------------------------------------------------------
-
+// ====================================================================
+// Wizard steps (mirrors PLAN_SCANNER_MANUAL_TRAINING_AGENT_SPEC.md §3)
+// ====================================================================
 const STEPS = [
-  {
-    id: 'step_2_teach_pole_appearance',
-    short: 'עמודים',
+  { id: 'step_2_teach_pole_appearance', short: 'עמודים',
     he: 'סמן 5–10 דוגמאות של עמודי תמרור בתוכנית.',
     en: 'Mark 5–10 examples of sign poles in the plan.',
-    tool: 'point',
-    labelType: 'pole_dot',
-    geometryType: 'point',
-    minExamples: 5,
-    maxExamples: 10,
-    idPrefix: 'te_pole_',
-  },
-  {
-    id: 'step_3_teach_sign_count',
-    short: 'כמות תמרורים',
+    tool: 'point', labelType: 'pole_dot', geometryType: 'point',
+    minExamples: 5, maxExamples: 10, idPrefix: 'te_pole_' },
+  { id: 'step_3_teach_sign_count', short: 'כמות תמרורים',
     he: 'סמן 5–10 דוגמאות שמראות איך התוכנית מציינת כמה תמרורים נמצאים על עמוד.',
     en: 'Mark 5–10 examples of how the plan indicates how many signs are on a pole.',
-    tool: 'line',
-    labelType: 'sign_count_tick',
-    geometryType: 'line',
-    minExamples: 5,
-    maxExamples: 10,
-    idPrefix: 'te_tick_',
-  },
-  {
-    id: 'step_4_teach_sign_code',
-    short: 'מספרי תמרורים',
+    tool: 'line', labelType: 'sign_count_tick', geometryType: 'line',
+    minExamples: 5, maxExamples: 10, idPrefix: 'te_tick_' },
+  { id: 'step_4_teach_sign_code', short: 'מספרי תמרורים',
     he: 'סמן 5–10 דוגמאות של מספרי תמרורים ליד עמודים.',
     en: 'Mark 5–10 examples of sign code numbers near poles.',
-    tool: 'rect_small',
-    labelType: 'sign_code_text',
-    geometryType: 'rectangle',
-    minExamples: 5,
-    maxExamples: 10,
-    idPrefix: 'te_code_',
-  },
-  {
-    id: 'step_5_teach_sign_symbol',
-    short: 'סמלי תמרורים (אופציונלי)',
+    tool: 'rect_small', labelType: 'sign_code_text', geometryType: 'rectangle',
+    minExamples: 5, maxExamples: 10, idPrefix: 'te_code_' },
+  { id: 'step_5_teach_sign_symbol', short: 'סמלי תמרורים (אופציונלי)',
     he: 'סמן 5–10 דוגמאות של הסימון הגרפי של התמרור עצמו, אם הוא מופיע בתוכנית.',
     en: 'Mark 5–10 examples of the sign\'s visual symbol, if it appears on the plan.',
-    tool: 'rect_medium',
-    labelType: 'sign_symbol',
-    geometryType: 'rectangle',
-    minExamples: 0,
-    maxExamples: 10,
-    optional: true,
-    idPrefix: 'te_symbol_',
-  },
+    tool: 'rect_medium', labelType: 'sign_symbol', geometryType: 'rectangle',
+    minExamples: 0, maxExamples: 10, optional: true, idPrefix: 'te_symbol_' },
 ];
 
+// Step 6 is the associations bucket (separate from the per-tool steps above).
+const STEP6_ID = 'step_6_teach_associations';
+
+// All label_types from the spec — the user can pick any of these from the
+// per-marking dropdown.
+const LABEL_TYPES = [
+  'pole_dot', 'sign_count_tick', 'sign_code_text', 'sign_symbol',
+  'pole_to_code_association', 'pole_to_symbol_association',
+  'number_of_signs_on_pole',
+  'ignore_region', 'noise_background', 'wrong_detection',
+];
+
+// Per-tool default colors (display only; label_type can be edited per marking)
 const TOOL_COLORS = {
   point: '#00aa00',
-  line: '#dd9900',
-  rect_small: '#0066dd',
+  line:  '#dd9900',
+  rect_small:  '#0066dd',
   rect_medium: '#9900cc',
+  polygon: '#cc0000',
+  association: '#c80',
+};
+// Default color when we don't know the tool (e.g. by label_type during hydration)
+const LABEL_COLORS = {
+  pole_dot:                       '#00aa00',
+  sign_count_tick:                '#dd9900',
+  sign_code_text:                 '#0066dd',
+  sign_symbol:                    '#9900cc',
+  pole_to_code_association:       '#c80',
+  pole_to_symbol_association:     '#c80',
+  number_of_signs_on_pole:        '#888',
+  ignore_region:                  '#cc0000',
+  noise_background:               '#c33',
+  wrong_detection:                '#c33',
 };
 
 const TOOL_HOTKEYS = {
+  V: 'select',
   P: 'point',
   T: 'line',
   C: 'rect_small',
   S: 'rect_medium',
+  A: 'association',
+  G: 'polygon',
 };
 
-// ---------------------------------------------------------------
-// Application state
-// ---------------------------------------------------------------
+// Which labels are pole-like (valid as the 1st step of association tool)
+const POLE_LABELS = new Set(['pole_dot']);
+const CODE_OR_SYMBOL_LABELS = new Set(['sign_code_text', 'sign_symbol']);
 
+// ====================================================================
+// State
+// ====================================================================
 const App = {
-  // Image
-  imageInfo: null,           // {width, height, dpi, plan_id, page_number, filename}
-  konvaImage: null,          // Konva.Image instance
+  imageInfo: null,
+  konvaImage: null,
 
-  // Konva
   stage: null,
   imageLayer: null,
   markingsLayer: null,
+  uiLayer: null,
+  transformer: null,
 
-  // Wizard
+  // All examples by step bucket (steps 2-5 hold their typed examples; step 6
+  // holds associations; supporting_examples.ignore_regions holds polygons)
+  examples: {},                    // { stepId: [ex, ...] }
+  associations: [],                // [ex, ...]
+  ignoreRegions: [],               // [ex, ...]  (polygons go here)
+  noiseRegions: [],                // [ex, ...]
+  counters: {},                    // {prefix: lastUsedInt}
+
+  currentTool: null,               // 'select' | 'point' | 'line' | 'rect_small' | ... | null
   currentStepId: STEPS[0].id,
-  examples: {},              // { stepId: [exampleObj, ...] }
 
-  // Active tool
-  currentTool: null,         // 'point' | 'line' | 'rect_small' | 'rect_medium' | null
-
-  // Drawing state
+  // Drawing state for tools that need a "start"
   drawing: false,
-  startPos: null,            // {x, y} in image-px
+  startPos: null,
   tempShape: null,
+
+  // Association tool state
+  assocFirstId: null,              // training_example_id of 1st-clicked shape
+
+  // Polygon tool state
+  polygonPoints: [],               // [{x, y}, ...] in image px
+  polygonPreviewLine: null,
+  polygonPreviewVertices: null,
+
+  // Selection
+  selectedId: null,                // training_example_id of selected marking
+  selectedKind: null,              // 'example' | 'association' | 'ignore' | 'noise'
 
   // Save state
   saveTimer: null,
-  saveStatus: 'idle',        // 'idle' | 'saving' | 'saved' | 'error'
+  saveStatus: 'idle',
 
-  // Counters (per id prefix) for stable example IDs
-  counters: {},
+  // Modifier key tracking
+  shiftHeld: false,
+  spaceHeld: false,
+  panStart: null,
 };
 
-// ---------------------------------------------------------------
+// ====================================================================
 // Boot
-// ---------------------------------------------------------------
-
+// ====================================================================
 async function boot() {
   buildWizardPanel();
   buildToolbar();
+  wireDetailPanel();
+  wireGlobalKeys();
 
-  // Load image-info first
   const info = await fetchJSON('/image-info');
-  if (info && info.width > 0) {
-    App.imageInfo = info;
-  }
+  if (info && info.width > 0) App.imageInfo = info;
 
-  // Try to load existing examples; if file empty, initialize blank
   const ex = await fetchJSON('/examples');
-  if (ex && !ex.empty && ex.steps) {
-    // Hydrate state from existing file
+  if (ex && !ex.empty && (ex.steps || ex.supporting_examples)) {
     hydrateFromFile(ex);
-    renderAllMarkings();
   } else {
     initBlankExamples();
   }
 
-  // Wire first-screen button
   document.getElementById('loadImageBtn').addEventListener('click', loadImageAndInit);
-
-  // Keyboard shortcuts
-  window.addEventListener('keydown', onKeyDown);
-
   refreshWizard();
   refreshToolbar();
   refreshStageInfo();
@@ -159,7 +171,6 @@ async function boot() {
 
 async function loadImageAndInit() {
   document.getElementById('firstScreen').classList.add('hidden');
-  // Refresh info in case it was rendered between page load and click
   const info = await fetchJSON('/image-info');
   if (!info || !info.width) {
     alert('לא נמצאה תמונה בתיקיית הריצה. בדוק את --plan-run-dir.');
@@ -167,44 +178,51 @@ async function loadImageAndInit() {
   }
   App.imageInfo = info;
   await initStage(info);
+  renderAllMarkings();
   refreshStageInfo();
+  refreshAssocPoleDropdown();
 }
 
-// ---------------------------------------------------------------
-// Konva stage setup
-// ---------------------------------------------------------------
-
+// ====================================================================
+// Konva stage
+// ====================================================================
 async function initStage(info) {
   const container = document.getElementById('stage-container');
-  const cw = container.clientWidth;
-  const ch = container.clientHeight;
+  const cw = container.clientWidth, ch = container.clientHeight;
 
   App.stage = new Konva.Stage({
     container: 'stage-container',
-    width: cw,
-    height: ch,
-    draggable: false,  // we control panning manually via tools
+    width: cw, height: ch,
+    draggable: false,
   });
-
   App.imageLayer = new Konva.Layer({ listening: false });
   App.markingsLayer = new Konva.Layer();
-  App.stage.add(App.imageLayer);
-  App.stage.add(App.markingsLayer);
+  App.uiLayer = new Konva.Layer();
+  App.stage.add(App.imageLayer, App.markingsLayer, App.uiLayer);
 
-  // Load the plan image
+  // Load image
   const img = new window.Image();
   img.crossOrigin = 'anonymous';
   await new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = reject;
-    img.src = '/image';
+    img.onload = resolve; img.onerror = reject; img.src = '/image';
   });
   App.konvaImage = new Konva.Image({
     image: img, x: 0, y: 0,
-    width: info.width, height: info.height,
-    listening: false,
+    width: info.width, height: info.height, listening: false,
   });
   App.imageLayer.add(App.konvaImage);
+
+  // Transformer for selected shapes (only attached when something is selected)
+  App.transformer = new Konva.Transformer({
+    rotateEnabled: false,
+    keepRatio: false,
+    borderStroke: '#2a72d4',
+    borderStrokeWidth: 2,
+    anchorStroke: '#2a72d4',
+    anchorFill: '#fff',
+    anchorSize: 8,
+  });
+  App.uiLayer.add(App.transformer);
 
   // Fit to view
   const scale = Math.min(cw / info.width, ch / info.height) * 0.95;
@@ -215,13 +233,8 @@ async function initStage(info) {
   });
   App.stage.batchDraw();
 
-  // Wire interactions
   wireStageEvents();
 
-  // Render any pre-existing markings (from hydrated file)
-  renderAllMarkings();
-
-  // Resize handler
   window.addEventListener('resize', () => {
     const c = document.getElementById('stage-container');
     App.stage.size({ width: c.clientWidth, height: c.clientHeight });
@@ -229,12 +242,8 @@ async function initStage(info) {
   });
 }
 
-// ---------------------------------------------------------------
-// Mouse + tool dispatcher
-// ---------------------------------------------------------------
-
 function wireStageEvents() {
-  // Wheel zoom — zoom around cursor
+  // Wheel zoom around cursor
   App.stage.on('wheel', (e) => {
     e.evt.preventDefault();
     const oldScale = App.stage.scaleX();
@@ -254,69 +263,83 @@ function wireStageEvents() {
     refreshToolbar();
   });
 
-  // Mouse handlers — route based on currentTool
   App.stage.on('mousedown touchstart', onPointerDown);
   App.stage.on('mousemove touchmove', onPointerMove);
   App.stage.on('mouseup touchend', onPointerUp);
-
-  // Pan when no tool active (right-button or middle-button drag, OR primary
-  // drag if currentTool is null). To keep Slice 1 simple, pan is achieved by
-  // holding Space and dragging.
-  let spaceHeld = false;
-  let panStart = null;
-  window.addEventListener('keydown', (e) => {
-    if (e.code === 'Space') { spaceHeld = true; document.body.style.cursor = 'grab'; }
-  });
-  window.addEventListener('keyup', (e) => {
-    if (e.code === 'Space') { spaceHeld = false; document.body.style.cursor = ''; panStart = null; }
-  });
-  App.stage.on('mousedown', (e) => {
-    if (spaceHeld) {
-      panStart = App.stage.getPointerPosition();
-      document.body.style.cursor = 'grabbing';
-    }
-  });
-  App.stage.on('mousemove', (e) => {
-    if (spaceHeld && panStart) {
-      const p = App.stage.getPointerPosition();
-      App.stage.position({
-        x: App.stage.x() + (p.x - panStart.x),
-        y: App.stage.y() + (p.y - panStart.y),
-      });
-      panStart = p;
-      App.stage.batchDraw();
-    }
-  });
-  App.stage.on('mouseup', () => {
-    if (spaceHeld) { panStart = null; document.body.style.cursor = 'grab'; }
-  });
+  App.stage.on('dblclick dbltap', onDoubleClick);
 }
 
+// ====================================================================
+// Pointer dispatch — handles every tool + Shift+click select shortcut
+// ====================================================================
 function onPointerDown(e) {
-  if (!App.currentTool || isPanning()) return;
+  // Space-pan
+  if (App.spaceHeld) {
+    App.panStart = App.stage.getPointerPosition();
+    document.body.style.cursor = 'grabbing';
+    return;
+  }
+
+  // Shift+click on any shape → select that shape, irrespective of active tool
+  if (App.shiftHeld && e.target !== App.stage) {
+    const id = shapeIdAt(e.target);
+    if (id) {
+      selectById(id);
+      return;
+    }
+  }
+
+  // Polygon tool: each click adds a vertex
+  if (App.currentTool === 'polygon') {
+    const pos = imagePos();
+    if (!pos) return;
+    pushPolygonVertex(pos);
+    return;
+  }
+
+  // Association tool: each click picks a shape
+  if (App.currentTool === 'association') {
+    const id = shapeIdAt(e.target);
+    if (!id) {
+      flash('בחר סימון קיים (לא ריקות) לחיבור / Click an existing marking');
+      return;
+    }
+    handleAssociationPick(id);
+    return;
+  }
+
+  // Select tool: clicking a shape selects it; clicking empty deselects
+  if (App.currentTool === 'select' || !App.currentTool) {
+    if (e.target === App.stage || e.target === App.konvaImage) {
+      deselectAll();
+      return;
+    }
+    const id = shapeIdAt(e.target);
+    if (id) {
+      selectById(id);
+    }
+    return;
+  }
+
+  // Drawing tools (point/line/rect_small/rect_medium)
   const pos = imagePos();
   if (!pos) return;
   const tool = App.currentTool;
   if (tool === 'point') {
-    // Single-click commit
     addPointMarking(pos);
   } else {
-    // Drag-based tools: start a temp shape
     App.drawing = true;
     App.startPos = pos;
     const color = TOOL_COLORS[tool];
     if (tool === 'line') {
       App.tempShape = new Konva.Line({
         points: [pos.x, pos.y, pos.x, pos.y],
-        stroke: color, strokeWidth: 2,
-        listening: false,
+        stroke: color, strokeWidth: 2, dash: [4, 3], listening: false,
       });
-    } else { // rect_small / rect_medium
+    } else {
       App.tempShape = new Konva.Rect({
         x: pos.x, y: pos.y, width: 0, height: 0,
-        stroke: color, strokeWidth: 2,
-        dash: [4, 3],
-        listening: false,
+        stroke: color, strokeWidth: 2, dash: [4, 3], listening: false,
       });
     }
     App.markingsLayer.add(App.tempShape);
@@ -324,142 +347,167 @@ function onPointerDown(e) {
 }
 
 function onPointerMove(e) {
-  if (!App.drawing || !App.tempShape) return;
-  const pos = imagePos();
-  if (!pos) return;
-  const tool = App.currentTool;
-  if (tool === 'line') {
-    App.tempShape.points([App.startPos.x, App.startPos.y, pos.x, pos.y]);
-  } else if (tool === 'rect_small' || tool === 'rect_medium') {
-    App.tempShape.position({
-      x: Math.min(App.startPos.x, pos.x),
-      y: Math.min(App.startPos.y, pos.y),
+  if (App.spaceHeld && App.panStart) {
+    const p = App.stage.getPointerPosition();
+    App.stage.position({
+      x: App.stage.x() + (p.x - App.panStart.x),
+      y: App.stage.y() + (p.y - App.panStart.y),
     });
-    App.tempShape.size({
-      width: Math.abs(pos.x - App.startPos.x),
-      height: Math.abs(pos.y - App.startPos.y),
-    });
+    App.panStart = p;
+    App.stage.batchDraw();
+    return;
   }
-  App.markingsLayer.batchDraw();
+  // Update temp draw shape
+  if (App.drawing && App.tempShape) {
+    const pos = imagePos(); if (!pos) return;
+    const tool = App.currentTool;
+    if (tool === 'line') {
+      App.tempShape.points([App.startPos.x, App.startPos.y, pos.x, pos.y]);
+    } else if (tool === 'rect_small' || tool === 'rect_medium') {
+      App.tempShape.position({
+        x: Math.min(App.startPos.x, pos.x),
+        y: Math.min(App.startPos.y, pos.y),
+      });
+      App.tempShape.size({
+        width: Math.abs(pos.x - App.startPos.x),
+        height: Math.abs(pos.y - App.startPos.y),
+      });
+    }
+    App.markingsLayer.batchDraw();
+    return;
+  }
+  // Polygon preview (rubber-band from last vertex to cursor)
+  if (App.currentTool === 'polygon' && App.polygonPoints.length > 0) {
+    const pos = imagePos();
+    if (pos && App.polygonPreviewLine) {
+      const last = App.polygonPoints[App.polygonPoints.length - 1];
+      App.polygonPreviewLine.points([last.x, last.y, pos.x, pos.y]);
+      App.markingsLayer.batchDraw();
+    }
+  }
 }
 
 function onPointerUp(e) {
+  if (App.spaceHeld) {
+    App.panStart = null;
+    document.body.style.cursor = 'grab';
+    return;
+  }
   if (!App.drawing || !App.tempShape) return;
   const tool = App.currentTool;
   const endPos = imagePos() || App.startPos;
   App.drawing = false;
-  // Validate minimum size
   if (tool === 'line') {
-    const dx = endPos.x - App.startPos.x;
-    const dy = endPos.y - App.startPos.y;
-    if (dx * dx + dy * dy < 16) {
-      App.tempShape.destroy(); App.tempShape = null; App.markingsLayer.draw();
-      return;
-    }
+    const dx = endPos.x - App.startPos.x, dy = endPos.y - App.startPos.y;
+    if (dx * dx + dy * dy < 16) { App.tempShape.destroy(); App.tempShape = null; App.markingsLayer.draw(); return; }
     addLineMarking(App.startPos, endPos);
   } else {
-    const w = Math.abs(endPos.x - App.startPos.x);
-    const h = Math.abs(endPos.y - App.startPos.y);
-    if (w < 4 || h < 4) {
-      App.tempShape.destroy(); App.tempShape = null; App.markingsLayer.draw();
-      return;
-    }
-    const x0 = Math.min(App.startPos.x, endPos.x);
-    const y0 = Math.min(App.startPos.y, endPos.y);
+    const w = Math.abs(endPos.x - App.startPos.x), h = Math.abs(endPos.y - App.startPos.y);
+    if (w < 4 || h < 4) { App.tempShape.destroy(); App.tempShape = null; App.markingsLayer.draw(); return; }
+    const x0 = Math.min(App.startPos.x, endPos.x), y0 = Math.min(App.startPos.y, endPos.y);
     addRectMarking(x0, y0, w, h);
   }
-  // Discard the temp shape; the marking is re-rendered as a permanent shape.
   App.tempShape.destroy(); App.tempShape = null;
   App.markingsLayer.draw();
 }
 
-// ---------------------------------------------------------------
-// Marking adders — push to App.examples + render permanent shape + save
-// ---------------------------------------------------------------
+function onDoubleClick(e) {
+  if (App.currentTool === 'polygon') {
+    closePolygon();
+  }
+}
 
+// ====================================================================
+// Adding markings
+// ====================================================================
 function addPointMarking(pos) {
   const step = currentStep();
-  if (step.tool !== 'point') return;
   const id = nextId(step.idPrefix);
-  const ex = {
-    training_example_id: id,
+  const ex = newExample({
+    id, step,
     geometry: { type: 'point', x: round(pos.x), y: round(pos.y), radius: 8 },
-    confidence_source: 'human_labeled',
-    scope: 'current_plan_only',
-    created_at: nowIso(),
-    audit_notes: '',
-  };
-  pushExample(step.id, ex);
-  drawMarking(step, ex);
+    labelType: step.labelType,
+  });
+  App.examples[step.id].push(ex);
+  drawExample(ex);
+  selectById(id);
   queueSave();
+  refreshWizard();
 }
 
 function addLineMarking(p0, p1) {
   const step = currentStep();
-  if (step.tool !== 'line') return;
   const id = nextId(step.idPrefix);
-  const ex = {
-    training_example_id: id,
+  const ex = newExample({
+    id, step,
     geometry: { type: 'line', x0: round(p0.x), y0: round(p0.y), x1: round(p1.x), y1: round(p1.y) },
-    confidence_source: 'human_labeled',
-    scope: 'current_plan_only',
-    created_at: nowIso(),
-    audit_notes: '',
-  };
-  pushExample(step.id, ex);
-  drawMarking(step, ex);
+    labelType: step.labelType,
+  });
+  App.examples[step.id].push(ex);
+  drawExample(ex);
+  selectById(id);
   queueSave();
+  refreshWizard();
 }
 
 function addRectMarking(x0, y0, w, h) {
   const step = currentStep();
-  if (step.tool !== 'rect_small' && step.tool !== 'rect_medium') return;
   const id = nextId(step.idPrefix);
-  const ex = {
-    training_example_id: id,
+  const ex = newExample({
+    id, step,
     geometry: { type: 'rectangle', x0: round(x0), y0: round(y0), x1: round(x0 + w), y1: round(y0 + h) },
+    labelType: step.labelType,
+  });
+  App.examples[step.id].push(ex);
+  drawExample(ex);
+  selectById(id);
+  queueSave();
+  refreshWizard();
+}
+
+function newExample({ id, step, geometry, labelType }) {
+  return {
+    training_example_id: id,
+    page_number: App.imageInfo?.page_number ?? 0,
+    label_type: labelType,
+    label_value: '',
+    geometry_type: geometry.type,
+    geometry: geometry,
+    user_description: '',
+    user_notes: '',
+    associated_pole_id: null,
     confidence_source: 'human_labeled',
     scope: 'current_plan_only',
     created_at: nowIso(),
-    audit_notes: '',
+    audit_notes: [],
+    _step_bucket: step ? step.id : null,  // private, not persisted to file directly
   };
-  pushExample(step.id, ex);
-  drawMarking(step, ex);
-  queueSave();
 }
 
-function pushExample(stepId, ex) {
-  if (!App.examples[stepId]) App.examples[stepId] = [];
-  App.examples[stepId].push(ex);
-  refreshWizard();
+// ====================================================================
+// Drawing markings on the canvas
+// ====================================================================
+function colorForExample(ex) {
+  return LABEL_COLORS[ex.label_type] || '#888';
 }
 
-function removeExample(stepId, exampleId) {
-  if (!App.examples[stepId]) return;
-  App.examples[stepId] = App.examples[stepId].filter(e => e.training_example_id !== exampleId);
-  // Remove the shape from the canvas
-  const shape = App.markingsLayer.findOne('#' + exampleId);
-  if (shape) shape.destroy();
-  App.markingsLayer.draw();
-  refreshWizard();
-  queueSave();
-}
-
-function drawMarking(step, ex) {
-  const color = TOOL_COLORS[step.tool];
-  const id = ex.training_example_id;
+function drawExample(ex) {
   const g = ex.geometry;
+  const color = colorForExample(ex);
+  const id = ex.training_example_id;
   let shape;
   if (g.type === 'point') {
     shape = new Konva.Circle({
       id, x: g.x, y: g.y, radius: g.radius || 8,
       stroke: color, strokeWidth: 2,
       fill: hexToRgba(color, 0.18),
+      draggable: true,
     });
   } else if (g.type === 'line') {
     shape = new Konva.Line({
       id, points: [g.x0, g.y0, g.x1, g.y1],
       stroke: color, strokeWidth: 3,
+      draggable: true,
     });
   } else if (g.type === 'rectangle') {
     shape = new Konva.Rect({
@@ -467,28 +515,520 @@ function drawMarking(step, ex) {
       width: g.x1 - g.x0, height: g.y1 - g.y0,
       stroke: color, strokeWidth: 2,
       fill: hexToRgba(color, 0.10),
+      draggable: true,
     });
   }
   if (!shape) return;
-  shape.listening(false); // Slice 1: no selection/edit yet
+  shape._kind = 'example';
+  attachDragHandlers(shape, ex);
   App.markingsLayer.add(shape);
   App.markingsLayer.batchDraw();
+  return shape;
+}
+
+function drawAssociation(ex) {
+  const g = ex.geometry;
+  const from = findShapeById(g.from?.ref);
+  const to = findShapeById(g.to?.ref);
+  // Use centroids of referenced shapes if available, else stored coords
+  const fxy = from ? shapeCentroid(from) : { x: g.from.x, y: g.from.y };
+  const txy = to ? shapeCentroid(to) : { x: g.to.x, y: g.to.y };
+  const color = LABEL_COLORS[ex.label_type] || '#c80';
+  const line = new Konva.Line({
+    id: ex.training_example_id,
+    points: [fxy.x, fxy.y, txy.x, txy.y],
+    stroke: color, strokeWidth: 2, dash: [8, 4],
+    listening: true,
+  });
+  line._kind = 'association';
+  line._fromId = g.from?.ref;
+  line._toId = g.to?.ref;
+  // Selectable but not draggable directly (drag its endpoints by dragging the
+  // referenced shapes — handled in attachDragHandlers).
+  App.markingsLayer.add(line);
+  App.markingsLayer.batchDraw();
+  return line;
+}
+
+function drawPolygon(ex) {
+  const g = ex.geometry;
+  if (!g.points || g.points.length < 3) return;
+  const color = LABEL_COLORS[ex.label_type] || '#cc0000';
+  const flat = [];
+  g.points.forEach(p => { flat.push(p[0], p[1]); });
+  const poly = new Konva.Line({
+    id: ex.training_example_id,
+    points: flat,
+    closed: true,
+    stroke: color, strokeWidth: 2,
+    fill: hexToRgba(color, 0.12),
+    draggable: true,
+  });
+  poly._kind = ex.label_type === 'noise_background' ? 'noise' : 'ignore';
+  attachDragHandlers(poly, ex);
+  App.markingsLayer.add(poly);
+  App.markingsLayer.batchDraw();
+  return poly;
 }
 
 function renderAllMarkings() {
   if (!App.markingsLayer) return;
   App.markingsLayer.destroyChildren();
+  // 1. Examples (per step)
   for (const step of STEPS) {
-    const list = App.examples[step.id] || [];
-    for (const ex of list) drawMarking(step, ex);
+    for (const ex of (App.examples[step.id] || [])) drawExample(ex);
   }
+  // 2. Ignore polygons + noise polygons
+  for (const ex of App.ignoreRegions) drawPolygon(ex);
+  for (const ex of App.noiseRegions) drawPolygon(ex);
+  // 3. Associations LAST so they sit on top
+  for (const ex of App.associations) drawAssociation(ex);
   App.markingsLayer.draw();
 }
 
-// ---------------------------------------------------------------
-// Wizard panel
-// ---------------------------------------------------------------
+function findShapeById(id) {
+  if (!id || !App.markingsLayer) return null;
+  return App.markingsLayer.findOne('#' + id);
+}
 
+function shapeCentroid(shape) {
+  const cls = shape.getClassName();
+  if (cls === 'Circle') return { x: shape.x(), y: shape.y() };
+  if (cls === 'Rect') return { x: shape.x() + shape.width() / 2, y: shape.y() + shape.height() / 2 };
+  if (cls === 'Line') {
+    const pts = shape.points();
+    let cx = 0, cy = 0, n = 0;
+    for (let i = 0; i < pts.length; i += 2) { cx += pts[i]; cy += pts[i + 1]; n++; }
+    return { x: cx / Math.max(1, n), y: cy / Math.max(1, n) };
+  }
+  return { x: 0, y: 0 };
+}
+
+function attachDragHandlers(shape, ex) {
+  shape.on('dragmove', () => {
+    syncGeometryFromShape(shape, ex);
+    // Update any association line that references this shape
+    App.markingsLayer.find(n => n._kind === 'association' &&
+        (n._fromId === ex.training_example_id || n._toId === ex.training_example_id))
+      .forEach(line => syncAssociationLine(line));
+    App.markingsLayer.batchDraw();
+  });
+  shape.on('dragend', () => queueSave());
+  // Transformer end handler (for rect resize)
+  shape.on('transformend', () => {
+    // Bake scale into geometry
+    const cls = shape.getClassName();
+    if (cls === 'Rect') {
+      const sx = shape.scaleX(), sy = shape.scaleY();
+      shape.width(Math.max(2, shape.width() * sx));
+      shape.height(Math.max(2, shape.height() * sy));
+      shape.scaleX(1); shape.scaleY(1);
+    }
+    syncGeometryFromShape(shape, ex);
+    queueSave();
+  });
+}
+
+function syncGeometryFromShape(shape, ex) {
+  const cls = shape.getClassName();
+  const g = ex.geometry;
+  if (cls === 'Circle') {
+    g.x = round(shape.x()); g.y = round(shape.y());
+  } else if (cls === 'Rect') {
+    g.x0 = round(shape.x()); g.y0 = round(shape.y());
+    g.x1 = round(shape.x() + shape.width());
+    g.y1 = round(shape.y() + shape.height());
+  } else if (cls === 'Line' && g.type === 'line') {
+    // For line markings: drag translates the whole line
+    const dx = shape.x(), dy = shape.y();
+    if (dx !== 0 || dy !== 0) {
+      g.x0 = round(g.x0 + dx); g.y0 = round(g.y0 + dy);
+      g.x1 = round(g.x1 + dx); g.y1 = round(g.y1 + dy);
+      shape.x(0); shape.y(0);
+      shape.points([g.x0, g.y0, g.x1, g.y1]);
+    }
+  } else if (cls === 'Line' && g.type === 'polygon') {
+    const dx = shape.x(), dy = shape.y();
+    if (dx !== 0 || dy !== 0) {
+      g.points = g.points.map(([x, y]) => [round(x + dx), round(y + dy)]);
+      shape.x(0); shape.y(0);
+      const flat = []; g.points.forEach(p => { flat.push(p[0], p[1]); });
+      shape.points(flat);
+    }
+  }
+}
+
+function syncAssociationLine(line) {
+  const from = findShapeById(line._fromId);
+  const to = findShapeById(line._toId);
+  if (!from || !to) return;
+  const f = shapeCentroid(from), t = shapeCentroid(to);
+  line.points([f.x, f.y, t.x, t.y]);
+}
+
+// ====================================================================
+// Selection
+// ====================================================================
+function shapeIdAt(node) {
+  while (node && node !== App.stage) {
+    if (node.id && node.id()) return node.id();
+    node = node.getParent && node.getParent();
+  }
+  return null;
+}
+
+function selectById(id) {
+  const ex = findExampleById(id);
+  if (!ex) return;
+  App.selectedId = id;
+  App.selectedKind = ex._kind;
+  // Attach transformer for rectangles + lines (skip points + polygons + associations)
+  const shape = findShapeById(id);
+  if (shape) {
+    const cls = shape.getClassName();
+    if (cls === 'Rect') {
+      App.transformer.nodes([shape]);
+      App.transformer.enabledAnchors([
+        'top-left', 'top-center', 'top-right', 'middle-right',
+        'bottom-right', 'bottom-center', 'bottom-left', 'middle-left',
+      ]);
+    } else {
+      App.transformer.nodes([]);  // no resize handles
+    }
+    App.uiLayer.draw();
+  }
+  openDetailPanel(ex);
+}
+
+function deselectAll() {
+  App.selectedId = null;
+  App.selectedKind = null;
+  App.transformer.nodes([]);
+  App.uiLayer.draw();
+  closeDetailPanel();
+}
+
+function findExampleById(id) {
+  for (const step of STEPS) {
+    const ex = (App.examples[step.id] || []).find(e => e.training_example_id === id);
+    if (ex) { ex._kind = 'example'; ex._step_bucket = step.id; return ex; }
+  }
+  let ex = App.associations.find(e => e.training_example_id === id);
+  if (ex) { ex._kind = 'association'; return ex; }
+  ex = App.ignoreRegions.find(e => e.training_example_id === id);
+  if (ex) { ex._kind = 'ignore'; return ex; }
+  ex = App.noiseRegions.find(e => e.training_example_id === id);
+  if (ex) { ex._kind = 'noise'; return ex; }
+  return null;
+}
+
+// ====================================================================
+// Detail panel
+// ====================================================================
+function wireDetailPanel() {
+  const closeBtn = document.getElementById('detailClose');
+  const doneBtn = document.getElementById('detailDone');
+  const deleteBtn = document.getElementById('detailDelete');
+  closeBtn.addEventListener('click', () => deselectAll());
+  doneBtn.addEventListener('click', () => deselectAll());
+  deleteBtn.addEventListener('click', onDetailDelete);
+
+  const fields = ['detailLabelType', 'detailLabelValue', 'detailDescription',
+                  'detailNotes', 'detailAssocPole', 'detailScope'];
+  fields.forEach(fid => {
+    const el = document.getElementById(fid);
+    if (!el) return;
+    const fire = () => onDetailFieldChange();
+    el.addEventListener('change', fire);
+    if (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && el.type === 'text')) {
+      el.addEventListener('input', fire);
+    }
+  });
+}
+
+function openDetailPanel(ex) {
+  const panel = document.getElementById('detailPanel');
+  const layout = document.getElementById('layout');
+  panel.classList.remove('hidden');
+  layout.classList.add('detail-open');
+  panel.setAttribute('aria-hidden', 'false');
+
+  document.getElementById('detailGeom').textContent = describeGeometry(ex.geometry);
+  document.getElementById('detailIdLong').textContent = ex.training_example_id;
+  document.getElementById('detailCreatedAt').textContent = ex.created_at || '';
+  document.getElementById('detailLabelType').value = ex.label_type || '';
+  document.getElementById('detailLabelValue').value = ex.label_value || '';
+  document.getElementById('detailDescription').value = ex.user_description || '';
+  document.getElementById('detailNotes').value = ex.user_notes || '';
+  document.getElementById('detailScope').value = ex.scope || 'current_plan_only';
+
+  // Associated pole dropdown — only relevant for tick/code/symbol
+  refreshAssocPoleDropdown();
+  const assocSel = document.getElementById('detailAssocPole');
+  assocSel.value = ex.associated_pole_id || '';
+  const assocWrap = document.getElementById('detailAssocWrap');
+  const hideAssoc = ex._kind === 'association' || ex.label_type === 'pole_dot'
+                  || ex.label_type === 'ignore_region' || ex.label_type === 'noise_background';
+  assocWrap.style.display = hideAssoc ? 'none' : '';
+
+  // Focus the description field (the primary teaching field)
+  setTimeout(() => document.getElementById('detailDescription').focus(), 50);
+}
+
+function closeDetailPanel() {
+  const panel = document.getElementById('detailPanel');
+  const layout = document.getElementById('layout');
+  panel.classList.add('hidden');
+  layout.classList.remove('detail-open');
+  panel.setAttribute('aria-hidden', 'true');
+}
+
+function onDetailFieldChange() {
+  if (!App.selectedId) return;
+  const ex = findExampleById(App.selectedId);
+  if (!ex) return;
+  const newType = document.getElementById('detailLabelType').value;
+  ex.label_type = newType;
+  ex.label_value = document.getElementById('detailLabelValue').value;
+  ex.user_description = document.getElementById('detailDescription').value;
+  ex.user_notes = document.getElementById('detailNotes').value;
+  ex.scope = document.getElementById('detailScope').value;
+  ex.associated_pole_id = document.getElementById('detailAssocPole').value || null;
+  // Re-color the shape to reflect new label_type
+  const shape = findShapeById(ex.training_example_id);
+  if (shape) {
+    const color = colorForExample(ex);
+    shape.stroke(color);
+    if (shape.fill) {
+      const cls = shape.getClassName();
+      if (cls === 'Circle' || cls === 'Rect' || (cls === 'Line' && shape.closed())) {
+        shape.fill(hexToRgba(color, 0.12));
+      }
+    }
+    App.markingsLayer.batchDraw();
+  }
+  queueSave();
+}
+
+function onDetailDelete() {
+  if (!App.selectedId) return;
+  const ex = findExampleById(App.selectedId);
+  if (!ex) return;
+  const ok = confirm('למחוק את הסימון "' + ex.training_example_id + '"?');
+  if (!ok) return;
+  removeMarking(ex);
+}
+
+function refreshAssocPoleDropdown() {
+  const sel = document.getElementById('detailAssocPole');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— ללא קישור / none —</option>';
+  const poles = (App.examples[STEPS[0].id] || []).filter(e => e.label_type === 'pole_dot');
+  poles.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.training_example_id;
+    const desc = p.user_description ? (' — ' + p.user_description.slice(0, 30)) : '';
+    opt.textContent = p.training_example_id + desc;
+    sel.appendChild(opt);
+  });
+  sel.value = current;
+}
+
+// ====================================================================
+// Delete (cascade to associations)
+// ====================================================================
+function removeMarking(ex) {
+  const id = ex.training_example_id;
+  // Remove from data
+  if (ex._kind === 'association' || App.associations.some(a => a.training_example_id === id)) {
+    App.associations = App.associations.filter(a => a.training_example_id !== id);
+  } else if (App.ignoreRegions.some(r => r.training_example_id === id)) {
+    App.ignoreRegions = App.ignoreRegions.filter(r => r.training_example_id !== id);
+  } else if (App.noiseRegions.some(r => r.training_example_id === id)) {
+    App.noiseRegions = App.noiseRegions.filter(r => r.training_example_id !== id);
+  } else {
+    for (const step of STEPS) {
+      App.examples[step.id] = (App.examples[step.id] || []).filter(e => e.training_example_id !== id);
+    }
+    // Cascade: remove any association that references this id
+    App.associations = App.associations.filter(a => {
+      const f = a.geometry?.from?.ref, t = a.geometry?.to?.ref;
+      return f !== id && t !== id;
+    });
+  }
+  // Remove canvas shapes
+  const shape = findShapeById(id);
+  if (shape) shape.destroy();
+  // Remove orphaned association lines
+  App.markingsLayer.find(n => n._kind === 'association' &&
+      (n._fromId === id || n._toId === id))
+    .forEach(line => line.destroy());
+  App.markingsLayer.draw();
+
+  if (App.selectedId === id) deselectAll();
+  refreshWizard();
+  refreshAssocPoleDropdown();
+  queueSave();
+}
+
+// ====================================================================
+// Association tool
+// ====================================================================
+function handleAssociationPick(id) {
+  const ex = findExampleById(id);
+  if (!ex || ex._kind !== 'example') {
+    flash('בחר עמוד, מספר תמרור או סמל / Pick a pole, sign code or symbol');
+    return;
+  }
+  if (!App.assocFirstId) {
+    // First pick
+    if (!POLE_LABELS.has(ex.label_type) && !CODE_OR_SYMBOL_LABELS.has(ex.label_type)) {
+      flash('בחירה ראשונה חייבת להיות עמוד / מספר / סמל');
+      return;
+    }
+    App.assocFirstId = id;
+    flash('בחר עכשיו את הסימון השני (עמוד או מספר/סמל) / Now click the second marking');
+    // Visually mark selection
+    const shape = findShapeById(id);
+    if (shape) { shape.shadowColor('#c80'); shape.shadowBlur(12); App.markingsLayer.batchDraw(); }
+    return;
+  }
+  // Second pick
+  if (id === App.assocFirstId) {
+    flash('אי אפשר לקשר סימון לעצמו / Cannot associate a shape to itself');
+    return;
+  }
+  const a = findExampleById(App.assocFirstId);
+  const b = ex;
+  let pole, target;
+  if (POLE_LABELS.has(a.label_type) && CODE_OR_SYMBOL_LABELS.has(b.label_type)) {
+    pole = a; target = b;
+  } else if (POLE_LABELS.has(b.label_type) && CODE_OR_SYMBOL_LABELS.has(a.label_type)) {
+    pole = b; target = a;
+  } else {
+    flash('הצימוד צריך להיות עמוד + מספר/סמל / Pair must be pole + code/symbol');
+    clearAssocFirst();
+    return;
+  }
+  const assocType = target.label_type === 'sign_code_text' ? 'pole_to_code_association'
+                                                            : 'pole_to_symbol_association';
+  const prefix = target.label_type === 'sign_code_text' ? 'te_assoc_code_' : 'te_assoc_symbol_';
+  const id_ = nextId(prefix);
+  const fromXY = shapeCentroid(findShapeById(target.training_example_id));
+  const toXY = shapeCentroid(findShapeById(pole.training_example_id));
+  const assocEx = {
+    training_example_id: id_,
+    page_number: App.imageInfo?.page_number ?? 0,
+    label_type: assocType,
+    label_value: '',
+    geometry_type: 'association',
+    geometry: {
+      type: 'association',
+      from: { type: 'point', x: round(fromXY.x), y: round(fromXY.y), ref: target.training_example_id },
+      to:   { type: 'point', x: round(toXY.x),   y: round(toXY.y),   ref: pole.training_example_id },
+    },
+    user_description: '',
+    user_notes: '',
+    associated_pole_id: pole.training_example_id,
+    confidence_source: 'human_labeled',
+    scope: 'current_plan_only',
+    created_at: nowIso(),
+    audit_notes: [],
+  };
+  App.associations.push(assocEx);
+  // Also set the target's associated_pole_id for hint
+  if (!target.associated_pole_id) target.associated_pole_id = pole.training_example_id;
+  // Draw + select
+  drawAssociation(assocEx);
+  clearAssocFirst();
+  selectById(id_);
+  queueSave();
+  refreshWizard();
+  flash('הקישור נוצר / Association created: ' + assocType);
+}
+
+function clearAssocFirst() {
+  if (App.assocFirstId) {
+    const s = findShapeById(App.assocFirstId);
+    if (s) { s.shadowBlur(0); s.shadowColor(''); App.markingsLayer.batchDraw(); }
+  }
+  App.assocFirstId = null;
+}
+
+// ====================================================================
+// Polygon tool
+// ====================================================================
+function pushPolygonVertex(pos) {
+  App.polygonPoints.push({ x: round(pos.x), y: round(pos.y) });
+  if (!App.polygonPreviewVertices) {
+    App.polygonPreviewVertices = new Konva.Line({
+      points: [pos.x, pos.y],
+      stroke: '#cc0000', strokeWidth: 2, listening: false,
+    });
+    App.markingsLayer.add(App.polygonPreviewVertices);
+  } else {
+    const flat = [];
+    App.polygonPoints.forEach(p => { flat.push(p.x, p.y); });
+    App.polygonPreviewVertices.points(flat);
+  }
+  if (!App.polygonPreviewLine) {
+    App.polygonPreviewLine = new Konva.Line({
+      points: [pos.x, pos.y, pos.x, pos.y],
+      stroke: '#cc0000', strokeWidth: 1, dash: [4, 3], listening: false,
+    });
+    App.markingsLayer.add(App.polygonPreviewLine);
+  }
+  App.markingsLayer.batchDraw();
+}
+
+function closePolygon() {
+  if (App.polygonPoints.length < 3) {
+    cancelPolygon();
+    flash('פוליגון דורש לפחות 3 קודקודים / Polygon needs at least 3 vertices');
+    return;
+  }
+  const id = nextId('te_ignore_');
+  const xs = App.polygonPoints.map(p => p.x), ys = App.polygonPoints.map(p => p.y);
+  const bbox = { type: 'rectangle', x0: Math.min(...xs), y0: Math.min(...ys),
+                                     x1: Math.max(...xs), y1: Math.max(...ys) };
+  const ex = {
+    training_example_id: id,
+    page_number: App.imageInfo?.page_number ?? 0,
+    label_type: 'ignore_region',
+    label_value: '',
+    geometry_type: 'polygon',
+    geometry: {
+      type: 'polygon',
+      points: App.polygonPoints.map(p => [p.x, p.y]),
+      bbox: bbox,  // backward-compat for script 37
+    },
+    user_description: '',
+    user_notes: '',
+    associated_pole_id: null,
+    confidence_source: 'human_labeled',
+    scope: 'current_plan_only',
+    created_at: nowIso(),
+    audit_notes: [],
+  };
+  App.ignoreRegions.push(ex);
+  cancelPolygon();  // clears preview, keeps the data
+  drawPolygon(ex);
+  selectById(id);
+  queueSave();
+  refreshWizard();
+}
+
+function cancelPolygon() {
+  App.polygonPoints = [];
+  if (App.polygonPreviewLine) { App.polygonPreviewLine.destroy(); App.polygonPreviewLine = null; }
+  if (App.polygonPreviewVertices) { App.polygonPreviewVertices.destroy(); App.polygonPreviewVertices = null; }
+  App.markingsLayer.batchDraw();
+}
+
+// ====================================================================
+// Wizard panel
+// ====================================================================
 function buildWizardPanel() {
   const wiz = document.getElementById('wizard');
   wiz.innerHTML = '';
@@ -508,7 +1048,6 @@ function buildWizardPanel() {
     div.querySelector('[data-activate]').addEventListener('click', () => setCurrentStep(step.id));
     if (step.optional) {
       div.querySelector('[data-skip]').addEventListener('click', () => {
-        // Mark complete via UI by advancing past it
         const nextIdx = STEPS.findIndex(s => s.id === step.id) + 1;
         if (nextIdx < STEPS.length) setCurrentStep(STEPS[nextIdx].id);
       });
@@ -516,13 +1055,31 @@ function buildWizardPanel() {
     wiz.appendChild(div);
   });
 
-  // "Run detection" hint
+  // Step 6 (associations) + supporting counts
+  const assoc = document.createElement('div');
+  assoc.className = 'step';
+  assoc.innerHTML = `
+    <div class="step-head"><span>6. קישורים / Associations</span><span class="count" id="assocCount">0</span></div>
+    <div class="he">חבר עמוד למספר תמרור או לסמל גרפי (כלי A).</div>
+    <div class="en">Link a pole to its sign code/symbol (press A).</div>
+  `;
+  wiz.appendChild(assoc);
+
+  const ignore = document.createElement('div');
+  ignore.className = 'step';
+  ignore.innerHTML = `
+    <div class="step-head"><span>+ אזורי התעלמות / Ignore</span><span class="count" id="ignoreCount">0</span></div>
+    <div class="he">סמן פוליגון לאזורים כמו כותרת, מקרא, רעש (כלי G).</div>
+    <div class="en">Polygon for title block, legend, noise (press G).</div>
+  `;
+  wiz.appendChild(ignore);
+
+  // Apply hint
   const apply = document.createElement('div');
   apply.className = 'step';
   apply.innerHTML = `
     <div class="step-head"><span>7. החל דפוס נלמד</span></div>
     <div class="he">החל את הדפוס הנלמד והפעל את הסורק.</div>
-    <div class="en">When ready_for_apply=true, run script 37 in a terminal:</div>
     <pre style="font-size:11px;background:#f4f4f4;padding:6px;border-radius:4px;overflow-x:auto;">.venv/bin/python 37_manual_visual_training_poc.py \\
   --plan-run-dir &lt;run-dir&gt; \\
   --wizard-examples &lt;run-dir&gt;/outputs/manual_training/visual_training_examples.wizard.json</pre>
@@ -532,8 +1089,7 @@ function buildWizardPanel() {
 
 function setCurrentStep(stepId) {
   App.currentStepId = stepId;
-  const step = currentStep();
-  setTool(step.tool);
+  setTool(currentStep().tool);
   refreshWizard();
 }
 
@@ -542,7 +1098,7 @@ function refreshWizard() {
   STEPS.forEach(step => {
     const card = wiz.querySelector(`[data-step-id="${step.id}"]`);
     if (!card) return;
-    const list = App.examples[step.id] || [];
+    const list = (App.examples[step.id] || []).filter(e => e.label_type === step.labelType);
     const n = list.length;
     const min = step.minExamples;
     const isActive = step.id === App.currentStepId;
@@ -550,33 +1106,41 @@ function refreshWizard() {
     card.classList.toggle('active', isActive);
     card.classList.toggle('done', isDone);
     card.querySelector('[data-count]').textContent =
-      step.optional && min === 0
-        ? `${n} (optional)`
-        : `${n}/${min}`;
+      step.optional && min === 0 ? `${n} (optional)` : `${n}/${min}`;
     const bar = card.querySelector('[data-progress] .bar');
-    const pct = min === 0 ? (n > 0 ? 100 : 0) : Math.min(100, (n / min) * 100);
-    bar.style.width = pct + '%';
+    bar.style.width = (min === 0 ? (n > 0 ? 100 : 0) : Math.min(100, (n / min) * 100)) + '%';
     card.querySelector('[data-progress]').classList.toggle('done', isDone);
     const log = card.querySelector('[data-log]');
     log.innerHTML = '';
-    list.forEach(ex => {
+    (App.examples[step.id] || []).forEach(ex => {
       const item = document.createElement('div');
       item.className = 'item';
-      item.innerHTML = `<span>${ex.training_example_id} ${describeGeometry(ex.geometry)}</span>` +
+      const desc = ex.user_description ? (' · ' + ex.user_description.slice(0, 24)) : '';
+      item.innerHTML = `<span title="${escapeHtml(ex.user_description)}">${ex.training_example_id}${escapeHtml(desc)}</span>` +
                        `<button title="Delete">×</button>`;
-      item.querySelector('button').addEventListener('click', () => removeExample(step.id, ex.training_example_id));
+      item.querySelector('button').addEventListener('click', () => {
+        const e = findExampleById(ex.training_example_id);
+        if (e) removeMarking(e);
+      });
       log.appendChild(item);
     });
     const btn = card.querySelector('[data-activate]');
     btn.textContent = isActive ? '✓ Active' : 'Activate this step';
     btn.disabled = isActive;
   });
+  const ac = document.getElementById('assocCount');
+  if (ac) ac.textContent = String(App.associations.length);
+  const ic = document.getElementById('ignoreCount');
+  if (ic) ic.textContent = String(App.ignoreRegions.length + App.noiseRegions.length);
+  refreshAssocPoleDropdown();
 }
 
 function describeGeometry(g) {
   if (g.type === 'point') return `point (${g.x}, ${g.y})`;
   if (g.type === 'line')  return `line (${g.x0}, ${g.y0}) → (${g.x1}, ${g.y1})`;
   if (g.type === 'rectangle') return `rect ${g.x1 - g.x0}×${g.y1 - g.y0}`;
+  if (g.type === 'polygon') return `polygon (${g.points?.length || 0} vertices)`;
+  if (g.type === 'association') return `assoc ${g.from?.ref || '?'} → ${g.to?.ref || '?'}`;
   return g.type;
 }
 
@@ -584,18 +1148,20 @@ function currentStep() {
   return STEPS.find(s => s.id === App.currentStepId) || STEPS[0];
 }
 
-// ---------------------------------------------------------------
+// ====================================================================
 // Toolbar
-// ---------------------------------------------------------------
-
+// ====================================================================
 function buildToolbar() {
   const tb = document.getElementById('toolbar');
   tb.innerHTML = '';
   const tools = [
-    { id: 'point', label: 'P · עמוד (point)' },
-    { id: 'line', label: 'T · טיק (line)' },
-    { id: 'rect_small', label: 'C · קוד (rect)' },
-    { id: 'rect_medium', label: 'S · סמל (rect)' },
+    { id: 'select',      label: 'V · בחירה' },
+    { id: 'point',       label: 'P · עמוד' },
+    { id: 'line',        label: 'T · טיק' },
+    { id: 'rect_small',  label: 'C · קוד' },
+    { id: 'rect_medium', label: 'S · סמל' },
+    { id: 'association', label: 'A · קישור' },
+    { id: 'polygon',     label: 'G · התעלם' },
   ];
   tools.forEach(t => {
     const b = document.createElement('button');
@@ -605,38 +1171,28 @@ function buildToolbar() {
     b.addEventListener('click', () => setTool(t.id));
     tb.appendChild(b);
   });
-  const sep = document.createElement('div');
-  sep.className = 'sep';
-  tb.appendChild(sep);
-  const hint = document.createElement('span');
-  hint.className = 'zoom';
-  hint.textContent = 'Wheel = zoom · Space+drag = pan';
+  const sep = document.createElement('div'); sep.className = 'sep'; tb.appendChild(sep);
+  const hint = document.createElement('span'); hint.className = 'zoom';
+  hint.textContent = 'Wheel = zoom · Space+drag = pan · Shift+click = select';
   tb.appendChild(hint);
-  const zoom = document.createElement('span');
-  zoom.className = 'zoom';
-  zoom.id = 'zoomLabel';
-  zoom.textContent = '100%';
-  tb.appendChild(zoom);
-
-  const save = document.createElement('span');
-  save.className = 'save-status';
-  save.id = 'saveStatus';
-  save.textContent = '';
+  const zoom = document.createElement('span'); zoom.className = 'zoom'; zoom.id = 'zoomLabel';
+  zoom.textContent = '100%'; tb.appendChild(zoom);
+  const save = document.createElement('span'); save.className = 'save-status'; save.id = 'saveStatus';
   tb.appendChild(save);
-
-  const download = document.createElement('button');
-  download.className = 'action';
+  const download = document.createElement('button'); download.className = 'action';
   download.textContent = 'Download JSON';
   download.addEventListener('click', downloadJSON);
   tb.appendChild(download);
 }
 
 function setTool(toolId) {
+  // Leaving polygon mode mid-draw cancels the in-progress polygon
+  if (App.currentTool === 'polygon' && toolId !== 'polygon') cancelPolygon();
+  // Leaving association mode mid-pick clears the first selection
+  if (App.currentTool === 'association' && toolId !== 'association') clearAssocFirst();
   App.currentTool = toolId;
   refreshToolbar();
-  // Cursor hint
-  if (toolId) document.body.style.cursor = 'crosshair';
-  else document.body.style.cursor = '';
+  document.body.style.cursor = toolId && toolId !== 'select' ? 'crosshair' : '';
 }
 
 function refreshToolbar() {
@@ -647,48 +1203,77 @@ function refreshToolbar() {
   if (zoom && App.stage) zoom.textContent = Math.round(App.stage.scaleX() * 100) + '%';
 }
 
-// ---------------------------------------------------------------
+// ====================================================================
 // Stage info footer
-// ---------------------------------------------------------------
-
+// ====================================================================
 function refreshStageInfo() {
   const el = document.getElementById('stageInfo');
   if (!el) return;
-  if (!App.imageInfo) {
-    el.textContent = 'No image loaded';
-    return;
-  }
+  if (!App.imageInfo) { el.textContent = 'No image loaded'; return; }
   const info = App.imageInfo;
-  const total = STEPS.reduce((acc, s) => acc + (App.examples[s.id]?.length || 0), 0);
+  const total = STEPS.reduce((acc, s) => acc + (App.examples[s.id]?.length || 0), 0)
+              + App.associations.length + App.ignoreRegions.length + App.noiseRegions.length;
   el.innerHTML =
     `<span>Plan: <b>${escapeHtml(info.plan_id)}</b></span>` +
     `<span>Page ${info.page_number} · ${info.width}×${info.height}px @ ${info.dpi} DPI</span>` +
     `<span>Total markings: ${total}</span>`;
 }
 
-// ---------------------------------------------------------------
+// ====================================================================
 // Keyboard
-// ---------------------------------------------------------------
+// ====================================================================
+function wireGlobalKeys() {
+  window.addEventListener('keydown', (e) => {
+    // Always track modifiers (regardless of focus target)
+    if (e.key === 'Shift') App.shiftHeld = true;
+    if (e.code === 'Space') { App.spaceHeld = true; if (document.body.style.cursor === '') document.body.style.cursor = 'grab'; }
 
-function onKeyDown(e) {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-  if (e.ctrlKey || e.metaKey || e.altKey) return;
-  const key = e.key.toUpperCase();
-  if (TOOL_HOTKEYS[key]) {
-    setTool(TOOL_HOTKEYS[key]);
-    e.preventDefault();
-  } else if (key === 'ESCAPE') {
-    setTool(null);
-  }
+    // Don't fire other shortcuts while typing into a field
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+    const key = e.key.toUpperCase();
+    if (TOOL_HOTKEYS[key]) { setTool(TOOL_HOTKEYS[key]); e.preventDefault(); return; }
+
+    if (e.key === 'Enter' && App.currentTool === 'polygon') {
+      closePolygon(); e.preventDefault(); return;
+    }
+    if (e.key === 'Escape') {
+      if (App.currentTool === 'polygon') { cancelPolygon(); }
+      if (App.currentTool === 'association') { clearAssocFirst(); }
+      deselectAll();
+      setTool(null);
+      return;
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (App.selectedId) {
+        const ex = findExampleById(App.selectedId);
+        if (ex) removeMarking(ex);
+        e.preventDefault();
+      }
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'Shift') App.shiftHeld = false;
+    if (e.code === 'Space') {
+      App.spaceHeld = false;
+      App.panStart = null;
+      if (document.body.style.cursor === 'grab' || document.body.style.cursor === 'grabbing') {
+        document.body.style.cursor = App.currentTool && App.currentTool !== 'select' ? 'crosshair' : '';
+      }
+    }
+  });
 }
 
-// ---------------------------------------------------------------
+// ====================================================================
 // Persistence — save to local Python helper
-// ---------------------------------------------------------------
-
+// ====================================================================
 function buildPayload() {
   const stepsOut = {};
   STEPS.forEach((s, idx) => {
+    // Strip private _step_bucket / _kind before saving
+    const cleanExamples = (App.examples[s.id] || []).map(stripPrivate);
     stepsOut[s.id] = {
       order: idx + 2,
       label_type: s.labelType,
@@ -698,16 +1283,30 @@ function buildPayload() {
       optional: !!s.optional,
       prompt_he: s.he,
       prompt_en: s.en,
-      examples: App.examples[s.id] || [],
+      examples: cleanExamples,
     };
   });
-  // Wizard state
+  // Step 6: associations
+  stepsOut[STEP6_ID] = {
+    order: 6,
+    label_type: 'pole_to_code_association',
+    geometry_type: 'association',
+    min_examples: 1,
+    max_examples: 20,
+    prompt_he: 'חבר בין עמוד למספר התמרור / סימון תמרור / כמות תמרורים שלו.',
+    prompt_en: 'Link a pole to its sign code / sign symbol / sign count.',
+    examples: App.associations.map(stripPrivate),
+  };
+  // Completed steps
   const completed = STEPS.filter(s => {
-    const n = (App.examples[s.id] || []).length;
+    const n = (App.examples[s.id] || []).filter(e => e.label_type === s.labelType).length;
     return (s.optional && s.minExamples === 0) || n >= s.minExamples;
   }).map(s => s.id);
+  if (App.associations.length > 0) completed.push(STEP6_ID);
   const required = STEPS.filter(s => !s.optional).map(s => s.id);
+  required.push(STEP6_ID);
   const readyForApply = required.every(id => completed.includes(id));
+
   return {
     schema_version: '3.0',
     engine: 'engine_c_v0.3_manual_first',
@@ -718,16 +1317,24 @@ function buildPayload() {
     image_path: App.imageInfo?.path || null,
     image_size_px: App.imageInfo ? [App.imageInfo.width, App.imageInfo.height] : null,
     image_source: 'rendered_from_pdf',
-    author: 'research_annotator_slice1',
-    purpose: 'Created by the local research annotator (Engine C v0.3 Slice 1). Mark-and-save workflow.',
+    author: 'research_annotator_slice2',
+    purpose: 'Created by the local research annotator (Engine C v0.3 Slice 2). Manual marking with user_description.',
     wizard_state: {
       current_step: 'step_7_apply_learning',
       steps_completed: completed,
       ready_for_apply: readyForApply,
     },
     steps: stepsOut,
-    supporting_examples: { ignore_regions: [], noise_background: [] },
+    supporting_examples: {
+      ignore_regions: App.ignoreRegions.map(stripPrivate),
+      noise_background: App.noiseRegions.map(stripPrivate),
+    },
   };
+}
+
+function stripPrivate(ex) {
+  const { _kind, _step_bucket, ...rest } = ex;
+  return rest;
 }
 
 function queueSave() {
@@ -765,77 +1372,98 @@ function downloadJSON() {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = 'visual_training_examples.wizard.json';
-  a.click();
+  a.href = url; a.download = 'visual_training_examples.wizard.json'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// ---------------------------------------------------------------
-// Existing-file hydration
-// ---------------------------------------------------------------
-
+// ====================================================================
+// Hydration from existing file
+// ====================================================================
 function initBlankExamples() {
   App.examples = {};
   STEPS.forEach(s => { App.examples[s.id] = []; });
+  App.associations = [];
+  App.ignoreRegions = [];
+  App.noiseRegions = [];
   App.counters = {};
 }
 
 function hydrateFromFile(file) {
   initBlankExamples();
-  if (!file.steps) return;
-  STEPS.forEach(step => {
-    const fileStep = file.steps[step.id];
-    if (fileStep && Array.isArray(fileStep.examples)) {
-      App.examples[step.id] = fileStep.examples.slice();
-      // Update counter so new IDs don't collide
-      fileStep.examples.forEach(ex => {
-        const m = ex.training_example_id?.match(/_(\d+)$/);
-        if (m) {
-          const n = parseInt(m[1], 10);
-          App.counters[step.idPrefix] = Math.max(App.counters[step.idPrefix] || 0, n);
-        }
-      });
+  if (file.steps) {
+    STEPS.forEach(step => {
+      const fs = file.steps[step.id];
+      if (fs && Array.isArray(fs.examples)) {
+        App.examples[step.id] = fs.examples.slice();
+      }
+    });
+    if (file.steps[STEP6_ID] && Array.isArray(file.steps[STEP6_ID].examples)) {
+      App.associations = file.steps[STEP6_ID].examples.slice();
+    }
+  }
+  if (file.supporting_examples) {
+    if (Array.isArray(file.supporting_examples.ignore_regions))
+      App.ignoreRegions = file.supporting_examples.ignore_regions.slice();
+    if (Array.isArray(file.supporting_examples.noise_background))
+      App.noiseRegions = file.supporting_examples.noise_background.slice();
+  }
+  // Advance counters past existing IDs
+  const allIds = [
+    ...Object.values(App.examples).flat(),
+    ...App.associations, ...App.ignoreRegions, ...App.noiseRegions,
+  ].map(e => e.training_example_id);
+  allIds.forEach(id => {
+    const m = id?.match(/^(.+_)(\d+)$/);
+    if (m) {
+      const prefix = m[1], n = parseInt(m[2], 10);
+      App.counters[prefix] = Math.max(App.counters[prefix] || 0, n);
     }
   });
+  // Patch missing fields onto pre-Slice2 entries
+  const patch = (ex) => {
+    if (ex.user_description === undefined) ex.user_description = '';
+    if (ex.user_notes === undefined) ex.user_notes = '';
+    if (ex.label_value === undefined) ex.label_value = '';
+    if (ex.associated_pole_id === undefined) ex.associated_pole_id = null;
+    if (ex.scope === undefined) ex.scope = 'current_plan_only';
+    if (ex.audit_notes === undefined) ex.audit_notes = [];
+    if (ex.page_number === undefined) ex.page_number = file.page_number ?? 0;
+    if (!ex.geometry_type && ex.geometry?.type) ex.geometry_type = ex.geometry.type;
+    if (!ex.label_type && ex._step_bucket) {
+      const step = STEPS.find(s => s.id === ex._step_bucket);
+      if (step) ex.label_type = step.labelType;
+    }
+  };
+  Object.values(App.examples).flat().forEach(patch);
+  App.associations.forEach(patch);
+  App.ignoreRegions.forEach(patch);
+  App.noiseRegions.forEach(patch);
 }
 
-// ---------------------------------------------------------------
+// ====================================================================
 // Helpers
-// ---------------------------------------------------------------
-
-function isPanning() { return document.body.style.cursor === 'grab' || document.body.style.cursor === 'grabbing'; }
+// ====================================================================
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function round(v) { return Math.round(v); }
 function nowIso() { return new Date().toISOString(); }
-
 function nextId(prefix) {
   App.counters[prefix] = (App.counters[prefix] || 0) + 1;
   return prefix + String(App.counters[prefix]).padStart(3, '0');
 }
-
 function imagePos() {
-  // Pointer in image-pixel space (stage local coords)
   const p = App.stage.getRelativePointerPosition();
   if (!p) return null;
   if (!App.imageInfo) return p;
-  // Clip to image bounds (we don't want markings outside the image)
-  if (p.x < 0 || p.y < 0 || p.x > App.imageInfo.width || p.y > App.imageInfo.height) {
-    return null;
-  }
+  if (p.x < 0 || p.y < 0 || p.x > App.imageInfo.width || p.y > App.imageInfo.height) return null;
   return p;
 }
-
 async function fetchJSON(url) {
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
     return await res.json();
-  } catch (e) {
-    return null;
-  }
+  } catch (e) { return null; }
 }
-
 function hexToRgba(hex, alpha) {
   const h = hex.replace('#', '');
   const r = parseInt(h.substring(0, 2), 16);
@@ -843,15 +1471,17 @@ function hexToRgba(hex, alpha) {
   const b = parseInt(h.substring(4, 6), 16);
   return `rgba(${r},${g},${b},${alpha})`;
 }
-
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
 }
+function flash(msg) {
+  const old = document.querySelector('.flash-msg'); if (old) old.remove();
+  const el = document.createElement('div'); el.className = 'flash-msg'; el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2400);
+}
 
-// ---------------------------------------------------------------
-// Go
-// ---------------------------------------------------------------
-
+// ====================================================================
 document.addEventListener('DOMContentLoaded', boot);

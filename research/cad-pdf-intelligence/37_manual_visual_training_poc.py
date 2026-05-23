@@ -264,6 +264,39 @@ def safe_crop(img, x0, y0, x1, y1):
 # Rule extraction per wizard step (from completed steps only)
 # ====================================================================
 
+def _polygon_or_rect_bbox(g: Dict) -> Optional[List[int]]:
+    """
+    Compute a bounding box from a geometry dict. Accepts:
+      - {type: "rectangle", x0, y0, x1, y1}
+      - {type: "polygon", points: [[x,y], ...], bbox?: {x0, y0, x1, y1}}
+    Returns [x0, y0, x1, y1] in ints, or None if unrecognized.
+    """
+    if not g or not isinstance(g, dict):
+        return None
+    t = g.get("type")
+    if t == "rectangle":
+        try:
+            return [int(g["x0"]), int(g["y0"]), int(g["x1"]), int(g["y1"])]
+        except (KeyError, TypeError, ValueError):
+            return None
+    if t == "polygon":
+        bb = g.get("bbox")
+        if bb and isinstance(bb, dict):
+            try:
+                return [int(bb["x0"]), int(bb["y0"]), int(bb["x1"]), int(bb["y1"])]
+            except (KeyError, TypeError, ValueError):
+                pass
+        pts = g.get("points") or []
+        if not pts:
+            return None
+        xs = [int(p[0]) for p in pts if len(p) >= 2]
+        ys = [int(p[1]) for p in pts if len(p) >= 2]
+        if not xs or not ys:
+            return None
+        return [min(xs), min(ys), max(xs), max(ys)]
+    return None
+
+
 def extract_rules_from_wizard(
     wizard_data: Dict, completed_steps: List[str], img_bgr, templates_dir: Path
 ) -> List[Dict]:
@@ -525,17 +558,21 @@ def extract_rules_from_wizard(
                 })
 
     # --- ignore_region_rule (from supporting_examples.ignore_regions) ---
+    # v0.3 Slice 2: accept either rectangle OR polygon geometry. For polygons,
+    # compute the bounding box from the points (or use the precomputed bbox
+    # supplied by the annotator).
     ignore_examples = supporting.get("ignore_regions", [])
     if ignore_examples:
         rule_id = "r_ignore_region"
         rects: List[Dict] = []
         for e in ignore_examples:
             g = e.get("geometry", {})
-            if g.get("type") != "rectangle":
+            bbox = _polygon_or_rect_bbox(g)
+            if not bbox:
                 continue
             rects.append({
                 "training_example_id": e["training_example_id"],
-                "bbox": [int(g["x0"]), int(g["y0"]), int(g["x1"]), int(g["y1"])],
+                "bbox": bbox,
                 "label_value": e.get("label_value", ""),
             })
         if rects:
@@ -560,11 +597,12 @@ def extract_rules_from_wizard(
         rects: List[Dict] = []
         for e in noise_examples:
             g = e.get("geometry", {})
-            if g.get("type") != "rectangle":
+            bbox = _polygon_or_rect_bbox(g)
+            if not bbox:
                 continue
             rects.append({
                 "training_example_id": e["training_example_id"],
-                "bbox": [int(g["x0"]), int(g["y0"]), int(g["x1"]), int(g["y1"])],
+                "bbox": bbox,
             })
         if rects:
             rules.append({

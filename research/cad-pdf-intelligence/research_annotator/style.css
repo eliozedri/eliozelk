@@ -21,6 +21,10 @@ html, body {
   display: grid;
   grid-template-columns: 320px 1fr;
   height: calc(100vh - 48px);
+  transition: grid-template-columns 200ms ease;
+}
+.layout.detail-open {
+  grid-template-columns: 320px 1fr 360px;
 }
 .wizard {
   border-inline-end: 1px solid #ddd;
@@ -156,3 +160,114 @@ html, body {
   margin-top: 14px; font-size: 11px; color: #888;
 }
 .first-screen.hidden { display: none; }
+
+/* ====================================================================
+ * Slice 2 — Detail panel (teaching surface)
+ * ==================================================================== */
+.detail-panel {
+  border-inline-start: 1px solid #ddd;
+  background: #fafafa;
+  overflow-y: auto;
+  font-size: 13px;
+  display: flex; flex-direction: column;
+  width: 360px;
+  transition: opacity 200ms ease;
+}
+.detail-panel.hidden { display: none; }
+.detail-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  background: #eef2f7;
+  border-bottom: 1px solid #ddd;
+}
+.detail-head .title { font-weight: 600; font-size: 14px; color: #2a72d4; }
+.detail-head .close-btn {
+  background: transparent; border: none;
+  font-size: 22px; line-height: 1;
+  color: #555; cursor: pointer; padding: 2px 8px;
+}
+.detail-body { padding: 14px; }
+.detail-body .field { margin-bottom: 14px; }
+.detail-body .field label {
+  display: block; font-size: 11px;
+  color: #555; margin-bottom: 4px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.3px;
+}
+.detail-body .field.primary label { color: #2a72d4; }
+.detail-body .field .readonly {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px; color: #333;
+  background: #fff; border: 1px solid #ddd; border-radius: 4px;
+  padding: 6px 8px;
+}
+.detail-body .field input[type="text"],
+.detail-body .field select,
+.detail-body .field textarea {
+  width: 100%; box-sizing: border-box;
+  padding: 7px 9px; font-size: 13px;
+  border: 1px solid #ccc; border-radius: 4px;
+  background: #fff; color: #222;
+  font-family: inherit;
+}
+.detail-body .field textarea { resize: vertical; min-height: 50px; line-height: 1.4; }
+.detail-body .field.primary textarea {
+  border: 2px solid #2a72d4;
+  background: #f7fbff;
+  font-size: 14px;
+}
+.detail-body .field .hint {
+  font-size: 11px; color: #777; margin-top: 4px; line-height: 1.4;
+}
+.detail-actions {
+  display: flex; justify-content: space-between; gap: 8px;
+  margin: 18px 0 12px;
+  padding-top: 12px; border-top: 1px solid #ddd;
+}
+.detail-actions button {
+  padding: 7px 14px; font-size: 13px;
+  border-radius: 4px; cursor: pointer; font-weight: 500;
+}
+.detail-actions button.danger {
+  background: #fff; color: #c33; border: 1px solid #c33;
+}
+.detail-actions button.danger:hover { background: #fff0f0; }
+.detail-actions button.secondary {
+  background: #2a72d4; color: #fff; border: 1px solid #2a72d4;
+}
+.detail-body .audit {
+  margin-top: 14px; padding: 8px 10px;
+  background: #f0f0f0; border-radius: 4px;
+  font-size: 10px; color: #777;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  line-height: 1.6;
+}
+
+/* ====================================================================
+ * Slice 2 — Tool / mode visual states
+ * ==================================================================== */
+.toolbar .mode-indicator {
+  margin-inline-start: 12px;
+  padding: 3px 8px; border-radius: 3px;
+  background: #444; color: #eee;
+  font-size: 11px;
+}
+.toolbar .mode-indicator.assoc { background: #c80; color: #fff; }
+.toolbar .mode-indicator.polygon { background: #c33; color: #fff; }
+
+/* Inline message for association validation */
+.flash-msg {
+  position: absolute; bottom: 20px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.85); color: #fff;
+  padding: 8px 16px; border-radius: 4px;
+  font-size: 13px;
+  z-index: 1000;
+  pointer-events: none;
+  animation: fadeOut 2.4s forwards;
+}
+@keyframes fadeOut {
+  0%   { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+

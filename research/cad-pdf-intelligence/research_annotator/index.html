@@ -2,7 +2,7 @@
 <html dir="rtl" lang="he">
 <head>
   <meta charset="utf-8" />
-  <title>Plan Scanner — Manual Training Annotator (Engine C v0.3, Slice 1)</title>
+  <title>Plan Scanner — Manual Training Annotator (Engine C v0.3, Slice 2)</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -14,7 +14,7 @@
     </div>
   </header>
 
-  <main class="layout">
+  <main class="layout" id="layout">
     <aside class="wizard" id="wizard"></aside>
 
     <section class="stage-wrap">
@@ -22,6 +22,91 @@
       <div id="stage-container"></div>
       <div class="stage-info" id="stageInfo"></div>
     </section>
+
+    <!-- Detail panel — the TEACHING surface. Hidden until a marking is selected/created. -->
+    <aside class="detail-panel hidden" id="detailPanel" aria-hidden="true">
+      <div class="detail-head">
+        <div class="title">פרטי הסימון / Marking details</div>
+        <button class="close-btn" id="detailClose" title="Esc">×</button>
+      </div>
+
+      <div class="detail-body" id="detailBody">
+        <!-- Geometry summary (read-only) -->
+        <div class="field">
+          <label>סימון / Geometry</label>
+          <div class="readonly" id="detailGeom">—</div>
+        </div>
+
+        <!-- Label type — editable per marking -->
+        <div class="field">
+          <label for="detailLabelType">סוג סימון / label_type</label>
+          <select id="detailLabelType">
+            <option value="pole_dot">pole_dot — עמוד</option>
+            <option value="sign_count_tick">sign_count_tick — קו כמות תמרור</option>
+            <option value="sign_code_text">sign_code_text — מספר תמרור</option>
+            <option value="sign_symbol">sign_symbol — סמל גרפי</option>
+            <option value="pole_to_code_association">pole_to_code_association — קישור עמוד→מספר</option>
+            <option value="pole_to_symbol_association">pole_to_symbol_association — קישור עמוד→סמל</option>
+            <option value="number_of_signs_on_pole">number_of_signs_on_pole — מספר תמרורים על עמוד</option>
+            <option value="ignore_region">ignore_region — אזור להתעלם</option>
+            <option value="noise_background">noise_background — רעש/רקע</option>
+            <option value="wrong_detection">wrong_detection — זיהוי שגוי</option>
+          </select>
+        </div>
+
+        <!-- Label value — short tag (e.g. sign code "402") -->
+        <div class="field">
+          <label for="detailLabelValue">ערך / label_value</label>
+          <input type="text" id="detailLabelValue" placeholder="לדוגמה: 402, title_block" />
+        </div>
+
+        <!-- USER DESCRIPTION — Hebrew, RTL, the core teaching signal -->
+        <div class="field primary">
+          <label for="detailDescription">תיאור חופשי / user_description</label>
+          <textarea id="detailDescription" dir="rtl" lang="he" rows="3"
+                    placeholder="תאר במילים שלך מה אתה רואה כאן. דוגמה: זה עמוד תמרור."></textarea>
+          <div class="hint">המערכת לומדת מהגיאומטריה, מ-label_type, ומההסבר הזה.</div>
+        </div>
+
+        <!-- Technical notes -->
+        <div class="field">
+          <label for="detailNotes">הערות טכניות / user_notes</label>
+          <textarea id="detailNotes" dir="rtl" lang="he" rows="2"
+                    placeholder="הערות פנימיות, ביקורת."></textarea>
+        </div>
+
+        <!-- Associated pole (for tick/code/symbol) -->
+        <div class="field" id="detailAssocWrap">
+          <label for="detailAssocPole">עמוד מקושר / associated_pole_id</label>
+          <select id="detailAssocPole">
+            <option value="">— ללא קישור / none —</option>
+          </select>
+        </div>
+
+        <!-- Scope -->
+        <div class="field">
+          <label for="detailScope">היקף השימוש / scope</label>
+          <select id="detailScope">
+            <option value="current_plan_only">current_plan_only — תוכנית זו בלבד</option>
+            <option value="project_rule">project_rule — לכל התוכניות בפרויקט</option>
+            <option value="company_rule_candidate">company_rule_candidate — מועמד לחברה</option>
+            <option value="company_rule_approved">company_rule_approved — מאושר בחברה (admin only)</option>
+          </select>
+        </div>
+
+        <!-- Actions -->
+        <div class="detail-actions">
+          <button class="danger" id="detailDelete">מחק / Delete</button>
+          <button class="secondary" id="detailDone">סיום / Done</button>
+        </div>
+
+        <div class="audit">
+          <div><b>training_example_id:</b> <span id="detailIdLong">—</span></div>
+          <div><b>confidence_source:</b> human_labeled</div>
+          <div><b>created_at:</b> <span id="detailCreatedAt">—</span></div>
+        </div>
+      </div>
+    </aside>
   </main>
 
   <!-- First-screen overlay (shown until image loaded) -->
