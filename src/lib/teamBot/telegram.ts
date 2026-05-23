@@ -62,25 +62,32 @@ async function call<T = unknown>(
   return { ok: true, result: json.result };
 }
 
+/** Send a message. Returns the new message_id (or null on failure). */
 export async function sendMessage(
   chatId: number | string,
   text: string,
   keyboard?: ReplyMarkup,
-): Promise<void> {
-  await call("sendMessage", {
+): Promise<number | null> {
+  const r = await call<{ message_id: number }>("sendMessage", {
     chat_id: chatId,
     text,
     reply_markup: keyboard,
     disable_web_page_preview: true,
   });
+  return r.ok && r.result ? r.result.message_id : null;
 }
 
+/**
+ * Edit a message's text/keyboard in place. Returns true on success (or when
+ * Telegram reports "not modified", which is benign). The caller decides
+ * whether to fall back to a fresh message — this no longer auto-sends.
+ */
 export async function editMessageText(
   chatId: number | string,
   messageId: number,
   text: string,
   keyboard?: InlineKeyboard,
-): Promise<void> {
+): Promise<boolean> {
   const r = await call("editMessageText", {
     chat_id: chatId,
     message_id: messageId,
@@ -88,11 +95,16 @@ export async function editMessageText(
     reply_markup: keyboard,
     disable_web_page_preview: true,
   });
-  // "message is not modified" is benign; fall back to a fresh message on other
-  // edit failures (e.g. message too old to edit).
-  if (!r.ok && !(r.description ?? "").includes("not modified")) {
-    await sendMessage(chatId, text, keyboard);
-  }
+  if (r.ok) return true;
+  return (r.description ?? "").includes("not modified");
+}
+
+/** Best-effort delete (keeps the chat clean). Silently ignores failures. */
+export async function deleteMessage(
+  chatId: number | string,
+  messageId: number,
+): Promise<void> {
+  await call("deleteMessage", { chat_id: chatId, message_id: messageId });
 }
 
 export async function answerCallbackQuery(

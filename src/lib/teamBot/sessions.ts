@@ -20,6 +20,7 @@ export async function loadSession(telegramUserId: string): Promise<SessionState>
     draft: raw.draft ?? {},
     department: raw.department ?? null,
     page: raw.page ?? 1,
+    wizardMessageId: raw.wizardMessageId ?? null,
   };
 }
 
@@ -36,7 +37,11 @@ export async function saveSession(
     );
 }
 
-/** Reset the flow but keep the cart (used by 🏠 / ↩️). */
+/**
+ * Reset the flow but keep the cart (used by 🏠 / ↩️ and /start /menu). Also
+ * clears the tracked active wizard message so the next render starts a fresh
+ * message instead of editing a stale one buried in history.
+ */
 export async function resetFlow(telegramUserId: string, state: SessionState): Promise<void> {
   await saveSession(telegramUserId, {
     ...state,
@@ -44,6 +49,7 @@ export async function resetFlow(telegramUserId: string, state: SessionState): Pr
     pendingItem: null,
     department: null,
     page: 1,
+    wizardMessageId: null,
   });
 }
 

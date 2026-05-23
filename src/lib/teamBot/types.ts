@@ -88,8 +88,10 @@ export type SessionState = {
   /** breadcrumb for the catalog department being browsed (TB-2). */
   department?: string | null;
   page?: number;
+  /** Telegram message_id of the single active wizard message we edit in place. */
+  wizardMessageId?: number | null;
 };
 
 export function emptySession(): SessionState {
-  return { flow: "idle", cart: [] };
+  return { flow: "idle", cart: [], wizardMessageId: null };
 }

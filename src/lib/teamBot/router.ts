@@ -1,6 +1,6 @@
 import "server-only";
 import { sendMessage } from "./telegram";
-import { ack, respond, sendNew, type Ctx } from "./reply";
+import { ack, editUntracked, respond, sendNew, type Ctx } from "./reply";
 import {
   approveUser,
   createAccessCode,
@@ -26,7 +26,6 @@ import {
   ROLE_LABELS,
   adminDecisionApplied,
   adminRequestsScreen,
-  cancelledMessage,
   codeInvalidMessage,
   codeResultMessage,
   helpScreen,
@@ -71,6 +70,7 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
     isCallback: Boolean(update.callback_query),
     callbackId: update.callback_query?.id,
     messageId: update.callback_query?.message?.message_id,
+    userMessageId: update.message?.message_id,
   };
 
   await ack(ctx); // close the Telegram loading spinner on callbacks
@@ -105,7 +105,6 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
   }
   if (text === "/cancel") {
     await clearSession(ctx.telegramUserId);
-    await sendMessage(ctx.chatId, cancelledMessage);
     await sendMain(ctx);
     return;
   }
@@ -131,7 +130,7 @@ async function handleAdminApproval(ctx: Ctx, data: string): Promise<void> {
   // Telegram id is in the configured admin allowlist.
   if (!isAdminTelegramId(ctx.telegramUserId)) {
     await logEvent(ctx.telegramUserId, "unauthorized_admin_action", { data });
-    await respond(ctx, "⛔ פעולה זו זמינה למנהלים מורשים בלבד.");
+    await editUntracked(ctx, ctx.messageId, "⛔ פעולה זו זמינה למנהלים מורשים בלבד.");
     return;
   }
 
@@ -150,7 +149,7 @@ async function handleAdminApproval(ctx: Ctx, data: string): Promise<void> {
   }
   await logEvent(ctx.telegramUserId, approve ? "user_approved" : "user_rejected", { targetId });
 
-  await respond(ctx, adminDecisionApplied(approve, targetId), {
+  await editUntracked(ctx, ctx.messageId, adminDecisionApplied(approve, targetId), {
     inline_keyboard: [
       [{ text: "🔐 בקשות נוספות", callback_data: CB.ADMIN_REQUESTS }],
       [{ text: "🏠 תפריט ראשי", callback_data: CB.HOME }],
@@ -229,7 +228,6 @@ async function handleCallback(ctx: Ctx, data: string): Promise<void> {
   }
   if (data === CB.CANCEL) {
     await clearSession(ctx.telegramUserId);
-    await respond(ctx, cancelledMessage);
     await sendMain(ctx);
     return;
   }

@@ -1,5 +1,5 @@
 import "server-only";
-import { respond, sendNew, type Ctx } from "./reply";
+import { deleteUserMessage, respond, type Ctx } from "./reply";
 import { loadSession, saveSession, clearSession } from "./sessions";
 import { activeIdSet, getItem, listDepartments, listItems } from "./catalog";
 import { createOrderDraft } from "./drafts";
@@ -59,17 +59,19 @@ export async function selectItem(ctx: Ctx, itemId: string): Promise<void> {
       type: item.type,
     },
   });
-  await sendNew(ctx, quantityPrompt(item.name, item.unit_of_measure));
+  // Edit the items-list message in place into the quantity prompt.
+  await respond(ctx, quantityPrompt(item.name, item.unit_of_measure));
 }
 
 export async function enterQuantity(ctx: Ctx, text: string): Promise<void> {
+  await deleteUserMessage(ctx); // remove the typed number to keep the chat clean
   const session = await loadSession(ctx.telegramUserId);
   const pending = session.pendingItem;
   if (!pending) return void (await openDepartments(ctx));
 
   const qty = parseQuantity(text);
   if (qty == null) {
-    await sendNew(ctx, quantityInvalid());
+    await respond(ctx, quantityInvalid());
     return;
   }
 
@@ -85,7 +87,7 @@ export async function enterQuantity(ctx: Ctx, text: string): Promise<void> {
   const cart = [...session.cart, line];
   await saveSession(ctx.telegramUserId, { ...session, cart, flow: "idle", pendingItem: null });
   const s = addedToCart(pending.name, qty, cart.length);
-  await sendNew(ctx, s.text, s.keyboard);
+  await respond(ctx, s.text, s.keyboard);
 }
 
 // ── Cart ────────────────────────────────────────────────────────────────────────
@@ -127,16 +129,18 @@ export async function startFreetext(ctx: Ctx): Promise<void> {
 }
 
 export async function enterFreetext(ctx: Ctx, text: string): Promise<void> {
+  await deleteUserMessage(ctx);
   const session = await loadSession(ctx.telegramUserId);
   await saveSession(ctx.telegramUserId, {
     ...session,
     draft: { ...session.draft, notes: text },
     flow: "awaiting_customer",
   });
-  await sendNew(ctx, customerPrompt);
+  await respond(ctx, customerPrompt);
 }
 
 export async function enterCustomer(ctx: Ctx, text: string): Promise<void> {
+  await deleteUserMessage(ctx);
   const session = await loadSession(ctx.telegramUserId);
   const draft = { ...session.draft, customer: text };
   // Free-text orders (empty cart) skip straight to finalize.
@@ -147,10 +151,11 @@ export async function enterCustomer(ctx: Ctx, text: string): Promise<void> {
   }
   await saveSession(ctx.telegramUserId, { ...session, draft, flow: "awaiting_city" });
   const s = cityPrompt();
-  await sendNew(ctx, s.text, s.keyboard);
+  await respond(ctx, s.text, s.keyboard);
 }
 
 export async function enterCity(ctx: Ctx, text: string | null): Promise<void> {
+  await deleteUserMessage(ctx); // no-op when reached via the skip button (callback)
   const session = await loadSession(ctx.telegramUserId);
   await saveSession(ctx.telegramUserId, {
     ...session,
@@ -158,10 +163,11 @@ export async function enterCity(ctx: Ctx, text: string | null): Promise<void> {
     flow: "awaiting_notes",
   });
   const s = notesPrompt();
-  await sendNew(ctx, s.text, s.keyboard);
+  await respond(ctx, s.text, s.keyboard);
 }
 
 export async function enterNotes(ctx: Ctx, text: string | null): Promise<void> {
+  await deleteUserMessage(ctx); // no-op when reached via the skip button (callback)
   const session = await loadSession(ctx.telegramUserId);
   const draft = { ...session.draft };
   if (text) draft.notes = draft.notes ? `${draft.notes}\n${text}` : text;
@@ -178,10 +184,11 @@ async function finalize(ctx: Ctx): Promise<void> {
   const hasContent =
     session.cart.length > 0 || Boolean(session.draft?.notes && session.draft.notes.trim());
   if (!hasContent) {
-    await clearSession(ctx.telegramUserId);
-    await sendNew(ctx, "אין מה לשלוח — הסל ריק. בנה הזמנה מהקטלוג.", {
+    // Render before clearing so we edit the active message rather than orphan it.
+    await respond(ctx, "אין מה לשלוח — הסל ריק. בנה הזמנה מהקטלוג.", {
       inline_keyboard: [[{ text: "📚 לקטלוג", callback_data: CB.CATALOG }]],
     });
+    await clearSession(ctx.telegramUserId);
     return;
   }
 
@@ -191,9 +198,10 @@ async function finalize(ctx: Ctx): Promise<void> {
     const active = await activeIdSet(ids);
     const inactive = session.cart.filter((l) => !active.has(l.catalog_item_id));
     if (inactive.length > 0) {
+      // Keep the cart so the user can remove the offending item.
       await saveSession(ctx.telegramUserId, { ...session, flow: "idle" });
       const s = inactiveBlocked(inactive.map((l) => l.name));
-      await sendNew(ctx, s.text, s.keyboard);
+      await respond(ctx, s.text, s.keyboard);
       return;
     }
   }
@@ -207,9 +215,11 @@ async function finalize(ctx: Ctx): Promise<void> {
     cart: session.cart,
   });
 
-  await clearSession(ctx.telegramUserId);
+  // Edit the active wizard message into the confirmation (kept as the final
+  // visible/audit message), THEN clear the session.
   const s = draftConfirmation(draft.shortRef, session.draft?.customer ?? null, session.cart.length);
-  await sendNew(ctx, s.text, s.keyboard);
+  await respond(ctx, s.text, s.keyboard);
+  await clearSession(ctx.telegramUserId);
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
