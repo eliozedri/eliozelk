@@ -64,3 +64,22 @@ neural_core_asset_extract_v1/
 # These live in מקורות מידע/ on disk and are not part of the deployed app.
 Sign/
 מקורות\ מידע/
+תוכניות\ שטח\ לדוגמא/
+
+# Security: scripts containing secrets / runtime tokens (never commit)
+verify_elkayam.mjs
+
+# Local browser profiles used by verification scripts (cookies, login data)
+scripts/.browser-profile/
+
+# Local exports / snapshots of components (not part of the app)
+/holographic-catalog/
+/holographic-catalog-components.zip
+/*.zip
+
+# Backup files
+*.bak
+
+# CAD scanner run outputs — ephemeral, regenerated each run.
+# Specs, code, scripts, and small wizard examples remain tracked above this dir.
+research/cad-pdf-intelligence/runs/
