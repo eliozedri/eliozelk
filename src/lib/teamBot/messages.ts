@@ -20,7 +20,17 @@ export const CB = {
   ADMIN_REQUESTS: "menu:admin_requests",
   ADMIN_NEWCODE: "menu:admin_newcode",
   ENTER_CODE: "act:code",
+  CART_SUBMIT: "cart:submit",
+  CART_CLEAR: "cart:clear",
+  SKIP_CITY: "submit:skipcity",
+  SKIP_NOTES: "submit:skipnotes",
 } as const;
+
+// Dynamic callback-data prefixes (followed by an id / slug / index).
+export const CB_DEPT = "dept:"; //  dept:<slug>
+export const CB_DEPT_PAGE = "dp:"; // dp:<slug>:<page>
+export const CB_ITEM = "it:"; //    it:<itemId>
+export const CB_CART_RM = "crm:"; // crm:<index>
 
 export const navRow = [
   { text: "🏠 תפריט ראשי", callback_data: CB.HOME },
@@ -156,3 +166,148 @@ export function renderCartLines(cart: CartLine[]): string {
 }
 
 export const cancelledMessage = "🚫 הפעולה בוטלה. הסל נוקה.";
+
+// ── Catalog & cart (TB-2) ──────────────────────────────────────────────────────
+
+const homeRow = [{ text: "🏠 תפריט ראשי", callback_data: CB.HOME }];
+
+export function departmentsScreen(
+  depts: { slug: string; label: string; emoji: string; count: number }[],
+): { text: string; keyboard: InlineKeyboard } {
+  const rows = depts
+    .filter((d) => d.count > 0)
+    .map((d) => [
+      { text: `${d.emoji} ${d.label} (${d.count})`, callback_data: `${CB_DEPT}${d.slug}` },
+    ]);
+  rows.push([{ text: "🛒 הסל שלי", callback_data: CB.CART }, ...homeRow]);
+  return {
+    text: `📚 קטלוג פעיל\n${RULE}\nבחר מחלקה:`,
+    keyboard: { inline_keyboard: rows },
+  };
+}
+
+export function itemsScreen(
+  deptLabel: string,
+  slug: string,
+  items: { id: string; name: string; unit_of_measure: string | null; default_price: number | null }[],
+  page: number,
+  total: number,
+  pageSize: number,
+): { text: string; keyboard: InlineKeyboard } {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const rows: { text: string; callback_data: string }[][] = items.map((it) => {
+    const unit = it.unit_of_measure ? ` (${it.unit_of_measure})` : "";
+    return [{ text: `${it.name}${unit}`.slice(0, 60), callback_data: `${CB_ITEM}${it.id}` }];
+  });
+
+  const nav: { text: string; callback_data: string }[] = [];
+  if (page > 1) nav.push({ text: "◀️ הקודם", callback_data: `${CB_DEPT_PAGE}${slug}:${page - 1}` });
+  if (page < totalPages) nav.push({ text: "הבא ▶️", callback_data: `${CB_DEPT_PAGE}${slug}:${page + 1}` });
+  if (nav.length) rows.push(nav);
+
+  rows.push([
+    { text: "↩️ מחלקות", callback_data: CB.CATALOG },
+    { text: "🛒 הסל שלי", callback_data: CB.CART },
+  ]);
+  rows.push(homeRow);
+
+  const body = items.length
+    ? "בחר פריט להוספה לסל:"
+    : "אין פריטים פעילים במחלקה זו.";
+  return {
+    text: `📦 ${deptLabel}\n${RULE}\n${body}\n(עמוד ${page}/${totalPages})`,
+    keyboard: { inline_keyboard: rows },
+  };
+}
+
+export function quantityPrompt(itemName: string, unit: string | null): string {
+  const u = unit ? ` (ביחידות: ${unit})` : "";
+  return `כמה ${itemName} להוסיף?${u}\nהקלד מספר (לדוגמה: 10).`;
+}
+
+export function quantityInvalid(): string {
+  return "❌ כמות לא תקינה. הקלד מספר חיובי (לדוגמה: 5).";
+}
+
+export function addedToCart(itemName: string, qty: number, cartCount: number): {
+  text: string;
+  keyboard: InlineKeyboard;
+} {
+  return {
+    text: `✅ נוסף לסל: ${itemName} ×${qty}\nבסל כעת ${cartCount} פריטים.`,
+    keyboard: {
+      inline_keyboard: [
+        [{ text: "➕ הוסף עוד", callback_data: CB.CATALOG }],
+        [{ text: "🛒 לסל ולשליחה", callback_data: CB.CART }],
+        homeRow[0] ? homeRow : [],
+      ].filter((r) => r.length) as { text: string; callback_data: string }[][],
+    },
+  };
+}
+
+export function cartScreen(cart: CartLine[]): { text: string; keyboard: InlineKeyboard } {
+  if (cart.length === 0) {
+    return {
+      text: `🛒 הסל שלי\n${RULE}\nהסל ריק.\nהוסף פריטים מהקטלוג.`,
+      keyboard: {
+        inline_keyboard: [[{ text: "📚 לקטלוג", callback_data: CB.CATALOG }], homeRow],
+      },
+    };
+  }
+  const rows: { text: string; callback_data: string }[][] = cart.map((l, i) => [
+    { text: `🗑 ${i + 1}. ${l.name} ×${l.quantity}`.slice(0, 60), callback_data: `${CB_CART_RM}${i}` },
+  ]);
+  rows.push([{ text: "📚 הוסף עוד", callback_data: CB.CATALOG }, { text: "🧹 נקה סל", callback_data: CB.CART_CLEAR }]);
+  rows.push([{ text: "✅ שליחת הזמנה", callback_data: CB.CART_SUBMIT }]);
+  rows.push(homeRow);
+  return {
+    text: `🛒 הסל שלי\n${RULE}\n${renderCartLines(cart)}\n\nלהסרת פריט — לחץ עליו.`,
+    keyboard: { inline_keyboard: rows },
+  };
+}
+
+export const customerPrompt =
+  "👤 שם הלקוח / החברה עבור ההזמנה?\nהקלד את השם.";
+
+export function cityPrompt(): { text: string; keyboard: InlineKeyboard } {
+  return {
+    text: "📍 עיר / מיקום (לא חובה).\nהקלד עיר או דלג.",
+    keyboard: { inline_keyboard: [[{ text: "⏭ דלג", callback_data: CB.SKIP_CITY }]] },
+  };
+}
+
+export function notesPrompt(): { text: string; keyboard: InlineKeyboard } {
+  return {
+    text: "📝 הערות להזמנה (לא חובה).\nהקלד הערה או דלג.",
+    keyboard: { inline_keyboard: [[{ text: "⏭ דלג ושלח", callback_data: CB.SKIP_NOTES }]] },
+  };
+}
+
+export const freetextPrompt =
+  "📋 הזמנה בטקסט חופשי\nתאר את ההזמנה / בקשת העבודה בהודעה אחת.";
+
+export function inactiveBlocked(names: string[]): { text: string; keyboard: InlineKeyboard } {
+  return {
+    text:
+      `⚠️ לא ניתן לשלוח — חלק מהפריטים אינם פעילים יותר בקטלוג:\n` +
+      names.map((n) => `• ${n}`).join("\n") +
+      `\n\nהסר אותם מהסל ונסה שוב.`,
+    keyboard: { inline_keyboard: [[{ text: "🛒 חזרה לסל", callback_data: CB.CART }], homeRow] },
+  };
+}
+
+export function draftConfirmation(
+  shortRef: string,
+  customer: string | null,
+  itemCount: number,
+): { text: string; keyboard: InlineKeyboard } {
+  const cust = customer ? `\nלקוח: ${customer}` : "";
+  const items = itemCount > 0 ? `\nפריטים: ${itemCount}` : "";
+  return {
+    text:
+      `✅ ההזמנה נשלחה כטיוטה!\n${RULE}\n` +
+      `מספר טיוטה: ${shortRef}${cust}${items}\n\n` +
+      `ההזמנה נרשמה כ"הזמנה דרך הבוט מהטלגרם" וממתינה לאישור הצוות במשרד.`,
+    keyboard: { inline_keyboard: [homeRow] },
+  };
+}

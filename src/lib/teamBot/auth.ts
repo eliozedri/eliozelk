@@ -50,12 +50,14 @@ export async function resolveOrCreateUser(tgUser: TgUser): Promise<TeamBotUser> 
     .maybeSingle();
 
   if (existing) {
-    // Keep contact metadata fresh; never touch role/status here.
-    if (existing.telegram_username !== username || existing.display_name !== displayName) {
-      await db
-        .from("team_bot_users")
-        .update({ telegram_username: username, display_name: displayName })
-        .eq("telegram_user_id", telegramUserId);
+    // Keep contact metadata fresh; never touch role/status here, and never
+    // clobber a stored value with an empty one (some updates omit name fields).
+    const patch: Record<string, unknown> = {};
+    if (username && existing.telegram_username !== username) patch.telegram_username = username;
+    if (displayName && existing.display_name !== displayName) patch.display_name = displayName;
+    if (Object.keys(patch).length > 0) {
+      await db.from("team_bot_users").update(patch).eq("telegram_user_id", telegramUserId);
+      Object.assign(existing, patch);
     }
     return rowToUser(existing as Record<string, unknown>);
   }
