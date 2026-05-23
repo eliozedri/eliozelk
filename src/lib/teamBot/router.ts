@@ -22,6 +22,7 @@ import {
   CB_DEPT_PAGE,
   CB_DRAFT,
   CB_ITEM,
+  MENU_BUTTON_TEXT,
   ROLE_LABELS,
   adminDecisionApplied,
   adminRequestsScreen,
@@ -30,8 +31,10 @@ import {
   codeResultMessage,
   helpScreen,
   mainMenu,
+  persistentKeyboard,
   promptEnterCode,
   restrictedScreen,
+  startGreeting,
 } from "./messages";
 import {
   clearCart,
@@ -89,8 +92,14 @@ export async function handleUpdate(update: TgUpdate): Promise<void> {
   }
 
   // ── Gate 2: approved users ──────────────────────────────────────────────────
-  if (text === "/start" || text === "/menu") {
+  if (text === "/start" || text === "/menu" || text === MENU_BUTTON_TEXT) {
     await resetFlow(ctx.telegramUserId, await loadSession(ctx.telegramUserId));
+    // On /start, (re)install the persistent bottom keyboard so the user can
+    // always return to the menu without typing. It persists across later
+    // inline-keyboard messages.
+    if (text === "/start") {
+      await sendMessage(ctx.chatId, startGreeting, persistentKeyboard());
+    }
     await sendMain(ctx);
     return;
   }

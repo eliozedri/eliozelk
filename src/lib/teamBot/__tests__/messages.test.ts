@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mainMenu, restrictedScreen, helpScreen, adminAlert, CB, CB_ADMIN_OK } from "../messages";
+import { mainMenu, restrictedScreen, helpScreen, adminAlert, persistentKeyboard, MENU_BUTTON_TEXT, CB, CB_ADMIN_OK } from "../messages";
 import type { TeamBotUser } from "../types";
 
 function user(role: TeamBotUser["role"], status: TeamBotUser["status"] = "approved"): TeamBotUser {
@@ -66,6 +66,15 @@ describe("mainMenu role gating", () => {
 describe("helpScreen", () => {
   it("mentions the Telegram-origin labelling", () => {
     expect(helpScreen(user("authorized_user")).text).toContain("הזמנה דרך הבוט מהטלגרם");
+  });
+});
+
+describe("persistentKeyboard", () => {
+  it("is a persistent bottom keyboard with the menu button", () => {
+    const kb = persistentKeyboard();
+    expect(kb.is_persistent).toBe(true);
+    expect(kb.resize_keyboard).toBe(true);
+    expect(kb.keyboard.flat().map((b) => b.text)).toContain(MENU_BUTTON_TEXT);
   });
 });
 

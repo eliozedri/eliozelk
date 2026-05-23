@@ -14,6 +14,16 @@ const API_BASE = "https://api.telegram.org";
 export type InlineButton = { text: string; callback_data?: string; url?: string };
 export type InlineKeyboard = { inline_keyboard: InlineButton[][] };
 
+// Persistent bottom keyboard (reply keyboard). Tapping a button sends its text
+// as a normal message. is_persistent keeps it visible across messages.
+export type ReplyKeyboard = {
+  keyboard: { text: string }[][];
+  resize_keyboard?: boolean;
+  is_persistent?: boolean;
+  one_time_keyboard?: boolean;
+};
+export type ReplyMarkup = InlineKeyboard | ReplyKeyboard;
+
 export function botToken(): string | null {
   return process.env.TEAM_BOT_TELEGRAM_TOKEN ?? null;
 }
@@ -55,7 +65,7 @@ async function call<T = unknown>(
 export async function sendMessage(
   chatId: number | string,
   text: string,
-  keyboard?: InlineKeyboard,
+  keyboard?: ReplyMarkup,
 ): Promise<void> {
   await call("sendMessage", {
     chat_id: chatId,

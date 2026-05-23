@@ -37,7 +37,7 @@ vi.mock("../sessions", () => ({
 }));
 
 import { handleUpdate } from "../router";
-import { CB, CB_ADMIN_OK } from "../messages";
+import { CB, CB_ADMIN_OK, MENU_BUTTON_TEXT } from "../messages";
 
 function mkUser(role: TeamBotUser["role"], status: TeamBotUser["status"]): TeamBotUser {
   return {
@@ -110,6 +110,21 @@ describe("approved users", () => {
     await handleUpdate(startMsg());
     expect(allText()).toContain("בחר פעולה");
     expect(allDatas()).toContain(CB.CATALOG);
+  });
+
+  it("tapping the persistent bottom-menu button opens the main menu", async () => {
+    auth.resolveOrCreateUser.mockResolvedValue(mkUser("authorized_user", "approved"));
+    await handleUpdate(startMsg(MENU_BUTTON_TEXT));
+    expect(allText()).toContain("בחר פעולה");
+  });
+});
+
+describe("default-deny ignores the menu button for non-approved users", () => {
+  it("pending user tapping the menu button still gets the restricted screen", async () => {
+    auth.resolveOrCreateUser.mockResolvedValue(mkUser("viewer", "pending"));
+    await handleUpdate(startMsg(MENU_BUTTON_TEXT));
+    expect(allText()).toContain("ממתינה לאישור מנהל");
+    expect(allText()).not.toContain("בחר פעולה");
   });
 });
 

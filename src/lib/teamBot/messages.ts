@@ -1,5 +1,20 @@
-import type { InlineButton, InlineKeyboard } from "./telegram";
+import type { InlineButton, InlineKeyboard, ReplyKeyboard } from "./telegram";
 import type { CartLine, TeamBotRole, TeamBotUser } from "./types";
+
+/** Label of the persistent bottom-keyboard button (sent as text when tapped). */
+export const MENU_BUTTON_TEXT = "🏠 תפריט ראשי";
+
+/** Persistent bottom keyboard so users reach the main menu without typing. */
+export function persistentKeyboard(): ReplyKeyboard {
+  return {
+    keyboard: [[{ text: MENU_BUTTON_TEXT }]],
+    resize_keyboard: true,
+    is_persistent: true,
+  };
+}
+
+export const startGreeting =
+  "👷 ברוך הבא לבוט הצוות של אלקיים.\nלחזרה לתפריט בכל שלב — לחץ על הכפתור 🏠 תפריט ראשי שלמטה.";
 
 /**
  * Hebrew copy + inline-keyboard builders for the Team Bot. Plain text only
