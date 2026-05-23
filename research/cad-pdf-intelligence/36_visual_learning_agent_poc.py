@@ -76,6 +76,12 @@ def parse_args() -> argparse.Namespace:
                    help="Confidence below this triggers a review question (default 0.7)")
     p.add_argument("--max-candidates-per-rule", type=int, default=500,
                    help="Cap candidates per rule to avoid runaway (default 500)")
+    p.add_argument("--min-tick-pole-px", type=int, default=3,
+                   help="Minimum tick→nearest-pole distance to be kept (default 3px). "
+                        "Below this is overlap/noise.")
+    p.add_argument("--max-tick-pole-px", type=int, default=80,
+                   help="Maximum tick→nearest-pole distance to be kept (default 80px). "
+                        "Beyond this, the line is not associable with any pole and is dropped.")
     return p.parse_args()
 
 
@@ -496,6 +502,42 @@ def apply_template_patches(
     return deduped, elapsed_ms
 
 
+def filter_ticks_by_pole_distance(
+    candidates: List[Dict],
+    min_dist_px: int,
+    max_dist_px: int,
+) -> Tuple[List[Dict], int, int]:
+    """
+    Tick candidates must be near a detected pole. A 'tick' that is nowhere near
+    any pole is by definition not a tick (it's an unrelated short line). Drops
+    tick_candidates whose nearest pole is outside [min_dist_px, max_dist_px].
+
+    Returns:
+      (filtered_candidates, n_dropped, n_kept_ticks)
+    """
+    poles = [c for c in candidates if c.get("candidate_type") == "pole_candidate"]
+    ticks = [c for c in candidates if c.get("candidate_type") == "tick_candidate"]
+    others = [c for c in candidates if c.get("candidate_type") not in ("pole_candidate", "tick_candidate")]
+    if not poles:
+        # No poles → no tick can be validated; drop all ticks.
+        return poles + others, len(ticks), 0
+    pole_pts = [(p["centroid"][0], p["centroid"][1]) for p in poles]
+    kept_ticks: List[Dict] = []
+    n_dropped = 0
+    for t in ticks:
+        tx, ty = t["centroid"]
+        best = min(((tx - px) ** 2 + (ty - py) ** 2) ** 0.5 for (px, py) in pole_pts)
+        if min_dist_px <= best <= max_dist_px:
+            t["nearest_pole_distance_px"] = round(best, 1)
+            t.setdefault("audit_notes", []).append(
+                f"pole_distance_validated ({best:.0f}px in [{min_dist_px},{max_dist_px}])"
+            )
+            kept_ticks.append(t)
+        else:
+            n_dropped += 1
+    return poles + kept_ticks + others, n_dropped, len(kept_ticks)
+
+
 def apply_associations(
     pole_candidates: List[Dict],
     code_candidates: List[Dict],
@@ -536,21 +578,39 @@ def apply_associations(
 # Evidence crops + review questions
 # --------------------------------------------------------------------
 
+# Question texts keyed by candidate_type (must match values produced by the
+# detection loop: pole_candidate / tick_candidate / sign_code_candidate /
+# assembly_candidate / noise_candidate). Hebrew text per spec §9.
 QUESTION_TEXTS = {
-    "pole_dot": {
-        "he": "האם הנקודה הזו היא עמוד תמרור?",
-        "en": "Is this dot a sign pole?",
+    "pole_candidate": {
+        "he": "האם זו נקודת עמוד תמרור?",
+        "en": "Is this a sign pole point?",
+        "question_type": "is_pole",
         "allowed_answers": ["yes_pole", "no_noise", "no_dimension_mark", "other"],
     },
-    "tick_mark": {
-        "he": "האם הקו הקצר הזה הוא סימן טיק (תמרור על העמוד)?",
-        "en": "Is this short line a tick mark (sign on a pole)?",
+    "tick_candidate": {
+        "he": "האם הקו הקטן הזה מסמן תמרור נוסף על אותו עמוד?",
+        "en": "Does this short line mark an additional sign on the same pole?",
+        "question_type": "is_tick_mark",
         "allowed_answers": ["yes_tick", "no_unrelated_line", "other"],
     },
-    "sign_code_text": {
-        "he": "האם זה מספר תמרור?",
-        "en": "Is this a sign code number?",
-        "allowed_answers": ["yes_sign_code", "no_dimension", "no_other_text", "other"],
+    "sign_code_candidate": {
+        "he": "האם המספר הזה שייך לעמוד/לתמרור?",
+        "en": "Does this number belong to the pole/sign?",
+        "question_type": "is_sign_code",
+        "allowed_answers": ["yes_sign_code", "no_unrelated_number", "no_dimension", "other"],
+    },
+    "assembly_candidate": {
+        "he": "האם השיוך הזה בין עמוד/מספר/תמרור נכון?",
+        "en": "Is this pole/code/sign assembly correct?",
+        "question_type": "is_assembly",
+        "allowed_answers": ["yes_correct", "no_wrong_pole", "no_wrong_code", "no_wrong_sign", "other"],
+    },
+    "noise_candidate": {
+        "he": "האם זה רעש/רקע שיש להתעלם ממנו?",
+        "en": "Is this background noise that should be ignored?",
+        "question_type": "is_noise",
+        "allowed_answers": ["yes_noise", "no_real_detection", "other"],
     },
 }
 
@@ -588,18 +648,20 @@ def maybe_generate_review_question(
     if candidate.get("confidence", 0) >= review_threshold:
         return None
     cand_type = candidate.get("candidate_type", "")
-    label_type_key = cand_type.replace("_candidate", "")
-    qmeta = QUESTION_TEXTS.get(label_type_key)
+    qmeta = QUESTION_TEXTS.get(cand_type)
     if not qmeta:
+        # Unknown candidate type: emit a generic question but flag the source so
+        # we can extend QUESTION_TEXTS rather than swallowing it silently.
         qmeta = {
             "he": "האם הזיהוי הזה תקין?",
             "en": "Is this detection valid?",
+            "question_type": "is_valid_generic",
             "allowed_answers": ["yes_valid", "no_invalid", "other"],
         }
     return {
         "review_question_id": f"q_{candidate['candidate_id']}",
         "candidate_id": candidate["candidate_id"],
-        "question_type": f"is_{label_type_key}",
+        "question_type": qmeta["question_type"],
         "question_text_he": qmeta["he"],
         "question_text_en": qmeta["en"],
         "evidence_crop_path": candidate.get("evidence_crop_path"),
@@ -838,6 +900,18 @@ def main() -> int:
             timing.setdefault("apply_code", 0)
             timing["apply_code"] += ms
 
+    # 4b. Validate ticks by distance to nearest pole.
+    # A 'tick' that is nowhere near a detected pole is not a tick.
+    log(f"\nStep 4b: Validating tick candidates by pole distance "
+        f"[{args.min_tick_pole_px}..{args.max_tick_pole_px}px] ...")
+    t_tick_filter = time.perf_counter()
+    n_ticks_before = sum(1 for c in candidates if c.get("candidate_type") == "tick_candidate")
+    candidates, n_dropped_ticks, n_kept_ticks = filter_ticks_by_pole_distance(
+        candidates, args.min_tick_pole_px, args.max_tick_pole_px,
+    )
+    timing["tick_distance_filter"] = (time.perf_counter() - t_tick_filter) * 1000
+    log(f"  Before: {n_ticks_before} ticks; after: {n_kept_ticks}; dropped: {n_dropped_ticks}")
+
     # Apply associations
     log(f"\nStep 5: Applying associations ...")
     t_assoc = time.perf_counter()
@@ -922,9 +996,22 @@ def main() -> int:
         args=args,
     )
 
+    # 8b. Compact evidence inspection package — top 20 per type + all associations,
+    # designed for human-eye review before any full UI is built.
+    log(f"\nStep 8: Writing evidence inspection package ...")
+    write_evidence_inspection_package(
+        out_root=out_root,
+        candidates=candidates,
+        review_questions=review_questions,
+        training=training,
+        rules=rules,
+        page_img_path=page_img_path,
+        args=args,
+    )
+
     log("")
     log("============================================================")
-    log("DONE — Engine C POC v0.1")
+    log("DONE — Engine C POC v0.1.1 (bug fixes + inspection package)")
     log("============================================================")
     log(f"  Training examples loaded : {len(examples)} ({len(by_type)} types)")
     log(f"  Rules extracted          : {len(rules)}")
@@ -946,6 +1033,10 @@ def main() -> int:
     log(f"    outputs/visual_learning_agent/templates/")
     log(f"    outputs/visual_learning_agent/visual_learning_agent_report.md")
     log(f"    outputs/visual_learning_agent/visual_learning_agent_report.html")
+    log(f"    outputs/visual_learning_agent/top_evidence_review.json")
+    log(f"    outputs/visual_learning_agent/top_evidence_review.html")
+    log("")
+    log("  STATUS: Algorithmic POC output — NOT human validated.")
     log("")
     log("  Honest framing:")
     log("    This POC is rule-based template matching from human markings.")
@@ -989,6 +1080,12 @@ def write_reports(
         f"**Source kind:** {'image' if 'image' in page_img_path else 'pdf'}",
         f"**Match threshold:** {args.match_threshold}",
         f"**Review threshold:** {args.review_threshold}",
+        "",
+        "> ⚠ **STATUS: Algorithmic POC output — NOT human validated.**",
+        "> The counts and confidences below are pixel-similarity scores from template",
+        "> matching. They have not been confirmed against the real plan by a human reviewer.",
+        "> Do NOT use these numbers as accuracy claims. Use `top_evidence_review.html` to",
+        "> visually inspect the strongest candidates before drawing conclusions.",
         "",
         "## What This Is",
         "",
@@ -1104,9 +1201,14 @@ def write_reports(
         "h2{margin-top:1.5em;border-bottom:1px solid #ddd;padding-bottom:0.3em}",
         ".q{border:1px solid #ddd;border-radius:6px;padding:0.8em;margin:0.6em 0;background:#fafafa}",
         ".q img{max-width:280px;border:1px solid #aaa;display:block;margin:0.4em 0}",
-        ".hi{color:#080;font-weight:bold}.lo{color:#a00;font-weight:bold}</style>",
+        ".hi{color:#080;font-weight:bold}.lo{color:#a00;font-weight:bold}",
+        ".banner{border:2px solid #c80;background:#fff7e0;padding:0.6em 1em;border-radius:6px;margin:0.6em 0}</style>",
         "</head><body>",
-        f"<h1>Engine C — Visual Learning Agent (POC v0.1)</h1>",
+        f"<h1>Engine C — Visual Learning Agent (POC v0.1.1)</h1>",
+        "<div class='banner'><b>⚠ Algorithmic POC output — NOT human validated.</b><br>"
+        "Counts and confidences below are pixel-similarity scores from template matching. "
+        "They have not been confirmed against the real plan by a human reviewer. "
+        "See <code>top_evidence_review.html</code> to visually inspect the strongest candidates.</div>",
         f"<p><b>Plan:</b> {training.get('plan_id', '?')} | <b>Page:</b> {args.page} | "
         f"<b>DPI:</b> {args.dpi}</p>",
         "<h2>Summary</h2><ul>",
@@ -1161,6 +1263,240 @@ def write_reports(
     html_path = out_root / "visual_learning_agent_report.html"
     with open(html_path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(html))
+
+
+# --------------------------------------------------------------------
+# Evidence Inspection Package (top_evidence_review.json + .html)
+# --------------------------------------------------------------------
+
+def _question_for_candidate(cand: Dict, review_questions: List[Dict]) -> Optional[Dict]:
+    cid = cand["candidate_id"]
+    for q in review_questions:
+        if q.get("candidate_id") == cid:
+            return q
+    return None
+
+
+def _candidate_for_id(cid: str, candidates: List[Dict]) -> Optional[Dict]:
+    for c in candidates:
+        if c.get("candidate_id") == cid:
+            return c
+    return None
+
+
+def write_evidence_inspection_package(
+    out_root: Path,
+    candidates: List[Dict],
+    review_questions: List[Dict],
+    training: Dict,
+    rules: List[Dict],
+    page_img_path: str,
+    args,
+    top_n: int = 20,
+) -> None:
+    """
+    Compact human-review package: top N per candidate type + all associations,
+    each with crop, bbox, confidence, type, system guess, review question.
+    Outputs:
+      outputs/visual_learning_agent/top_evidence_review.json
+      outputs/visual_learning_agent/top_evidence_review.html
+    """
+    by_type: Dict[str, List[Dict]] = {}
+    for c in candidates:
+        by_type.setdefault(c["candidate_type"], []).append(c)
+    for ct in by_type:
+        by_type[ct].sort(key=lambda x: -x.get("confidence", 0))
+
+    top_poles = by_type.get("pole_candidate", [])[:top_n]
+    top_ticks = by_type.get("tick_candidate", [])[:top_n]
+    top_codes = by_type.get("sign_code_candidate", [])[:top_n]
+
+    associated_codes = [
+        c for c in candidates
+        if c.get("candidate_type") == "sign_code_candidate" and c.get("associated_candidates")
+    ]
+    associations: List[Dict] = []
+    for code in associated_codes:
+        for pole_id in code.get("associated_candidates", []):
+            pole = _candidate_for_id(pole_id, candidates)
+            if pole is None:
+                continue
+            cx, cy = code["centroid"]
+            px, py = pole["centroid"]
+            dist = ((cx - px) ** 2 + (cy - py) ** 2) ** 0.5
+            associations.append({
+                "code_id": code["candidate_id"],
+                "code_centroid": code["centroid"],
+                "code_confidence": code["confidence"],
+                "code_evidence_crop_path": code.get("evidence_crop_path"),
+                "pole_id": pole["candidate_id"],
+                "pole_centroid": pole["centroid"],
+                "pole_confidence": pole["confidence"],
+                "pole_evidence_crop_path": pole.get("evidence_crop_path"),
+                "distance_px": round(dist, 1),
+            })
+
+    def serialize(cand: Dict) -> Dict:
+        q = _question_for_candidate(cand, review_questions)
+        return {
+            "candidate_id": cand["candidate_id"],
+            "candidate_type": cand["candidate_type"],
+            "centroid": cand["centroid"],
+            "bbox": cand["bbox"],
+            "confidence": cand["confidence"],
+            "system_guess": cand["system_guess"],
+            "requires_review": cand.get("requires_review", False),
+            "learned_from_examples": cand.get("learned_from_examples", []),
+            "associated_candidates": cand.get("associated_candidates", []),
+            "nearest_pole_distance_px": cand.get("nearest_pole_distance_px"),
+            "evidence_crop_path": cand.get("evidence_crop_path"),
+            "review_question": {
+                "question_id": q["review_question_id"],
+                "question_text_he": q["question_text_he"],
+                "question_text_en": q["question_text_en"],
+                "allowed_answers": q["allowed_answers"],
+            } if q else None,
+            "audit_notes": cand.get("audit_notes", []),
+        }
+
+    package = {
+        "schema_version": "1.0",
+        "validation_status": "Algorithmic POC output — NOT human validated.",
+        "plan_id": training.get("plan_id"),
+        "page_number": args.page,
+        "image_path": page_img_path,
+        "top_n_per_type": top_n,
+        "summary_counts": {
+            "pole_candidates_total": len(by_type.get("pole_candidate", [])),
+            "tick_candidates_total": len(by_type.get("tick_candidate", [])),
+            "sign_code_candidates_total": len(by_type.get("sign_code_candidate", [])),
+            "associations_total": len(associations),
+        },
+        "rules_in_effect": [{"rule_id": r["rule_id"], "label_type": r["label_type"]} for r in rules],
+        "top_poles": [serialize(c) for c in top_poles],
+        "top_ticks": [serialize(c) for c in top_ticks],
+        "top_codes": [serialize(c) for c in top_codes],
+        "associations": associations,
+    }
+    json_path = out_root / "top_evidence_review.json"
+    with open(json_path, "w", encoding="utf-8") as fh:
+        json.dump(package, fh, indent=2)
+    log(f"  Saved {json_path.name}")
+
+    # HTML — visual inspection page with embedded crop images
+    def _img_b64(path: Optional[str]) -> str:
+        if not path:
+            return ""
+        try:
+            with open(path, "rb") as fh:
+                b64 = base64.b64encode(fh.read()).decode("ascii")
+            return f"<img src='data:image/png;base64,{b64}' style='max-width:240px;border:1px solid #aaa;display:block'/>"
+        except Exception:
+            return ""
+
+    def _row(cand: Dict) -> str:
+        q = _question_for_candidate(cand, review_questions)
+        q_he = q["question_text_he"] if q else "—"
+        q_en = q["question_text_en"] if q else "—"
+        learned = ", ".join(cand.get("learned_from_examples", []))
+        notes = "; ".join(cand.get("audit_notes", []))
+        conf = cand.get("confidence", 0)
+        conf_cls = "ok" if conf >= 0.85 else ("mid" if conf >= 0.7 else "lo")
+        return (
+            f"<tr>"
+            f"<td>{cand['candidate_id']}</td>"
+            f"<td>{cand['candidate_type']}</td>"
+            f"<td>({cand['centroid'][0]}, {cand['centroid'][1]})</td>"
+            f"<td class='{conf_cls}'>{conf:.3f}</td>"
+            f"<td>{cand['system_guess']}</td>"
+            f"<td>{learned}</td>"
+            f"<td>{_img_b64(cand.get('evidence_crop_path'))}</td>"
+            f"<td><b>HE:</b> {q_he}<br><b>EN:</b> {q_en}</td>"
+            f"<td>{notes}</td>"
+            f"</tr>"
+        )
+
+    def _assoc_row(a: Dict) -> str:
+        return (
+            f"<tr>"
+            f"<td>{a['code_id']} → {a['pole_id']}</td>"
+            f"<td>{a['distance_px']}px</td>"
+            f"<td>code conf {a['code_confidence']:.3f}, pole conf {a['pole_confidence']:.3f}</td>"
+            f"<td>{_img_b64(a.get('code_evidence_crop_path'))}</td>"
+            f"<td>{_img_b64(a.get('pole_evidence_crop_path'))}</td>"
+            f"</tr>"
+        )
+
+    html_lines = [
+        "<!DOCTYPE html><html><head><meta charset='utf-8'>",
+        "<title>Engine C — Top Evidence Review</title>",
+        "<style>body{font-family:system-ui,sans-serif;max-width:1400px;margin:1em auto;padding:0 1em;color:#222}",
+        "table{border-collapse:collapse;width:100%;font-size:13px;margin:0.5em 0}",
+        "td,th{border:1px solid #ccc;padding:6px 8px;vertical-align:top}",
+        "h2{margin-top:1.5em;border-bottom:1px solid #ddd;padding-bottom:0.3em}",
+        ".ok{color:#080;font-weight:bold}.mid{color:#a80;font-weight:bold}.lo{color:#a00;font-weight:bold}",
+        ".banner{border:2px solid #c80;background:#fff7e0;padding:0.6em 1em;border-radius:6px;margin:0.6em 0}",
+        ".sub{color:#555;font-size:13px}</style>",
+        "</head><body>",
+        "<h1>Engine C — Top Evidence Review</h1>",
+        "<div class='banner'><b>⚠ Algorithmic POC output — NOT human validated.</b><br>",
+        "Each row below is one candidate produced by template matching from the user's training examples. ",
+        "Confidence is a pixel-similarity score, NOT a verified detection. ",
+        "Open each crop image and answer the review question (HE/EN) to confirm or reject the candidate.</div>",
+        f"<p class='sub'>Plan: <code>{training.get('plan_id', '?')}</code> | "
+        f"Page: {args.page} | "
+        f"Totals — poles: {len(by_type.get('pole_candidate', []))}, "
+        f"ticks: {len(by_type.get('tick_candidate', []))}, "
+        f"codes: {len(by_type.get('sign_code_candidate', []))}, "
+        f"associations: {len(associations)}</p>",
+    ]
+
+    for title, rows in (
+        (f"Top {len(top_poles)} pole candidates", top_poles),
+        (f"Top {len(top_ticks)} tick candidates (after pole-distance filter)", top_ticks),
+        (f"Top {len(top_codes)} sign-code candidates", top_codes),
+    ):
+        html_lines.append(f"<h2>{title}</h2>")
+        if not rows:
+            html_lines.append("<p class='sub'>(none)</p>")
+            continue
+        html_lines.append(
+            "<table><tr>"
+            "<th>candidate_id</th><th>type</th><th>centroid</th><th>conf</th><th>system_guess</th>"
+            "<th>learned_from</th><th>evidence crop</th><th>review question (HE / EN)</th><th>audit</th>"
+            "</tr>"
+        )
+        for c in rows:
+            html_lines.append(_row(c))
+        html_lines.append("</table>")
+
+    html_lines.append(f"<h2>All {len(associations)} code ↔ pole associations</h2>")
+    if associations:
+        html_lines.append(
+            "<table><tr>"
+            "<th>code → pole</th><th>distance</th><th>confidences</th>"
+            "<th>code crop</th><th>pole crop</th></tr>"
+        )
+        for a in associations:
+            html_lines.append(_assoc_row(a))
+        html_lines.append("</table>")
+    else:
+        html_lines.append("<p class='sub'>(no associations were formed)</p>")
+
+    html_lines.extend([
+        "<h2>How to use this page</h2><ul>",
+        "<li>Open each crop image, judge whether the candidate matches its label type.</li>",
+        "<li>For each row, answer the HE/EN review question — yes/no/correction.</li>",
+        "<li>Reject obviously wrong candidates; promising candidates need full UI to write corrections back.</li>",
+        "<li>Detection corrections improve future scans but do <b>NOT</b> auto-approve BOQ.</li>",
+        "</ul>",
+        "</body></html>",
+    ])
+
+    html_path = out_root / "top_evidence_review.html"
+    with open(html_path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(html_lines))
+    log(f"  Saved {html_path.name}")
 
 
 if __name__ == "__main__":
