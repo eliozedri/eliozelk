@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     .eq("id", recipientId);
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
-  await db.from("notification_acknowledgements").insert({
+  const { error: auditErr } = await db.from("notification_acknowledgements").insert({
     notification_id: related.notification_id,
     recipient_id: recipientId,
     user_id: related.user_id,
@@ -59,6 +59,12 @@ export async function POST(req: NextRequest) {
     ack_was_direct: ackDirect,
     device_info: { ua: req.headers.get("user-agent") ?? null },
   });
+  if (auditErr) {
+    // Authoritative ack already persisted on the recipient row above; the audit
+    // row is supplementary. Surface the failure in logs without failing the
+    // request (which would leave the user unable to clear the blocking gate).
+    console.error("[notifications] acknowledgement audit insert failed:", auditErr.message);
+  }
 
   return NextResponse.json({ ok: true });
 }
