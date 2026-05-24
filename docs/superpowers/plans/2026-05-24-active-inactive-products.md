@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give the Catalog Manager a fast, safe way to bulk-review and activate the 137 imported (`needs_review`) products, manage active/inactive state per product, surface a `ממתין לבדיקה` status, guarantee inactive products never reach any orderable pool, and add an `אתר מכירה` placeholder tab that reads the same active pool.
+**Goal:** Give the Catalog Manager a fast, safe way to bulk-review and activate the 137 imported (`needs_review`) products, manage active/inactive state per product, surface a `ממתין לבדיקה` status, guarantee inactive products never reach any orderable pool, and add a premium glassmorphism `אתר מכירה` sales-site preview tab that reads the same active pool.
 
 **Architecture:** Reuse the existing `catalog_items.is_active` boolean as the single operational flag (no new column). Display state is derived from `is_active` + `metadata.review_state`. A new `SECURITY DEFINER` RPC `set_catalog_active(ids, active)` flips `is_active` and strips `needs_review` on activation in one atomic call. `useCatalog` gets `setActiveBulk`; the existing single `toggleActive` is rewired onto the same RPC. The `/catalog` page gains a four-way status filter (chips), a selection mode with a bulk action bar, and an amber `ממתין לבדיקה` pill. A shared `isSellable` helper centralizes the operational pool for order creation and the new sales-site page.
 
@@ -23,7 +23,12 @@
 | `src/context/CatalogContext.tsx` | Modify | Expose `setActiveBulk` |
 | `src/components/Catalog/index.tsx` | Modify | 4-way filter chips, selection mode, bulk bar, amber pill |
 | `src/components/OrderForm/MiscSection.tsx` | Modify | Use `isSellable` for the operational selector |
-| `src/components/SalesSite/index.tsx` | Create | `אתר מכירה` placeholder reading active pool |
+| `src/components/SalesSite/index.tsx` | Create | `SalesSitePage` — composition of the premium sales-site sections |
+| `src/components/SalesSite/SalesGlassPanel.tsx` | Create | Reusable glassmorphism container (blur + glow border) |
+| `src/components/SalesSite/SalesHero.tsx` | Create | Premium hero (title/subtitle, ambient gradient) |
+| `src/components/SalesSite/SalesStatsCards.tsx` | Create | Glass stat cards: sellable / hidden product counts |
+| `src/components/SalesSite/SalesProductPreviewGrid.tsx` | Create | Premium product cards from the active pool + hidden-products strip |
+| `src/components/SalesSite/SalesFutureModules.tsx` | Create | Coming-soon module tiles (disabled) |
 | `src/app/sales-site/page.tsx` | Create | Route wrapper |
 | `src/components/Sidebar.tsx` | Modify | Add `אתר מכירה` nav item to בנוסף |
 
@@ -631,63 +636,332 @@ No commit if nothing changed. If a gap was fixed, commit it with the message fro
 
 ---
 
-## Task 8: `אתר מכירה` sidebar tab + placeholder page
+## Task 8: `אתר מכירה` — premium glassmorphism sales-site page + sidebar tab
+
+**Intent:** Not a dry placeholder. The first version of `/sales-site` must look intentionally designed —
+deep glassmorphism, layered translucency, ambient gradients, glowing edges — a premium digital-catalog
+"starting point" inspired by Nike / Adidas / Apple Store browsing. **Bounded:** no cart, checkout, payment,
+customer accounts, or sales flows. It is a premium **management/preview** surface that prepares the ground.
+
+**Design contract:**
+- Dark premium canvas (`from-navy-950 via-navy-900 to-navy-950`), not the light admin `bg-surface`.
+- Glass panels: `border-white/10 bg-white/5 backdrop-blur-xl` + soft shadow; accent glow with `ek-blue`/`ek-gold`.
+- Strong hierarchy: large hero → stat cards → product preview → future modules. Generous spacing, minimal clutter.
+- **Hebrew RTL** throughout (`dir="rtl"`, all labels Hebrew). Tab name exactly `אתר מכירה`.
+- **Visibility rule:** active (sellable) products only in the "ready to publish" pool, via shared `isSellable`.
+  Inactive shown separately as muted "won't appear" preview. Out-of-stock is never referenced here.
+- **No duplicated filtering** — reuse `isSellable` / `statusBucket` from `src/lib/catalog/sellable.ts`.
+- No hardcoded mock products — render real active items; graceful empty state when none.
 
 **Files:**
+- Create: `src/components/SalesSite/SalesGlassPanel.tsx`
+- Create: `src/components/SalesSite/SalesHero.tsx`
+- Create: `src/components/SalesSite/SalesStatsCards.tsx`
+- Create: `src/components/SalesSite/SalesProductPreviewGrid.tsx`
+- Create: `src/components/SalesSite/SalesFutureModules.tsx`
 - Create: `src/components/SalesSite/index.tsx`
 - Create: `src/app/sales-site/page.tsx`
-- Modify: `src/components/Sidebar.tsx` (בנוסף section, after line 86; icon import)
+- Modify: `src/components/Sidebar.tsx` (icon import; בנוסף section after line 86)
 
-- [ ] **Step 1: Create the placeholder component**
+- [ ] **Step 1: Create the reusable glass container**
+
+```tsx
+// src/components/SalesSite/SalesGlassPanel.tsx
+"use client";
+
+import type { ReactNode } from "react";
+
+export function SalesGlassPanel({
+  children,
+  className = "",
+  glow = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  glow?: boolean;
+}) {
+  return (
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-[0_8px_40px_rgba(0,0,0,0.35)] ${
+        glow ? "ring-1 ring-ek-blue/30" : ""
+      } ${className}`}
+    >
+      {glow && (
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-ek-blue/10 via-transparent to-ek-gold/10" />
+      )}
+      <div className="relative">{children}</div>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 2: Create the hero**
+
+```tsx
+// src/components/SalesSite/SalesHero.tsx
+"use client";
+
+import { Store } from "lucide-react";
+
+export function SalesHero({ sellableCount }: { sellableCount: number }) {
+  return (
+    <header className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-navy-900 via-navy-800 to-navy-950 px-6 py-12 md:px-10 md:py-16">
+      <div className="pointer-events-none absolute -top-24 -left-24 h-72 w-72 rounded-full bg-ek-blue/30 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-28 -right-16 h-72 w-72 rounded-full bg-ek-gold/20 blur-3xl" />
+      <div className="relative max-w-2xl">
+        <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white/70 backdrop-blur">
+          <Store className="h-3.5 w-3.5 text-ek-gold" />
+          קטלוג מכירה דיגיטלי
+        </div>
+        <h1 className="mt-5 text-4xl font-bold tracking-tight text-white md:text-5xl">אתר מכירה</h1>
+        <p className="mt-4 text-base leading-relaxed text-white/70 md:text-lg">
+          נקודת הפתיחה לחוויית מכירה דיגיטלית פרימיום. כאן ינוהלו המוצרים שיוצגו וימכרו באתר —
+          רק מוצרים פעילים מופיעים כמוכנים לפרסום.
+        </p>
+        <div className="mt-7 inline-flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 backdrop-blur-xl">
+          <span className="text-3xl font-bold text-white">{sellableCount}</span>
+          <span className="text-sm leading-tight text-white/60">
+            מוצרים פעילים
+            <br />
+            מוכנים לפרסום
+          </span>
+        </div>
+      </div>
+    </header>
+  );
+}
+```
+
+- [ ] **Step 3: Create the stat cards**
+
+```tsx
+// src/components/SalesSite/SalesStatsCards.tsx
+"use client";
+
+import { CheckCircle2, EyeOff, Clock } from "lucide-react";
+import { SalesGlassPanel } from "./SalesGlassPanel";
+
+export function SalesStatsCards({
+  sellable,
+  hidden,
+  awaitingReview,
+}: {
+  sellable: number;
+  hidden: number;
+  awaitingReview: number;
+}) {
+  const stats = [
+    { label: "מוכנים לפרסום", value: sellable, Icon: CheckCircle2, accent: "text-emerald-300", ring: "ring-emerald-400/20" },
+    { label: "לא יופיעו באתר", value: hidden, Icon: EyeOff, accent: "text-white/50", ring: "ring-white/10" },
+    { label: "ממתינים לבדיקה", value: awaitingReview, Icon: Clock, accent: "text-amber-300", ring: "ring-amber-400/20" },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {stats.map(({ label, value, Icon, accent, ring }) => (
+        <SalesGlassPanel key={label} className={`p-5 ring-1 ${ring}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-white/60">{label}</span>
+            <Icon className={`h-5 w-5 ${accent}`} />
+          </div>
+          <div className={`mt-3 text-3xl font-bold ${accent}`}>{value}</div>
+        </SalesGlassPanel>
+      ))}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 4: Create the product preview grid**
+
+```tsx
+// src/components/SalesSite/SalesProductPreviewGrid.tsx
+"use client";
+
+import { useMemo } from "react";
+import type { CatalogItem } from "@/types/catalog";
+import { resolveProductImage } from "@/components/CatalogShowcase/constants";
+import { SalesGlassPanel } from "./SalesGlassPanel";
+
+function ProductGlassCard({ item, muted = false }: { item: CatalogItem; muted?: boolean }) {
+  const img = resolveProductImage(item.metadata);
+  return (
+    <div
+      className={`group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl transition-all hover:-translate-y-1 hover:border-white/25 hover:shadow-[0_12px_40px_rgba(29,111,216,0.25)] ${
+        muted ? "opacity-45 saturate-50" : ""
+      }`}
+    >
+      <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-navy-700/60 to-navy-900/60">
+        {img ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={img}
+            alt={item.name}
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <span className="text-4xl font-bold text-white/30">{item.name.slice(0, 1)}</span>
+          </div>
+        )}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-navy-950/70 via-transparent to-transparent" />
+      </div>
+      <div className="p-4">
+        <h3 className="truncate text-sm font-semibold text-white">{item.name}</h3>
+        <p className="mt-1 truncate text-xs text-white/50">{item.category || "—"}</p>
+        <div className="mt-3 flex items-center justify-between">
+          <span className="text-sm font-bold text-white">
+            {item.defaultPrice != null ? `₪${item.defaultPrice.toLocaleString()}` : "—"}
+          </span>
+          {!muted && (
+            <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+              מוכן לפרסום
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function SalesProductPreviewGrid({
+  sellableItems,
+  hiddenItems,
+}: {
+  sellableItems: CatalogItem[];
+  hiddenItems: CatalogItem[];
+}) {
+  const previewSellable = useMemo(() => sellableItems.slice(0, 10), [sellableItems]);
+  const previewHidden = useMemo(() => hiddenItems.slice(0, 5), [hiddenItems]);
+
+  return (
+    <div className="space-y-8">
+      <section>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-white">מוצרים שמוכנים לפרסום</h2>
+          <span className="text-sm text-white/50">{sellableItems.length} מוצרים</span>
+        </div>
+        {previewSellable.length > 0 ? (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            {previewSellable.map((item) => (
+              <ProductGlassCard key={item.id} item={item} />
+            ))}
+          </div>
+        ) : (
+          <SalesGlassPanel className="p-8 text-center">
+            <p className="text-sm text-white/50">אין כרגע מוצרים פעילים. ניתן להפעיל מוצרים במסך הקטלוג.</p>
+          </SalesGlassPanel>
+        )}
+      </section>
+
+      {previewHidden.length > 0 && (
+        <section>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white/70">מוצרים שלא יופיעו באתר</h2>
+            <span className="text-sm text-white/40">{hiddenItems.length} מוצרים</span>
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            {previewHidden.map((item) => (
+              <ProductGlassCard key={item.id} item={item} muted />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 5: Create the future-modules tiles**
+
+```tsx
+// src/components/SalesSite/SalesFutureModules.tsx
+"use client";
+
+import { LayoutTemplate, Tags, PackageCheck, Eye, Settings2 } from "lucide-react";
+
+const MODULES = [
+  { label: "ניהול תצוגת אתר", Icon: LayoutTemplate },
+  { label: "קטגוריות מכירה", Icon: Tags },
+  { label: "מוצרים לפרסום", Icon: PackageCheck },
+  { label: "תצוגה מקדימה", Icon: Eye },
+  { label: "הגדרות אתר", Icon: Settings2 },
+];
+
+export function SalesFutureModules() {
+  return (
+    <section>
+      <h2 className="mb-4 text-lg font-bold text-white">מודולים עתידיים</h2>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        {MODULES.map(({ label, Icon }) => (
+          <div
+            key={label}
+            aria-disabled
+            className="relative cursor-not-allowed rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-xl"
+          >
+            <Icon className="h-6 w-6 text-white/40" />
+            <div className="mt-4 text-sm font-medium text-white/70">{label}</div>
+            <span className="mt-2 inline-block rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-white/50">בקרוב</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+```
+
+- [ ] **Step 6: Create the page composition (`SalesSitePage`)**
 
 ```tsx
 // src/components/SalesSite/index.tsx
 "use client";
 
 import { useMemo } from "react";
-import { Store } from "lucide-react";
+import type { CatalogItem } from "@/types/catalog";
 import { useCatalogContext } from "@/context/CatalogContext";
-import { isSellable } from "@/lib/catalog/sellable";
+import { isSellable, statusBucket } from "@/lib/catalog/sellable";
+import { SalesHero } from "./SalesHero";
+import { SalesStatsCards } from "./SalesStatsCards";
+import { SalesProductPreviewGrid } from "./SalesProductPreviewGrid";
+import { SalesFutureModules } from "./SalesFutureModules";
 
 export function SalesSitePage() {
   const { items } = useCatalogContext();
-  const sellableCount = useMemo(() => items.filter(isSellable).length, [items]);
+
+  const { sellableItems, hiddenItems, awaitingReview } = useMemo(() => {
+    const sellable: CatalogItem[] = [];
+    const hidden: CatalogItem[] = [];
+    let awaiting = 0;
+    for (const item of items) {
+      if (isSellable(item)) {
+        sellable.push(item);
+      } else {
+        hidden.push(item);
+        if (statusBucket(item) === "needs_review") awaiting += 1;
+      }
+    }
+    return { sellableItems: sellable, hiddenItems: hidden, awaitingReview: awaiting };
+  }, [items]);
 
   return (
-    <div className="min-h-screen bg-surface text-navy-900 p-6">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-xl bg-ek-blue/10 flex items-center justify-center">
-            <Store className="w-6 h-6 text-ek-blue" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">אתר מכירה</h1>
-            <p className="text-sm text-gray-500">ניהול מוצרים לאתר המכירה (בפיתוח)</p>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-gray-200 bg-white p-5 mb-4">
-          <p className="text-sm text-gray-600 leading-relaxed">
-            מוצרים פעילים בלבד יוצגו באתר המכירה. מוצר שאינו פעיל לא יופיע כמוצר למכירה.
-            ניהול הסטטוס (פעיל / לא פעיל / ממתין לבדיקה) מתבצע במסך{" "}
-            <span className="font-medium">קטלוג מוצרים ופריטים</span>.
-          </p>
-          <div className="mt-4 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
-            <span className="text-2xl font-bold text-green-700">{sellableCount}</span>
-            <span className="text-sm text-green-700">מוצרים פעילים זמינים להצגה באתר</span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-dashed border-gray-300 bg-white/60 p-8 text-center">
-          <p className="text-gray-400 text-sm">מודול ניהול אתר המכירה — בקרוב</p>
-        </div>
+    <div dir="rtl" className="min-h-screen bg-gradient-to-b from-navy-950 via-navy-900 to-navy-950 p-4 md:p-8">
+      <div className="mx-auto max-w-6xl space-y-8">
+        <SalesHero sellableCount={sellableItems.length} />
+        <SalesStatsCards
+          sellable={sellableItems.length}
+          hidden={hiddenItems.length}
+          awaitingReview={awaitingReview}
+        />
+        <SalesProductPreviewGrid sellableItems={sellableItems} hiddenItems={hiddenItems} />
+        <SalesFutureModules />
       </div>
     </div>
   );
 }
 ```
 
-- [ ] **Step 2: Create the route wrapper**
+- [ ] **Step 7: Create the route wrapper**
 
 ```tsx
 // src/app/sales-site/page.tsx
@@ -698,28 +972,28 @@ export default function Page() {
 }
 ```
 
-- [ ] **Step 3: Add the `Store` icon to the Sidebar imports**
+- [ ] **Step 8: Add the `Store` icon to the Sidebar imports**
 
 In `src/components/Sidebar.tsx`, add `Store` to the existing `lucide-react` import (alongside `LayoutGrid`, `Layers`, etc.).
 
-- [ ] **Step 4: Add the nav item to the בנוסף section**
+- [ ] **Step 9: Add the nav item to the בנוסף section**
 
-In `src/components/Sidebar.tsx`, in the בנוסף `NavSection` (the one containing the catalog items at lines 84-86), add after the `holographic-catalog` line (line 86):
+In `src/components/Sidebar.tsx`, in the בנוסף `NavSection` (catalog items at lines 84-86), add after the `holographic-catalog` line (line 86):
 
 ```tsx
       { tabId: "catalog", href: "/sales-site", label: "אתר מכירה", icon: <Store className={ICON_CLS} />, matchFn: (p) => p.startsWith("/sales-site"), noBadge: true },
 ```
 
-- [ ] **Step 5: Typecheck**
+- [ ] **Step 10: Typecheck**
 
 Run: `npx tsc --noEmit`
 Expected: no errors.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 11: Commit**
 
 ```bash
-git add src/components/SalesSite/index.tsx src/app/sales-site/page.tsx src/components/Sidebar.tsx
-git commit -m "feat(sales-site): add אתר מכירה placeholder tab reading the active pool"
+git add src/components/SalesSite/ src/app/sales-site/page.tsx src/components/Sidebar.tsx
+git commit -m "feat(sales-site): premium glassmorphism אתר מכירה page reading the active pool"
 ```
 
 ---
@@ -763,7 +1037,13 @@ In the browser at `/catalog`:
 - Click `ממתינים לבדיקה` → only needs_review rows; each shows the amber `ממתין לבדיקה` pill.
 - Click `מצב בחירה` → view switches to table, checkboxes appear; `בחר הכל` selects the 137; the bulk bar shows `נבחרו 137 מוצרים`.
 - Select a small subset (e.g. 2), click `הפעל נבחרים (2)`, confirm → those rows become `פעיל`, leave the needs-review bucket, counts update (active +2, needs_review −2).
-- `/sales-site` shows the sellable count matching the active chip count.
+At `/sales-site` (premium page, RTL):
+- Renders the dark glass canvas with the `אתר מכירה` hero — not a light admin table.
+- Hero count + the "מוכנים לפרסום" stat equal the active chip count from `/catalog`.
+- "מוצרים שמוכנים לפרסום" grid shows real active products (images via `resolveProductImage`, gradient fallback otherwise); none of the inactive/needs_review items appear there.
+- "מוצרים שלא יופיעו באתר" shows inactive/needs_review items muted; "ממתינים לבדיקה" stat matches `/catalog`.
+- Future-module tiles (`ניהול תצוגת אתר`, `קטגוריות מכירה`, `מוצרים לפרסום`, `תצוגה מקדימה`, `הגדרות אתר`) render as disabled "בקרוב".
+- Activate a product in `/catalog`, return to `/sales-site` → it moves into the "ready to publish" grid (realtime/context update); no out-of-stock concept appears anywhere.
 
 - [ ] **Step 6: Data-safety SQL checks (read-only)**
 
@@ -786,6 +1066,14 @@ Confirm an existing order that references a now-inactive product still renders. 
 - [ ] **Step 8: Final report**
 
 Produce the completion report (per the project's required format) covering: schema findings, field reuse, scraped-product handling, bulk activate/deactivate behavior, filtering verification across order/Telegram/Jarvis/sales-site, historical-order safety, files changed, the migration, tests/build results, rollback risks, and the go/no-go for next steps.
+
+The report MUST include a dedicated section titled **"אתר מכירה UX/UI"** covering:
+- what was created visually (dark glass canvas, hero, stat cards, product preview, future modules);
+- which components were added (`SalesGlassPanel`, `SalesHero`, `SalesStatsCards`, `SalesProductPreviewGrid`, `SalesFutureModules`, `SalesSitePage`);
+- how the glass/futuristic design was implemented (backdrop-blur, translucent layers, ambient gradient blobs, glow rings, navy gradient canvas, RTL);
+- how active products are shown (shared `isSellable` → "מוכנים לפרסום" grid with real images);
+- how inactive products are excluded from the sellable pool (shown only in the muted "לא יופיעו באתר" strip; out-of-stock never referenced);
+- what remains for future sales-site development (the disabled coming-soon modules, and that no cart/checkout/payment/accounts exist yet by design).
 
 ---
 
