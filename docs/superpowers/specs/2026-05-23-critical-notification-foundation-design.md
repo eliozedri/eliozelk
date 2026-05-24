@@ -232,6 +232,70 @@ correct for a point-in-time operational event.
 `master` is always added by the resolver regardless of rule recipients. `field.issue` is the event
 that exercises the full blocking + view-before-ack loop.
 
+### 6.1 `order.created` is a PRODUCTION-INTAKE event (business-logic clarification — 2026-05-24)
+
+> **Added after Phase-1 apply, per owner clarification. This supersedes the simplistic seeded
+> default in the table above, which is now flagged as a mismatch to fix (see §6.2).**
+
+A new order is **not** a generic office toast — it is a **production/fulfillment intake event** that
+starts work inside the factory. The notification must reach the **relevant production departments**
+so they cannot miss an incoming order, and it must be **received/acknowledged**, not merely seen.
+
+**Target by relevant department (content-aware), not a generic office list.** The three production
+departments and the order content that routes to each:
+- **Graphics / גרפיקה** — graphics, print, design, sketch, signage design, stickers, visual prep.
+- **Metal Workshop / מסגרייה** — metal fabrication, sign structures, posts, frames, barriers,
+  workshop production.
+- **Warehouse / מחסן** — stock items, traffic equipment, cones, barriers, signs from inventory,
+  safety accessories, warehouse picking/preparation.
+- An order touching multiple areas → **all** relevant departments receive it.
+- **Plus** operational managers / `master` per configuration (for monitoring).
+
+**"Office" nuance:** do not assume every new order pings the general office visually. Distinguish
+(a) office/staff users who may not need every production alert, (b) operational managers / `master`
+who need monitoring, (c) future agent/"office-of-agents" logic (separate). The *user-facing* alert
+targets the **production departments**.
+
+**Required behavior for `order.created`:**
+- `severity`: warning or critical (admin-configurable) — **treated as a strong operational alert**,
+  not `toast_5s`.
+- `requires_ack: true` — the relevant department/assigned user must confirm **receipt**.
+- `require_open_before_ack: true` — open/view the order before confirming receipt.
+- Remains **pending until acknowledged**; dismissing an OS/browser notification never counts.
+- Identifying info to surface: **order name, order number, customer (if available), relevant
+  department/work area (if available)**.
+- Later: Web Push when app/browser/screen closed; snooze/reminders if a department doesn't ack;
+  appears in the future **"מרכז התראות"**.
+
+Contrast: `diary.submitted` and routine updates stay **light** (`toast_5s`, no required ack, no
+aggressive sound). `order.created` is intake and must not behave like a routine toast.
+
+### 6.2 KNOWN RULE-DEFAULT MISMATCH to reconcile BEFORE Provider/UI tasks (Task 8+)
+
+The **applied** DB seed (migration `20260601000000`, live on prod) currently has `order.created` as
+**`severity=warning`, `requires_ack=false`, `blocking=false`**, targeting `office_manager,
+graphics_manager, master`. This **does not match §6.1**. Do **not** fix this inside Task 7
+(client/sound). Reconcile it as a dedicated step **before Task 8 (NotificationProvider) / Notification
+Center / CriticalAlertGate**, via a follow-up migration / rule update (not a hand-edit of clients):
+
+- Set `order.created`: `requires_ack=true`, `blocking=true` (or persistent), keep view-before-ack
+  (a related `work_order` entity already drives the open-before-ack predicate).
+- **Recipient routing is the harder part:** §6.1 requires **content-aware, per-order department
+  routing** (which departments an order touches), but the current model resolves recipients from a
+  *static* `notification_rule_recipients` role list. The order row already carries signals
+  (`needsGraphics`/sign content, `fabricationRequired`, `warehouseRequired`) — routing must read
+  these. Options to design then: (a) richer trigger logic that emits per-department recipients from
+  the order content, (b) a future rules-engine recipient resolver, (c) department-tagged metadata.
+- **Role-model gap:** the role set has `graphics_manager` but **no dedicated Metal-Workshop or
+  Warehouse manager role** (fabrication/warehouse are tabs; `procurement_manager` holds warehouse).
+  Mapping the 3 production departments → real recipients (roles/users/groups) is part of this
+  reconciliation — may need new roles or department membership.
+- Also surfaces future per-rule fields from the consolidated requirements (not in the current
+  schema): `display_mode` (`toast_5s`/`persistent_banner`/`blocking_modal`/`notification_center_only`),
+  `require_open_before_ack`, `block_app_until_ack`, `auto_dismiss_seconds`, `snooze_enabled`,
+  `reminder_*`, `web_push_*`, `include_entity_details_in_push`. These are admin-configurable later
+  (the future **"מרכז התראות"** admin panel), not hardcoded.
+
 ---
 
 ## 7. Realtime delivery (`NotificationProvider`)

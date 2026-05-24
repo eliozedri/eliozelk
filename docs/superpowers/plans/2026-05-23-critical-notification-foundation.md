@@ -1156,6 +1156,30 @@ git commit -m "feat(notifications): client API wrappers + Web Audio chime"
 
 ---
 
+## Task 7.5 (BLOCKER before Task 8): reconcile `order.created` rule with production-intake business logic
+
+> Added 2026-05-24 per owner clarification. See spec §6.1 / §6.2. Do this **before** Task 8 — the
+> Provider/Center/Gate behavior depends on the rule's real severity/ack/blocking + recipient routing.
+
+The applied seed has `order.created` = `warning / requires_ack=false / blocking=false` targeting
+`office_manager, graphics_manager, master`. The business logic now says `order.created` is a
+**production-intake event**: strong, requires receipt-acknowledgement, view-before-ack, pending until
+acknowledged, and **routed to the relevant production departments** (Graphics / Metal Workshop /
+Warehouse — content-aware) plus managers/master.
+
+This is a **design + migration** step (not a client hand-edit), and it is **not yet specced in
+implementation detail** — when reached, brainstorm/plan it because it involves real decisions:
+- Follow-up migration to set `order.created` `requires_ack=true`, `blocking=true` (or persistent).
+- **Content-aware recipient routing** (which departments an order touches) — current model is a
+  static role list; the order row carries `needsGraphics`/sign content, `fabricationRequired`,
+  `warehouseRequired`. Decide: richer trigger emit, rules-engine resolver, or department-tagged metadata.
+- **Role-model gap:** no dedicated Metal-Workshop/Warehouse manager role exists today
+  (`graphics_manager` does). Map the 3 departments → real recipients (roles/users/groups).
+- Likely new per-rule fields (future): `display_mode`, `require_open_before_ack`, `auto_dismiss_seconds`,
+  `snooze_enabled`, `web_push_*` — admin-configurable later, not hardcoded.
+
+Keep `diary.submitted` light (`toast_5s`, no required ack). Do NOT fold this into Task 7.
+
 ## Task 8: NotificationProvider (realtime + hydrate + actions)
 
 **Files:**
