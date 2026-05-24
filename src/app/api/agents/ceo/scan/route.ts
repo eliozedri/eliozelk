@@ -14,7 +14,7 @@ import {
 import { emptyScanResult } from "@/lib/agents/types";
 import type { DbOrderRow } from "@/lib/agents/types";
 
-const AGENT_ID   = "ops-orchestrator";
+const AGENT_ID   = "ceo";
 const AGENT_NAME = "מנהל פעילות";
 
 // ── SLA thresholds (hours) — mirrors useWorkflowAlerts ───────────────────────
@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
 
       // ── Operationally complete but not yet entered billing verification ─
       // The billing-collections-agent owns deeper billing exceptions.
-      // ops-orchestrator gives a short nudge: if an order sits in "pending"
+      // ceo gives a short nudge: if an order sits in "pending"
       // accounting status for more than 24h, flag it so it enters the billing flow.
       if (order.status === "completed" &&
           (!order.accounting_status || order.accounting_status === "pending") &&
@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
       // ── Completed warehouse order missing inventory reconciliation ────────
       // Ops nudge: warehouse orders with mapped items that have no consumption yet.
       // Ownership: inventory-agent owns deeper reconciliation exceptions;
-      // ops-orchestrator only flags if the order is stuck before billing.
+      // ceo only flags if the order is stuck before billing.
       if (order.status === "completed" && !order.invoiced_at &&
           !reconciledOrderIds.has(order.id)) {
         const orderData = order.data as Record<string, unknown> | null ?? {};

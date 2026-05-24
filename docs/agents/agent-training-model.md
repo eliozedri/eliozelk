@@ -315,7 +315,7 @@ Some detection rules in one agent depend on data quality that another agent impr
 | billing-collections-agent | field-ops-agent | Billing requires diary approval, which field-ops-agent monitors |
 | cfo-agent | catalog-pricing-agent | Profitability confidence improves as catalog-agent ensures costPrice is populated |
 | coordination-qa-agent | inventory-agent + fabrication-agent | Pre-dispatch QA depends on warehouse_status and fabrication_status being accurate |
-| ops-orchestrator | all agents | System health view depends on all agents producing accurate exceptions |
+| ceo | all agents | System health view depends on all agents producing accurate exceptions |
 
 **Training order recommendation (Phase 1 → Phase 2):**
 1. Train inventory-agent first (most comprehensive data, direct impact on billing and scheduling)
@@ -324,7 +324,7 @@ Some detection rules in one agent depend on data quality that another agent impr
 4. Train graphics-production-agent (improves scheduling accuracy)
 5. Train coordination-qa-agent (uses output from warehouse + fabrication as inputs)
 6. Train fabrication-agent (provides gate data for coordination-qa-agent)
-7. Train ops-orchestrator to aggregate cross-agent awareness (Phase 2)
+7. Train ceo to aggregate cross-agent awareness (Phase 2)
 
 ---
 

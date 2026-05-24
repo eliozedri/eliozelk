@@ -4,7 +4,7 @@ import type { AgentStats } from "@/types/agent";
 
 // Active Neural Core agents — engineering-plan-agent intentionally excluded (future/out-of-core).
 const ACTIVE_AGENT_IDS = [
-  "ops-orchestrator",
+  "ceo",
   "billing-collections-agent",
   "cfo-agent",
   "field-ops-agent",

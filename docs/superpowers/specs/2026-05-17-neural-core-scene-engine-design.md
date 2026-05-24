@@ -1,4 +1,6 @@
 # Neural Core Scene Engine — Design Spec
+
+> **Historical document — identity migration note (2026-05-24):** Point-in-time design record. The central executive agent was later renamed ops-orchestrator -> ceo (id and type = ceo; Hebrew display name "מנהל תפעול"). Any ops-orchestrator reference below is the PRE-migration name of the current ceo agent and is NOT a live source of truth. All managerial routing (Jarvis, Telegram, WhatsApp, approvals, notifications, agent routing) now targets ceo.
 **Date:** 2026-05-17  
 **Status:** Approved  
 **Figma file:** Elkayam Neural Operations Core (`xzKrhmGds0wUhHmy6Nh9ju`)

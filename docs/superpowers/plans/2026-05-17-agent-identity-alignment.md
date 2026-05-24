@@ -1,5 +1,7 @@
 # Agent Identity Alignment — Coordination & QA Manager Implementation Plan
 
+> **Historical document — identity migration note (2026-05-24):** Point-in-time design record. The central executive agent was later renamed ops-orchestrator -> ceo (id and type = ceo; Hebrew display name "מנהל תפעול"). Any ops-orchestrator reference below is the PRE-migration name of the current ceo agent and is NOT a live source of truth. All managerial routing (Jarvis, Telegram, WhatsApp, approvals, notifications, agent routing) now targets ceo.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Insert `coordination-qa-agent` into the Supabase agents table and align all TypeScript/config layers so the Coordination & QA Manager appears consistently in every system view — not just as a GhostNode on the visual map.

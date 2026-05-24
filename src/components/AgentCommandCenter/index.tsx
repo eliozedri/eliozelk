@@ -44,7 +44,7 @@ const EK_GOLD = "#f59e0b";
 
 // ── Scannable agents ─────────────────────────────────────────────────────────
 const SCANNABLE_AGENTS = new Set([
-  "ops-orchestrator",
+  "ceo",
   "inventory-agent",
   "field-ops-agent",
   "billing-collections-agent",
@@ -162,7 +162,7 @@ function KpiCard({ value, label, sub, accent, onClick }: {
 
 function OrgChart({ agents, onSelect }: { agents: Agent[]; onSelect: (a: Agent) => void }) {
   const byId = useMemo(() => new Map(agents.map(a => [a.id, a])), [agents]);
-  const root = byId.get("ops-orchestrator");
+  const root = byId.get("ceo");
   const rootNode = AGENT_ORG[0];
 
   if (!root) return null;
@@ -183,7 +183,7 @@ function OrgChart({ agents, onSelect }: { agents: Agent[]; onSelect: (a: Agent) 
         <div className="w-px h-6 bg-white/20" />
       </div>
 
-      {/* Orchestrator */}
+      {/* CEO (root) */}
       <div className="flex justify-center">
         <button
           onClick={() => onSelect(root)}
@@ -1104,7 +1104,7 @@ export function AgentCommandCenter() {
             שיחה עם מרכז הפיקוד
           </button>
           <button
-            onClick={() => openChat({ agentId: "ops-orchestrator", agentName: "מנהל התפעול", agentIcon: "📋" })}
+            onClick={() => openChat({ agentId: "ceo", agentName: "מנהל התפעול", agentIcon: "📋" })}
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
             style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.65)", border: "1px solid rgba(255,255,255,0.15)" }}
           >

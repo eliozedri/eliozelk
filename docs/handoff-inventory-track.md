@@ -92,7 +92,7 @@ Also added: `/api/agents/inventory-agent/scan` — full inventory scan (stock le
 |-------|---------------|
 | `inventory-agent` | Full scan: negative/low/out-of-stock, over-reserved, consumption mismatches, unmapped delivery note items; upserts purchase recommendations; resolves stale exceptions |
 | `billing-collections-agent` | Loads `inventory_consumptions`; flags `inventory_reconciliation_missing` exceptions+tasks for warehouse orders with approved diary but no consumption |
-| `ops-orchestrator` | Loads `inventory_consumptions`; flags `missing_inventory_reconciliation` exceptions for completed warehouse orders without reconciliation |
+| `ceo` | Loads `inventory_consumptions`; flags `missing_inventory_reconciliation` exceptions for completed warehouse orders without reconciliation |
 
 ---
 

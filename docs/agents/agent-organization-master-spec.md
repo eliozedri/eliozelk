@@ -3,6 +3,8 @@
 **Date:** 2026-05-17 | **Status:** Approved reference — do not implement code without reading this document first
 **Companion documents:** `agent-capability-audit.md`, `agent-operating-model.md`, `agent-training-model.md`, `catalog-agent-pilot.md`, `catalog-agent-reference-mapping.md`
 
+> **Identity migration (2026-05-24):** The central executive operations agent is **CEO, id: `ceo`** (renamed from the legacy id `ops-orchestrator`; `type` is also `ceo`, Hebrew display name stays "מנהל תפעול"). This is the single source of truth and the routing target for all managerial decisions. Older `ops-orchestrator` references denote the same agent before the rename.
+
 ---
 
 ## 1. Executive Summary
@@ -15,7 +17,7 @@ The system manages **15 agents** across a unified operational pipeline. Each age
 
 | Phase | Agents | Goal |
 |---|---|---|
-| Phase 1 (current) | ops-orchestrator, catalog-pricing, inventory, billing, cfo, field-ops, graphics, fabrication, coordination-qa | Core pipeline control + billing readiness |
+| Phase 1 (current) | ceo, catalog-pricing, inventory, billing, cfo, field-ops, graphics, fabrication, coordination-qa | Core pipeline control + billing readiness |
 | Phase 2 | orders, equipment-fleet, digital-hq panels, supplier-support | Completeness + dispatch readiness |
 | Phase 3 (later) | engineering-plan-analysis, jarvis-whatsapp, advanced profitability | Intelligence layer + external integration |
 
@@ -249,7 +251,7 @@ When an agent encounters conflicting information, it applies this hierarchy from
 
 | # | Agent ID | Hebrew Name | English Name | Phase | Current Layer Status |
 |---|---|---|---|---|---|
-| 1 | ops-orchestrator | מנהל פעילות / מנהל מערכת | Ops Orchestrator | Phase 1 | All 8 layers ✅ |
+| 1 | ceo | מנהל פעילות / מנהל מערכת | Ops Orchestrator | Phase 1 | All 8 layers ✅ |
 | 2 | billing-collections-agent | סוכן כספים וחיוב | Finance / Billing Agent | Phase 1 | Scan route ✅ |
 | 3 | cfo-agent | סוכן סמנכ"ל כספים / רווחיות | CFO / Profitability Agent | Phase 1 | Scan route ✅ |
 | 4 | field-ops-agent | סוכן ביצוע שטח / יומן עבודה | Field Operations / Work Diary Agent | Phase 1 | Scan route ✅ |
@@ -1527,7 +1529,7 @@ New order placed or supplier invoice scanned
 
 | # | Capability | Agent | Status |
 |---|---|---|---|
-| 1 | Ops cross-order monitoring (8 checks) | ops-orchestrator | ✅ Live |
+| 1 | Ops cross-order monitoring (8 checks) | ceo | ✅ Live |
 | 2 | Billing delay + reconciliation checks | billing-collections-agent | ✅ Live |
 | 3 | Profitability snapshots + margin exceptions | cfo-agent | ✅ Live |
 | 4 | Diary completeness + approval overdue | field-ops-agent | ✅ Live |
@@ -1550,7 +1552,7 @@ New order placed or supplier invoice scanned
 | 6 | Cross-agent exception deduplication | All agents |
 | 7 | Threshold DB config table (agent_config) | System |
 | 8 | Owner exception whitelist DB table | System |
-| 9 | Approval feedback review cadence | ops-orchestrator |
+| 9 | Approval feedback review cadence | ceo |
 | 10 | Dashboard panels per department | digital-hq-agent |
 
 ### Phase 3 — Intelligence Layer
@@ -1561,7 +1563,7 @@ New order placed or supplier invoice scanned
 | 2 | Advanced WhatsApp command interface | jarvis-agent |
 | 3 | Near-duplicate product auto-suggestion (after 20+ approved corrections) | catalog-pricing-agent |
 | 4 | Customer chronic loss detection (3+ consecutive loss-making orders) | cfo-agent |
-| 5 | Threshold auto-calibration suggestions from approval history | ops-orchestrator |
+| 5 | Threshold auto-calibration suggestions from approval history | ceo |
 | 6 | Supplier performance scoring and purchase automation | supplier-support-agent |
 | 7 | Pre-dispatch cross-agent checklist visible to dispatcher in UI | coordination-qa-agent |
 | 8 | Profitability prediction at order intake | cfo-agent |
@@ -1776,7 +1778,7 @@ The Digital HQ must not become an alert flood:
 
 | Agent | Panel trigger | Key panel content |
 |---|---|---|
-| ops-orchestrator | "Pipeline" pod | Stuck orders, SLA breaches, cross-department blockers |
+| ceo | "Pipeline" pod | Stuck orders, SLA breaches, cross-department blockers |
 | billing-collections-agent | "Finance" pod | Billing candidates, blockers, overdue receivables |
 | cfo-agent | "CFO" pod | Margin alerts, loss-making jobs, cost anomalies |
 | field-ops-agent | "Field Ops" pod | Missing diaries, pending approvals, actual-vs-planned mismatches |

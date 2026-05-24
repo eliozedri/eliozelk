@@ -60,7 +60,7 @@ const CHAT_CHANNELS: ChatChannel[] = [
     id: "ops-manager",
     labelHe: "מנהל התפעול",
     tooltipHe: "פנה למנהל התפעול",
-    agentId: "ops-orchestrator",
+    agentId: "ceo",
     agentName: "מנהל התפעול",
     agentIcon: "🎯",
     requiredPermission: "chat_ops_manager",

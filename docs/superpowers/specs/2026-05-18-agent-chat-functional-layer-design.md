@@ -1,5 +1,7 @@
 # Agent Chat — First Functional Layer
 
+> **Historical document — identity migration note (2026-05-24):** Point-in-time design record. The central executive agent was later renamed ops-orchestrator -> ceo (id and type = ceo; Hebrew display name "מנהל תפעול"). Any ops-orchestrator reference below is the PRE-migration name of the current ceo agent and is NOT a live source of truth. All managerial routing (Jarvis, Telegram, WhatsApp, approvals, notifications, agent routing) now targets ceo.
+
 **Date:** 2026-05-18
 **Status:** Approved for implementation
 **Approach:** B — keyword expansion + page context + number detection

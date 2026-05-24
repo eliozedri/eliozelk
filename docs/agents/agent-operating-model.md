@@ -2,6 +2,8 @@
 **Elkayam Road Marking LTD — Digital Operations Command Center**
 **Date:** 2026-05-17 | **Status:** Specification — approved for implementation planning
 
+> **Identity migration (2026-05-24):** The central executive operations agent is **CEO, id: `ceo`** (renamed from the legacy id `ops-orchestrator`). It remains the root escalation target and the routing target for all managerial decisions — Jarvis, Telegram, WhatsApp, approvals, notifications, agent routing, and chat. References to `ops-orchestrator` in older/historical documents refer to this same agent under its pre-migration id.
+
 ---
 
 ## 1. Purpose of This Document
@@ -34,10 +36,10 @@ All agent autonomy levels map to the 0–5 scale already encoded in `AUTONOMY_LE
 
 ## 3. Cross-Agent Coordination Model
 
-Agents operate in a hierarchy under ops-orchestrator. Escalation always travels upward:
+Agents operate in a hierarchy under ceo. Escalation always travels upward:
 
 ```
-ops-orchestrator (root — escalates to human owner)
+ceo (root — escalates to human owner)
 ├── coordination-qa-agent (workflow integrity)
 ├── inventory-agent (warehouse)
 ├── field-ops-agent (field execution)
@@ -50,7 +52,7 @@ ops-orchestrator (root — escalates to human owner)
 
 **Coordination rules:**
 1. An agent must not create an exception for the same entity (same work_order id, same issue category) if another agent has already created an active exception for that entity and category. This prevents noise. (Phase 2 implementation — cross-agent deduplication via agent_exceptions table lookup.)
-2. Escalation to ops-orchestrator must include the source agent ID and the specific exception ID that triggered the escalation.
+2. Escalation to ceo must include the source agent ID and the specific exception ID that triggered the escalation.
 3. Agents at Level 0 communicate findings only via the UI/feed — they do not call other agents directly.
 4. In Phase 2, agents may read each other's open exceptions for the same work_order to avoid duplication.
 
@@ -106,7 +108,7 @@ ops-orchestrator (root — escalates to human owner)
 - Any suggested status transition it surfaces as a recommendation
 
 **Escalation rules:**
-- ops-orchestrator IS the escalation target — it escalates only to human owner
+- ceo IS the escalation target — it escalates only to human owner
 - Critical exceptions (score > 75 on 3+ simultaneous orders) → push notification to owner
 
 **Required QA before flagging:**
@@ -128,7 +130,7 @@ ops-orchestrator (root — escalates to human owner)
 - Flagging completed orders as active → noise from stale data
 
 **Owner clarification required:**
-- What is the escalation notification channel when ops-orchestrator detects a critical system-wide blockage? (email? WhatsApp? Dashboard alert only?)
+- What is the escalation notification channel when ceo detects a critical system-wide blockage? (email? WhatsApp? Dashboard alert only?)
 - Should urgency factor be configurable per customer type or order type?
 
 ---
@@ -186,8 +188,8 @@ ops-orchestrator (root — escalates to human owner)
 - Any recommendation to override a gate that normally blocks dispatch
 
 **Escalation rules:**
-- Gate failure blocks order > 2 days → escalate exception to ops-orchestrator
-- Order is scheduled with gate still open → critical exception to ops-orchestrator immediately
+- Gate failure blocks order > 2 days → escalate exception to ceo
+- Order is scheduled with gate still open → critical exception to ceo immediately
 
 **Required QA before flagging:**
 1. Verify order is not cancelled
@@ -267,7 +269,7 @@ ops-orchestrator (root — escalates to human owner)
 - Any correction to the immutable `inventory_movements` ledger (*Requires owner clarification: is manual correction ever allowed?*)
 
 **Escalation rules:**
-- Negative stock + active reservation on that item → immediate critical exception + escalate to ops-orchestrator
+- Negative stock + active reservation on that item → immediate critical exception + escalate to ceo
 - Delivery note stuck >7 days → exception + task for warehouse manager
 - Missing reconciliation on order approaching billing → exception + notify billing-collections-agent (Phase 2)
 
@@ -340,8 +342,8 @@ ops-orchestrator (root — escalates to human owner)
 - Any suggested bypass of customer approval in an emergency (decision must be made by owner)
 
 **Escalation rules:**
-- Customer approval pending >48h → escalate task to ops-orchestrator
-- Graphics_done → production stuck >48h → exception to ops-orchestrator
+- Customer approval pending >48h → escalate task to ceo
+- Graphics_done → production stuck >48h → exception to ceo
 
 **Required QA before flagging:**
 1. Verify order is not cancelled before flagging SLA breach
@@ -418,7 +420,7 @@ ops-orchestrator (root — escalates to human owner)
 
 **Escalation rules:**
 - Margin < 0% on a completed order → task for manager
-- Chronic loss customer (3+ consecutive negative-margin orders) → escalate to ops-orchestrator
+- Chronic loss customer (3+ consecutive negative-margin orders) → escalate to ceo
 - Billing amount < total cost → immediate critical exception
 
 **Required QA before generating snapshots:**
@@ -497,7 +499,7 @@ ops-orchestrator (root — escalates to human owner)
 4. No open critical exceptions from inventory-agent or field-ops-agent on this order (Phase 2)
 
 **Escalation rules:**
-- Billing blocked >7 days → escalate to ops-orchestrator
+- Billing blocked >7 days → escalate to ceo
 - Disputed payment open >14 days → escalate to owner directly
 
 **Required QA before flagging:**
@@ -571,7 +573,7 @@ ops-orchestrator (root — escalates to human owner)
 - Billing decision on approved diary
 
 **Escalation rules:**
-- Missing diary 48h after scheduled_date → escalate exception to ops-orchestrator
+- Missing diary 48h after scheduled_date → escalate exception to ceo
 - Unclaimed approval >72h → create task assigned to manager
 
 **Required QA before flagging:**
@@ -693,7 +695,7 @@ See `catalog-agent-pilot.md` for full detection rules, severity classification, 
 - Any escalation of a fabrication issue to the customer
 
 **Escalation rules:**
-- fabrication_status = "issue" on urgent order → immediate critical exception + escalate to ops-orchestrator
+- fabrication_status = "issue" on urgent order → immediate critical exception + escalate to ceo
 - Stuck in_progress on order with scheduled_date in <48h → critical exception immediately
 
 **Required QA before flagging:**
@@ -726,7 +728,7 @@ The following items appeared across multiple agents and require owner clarificat
 
 | # | Item | Affects |
 |---|---|---|
-| 1 | Escalation notification channel for critical ops-orchestrator alerts (email? dashboard? WhatsApp?) | ops-orchestrator |
+| 1 | Escalation notification channel for critical ceo alerts (email? dashboard? WhatsApp?) | ceo |
 | 2 | Are there order types that never require customer graphic approval? | graphics-agent |
 | 3 | Is customer coordination confirmation tracked anywhere in the system? | coordination-qa-agent |
 | 4 | Emergency override process for gate bypass before dispatch | coordination-qa-agent |
@@ -753,7 +755,7 @@ The following items appeared across multiple agents and require owner clarificat
 
 | Agent | Phase 1 status | Phase 2 (planned) |
 |---|---|---|
-| ops-orchestrator | ✅ Implemented | Cross-agent awareness, risk score integration |
+| ceo | ✅ Implemented | Cross-agent awareness, risk score integration |
 | billing-collections-agent | ✅ Implemented | Payment aging, monthly leakage report |
 | cfo-agent | ✅ Implemented | Customer/crew-level margin, forecast accuracy |
 | field-ops-agent | ✅ Implemented | Crew validation, utilization analysis |

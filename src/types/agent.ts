@@ -2,7 +2,7 @@
 // All agent infrastructure types for the Digital Operations Command Center.
 
 export type AgentType =
-  | "orchestrator"
+  | "ceo"
   | "inventory"
   | "field_operations"
   | "graphics_production"
@@ -272,7 +272,7 @@ export interface OrgNode {
 
 export const AGENT_ORG: OrgNode[] = [
   {
-    agentId: "ops-orchestrator",
+    agentId: "ceo",
     children: [
       "orders-agent",
       "coordination-qa-agent",

@@ -403,7 +403,7 @@ function ExecutiveControlCard({
           <div className="min-w-0">
             <div className="text-base font-black text-white tracking-tight">{agent.name}</div>
             <div className="text-[10px] mt-0.5" style={{ color: "#7ab0e8" }}>
-              Operations Orchestrator · שכבת ניהול עליונה
+              CEO · שכבת ניהול עליונה
             </div>
             <div className="text-[10px] mt-1.5 leading-relaxed max-w-sm" style={{ color: "rgba(255,255,255,0.45)" }}>
               {agent.description.split("。")[0]}

@@ -33,7 +33,7 @@ Agents missing layers 6 or 7 are **visual/config only** — they appear in the N
 
 ## 3. Agent Inventory
 
-### 3.1 ops-orchestrator — מנהל פעילות
+### 3.1 ceo — מנהל פעילות
 
 | Property | Value |
 |---|---|
@@ -52,7 +52,7 @@ Agents missing layers 6 or 7 are **visual/config only** — they appear in the N
 | AGENT_ORG | ✅ (root node — all others report to it) |
 | Neural Core hotspot | ✅ |
 | DB (agents table) | ✅ (seeded in migration) |
-| Scan route | ✅ `/api/agents/ops-orchestrator/scan` |
+| Scan route | ✅ `/api/agents/ceo/scan` |
 | SCANNABLE_AGENTS | ✅ |
 | Chat addressable | ✅ |
 
@@ -480,13 +480,13 @@ Also triggers: `syncAllReservations` before each scan
 | `graphics-production-agent` | SLA thresholds are defined in workflowEngine.ts but the agent cannot enforce them |
 | `catalog-pricing-agent` | Catalog data quality problems are known and undetected by any automated agent |
 | `coordination-qa-agent` | Workflow gate violations (`canMarkReadyForInstallation`) are not surfaced by this agent |
-| `fabrication-agent` | fabrication_status = "issue" is only caught by ops-orchestrator, not the fabrication agent itself |
+| `fabrication-agent` | fabrication_status = "issue" is only caught by ceo, not the fabrication agent itself |
 | `engineering-plan-agent` | Intentional — future module, not planned for current phase |
 
 ### Gap 3 — No cross-agent awareness
 
 Currently, agents do not read each other's exceptions or tasks. Each agent scans independently. This means:
-- ops-orchestrator may flag the same SLA breach that graphics-agent would flag → duplicate noise in the future
+- ceo may flag the same SLA breach that graphics-agent would flag → duplicate noise in the future
 - coordination-qa-agent cannot know whether warehouse-agent has already cleared a reservation issue
 
 **Mitigation path (Phase 2):** Agents should read `agent_exceptions` table filtered by related_entity_id to check whether a sibling agent has already flagged the same order before creating a new exception.
@@ -505,16 +505,16 @@ The `autonomy_level` field in the DB is declared per agent but not enforced at r
 
 | Table | Read by agents | Written by agents |
 |---|---|---|
-| `work_orders` | ops-orchestrator, billing, cfo, field-ops, inventory | — |
-| `work_diaries` | cfo, field-ops, billing, inventory, ops-orchestrator | — |
+| `work_orders` | ceo, billing, cfo, field-ops, inventory | — |
+| `work_diaries` | cfo, field-ops, billing, inventory, ceo | — |
 | `catalog_items` | inventory | — |
 | `inventory_reservations` | inventory | — |
-| `inventory_consumptions` | inventory, billing, ops-orchestrator | — |
+| `inventory_consumptions` | inventory, billing, ceo | — |
 | `delivery_notes` | inventory | — |
 | `delivery_note_items` | inventory | — |
 | `cost_rates` | cfo | — |
 | `profitability_snapshots` | cfo | ✅ cfo (generates) |
-| `order_problems` | ops-orchestrator | — |
+| `order_problems` | ceo | — |
 | `purchase_recommendations` | inventory | ✅ inventory (upsert/resolve) |
 | `agents` | — | ✅ all (update status, last_run_at) |
 | `agent_tasks` | all | ✅ all |
@@ -534,7 +534,7 @@ The `autonomy_level` field in the DB is declared per agent but not enforced at r
 
 | Agent | Declared Level | Actual Behavior Level |
 |---|---|---|
-| ops-orchestrator | 1 | 1 — creates tasks/exceptions |
+| ceo | 1 | 1 — creates tasks/exceptions |
 | billing-collections-agent | 1 | 1 — creates tasks/exceptions |
 | cfo-agent | 1 | 1 — creates tasks/exceptions + generates snapshots |
 | field-ops-agent | 1 | 1 — creates tasks/exceptions |

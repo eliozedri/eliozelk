@@ -24,7 +24,7 @@ export const ROOMS: RoomConfig[] = [
     department: "operations",
     icon: "🏢",
     description: "מרכז פיקוד ותיאום כלל ארגוני",
-    agentIds: ["ops-orchestrator"],
+    agentIds: ["ceo"],
     gridCol: 1, gridRow: 1, gridColSpan: 2,
   },
   {

@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
 
   // 3. Persist agent response
   const agentMsgId = nanoid();
-  const responseAgentId = agentId ?? "ops-orchestrator";
+  const responseAgentId = agentId ?? "ceo";
   const agentNow = new Date().toISOString();
 
   const { error: agentMsgErr } = await db.from("communication_messages").insert({

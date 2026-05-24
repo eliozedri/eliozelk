@@ -27,7 +27,7 @@ export function NewMeetingModal({ agents, creating, error, onCreate, onClose }: 
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
   const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
-    new Set(["ops-orchestrator"]) // orchestrator selected by default
+    new Set(["ceo"]) // CEO selected by default
   );
 
   function toggleAgent(id: string) {

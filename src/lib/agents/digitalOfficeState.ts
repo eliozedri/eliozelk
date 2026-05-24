@@ -117,7 +117,7 @@ export const DEPT_ROOMS: DeptRoomConfig[] = [
 ];
 
 export const EXECUTIVE_ROOM_ID = "management";
-export const EXECUTIVE_AGENT_ID = "ops-orchestrator";
+export const EXECUTIVE_AGENT_ID = "ceo";
 export const MEETING_ROOM_ID = "meetings";
 
 // Map from agentId → homeRoomId (built once at module load)
@@ -148,7 +148,7 @@ export interface AgentPresence {
 // PLACEHOLDER: static activity labels per agent
 // Replace with agent.currentActivity from DB when available
 const AGENT_ACTIVITY_LABELS: Record<string, string> = {
-  "ops-orchestrator":           "פיקוד כלל-ארגוני",
+  "ceo":                        "פיקוד כלל-ארגוני",
   "orders-agent":               "מעבד הזמנות",
   "coordination-qa-agent":      "בדיקת שערי מוכנות",
   "graphics-production-agent":  "מעבד גרפיקה",
