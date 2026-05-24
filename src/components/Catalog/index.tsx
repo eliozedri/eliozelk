@@ -143,8 +143,8 @@ function CatalogItemDetailPanel({ item, onEdit, onToggle }: {
                   <p className="font-semibold text-gray-900 text-sm">{item.name}</p>
                   <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${TYPE_COLORS[item.type]}`}>{TYPE_LABELS[item.type]}</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${item.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                      {item.isActive ? "פעיל" : "לא פעיל"}
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${statusPillClass[statusBucket(item)]}`}>
+                      {STATUS_LABEL_HE[statusBucket(item)]}
                     </span>
                     {safetyRefId && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">🛡 בטיחות</span>}
                     {isFleetManaged && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">צי</span>}
@@ -426,11 +426,9 @@ function ItemCard({ item, onEdit, onToggle, onDelete }: {
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onToggle(item.id); }}
-            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${
-              item.isActive ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-            }`}
+            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${statusPillClass[statusBucket(item)]}`}
           >
-            {item.isActive ? "פעיל" : "לא פעיל"}
+            {STATUS_LABEL_HE[statusBucket(item)]}
           </button>
         </div>
       </div>
@@ -838,7 +836,7 @@ function AddItemForm({ onAdd, onCreateAndLink, categories, allItems }: AddItemFo
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function CatalogPage() {
-  const { items, addItem, updateItem, toggleActive, deleteItem, updateStockConfig, updateCostPrice } = useCatalogContext();
+  const { items, addItem, updateItem, toggleActive, setActiveBulk, deleteItem, updateStockConfig, updateCostPrice } = useCatalogContext();
 
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<CatalogItemType | "all">("all");
@@ -941,6 +939,41 @@ export function CatalogPage() {
     }
     return c;
   }, [items]);
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every(i => selectedIds.has(i.id));
+
+  function toggleSelectAll() {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allFilteredSelected) filtered.forEach(i => next.delete(i.id));
+      else filtered.forEach(i => next.add(i.id));
+      return next;
+    });
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function applyBulk(active: boolean) {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const verb = active ? "להפעיל" : "להשבית";
+    if (!window.confirm(`האם ${verb} ${ids.length} מוצרים?`)) return;
+    setBulkBusy(true);
+    const res = await setActiveBulk(ids, active);
+    setBulkBusy(false);
+    if (res.ok) setSelectedIds(new Set());
+    else window.alert(`הפעולה נכשלה: ${res.error ?? "שגיאה לא ידועה"}`);
+  }
 
   const stats = useMemo(() => {
     const activeCount = items.filter((i) => i.isActive).length;
@@ -1196,6 +1229,25 @@ export function CatalogPage() {
                 {filterMissingCost ? `✕ חסרי עלות (${filtered.length})` : `חסרי עלות${missingCostCount > 0 ? ` (${missingCostCount})` : ""}`}
               </button>
 
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectMode(v => {
+                    const next = !v;
+                    if (next) setViewMode("table");
+                    else setSelectedIds(new Set());
+                    return next;
+                  });
+                }}
+                className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors whitespace-nowrap ${
+                  selectMode
+                    ? "border-blue-500 bg-blue-600 text-white hover:bg-blue-700"
+                    : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {selectMode ? "✕ סיום בחירה" : "מצב בחירה"}
+              </button>
+
               {/* View toggle */}
               <div className="mr-auto flex items-center gap-0.5 bg-gray-100 rounded-lg p-0.5">
                 <button
@@ -1444,6 +1496,37 @@ export function CatalogPage() {
             );
           })()}
 
+          {selectMode && selectedIds.size > 0 && (
+            <div className="sticky top-2 z-20 mb-3 flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-navy-900 text-white shadow-lg">
+              <span className="text-sm font-medium">נבחרו {selectedIds.size} מוצרים</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={bulkBusy}
+                  onClick={() => applyBulk(true)}
+                  className="px-3 py-1.5 rounded-lg bg-green-500 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-50 transition-colors"
+                >
+                  {bulkBusy ? "..." : `הפעל נבחרים (${selectedIds.size})`}
+                </button>
+                <button
+                  type="button"
+                  disabled={bulkBusy}
+                  onClick={() => applyBulk(false)}
+                  className="px-3 py-1.5 rounded-lg bg-white/15 text-white text-sm font-medium hover:bg-white/25 disabled:opacity-50 transition-colors"
+                >
+                  {bulkBusy ? "..." : `השבת נבחרים (${selectedIds.size})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedIds(new Set())}
+                  className="px-2 py-1.5 rounded-lg text-white/60 text-sm hover:text-white transition-colors"
+                >
+                  נקה
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* ── Table view ───────────────────────────────────────────────────── */}
           {filtered.length > 0 && viewMode === "table" && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1451,6 +1534,17 @@ export function CatalogPage() {
                 <table className="w-full text-sm border-collapse">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
+                      {selectMode && (
+                        <th className="px-3 py-2 text-center">
+                          <input
+                            type="checkbox"
+                            checked={allFilteredSelected}
+                            onChange={toggleSelectAll}
+                            className="rounded"
+                            aria-label="בחר הכל"
+                          />
+                        </th>
+                      )}
                       <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right">שם פריט</th>
                       <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-24">סוג</th>
                       <th className="px-4 py-2.5 text-xs font-medium text-gray-500 text-right w-28">קטגוריה</th>
@@ -1519,6 +1613,16 @@ export function CatalogPage() {
                               className={`border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${!item.isActive ? "opacity-50" : ""} ${isExpanded ? "bg-blue-50/20" : ""}`}
                               onClick={() => setExpandedId(prev => prev === item.id ? null : item.id)}
                             >
+                              {selectMode && (
+                                <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedIds.has(item.id)}
+                                    onChange={() => toggleSelect(item.id)}
+                                    className="rounded"
+                                  />
+                                </td>
+                              )}
                               <td className="px-4 py-3 font-medium text-gray-900">
                                 <span className="flex items-center gap-1.5 flex-wrap">
                                   {item.name}
@@ -1547,13 +1651,19 @@ export function CatalogPage() {
                               </td>
                               <td className="px-4 py-3 text-gray-400 text-xs max-w-xs truncate">{item.description || "—"}</td>
                               <td className="px-4 py-3 text-center">
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); toggleActive(item.id); }}
-                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${item.isActive ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
-                                >
-                                  {item.isActive ? "פעיל" : "לא פעיל"}
-                                </button>
+                                {(() => {
+                                  const bucket = statusBucket(item);
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); toggleActive(item.id); }}
+                                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${statusPillClass[bucket]}`}
+                                      title={item.isActive ? "לחץ להשבתה" : "לחץ להפעלה (סקירה ואישור)"}
+                                    >
+                                      {STATUS_LABEL_HE[bucket]}
+                                    </button>
+                                  );
+                                })()}
                               </td>
                               <td className="px-3 py-3">
                                 <div className="flex items-center gap-1 justify-end">
