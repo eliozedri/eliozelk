@@ -10,6 +10,7 @@ import {
   getSourceType, SOURCE_BADGE, REVIEW_BADGE, resolveProductImage,
   isUnresolvedImage, UNRESOLVED_IMAGE_LABEL,
 } from "@/components/CatalogShowcase/constants";
+import { statusBucket, STATUS_LABEL_HE, statusPillClass } from "@/lib/catalog/sellable";
 
 function getSourceLabel(metadata: Record<string, unknown> | undefined): string | null {
   const sources = metadata?.sources as Array<{ type: string }> | undefined;
@@ -841,7 +842,7 @@ export function CatalogPage() {
 
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<CatalogItemType | "all">("all");
-  const [filterActive, setFilterActive] = useState<"all" | "active" | "inactive">("all");
+  const [filterActive, setFilterActive] = useState<"all" | "active" | "needs_review" | "inactive">("all");
   const [filterMissingCost, setFilterMissingCost] = useState(false);
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterImage, setFilterImage] = useState<"all" | "real" | "missing" | "needs_review">("all");
@@ -911,8 +912,7 @@ export function CatalogPage() {
     return items.filter((item) => {
       if (q && !item.name.toLowerCase().includes(q) && !item.category.toLowerCase().includes(q) && !(item.description ?? "").toLowerCase().includes(q)) return false;
       if (filterType !== "all" && item.type !== filterType) return false;
-      if (filterActive === "active" && !item.isActive) return false;
-      if (filterActive === "inactive" && item.isActive) return false;
+      if (filterActive !== "all" && statusBucket(item) !== filterActive) return false;
       if (filterMissingCost && !(["material", "product"].includes(item.type) && item.costPrice == null)) return false;
       if (filterCategory !== "all" && item.category !== filterCategory) return false;
       // Image filters — uses the same isUnresolvedImage rule as the cards,
@@ -933,6 +933,14 @@ export function CatalogPage() {
       return true;
     });
   }, [items, search, filterType, filterActive, filterMissingCost, filterCategory, filterImage, filterPrice]);
+
+  const statusCounts = useMemo(() => {
+    const c = { all: items.length, active: 0, needs_review: 0, inactive: 0 };
+    for (const i of items) {
+      c[statusBucket(i)] += 1;
+    }
+    return c;
+  }, [items]);
 
   const stats = useMemo(() => {
     const activeCount = items.filter((i) => i.isActive).length;
@@ -1118,6 +1126,27 @@ export function CatalogPage() {
                 placeholder="חיפוש לפי שם, קטגוריה, תיאור..."
                 className="flex-1 min-w-36 px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400"
               />
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {([
+                  ["all", `כל המוצרים (${statusCounts.all})`],
+                  ["active", `פעילים (${statusCounts.active})`],
+                  ["needs_review", `ממתינים לבדיקה (${statusCounts.needs_review})`],
+                  ["inactive", `לא פעילים (${statusCounts.inactive})`],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setFilterActive(value)}
+                    className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors whitespace-nowrap ${
+                      filterActive === value
+                        ? "border-blue-400 bg-blue-50 text-blue-700"
+                        : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <select
                 value={filterCategory}
                 onChange={(e) => setFilterCategory(e.target.value)}
@@ -1133,15 +1162,6 @@ export function CatalogPage() {
               >
                 <option value="all">כל הסוגים</option>
                 {(Object.entries(TYPE_LABELS) as [CatalogItemType, string][]).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-              </select>
-              <select
-                value={filterActive}
-                onChange={(e) => setFilterActive(e.target.value as "all" | "active" | "inactive")}
-                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-              >
-                <option value="all">פעיל / לא פעיל</option>
-                <option value="active">פעילים בלבד</option>
-                <option value="inactive">לא פעילים</option>
               </select>
               <select
                 value={filterImage}
