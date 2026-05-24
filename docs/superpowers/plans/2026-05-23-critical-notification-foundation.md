@@ -1156,27 +1156,41 @@ git commit -m "feat(notifications): client API wrappers + Web Audio chime"
 
 ---
 
-## Task 7.5 (BLOCKER before Task 8): reconcile `order.created` rule with production-intake business logic
+## Task 7.5 (before Task 8): reconcile `order.created` rule — DECIDED 2026-05-24 (safe Phase-1 fallback)
 
-> Added 2026-05-24 per owner clarification. See spec §6.1 / §6.2. Do this **before** Task 8 — the
-> Provider/Center/Gate behavior depends on the rule's real severity/ack/blocking + recipient routing.
+> Owner-approved decision. See spec §6.2 for full rationale + deferral conditions. **Status: SQL ready,
+> NOT applied to prod — needs a separate explicit approval to touch Supabase.**
 
-The applied seed has `order.created` = `warning / requires_ack=false / blocking=false` targeting
-`office_manager, graphics_manager, master`. The business logic now says `order.created` is a
-**production-intake event**: strong, requires receipt-acknowledgement, view-before-ack, pending until
-acknowledged, and **routed to the relevant production departments** (Graphics / Metal Workshop /
-Warehouse — content-aware) plus managers/master.
+`order.created` becomes a **strong, acknowledged production-intake** event, but **NON-blocking for now**
+(hard-block deferred). Existing static recipients kept; true content-aware department routing deferred.
 
-This is a **design + migration** step (not a client hand-edit), and it is **not yet specced in
-implementation detail** — when reached, brainstorm/plan it because it involves real decisions:
-- Follow-up migration to set `order.created` `requires_ack=true`, `blocking=true` (or persistent).
-- **Content-aware recipient routing** (which departments an order touches) — current model is a
-  static role list; the order row carries `needsGraphics`/sign content, `fabricationRequired`,
-  `warehouseRequired`. Decide: richer trigger emit, rules-engine resolver, or department-tagged metadata.
-- **Role-model gap:** no dedicated Metal-Workshop/Warehouse manager role exists today
-  (`graphics_manager` does). Map the 3 departments → real recipients (roles/users/groups).
-- Likely new per-rule fields (future): `display_mode`, `require_open_before_ack`, `auto_dismiss_seconds`,
-  `snooze_enabled`, `web_push_*` — admin-configurable later, not hardcoded.
+**Ready migration (apply only on explicit approval):**
+```sql
+-- 20260603000000_order_created_production_intake.sql  (additive: one UPDATE)
+update public.notification_rules
+set requires_ack = true,       -- now requires receipt-acknowledgement
+    blocking     = false,      -- hard-block DEFERRED
+    severity     = 'warning',  -- strong operational warning
+    play_sound   = true,
+    updated_at   = now()
+where event_type = 'order.created';
+```
+- View-before-ack already enforced (order.created carries a related `work_order` entity → existing
+  `serverAckAllowed`/gate predicate requires opening it first). No code change.
+- Recipients unchanged (`graphics_manager + office_manager + master`); strong/persistent in the Center,
+  pending until acknowledged; not a `toast_5s`.
+
+**Hard-block + true department routing deferred until ALL of:** content-aware routing
+(`fabrication_required`/`warehouse_required`/graphics proxy), roles/users for Graphics/Metal-Workshop/
+Warehouse (only `graphics_manager` exists today), creator-exclusion (no creator uuid on orders yet),
+per-recipient display/blocking mode (schema has one `blocking` flag), and admin control from "מרכז התראות".
+Future per-rule fields: `display_mode`, `block_app_until_ack`, `auto_dismiss_seconds`, `snooze_enabled`,
+`web_push_*` — admin-configurable later, not hardcoded.
+
+**Environment note (Part A, done 2026-05-24):** local toolchain requires **Node 24** (the machine's
+Homebrew Node 26 hangs `tsc`/`vitest` and crashes `next dev`). Installed `node@24` keg-only; use via
+`export PATH="/opt/homebrew/opt/node@24/bin:$PATH"`. Repo guards added: `.nvmrc`=24, `package.json`
+`engines.node`="24.x".
 
 Keep `diary.submitted` light (`toast_5s`, no required ack). Do NOT fold this into Task 7.
 

@@ -270,31 +270,48 @@ targets the **production departments**.
 Contrast: `diary.submitted` and routine updates stay **light** (`toast_5s`, no required ack, no
 aggressive sound). `order.created` is intake and must not behave like a routine toast.
 
-### 6.2 KNOWN RULE-DEFAULT MISMATCH to reconcile BEFORE Provider/UI tasks (Task 8+)
+### 6.2 RECONCILIATION DECISION (2026-05-24) — safe Phase-1 fallback, NON-blocking
 
-The **applied** DB seed (migration `20260601000000`, live on prod) currently has `order.created` as
-**`severity=warning`, `requires_ack=false`, `blocking=false`**, targeting `office_manager,
-graphics_manager, master`. This **does not match §6.1**. Do **not** fix this inside Task 7
-(client/sound). Reconcile it as a dedicated step **before Task 8 (NotificationProvider) / Notification
-Center / CriticalAlertGate**, via a follow-up migration / rule update (not a hand-edit of clients):
+The **applied** DB seed (migration `20260601000000`, live on prod) has `order.created` as
+`severity=warning, requires_ack=false, blocking=false`, recipients `office_manager, graphics_manager,
+master`. That does not match the production-intake intent (§6.1).
 
-- Set `order.created`: `requires_ack=true`, `blocking=true` (or persistent), keep view-before-ack
-  (a related `work_order` entity already drives the open-before-ack predicate).
-- **Recipient routing is the harder part:** §6.1 requires **content-aware, per-order department
-  routing** (which departments an order touches), but the current model resolves recipients from a
-  *static* `notification_rule_recipients` role list. The order row already carries signals
-  (`needsGraphics`/sign content, `fabricationRequired`, `warehouseRequired`) — routing must read
-  these. Options to design then: (a) richer trigger logic that emits per-department recipients from
-  the order content, (b) a future rules-engine recipient resolver, (c) department-tagged metadata.
-- **Role-model gap:** the role set has `graphics_manager` but **no dedicated Metal-Workshop or
-  Warehouse manager role** (fabrication/warehouse are tabs; `procurement_manager` holds warehouse).
-  Mapping the 3 production departments → real recipients (roles/users/groups) is part of this
-  reconciliation — may need new roles or department membership.
-- Also surfaces future per-rule fields from the consolidated requirements (not in the current
-  schema): `display_mode` (`toast_5s`/`persistent_banner`/`blocking_modal`/`notification_center_only`),
-  `require_open_before_ack`, `block_app_until_ack`, `auto_dismiss_seconds`, `snooze_enabled`,
-  `reminder_*`, `web_push_*`, `include_entity_details_in_push`. These are admin-configurable later
-  (the future **"מרכז התראות"** admin panel), not hardcoded.
+**Decided Phase-1 reconciliation (owner-approved 2026-05-24):** make `order.created` a *strong,
+acknowledged* intake event, but **NOT hard-blocking yet**, and keep the existing static recipients
+(true department routing deferred). Rationale: there are 0 `graphics_manager` users, no Metal-Workshop/
+Warehouse roles, `exclude_actor` is inert (orders carry no creator uuid), and the schema has only one
+per-notification `blocking` flag (no per-recipient mode) — so hard-blocking would lock master/office
+on every order, including self-created ones.
+
+**Ready follow-up migration (NOT yet applied — needs separate explicit approval to touch prod):**
+```sql
+-- 20260603000000_order_created_production_intake.sql  (additive: one UPDATE)
+update public.notification_rules
+set requires_ack = true,       -- was false: now requires receipt-acknowledgement
+    blocking     = false,      -- HARD-BLOCK DEFERRED (see conditions below)
+    severity     = 'warning',  -- strong operational warning (not critical full-lock)
+    play_sound   = true,
+    updated_at   = now()
+where event_type = 'order.created';
+```
+- **View-before-ack already works**: `order.created` notifications carry a related `work_order`
+  entity, so the existing `serverAckAllowed` / gate predicate requires opening the order before ack.
+  No code change needed.
+- **Recipients unchanged** (`graphics_manager + office_manager + master`). Strong/persistent in the
+  Notification Center, pending until acknowledged; **not** a `toast_5s`.
+
+**Hard-blocking for `order.created` is DEFERRED until ALL of these exist:**
+1. clean content-aware **department routing** (signals available: `fabrication_required`,
+   `warehouse_required`, graphics proxy `graphics_sent_at`/`status='graphics_pending'`);
+2. **roles/users** for Graphics, Metal Workshop, Warehouse (today only `graphics_manager` exists);
+3. **creator-exclusion** (needs a creator uuid on the order row, currently absent);
+4. **per-recipient display/blocking mode** (schema today has a single per-notification `blocking` flag);
+5. **admin control** from the future **"מרכז התראות"** panel.
+
+**Future per-rule fields** implied by the consolidated requirements (not in the current schema):
+`display_mode` (`toast_5s`/`persistent_banner`/`blocking_modal`/`notification_center_only`),
+`require_open_before_ack`, `block_app_until_ack`, `auto_dismiss_seconds`, `snooze_enabled`,
+`reminder_*`, `web_push_*`, `include_entity_details_in_push` — admin-configurable later, not hardcoded.
 
 ---
 
