@@ -82,10 +82,11 @@ function ChevronDownIcon({ open }: { open: boolean }) {
 
 // ── Inline detail panel (table view expand) ───────────────────────────────────
 
-function CatalogItemDetailPanel({ item, onEdit, onToggle }: {
+function CatalogItemDetailPanel({ item, onEdit, onToggle, colSpan }: {
   item: CatalogItem;
   onEdit: (id: string) => void;
   onToggle: (id: string) => void;
+  colSpan: number;
 }) {
   const specs   = item.metadata?.specs   as Record<string, unknown> | undefined;
   const images  = item.metadata?.images  as Record<string, string | undefined> | undefined;
@@ -112,7 +113,7 @@ function CatalogItemDetailPanel({ item, onEdit, onToggle }: {
 
   return (
     <tr>
-      <td colSpan={9} className="p-0 border-b border-blue-100">
+      <td colSpan={colSpan} className="p-0 border-b border-blue-100">
         <div className="px-6 py-4 bg-blue-50/25">
           <div className="flex gap-5">
 
@@ -1564,7 +1565,7 @@ export function CatalogPage() {
                         <Fragment key={item.id}>
                           {isEditing ? (
                             <tr className="border-b border-gray-100 bg-blue-50/30">
-                              <td colSpan={9} className="px-4 py-3">
+                              <td colSpan={selectMode ? 10 : 9} className="px-4 py-3">
                                 <FormFields
                                   form={editForm}
                                   update={updateEditForm}
@@ -1693,6 +1694,7 @@ export function CatalogPage() {
                               item={item}
                               onEdit={startEdit}
                               onToggle={toggleActive}
+                              colSpan={selectMode ? 10 : 9}
                             />
                           )}
                         </Fragment>
