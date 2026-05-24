@@ -10,6 +10,9 @@ import { GlobalChatLauncher } from "@/components/AgentChat/GlobalChatLauncher";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { NavigationGuardProvider, useNavigationGuard } from "@/context/NavigationGuardContext";
 import { DraftProtectionModal } from "@/components/ui/DraftProtectionModal";
+import { NotificationProvider } from "@/context/NotificationContext";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { CriticalAlertGate } from "@/components/notifications/CriticalAlertGate";
 
 const AUTH_PATHS = ["/login", "/setup"];
 
@@ -57,6 +60,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           <Menu className="w-5 h-5 text-white" />
         </button>
 
+        {/* Notification bell (fixed, opens the מרכז התראות drawer) */}
+        <NotificationBell />
+
         {/* Mobile backdrop */}
         {sidebarOpen && (
           <div
@@ -93,6 +99,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             {...(guard?.modalOverride ?? {})}
           />
         )}
+
+        {/* Blocking gate for critical (blocking + requires_ack) notifications */}
+        <CriticalAlertGate />
       </GlobalFloatingChatProvider>
     </>
   );
@@ -113,9 +122,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthProvider>
-      <NavigationGuardProvider>
-        <AppShellInner>{children}</AppShellInner>
-      </NavigationGuardProvider>
+      <NotificationProvider>
+        <NavigationGuardProvider>
+          <AppShellInner>{children}</AppShellInner>
+        </NavigationGuardProvider>
+      </NotificationProvider>
     </AuthProvider>
   );
 }
