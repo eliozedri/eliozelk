@@ -9,6 +9,7 @@ interface CatalogContextValue {
   addItem: (form: CatalogFormState, linkedProducts?: LinkedProductEntry[]) => CatalogItem;
   updateItem: (id: string, partial: Partial<CatalogFormState>, linkedProducts?: LinkedProductEntry[]) => void;
   toggleActive: (id: string) => void;
+  setActiveBulk: (ids: string[], active: boolean) => Promise<{ ok: boolean; error?: string }>;
   deleteItem: (id: string) => void;
   adjustStock: (
     itemId: string,

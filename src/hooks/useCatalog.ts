@@ -191,24 +191,44 @@ export function useCatalog() {
     }
   }, []);
 
-  const toggleActive = useCallback((id: string) => {
+  const setActiveBulk = useCallback(async (
+    ids: string[],
+    active: boolean,
+  ): Promise<{ ok: boolean; error?: string }> => {
+    if (ids.length === 0) return { ok: true };
+    const idSet = new Set(ids);
     const now = new Date().toISOString();
-    const original = ref.current.find(i => i.id === id);
-    if (!original) return;
-    const updated = { ...original, isActive: !original.isActive, updatedAt: now };
+    const originals = ref.current.filter(i => idSet.has(i.id));
 
-    setItems(prev => prev.map(i => i.id === id ? updated : i));
+    // Optimistic: flip is_active; when activating, strip the needs_review flag locally.
+    setItems(prev => prev.map(i => {
+      if (!idSet.has(i.id)) return i;
+      let metadata = i.metadata;
+      if (active && metadata && "review_state" in metadata) {
+        metadata = { ...metadata };
+        delete (metadata as Record<string, unknown>).review_state;
+      }
+      return { ...i, isActive: active, metadata, updatedAt: now };
+    }));
 
     const db = getSupabase();
-    if (db) {
-      db.from("catalog_items").update({ is_active: updated.isActive, updated_at: now }).eq("id", id).then(({ error }) => {
-        if (error) {
-          console.error("[catalog] toggleActive failed:", error.message);
-          setItems(prev => prev.map(i => i.id === id ? original : i));
-        }
-      });
+    if (!db) return { ok: true };
+
+    const { error } = await db.rpc("set_catalog_active", { p_ids: ids, p_active: active });
+    if (error) {
+      console.error("[catalog] setActiveBulk failed:", error.message);
+      const byId = new Map(originals.map(o => [o.id, o]));
+      setItems(prev => prev.map(i => byId.get(i.id) ?? i));
+      return { ok: false, error: error.message };
     }
+    return { ok: true };
   }, []);
+
+  const toggleActive = useCallback((id: string) => {
+    const original = ref.current.find(i => i.id === id);
+    if (!original) return;
+    void setActiveBulk([id], !original.isActive);
+  }, [setActiveBulk]);
 
   const deleteItem = useCallback((id: string) => {
     const original = ref.current.find(i => i.id === id);
@@ -323,5 +343,5 @@ export function useCatalog() {
     }
   }, []);
 
-  return { items, addItem, updateItem, toggleActive, deleteItem, adjustStock, updateStockConfig, updateCostPrice };
+  return { items, addItem, updateItem, toggleActive, setActiveBulk, deleteItem, adjustStock, updateStockConfig, updateCostPrice };
 }
