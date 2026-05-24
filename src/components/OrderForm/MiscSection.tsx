@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import type { MiscRow } from "@/types/order";
 import { useCatalogContext } from "@/context/CatalogContext";
 import type { CatalogItemType } from "@/types/catalog";
+import { isSellable } from "@/lib/catalog/sellable";
 
 const inputCls =
   "w-full px-3 py-1.5 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400 transition-all";
@@ -120,7 +121,7 @@ export function MiscSection({
     const q = query.toLowerCase();
     return catalogItems
       .filter((item) => {
-        if (!item.isActive) return false;
+        if (!isSellable(item)) return false;
         if (allowedCatalogTypes && !allowedCatalogTypes.includes(item.type)) return false;
         return item.name.toLowerCase().includes(q);
       })
