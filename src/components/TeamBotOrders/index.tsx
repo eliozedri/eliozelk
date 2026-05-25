@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Send, Check, X, RefreshCw } from "lucide-react";
+import { Send, Check, X, RefreshCw, Link2 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase/client";
 
 type CartLine = { name: string; quantity: number; unit: string | null; notes: string | null };
@@ -30,6 +30,28 @@ export function TeamBotOrders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [copyMsg, setCopyMsg] = useState<string | null>(null);
+
+  // Copy the external (customer-facing) order-request form link to the clipboard.
+  // The full URL incl. its share token lives in NEXT_PUBLIC_EXTERNAL_ORDER_FORM_URL
+  // (config, not hardcoded). This only copies a link — it creates no DB record.
+  const copyExternalOrderLink = async () => {
+    const url = process.env.NEXT_PUBLIC_EXTERNAL_ORDER_FORM_URL;
+    if (!url) {
+      setCopyMsg("הקישור החיצוני לא הוגדר. פנה למנהל המערכת.");
+      setTimeout(() => setCopyMsg(null), 4000);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyMsg("הקישור הועתק");
+    } catch {
+      // Clipboard API can be blocked (insecure context / permissions) — offer manual copy.
+      window.prompt("העתקה אוטומטית נכשלה. העתק/י את הקישור ידנית:", url);
+      setCopyMsg("העתק/י את הקישור ידנית מהחלון שנפתח");
+    }
+    setTimeout(() => setCopyMsg(null), 4000);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,13 +101,26 @@ export function TeamBotOrders() {
           <Send className="w-5 h-5 text-sky-600" />
           הזמנות מהבוט — ממתינות לאישור
         </h1>
-        <button
-          onClick={() => void load()}
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800"
-        >
-          <RefreshCw className="w-4 h-4" /> רענן
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={copyExternalOrderLink}
+            title="העתק את הקישור לטופס בקשת הזמנה החיצוני"
+            className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700"
+          >
+            <Link2 className="w-4 h-4" /> לינק לקישור הזמנות חיצוני
+          </button>
+          <button
+            onClick={() => void load()}
+            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800"
+          >
+            <RefreshCw className="w-4 h-4" /> רענן
+          </button>
+        </div>
       </div>
+
+      {copyMsg && (
+        <div className="mb-4 rounded-lg bg-emerald-50 text-emerald-700 text-sm px-3 py-2">{copyMsg}</div>
+      )}
 
       <p className="text-xs text-gray-500 mb-4">
         טיוטות שנשלחו דרך בוט הטלגרם. קידום יוצר הזמנה רגילה המסומנת כ&quot;הזמנה דרך הבוט מהטלגרם&quot;.
