@@ -6,7 +6,7 @@ import {
   FileText, Table2, LayoutDashboard, Users, Palette, Wrench,
   Database, ShieldCheck, Warehouse, DollarSign, Map, Calendar,
   UsersRound, BookOpen, TrendingUp, Bot, Settings, ShieldPlus,
-  LogOut, X, Cable, ScanLine, ScanText, LayoutGrid, Send, Store, Truck, Wallet,
+  LogOut, X, Cable, ScanLine, ScanText, LayoutGrid, Send, Store, Truck, Wallet, Bell,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { canAccessTab, canPerformAction, ROLE_LABELS } from "@/types/auth";
@@ -237,6 +237,12 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             </div>
           );
         })}
+
+        {/* מרכז התראות — universal: every authenticated user has their own notification center */}
+        {profile && (
+          <SidebarLink href="/notifications" label="מרכז התראות" active={pathname.startsWith("/notifications")} icon={<Bell className={ICON_CLS} />} onClick={handleNavClick}
+            onGuardedNavigate={isDirtyGuard ? guardedNavigate : undefined} />
+        )}
 
         {(canManageAccess || canSeeTab("integrations")) && (
           <SectionLabel label="מערכת" />
