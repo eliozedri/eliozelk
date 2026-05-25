@@ -563,3 +563,71 @@ resolution first.
   reminders + audit log; control sound policy and setup enforcement.
 - **Escalation / reminders / snooze**; hard-block decision for `order.created`.
 None of these are implemented; none may be claimed as done.
+
+---
+
+## 19. "מרכז התראות" sidebar — user center + admin management (clarification 2026-05-25)
+
+A dedicated sidebar entry **near the bottom** of the main sidebar, **"מרכז התראות"** — NOT just the
+bell/drawer. The bell/drawer stays for quick access; the sidebar screen is the full center + admin.
+**Status: NOT implemented (only the bell/drawer exists today). Required Phase-2 task.**
+
+**Two areas, with strict access separation:**
+1. **User Notification Center (all users):** view *their own* notifications, open related items,
+   acknowledge, report a problem (when allowed), see history/status. Read-only re: policy.
+2. **Admin management (master/admin/owner ONLY):** normal employees / department / graphics /
+   warehouse / workshop / office / **viewer** users must **not** see or change policy. Controls
+   (future): enable/disable rules; recipients by user/role/department; severity; display mode
+   (toast/persistent/blocking); `requires_ack`; `require_open_before_ack`; require report-problem;
+   sound on/off; Web Push on/off; push-when-closed; mandatory PWA/home-screen; block-until-setup;
+   snooze/reminders/escalation; admin override for stuck notifications; **audit log of all changes**.
+
+**CRITICAL — separate policy layers (must NOT be hardcoded together):** in-system acknowledgement is
+independent of phone/PWA/push requirements. Suggested per-rule / per-target fields:
+`require_in_app_acknowledgement`, `require_open_before_ack`, `in_app_notification_enabled`,
+`web_push_enabled`, `require_pwa_installation`, `require_push_permission`,
+`block_work_until_push_setup_complete`. Example policy: graphics users must acknowledge new orders
+**in-app**, but PWA/home-screen install may be **off** (or later on) — configured independently, by
+master/admin only.
+
+## 20. Viewer / read-only user notification policy (clarification 2026-05-25)
+
+A `viewer`/read-only/observer (צופה) user is **not** a production department worker. **Defaults:**
+- **No** operational/department/blocking alerts by default; **not** required to acknowledge
+  production-intake; **not** forced into PWA/push setup.
+- May receive **only** selected notifications **if master/admin explicitly configures it** (by user,
+  role, group, rule, and — later — related project/order/customer).
+- Read-only access to their own notifications; **cannot** change policy; **cannot** mute mandatory
+  sounds if a policy applies to them; **cannot** see the admin management area.
+
+Per-target policy must distinguish: in-app visibility · ack requirement · blocking · sound · Web Push ·
+mandatory PWA setup · selective notification types. Suggested fields: `allow_viewer_recipients`,
+`viewer_can_receive`, `viewer_requires_ack`, `viewer_push_enabled`, `viewer_blocking_allowed`
+(default all false → viewers get nothing unless opted in by admin). **Status: `viewer` role exists in
+the auth model, but no viewer-specific notification policy is implemented; recipients are role-based
+and `viewer` is not targeted by any current rule. Required Phase-2 capability.**
+
+## 21. Phase 2 decomposition (each = its own brainstorm → spec → plan → build)
+
+Phase 2 is **multiple large subsystems** — not buildable safely in one run. Sequenced sub-phases:
+- **2a — Department model & routing:** add `warehouse` + `metal_workshop` roles (or a
+  department-membership/tagging model); content-aware `order.created` routing from
+  `fabrication_required`/`warehouse_required`/graphics signals; recipient rules target departments.
+  (Graphics role already exists.) Additive migrations only.
+- **2b — "מרכז התראות" sidebar:** new tab/route + full user Notification Center page (reuse existing
+  components) + **admin management foundation** (start read-only rules view → editable rules +
+  `notification_admin_audit_log`). Admin area gated to master. Touches shared `auth.ts`/`Sidebar.tsx`
+  (coordinate with concurrent sessions).
+- **2c — PWA + native Web Push (VAPID, self-hosted; NO Firebase/OneSignal/etc.):** manifest, service
+  worker, `push_subscriptions` (per user/device, multi-device), VAPID keys in env (never client),
+  push-when-closed, order push payload (name/number/title/action). Security-sensitive (keys, SW).
+- **2d — Setup gate (separate policy layers per §19):** detect permission/subscription/standalone;
+  mandatory-setup gate for department users by admin policy; block-until-setup with admin override.
+- **2e — Escalation / reminders / snooze worker** (cron/queue); the inert `reminder_*`/`escalation_*`
+  columns already exist.
+- **Also:** report-problem → `order_problems`/`field.issue` escalation wiring (from §18.4); per-rule
+  `display_mode`/`auto_dismiss_seconds` fields; server-side mandatory-sound enforcement.
+
+**Recommended order:** 2a (unblocks real department intake) → 2b (visibility + admin control) →
+2c/2d (push + setup) → 2e. Each needs its own design + approval; 2c involves secrets/SW and 2a/2b
+touch the shared auth/sidebar files — handle with cross-session coordination.
