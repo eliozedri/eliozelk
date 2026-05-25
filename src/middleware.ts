@@ -42,6 +42,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/).*)",
+    // Auth-gate everything except Next internals, the API (self-guarded), and the
+    // public PWA assets the browser must fetch without a session (service worker,
+    // web manifest, app icons) — otherwise SW registration / install break.
+    "/((?!_next/static|_next/image|favicon.ico|api/|sw.js|manifest.webmanifest|icon-192.png|icon-512.png).*)",
   ],
 };
