@@ -1,0 +1,54 @@
+// Task item — update + delete.
+// PATCH  /api/equipment/[id]/tasks/[taskId]
+// DELETE /api/equipment/[id]/tasks/[taskId]
+
+import { NextRequest, NextResponse } from "next/server";
+import { getServiceSupabase } from "@/lib/supabase/server";
+import { requireAction } from "@/lib/auth/apiAuth";
+
+const UPDATABLE = new Set<string>([
+  "title", "task_type", "due_date", "status", "reminder_at", "notes", "linked_maintenance_id",
+]);
+
+export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string; taskId: string }> }) {
+  const auth = await requireAction(req, "manage_equipment");
+  if (!auth.ok) return auth.response;
+  const { taskId } = await ctx.params;
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  }
+
+  const patch: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (UPDATABLE.has(k)) patch[k] = v;
+  }
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: "אין שדות לעדכון" }, { status: 400 });
+  }
+  patch.updated_at = new Date().toISOString();
+
+  const db = getServiceSupabase();
+  const { data, error } = await db
+    .from("equipment_tasks")
+    .update(patch)
+    .eq("id", taskId)
+    .select("*")
+    .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json(data);
+}
+
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ id: string; taskId: string }> }) {
+  const auth = await requireAction(req, "manage_equipment");
+  if (!auth.ok) return auth.response;
+  const { taskId } = await ctx.params;
+
+  const db = getServiceSupabase();
+  const { error } = await db.from("equipment_tasks").delete().eq("id", taskId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

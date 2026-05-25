@@ -6,7 +6,7 @@ import {
   FileText, Table2, LayoutDashboard, Users, Palette, Wrench,
   Database, ShieldCheck, Warehouse, DollarSign, Map, Calendar,
   UsersRound, BookOpen, TrendingUp, Bot, Settings, ShieldPlus,
-  LogOut, X, Cable, ScanLine, ScanText, LayoutGrid, Layers, Send, Store,
+  LogOut, X, Cable, ScanLine, ScanText, LayoutGrid, Send, Store, Truck,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { canAccessTab, canPerformAction, ROLE_LABELS } from "@/types/auth";
@@ -76,6 +76,7 @@ const NAV_SECTIONS: NavSection[] = [
       { tabId: "graphics", href: "/graphics", label: "מחלקת גרפיקה", icon: <Palette className={ICON_CLS} />, matchFn: (p) => p.startsWith("/graphics") },
       { tabId: "warehouse", href: "/warehouse", label: "מחלקת מחסן", icon: <Warehouse className={ICON_CLS} />, matchFn: (p) => p.startsWith("/warehouse") },
       { tabId: "fabrication", href: "/fabrication", label: "מחלקת מסגריה", icon: <Wrench className={ICON_CLS} />, matchFn: (p) => p.startsWith("/fabrication") },
+      { tabId: "fleet", href: "/fleet", label: "צי רכב ומכונות", icon: <Truck className={ICON_CLS} />, matchFn: (p) => p.startsWith("/fleet"), noBadge: true },
     ],
   },
   {
@@ -83,7 +84,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "catalog", href: "/catalog", label: "קטלוג מוצרים ופריטים", icon: <Database className={ICON_CLS} />, matchFn: (p) => p === "/catalog" || (p.startsWith("/catalog") && !p.startsWith("/catalog-showcase") && !p.startsWith("/catalog-holo")) },
       { tabId: "catalog", href: "/catalog-showcase", label: "קטלוג חזותי", icon: <LayoutGrid className={ICON_CLS} />, matchFn: (p) => p.startsWith("/catalog-showcase"), noBadge: true },
-      { tabId: "catalog", href: "/holographic-catalog", label: "קטלוג תצוגה", icon: <Layers className={ICON_CLS} />, matchFn: (p) => p.startsWith("/holographic-catalog"), noBadge: true },
       { tabId: "catalog", href: "/sales-site", label: "אתר מכירה", icon: <Store className={ICON_CLS} />, matchFn: (p) => p.startsWith("/sales-site"), noBadge: true },
     ],
   },

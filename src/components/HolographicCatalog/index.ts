@@ -1,1 +1,0 @@
-export { HolographicCatalogPage } from "./HolographicCatalogPage";

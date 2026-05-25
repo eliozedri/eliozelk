@@ -43,6 +43,7 @@ export type TabId =
   | "catalog"
   | "accounting"
   | "supplier-documents"
+  | "fleet"
   | "workmap"
   | "schedule"
   | "crews"
@@ -66,6 +67,7 @@ export const ALL_TABS: { id: TabId; label: string; path: string; section: string
   { id: "catalog", label: "מוצרים ושירותים", path: "/catalog", section: "מחלקות" },
   { id: "accounting", label: "הנהלת חשבונות", path: "/accounting", section: "מחלקות" },
   { id: "supplier-documents", label: "סריקת מסמך", path: "/supplier-documents", section: "ניהול" },
+  { id: "fleet", label: "צי רכב ומכונות", path: "/fleet", section: "מחלקות" },
   { id: "team-bot-orders", label: "הזמנות מהבוט", path: "/team-bot-orders", section: "ניהול" },
   { id: "workmap", label: "מפת עבודות", path: "/workmap", section: "בקרת שטח" },
   { id: "schedule", label: "סידור שבועי", path: "/schedule", section: "בקרת שטח" },
@@ -99,7 +101,8 @@ export type ActionPermission =
   | "upload_supplier_document"
   | "review_supplier_document"
   | "post_supplier_document"
-  | "override_duplicate";
+  | "override_duplicate"
+  | "manage_equipment";
 
 export const ACTION_PERMISSION_LABELS: Record<ActionPermission, string> = {
   create_order: "יצירת הזמנות",
@@ -121,6 +124,7 @@ export const ACTION_PERMISSION_LABELS: Record<ActionPermission, string> = {
   review_supplier_document: "בדיקת מסמכי ספקים",
   post_supplier_document: "רישום מסמכי ספקים",
   override_duplicate: "אישור כפילות ידני",
+  manage_equipment: "ניהול צי רכב ומכונות",
 };
 
 export const ALL_ACTIONS: ActionPermission[] = Object.keys(ACTION_PERMISSION_LABELS) as ActionPermission[];
@@ -148,8 +152,8 @@ export const ROLE_DEFAULTS: Record<Role, { tabs: TabId[] | ["*"]; actions: Actio
     actions: ["view_accounting", "export_accounting", "review_supplier_document", "post_supplier_document"],
   },
   fleet_manager: {
-    tabs: ["dashboard", "crews", "schedule", "workmap"],
-    actions: ["manage_crews"],
+    tabs: ["dashboard", "fleet", "crews", "schedule", "workmap"],
+    actions: ["manage_crews", "manage_equipment"],
   },
   field_worker: {
     tabs: ["work-diary", "schedule"],
