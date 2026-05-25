@@ -2,6 +2,8 @@ export type Role =
   | "master"
   | "office_manager"
   | "graphics_manager"
+  | "warehouse_manager"
+  | "fabrication_manager"
   | "procurement_manager"
   | "tender_manager"
   | "finance_manager"
@@ -13,6 +15,8 @@ export const ROLE_LABELS: Record<Role, string> = {
   master: "מנהל ראשי",
   office_manager: "מנהל משרד",
   graphics_manager: "מחלקת גרפיקה",
+  warehouse_manager: "מנהל מחסן",
+  fabrication_manager: "מנהל מסגריה",
   procurement_manager: "רכש וספקים",
   tender_manager: "מכרזים ותמחור",
   finance_manager: "כספים",
@@ -25,6 +29,8 @@ export const ALL_ROLES: Role[] = [
   "master",
   "office_manager",
   "graphics_manager",
+  "warehouse_manager",
+  "fabrication_manager",
   "procurement_manager",
   "tender_manager",
   "finance_manager",
@@ -140,6 +146,14 @@ export const ROLE_DEFAULTS: Record<Role, { tabs: TabId[] | ["*"]; actions: Actio
   graphics_manager: {
     tabs: ["dashboard", "orders", "graphics", "fabrication"],
     actions: ["manage_graphics"],
+  },
+  warehouse_manager: {
+    tabs: ["dashboard", "orders", "warehouse"],
+    actions: [],
+  },
+  fabrication_manager: {
+    tabs: ["dashboard", "orders", "fabrication"],
+    actions: [],
   },
   procurement_manager: {
     tabs: ["dashboard", "warehouse", "catalog", "supplier-documents"],
