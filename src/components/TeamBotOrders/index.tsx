@@ -142,13 +142,17 @@ export function TeamBotOrders() {
         {drafts.map((d) => (
           <div key={d.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              {d.source === "jarvis_admin" || d.source === "jarvis_bot" ? (
+              {d.source === "jarvis" ? (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
                   👤 הזמנת מנהל (JARVIS)
                 </span>
               ) : d.source === "external_web_form" ? (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700">
                   🌐 טופס חיצוני
+                </span>
+              ) : d.source === "telegram_orders_bot" ? (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-700">
+                  📱 בוט הזמנות
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-700">

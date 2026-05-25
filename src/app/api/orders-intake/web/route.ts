@@ -44,10 +44,14 @@ interface IncomingBody {
   source?: unknown;
 }
 
-// The sender declares the origin so the review queue can label it. Anything outside the
-// known set falls back to the public-form default. Either way it lands as a PENDING
-// request — the label never changes the no-auto-work_order / approval-gated behavior.
-const ALLOWED_SOURCES = ["external_web_form", "jarvis_admin", "jarvis_bot"] as const;
+// The sender (JARVIS) declares the origin so the review queue can label it; values match
+// JARVIS's OrderIntakeSource. Anything outside the known set falls back to the public-form
+// default. Either way it lands as a PENDING request — the label never changes the
+// no-auto-work_order / approval-gated behavior.
+//   external_web_form   — public /order.html link (🌐 טופס חיצוני)
+//   telegram_orders_bot — JARVIS Orders Bot (📱 בוט הזמנות)
+//   jarvis              — owner/admin via JARVIS (👤 הזמנת מנהל)
+const ALLOWED_SOURCES = ["external_web_form", "telegram_orders_bot", "jarvis"] as const;
 function normalizeSource(v: unknown): string {
   return typeof v === "string" && (ALLOWED_SOURCES as readonly string[]).includes(v) ? v : "external_web_form";
 }
