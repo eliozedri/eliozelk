@@ -54,14 +54,13 @@
 }
 
 /* ─── Global responsive guards ─────────────────────── */
-/* Prevent any single wide element (off-canvas drawer, wide table, etc.)
-   from creating page-level horizontal scroll. Wide tables get their own
-   internal overflow-x-auto wrapper instead. */
-html, body {
-  max-width: 100%;
-  overflow-x: hidden;
-}
+/* Clip page-level horizontal overflow (off-canvas drawer, over-wide element)
+   WITHOUT turning html/body into a scroll container. `clip` — unlike `hidden` —
+   does not force the cross-axis to `auto`, so it never breaks iOS touch-scrolling
+   of fixed children like the sidebar nav. Wide tables keep their own internal
+   overflow-x-auto wrapper. */
 html {
+  overflow-x: clip;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }

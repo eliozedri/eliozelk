@@ -180,7 +180,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const isDirtyGuard = guard?.isDirty ?? false;
 
   return (
-    <aside className="ek-sidebar w-64 lg:w-56 h-full min-h-screen flex flex-col shrink-0">
+    <aside className="ek-sidebar w-64 lg:w-56 h-full flex flex-col shrink-0">
 
       {/* Header — brand logo with gold glow halo */}
       <div className="px-3 pt-5 pb-4 flex items-center justify-between gap-2" style={{ borderBottom: `1px solid rgba(148,197,255,0.12)` }}>
@@ -203,7 +203,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex flex-col p-2.5 flex-1 overflow-y-auto overscroll-contain">
+      <nav className="flex flex-col p-2.5 flex-1 min-h-0 overflow-y-auto overscroll-contain">
         {/* Primary entry point — standalone top-level, visually separated from sections */}
         {canSeeTab(AGENTS_NAV_ITEM.tabId) && (
           <div className="pb-2 mb-1" style={{ borderBottom: "1px solid rgba(148,197,255,0.12)" }}>
