@@ -79,7 +79,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             className={`
               fixed inset-y-0 right-0 z-50
               transition-transform duration-300 ease-in-out
-              md:relative md:inset-auto md:z-auto md:translate-x-0
+              md:sticky md:top-0 md:inset-auto md:z-auto md:translate-x-0 md:h-screen
               ${sidebarOpen ? "translate-x-0" : "translate-x-full"}
             `}
           >
