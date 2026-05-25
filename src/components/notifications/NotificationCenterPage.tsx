@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useNotifications } from "@/context/NotificationContext";
 import { getSupabase } from "@/lib/supabase/client";
 import { relatedEntityHref } from "@/lib/notifications/state";
+import { notificationsApi } from "@/lib/notifications/client";
 import { NotificationItem } from "@/components/notifications/NotificationItem";
 import type { NotificationView } from "@/types/notification";
 
-// Full-page "מרכז התראות". User-facing center for everyone; master-only admin
-// foundation (read-only rules viewer for now — editing/recipients/audit are future).
+// Full-page "מרכז התראות". User-facing center for everyone; master-only admin area
+// with EDITABLE notification rules + a change audit log (recipients editing is future).
 type Tab = "mine" | "admin";
 
 interface RuleRow {
@@ -21,8 +22,31 @@ interface RuleRow {
   requires_ack: boolean;
   blocking: boolean;
   play_sound: boolean;
+  show_in_center: boolean;
   enabled: boolean;
   notification_rule_recipients: { recipient_type: string; recipient_value: string }[] | null;
+}
+
+interface AuditRow {
+  id: string;
+  rule_event_type: string | null;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  changed_by_name: string | null;
+  changed_at: string;
+}
+
+function RuleToggle({ on, disabled, onToggle }: { on: boolean; disabled: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      disabled={disabled}
+      className={`px-2 py-0.5 rounded text-[11px] font-bold disabled:opacity-50 ${on ? "bg-emerald-600 text-white" : "bg-gray-200 text-gray-600"}`}
+    >
+      {on ? "כן" : "לא"}
+    </button>
+  );
 }
 
 function Section({
@@ -55,58 +79,88 @@ function Section({
   );
 }
 
-// Master-only read-only rules viewer — the admin-management FOUNDATION.
-// Editing rules/recipients, severity/display/sound/push policy, viewer policy,
-// and the change audit log are future work (spec §19).
+// Master-only admin area: EDITABLE rule behavior flags + change audit log.
+// Editable = existing wired columns only (enabled/severity/requires_ack/blocking/
+// play_sound/show_in_center). Recipients editing + Web Push/display_mode policy are
+// future (no inert policy columns added). Reads via RLS; writes via the master-gated
+// /api/notifications/rules/update route.
 function AdminRulesPanel() {
   const [rules, setRules] = useState<RuleRow[] | null>(null);
+  const [audit, setAudit] = useState<AuditRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     const db = getSupabase();
     if (!db) return;
-    db.from("notification_rules")
-      .select("id, event_type, severity, requires_ack, blocking, play_sound, enabled, notification_rule_recipients(recipient_type, recipient_value)")
-      .order("event_type")
-      .then(({ data, error }) => {
-        if (error) setError(error.message);
-        else setRules((data as RuleRow[]) ?? []);
-      });
+    const { data: r, error: re } = await db
+      .from("notification_rules")
+      .select("id, event_type, severity, requires_ack, blocking, play_sound, show_in_center, enabled, notification_rule_recipients(recipient_type, recipient_value)")
+      .order("event_type");
+    if (re) { setError(re.message); return; }
+    setRules((r as RuleRow[]) ?? []);
+    const { data: a } = await db
+      .from("notification_admin_audit_log")
+      .select("id, rule_event_type, field, old_value, new_value, changed_by_name, changed_at")
+      .order("changed_at", { ascending: false })
+      .limit(20);
+    setAudit((a as AuditRow[]) ?? []);
   }, []);
 
+  useEffect(() => { void load(); }, [load]);
+
+  const saveField = async (rule: RuleRow, field: string, value: unknown) => {
+    setSavingId(rule.id);
+    const ok = await notificationsApi.updateRule(rule.id, { [field]: value });
+    setSavingId(null);
+    if (ok) void load();
+  };
+
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-        תצוגה בלבד. עריכת חוקים, נמענים, חומרה/מצב תצוגה/צליל/Web Push, מדיניות צופים, ויומן שינויים —
-        יתווספו בהמשך (Phase 2). רק מנהל ראשי רואה אזור זה.
+    <div className="space-y-5">
+      <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">
+        אזור ניהול — מנהל ראשי בלבד. שינויים נשמרים מיידית ומתועדים ביומן השינויים למטה.
+        עריכת נמענים ומדיניות Web Push/PWA תתווסף בהמשך.
       </div>
-      {error && <p className="text-sm text-red-600">שגיאה בטעינת החוקים: {error}</p>}
-      {rules === null && !error && <p className="text-sm text-gray-400">טוען חוקים…</p>}
-      {rules && rules.length === 0 && <p className="text-sm text-gray-400">אין חוקים מוגדרים.</p>}
-      {rules && rules.length > 0 && (
+      {error && <p className="text-sm text-red-600">שגיאה: {error}</p>}
+      {rules === null && !error && <p className="text-sm text-gray-400">טוען…</p>}
+      {rules && (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
           <table className="w-full text-right text-xs">
             <thead className="bg-gray-50 text-gray-500">
               <tr>
-                <th className="px-3 py-2 font-semibold">אירוע</th>
-                <th className="px-3 py-2 font-semibold">חומרה</th>
-                <th className="px-3 py-2 font-semibold">דורש אישור</th>
-                <th className="px-3 py-2 font-semibold">חוסם</th>
-                <th className="px-3 py-2 font-semibold">צליל</th>
-                <th className="px-3 py-2 font-semibold">פעיל</th>
-                <th className="px-3 py-2 font-semibold">נמענים</th>
+                <th className="px-2 py-2 font-semibold">אירוע</th>
+                <th className="px-2 py-2 font-semibold">חומרה</th>
+                <th className="px-2 py-2 font-semibold">פעיל</th>
+                <th className="px-2 py-2 font-semibold">דורש אישור</th>
+                <th className="px-2 py-2 font-semibold">חוסם</th>
+                <th className="px-2 py-2 font-semibold">צליל</th>
+                <th className="px-2 py-2 font-semibold">במרכז</th>
+                <th className="px-2 py-2 font-semibold">נמענים</th>
               </tr>
             </thead>
             <tbody>
               {rules.map(r => (
                 <tr key={r.id} className="border-t border-gray-100">
-                  <td className="px-3 py-2 font-mono text-navy-900">{r.event_type}</td>
-                  <td className="px-3 py-2">{r.severity}</td>
-                  <td className="px-3 py-2">{r.requires_ack ? "כן" : "לא"}</td>
-                  <td className="px-3 py-2">{r.blocking ? "כן" : "לא"}</td>
-                  <td className="px-3 py-2">{r.play_sound ? "כן" : "לא"}</td>
-                  <td className="px-3 py-2">{r.enabled ? "כן" : "לא"}</td>
-                  <td className="px-3 py-2 text-gray-600">
+                  <td className="px-2 py-2 font-mono text-navy-900">{r.event_type}</td>
+                  <td className="px-2 py-2">
+                    <select
+                      value={r.severity}
+                      disabled={savingId === r.id}
+                      onChange={e => saveField(r, "severity", e.target.value)}
+                      className="rounded border border-gray-200 px-1 py-0.5 text-[11px]"
+                    >
+                      <option value="info">info</option>
+                      <option value="warning">warning</option>
+                      <option value="critical">critical</option>
+                    </select>
+                  </td>
+                  <td className="px-2 py-2"><RuleToggle on={r.enabled} disabled={savingId === r.id} onToggle={() => saveField(r, "enabled", !r.enabled)} /></td>
+                  <td className="px-2 py-2"><RuleToggle on={r.requires_ack} disabled={savingId === r.id} onToggle={() => saveField(r, "requires_ack", !r.requires_ack)} /></td>
+                  <td className="px-2 py-2"><RuleToggle on={r.blocking} disabled={savingId === r.id} onToggle={() => saveField(r, "blocking", !r.blocking)} /></td>
+                  <td className="px-2 py-2"><RuleToggle on={r.play_sound} disabled={savingId === r.id} onToggle={() => saveField(r, "play_sound", !r.play_sound)} /></td>
+                  <td className="px-2 py-2"><RuleToggle on={r.show_in_center} disabled={savingId === r.id} onToggle={() => saveField(r, "show_in_center", !r.show_in_center)} /></td>
+                  <td className="px-2 py-2 text-gray-600">
                     {(r.notification_rule_recipients ?? [])
                       .map(x => `${x.recipient_type}:${x.recipient_value}`)
                       .join(" · ") || "—"}
@@ -117,6 +171,40 @@ function AdminRulesPanel() {
           </table>
         </div>
       )}
+
+      <div>
+        <h3 className="text-xs font-bold text-gray-500 px-1 mb-2">יומן שינויים (20 אחרונים)</h3>
+        {audit.length === 0 ? (
+          <p className="text-xs text-gray-400">אין שינויים מתועדים.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+            <table className="w-full text-right text-[11px]">
+              <thead className="bg-gray-50 text-gray-500">
+                <tr>
+                  <th className="px-2 py-1.5 font-semibold">מתי</th>
+                  <th className="px-2 py-1.5 font-semibold">מי</th>
+                  <th className="px-2 py-1.5 font-semibold">אירוע</th>
+                  <th className="px-2 py-1.5 font-semibold">שדה</th>
+                  <th className="px-2 py-1.5 font-semibold">לפני</th>
+                  <th className="px-2 py-1.5 font-semibold">אחרי</th>
+                </tr>
+              </thead>
+              <tbody>
+                {audit.map(a => (
+                  <tr key={a.id} className="border-t border-gray-100">
+                    <td className="px-2 py-1.5 text-gray-500">{new Date(a.changed_at).toLocaleString("he-IL")}</td>
+                    <td className="px-2 py-1.5">{a.changed_by_name ?? "—"}</td>
+                    <td className="px-2 py-1.5 font-mono">{a.rule_event_type ?? "—"}</td>
+                    <td className="px-2 py-1.5">{a.field}</td>
+                    <td className="px-2 py-1.5 text-gray-500">{a.old_value ?? "—"}</td>
+                    <td className="px-2 py-1.5 font-semibold">{a.new_value ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

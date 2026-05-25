@@ -30,4 +30,6 @@ export const notificationsApi = {
   reportProblem: (recipientId: string, description?: string) =>
     post("/api/notifications/report-problem", { recipientId, description }),
   demo: (eventType: string) => post("/api/notifications/demo", { eventType }),
+  updateRule: (ruleId: string, changes: Record<string, unknown>) =>
+    post("/api/notifications/rules/update", { ruleId, changes }),
 };
