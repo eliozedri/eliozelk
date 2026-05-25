@@ -32,6 +32,10 @@ export const notificationsApi = {
   demo: (eventType: string) => post("/api/notifications/demo", { eventType }),
   updateRule: (ruleId: string, changes: Record<string, unknown>) =>
     post("/api/notifications/rules/update", { ruleId, changes }),
+  updatePolicy: (changes: Record<string, unknown>) =>
+    post("/api/notifications/policy/update", { changes }),
+  snooze: (recipientId: string, minutes: number) =>
+    post("/api/notifications/snooze", { recipientId, minutes }),
   subscribePush: (subscription: PushSubscriptionJSON, userAgent?: string) =>
     post("/api/notifications/push/subscribe", { subscription, userAgent }),
   unsubscribePush: (endpoint: string) =>

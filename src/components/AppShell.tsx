@@ -13,6 +13,7 @@ import { DraftProtectionModal } from "@/components/ui/DraftProtectionModal";
 import { NotificationProvider } from "@/context/NotificationContext";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { CriticalAlertGate } from "@/components/notifications/CriticalAlertGate";
+import { NotificationSetupGate } from "@/components/notifications/NotificationSetupGate";
 
 const AUTH_PATHS = ["/login", "/setup"];
 
@@ -128,6 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <NotificationProvider>
         <NavigationGuardProvider>
           <AppShellInner>{children}</AppShellInner>
+          <NotificationSetupGate />
         </NavigationGuardProvider>
       </NotificationProvider>
     </AuthProvider>

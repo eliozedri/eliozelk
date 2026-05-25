@@ -12,6 +12,7 @@ export interface PushReadiness {
   permission: PushPermission;
   subscribed: boolean;
   configured: boolean; // public VAPID key present in the client build
+  standalone: boolean; // running as an installed PWA / home-screen app
 }
 
 export function pushSupported(): boolean {
@@ -21,6 +22,15 @@ export function pushSupported(): boolean {
     "PushManager" in window &&
     "Notification" in window
   );
+}
+
+// Whether the app is running in installed/standalone (home-screen) mode. Best-effort:
+// matchMedia covers most browsers; navigator.standalone covers iOS Safari.
+export function isStandalone(): boolean {
+  if (typeof window === "undefined") return false;
+  const mm = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches;
+  const iosStandalone = (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+  return !!mm || iosStandalone;
 }
 
 function publicKey(): string | null {
@@ -42,7 +52,7 @@ async function currentSubscription(): Promise<PushSubscription | null> {
 export async function getReadiness(): Promise<PushReadiness> {
   const supported = pushSupported();
   if (!supported) {
-    return { supported: false, permission: "unsupported", subscribed: false, configured: !!publicKey() };
+    return { supported: false, permission: "unsupported", subscribed: false, configured: !!publicKey(), standalone: isStandalone() };
   }
   const sub = await currentSubscription();
   return {
@@ -50,6 +60,7 @@ export async function getReadiness(): Promise<PushReadiness> {
     permission: Notification.permission as PushPermission,
     subscribed: !!sub,
     configured: !!publicKey(),
+    standalone: isStandalone(),
   };
 }
 

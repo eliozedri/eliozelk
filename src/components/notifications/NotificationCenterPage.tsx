@@ -25,7 +25,16 @@ interface RuleRow {
   play_sound: boolean;
   show_in_center: boolean;
   enabled: boolean;
+  in_app_notification_enabled: boolean;
+  require_open_before_ack: boolean;
+  web_push_enabled: boolean;
   notification_rule_recipients: { recipient_type: string; recipient_value: string }[] | null;
+}
+
+interface PolicyRow {
+  require_pwa_installation: boolean;
+  require_push_permission: boolean;
+  block_work_until_push_setup_complete: boolean;
 }
 
 interface AuditRow {
@@ -144,19 +153,27 @@ function Section({
 // /api/notifications/rules/update route.
 function AdminRulesPanel() {
   const [rules, setRules] = useState<RuleRow[] | null>(null);
+  const [policy, setPolicy] = useState<PolicyRow | null>(null);
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [savingPolicy, setSavingPolicy] = useState(false);
 
   const load = useCallback(async () => {
     const db = getSupabase();
     if (!db) return;
     const { data: r, error: re } = await db
       .from("notification_rules")
-      .select("id, event_type, severity, requires_ack, blocking, play_sound, show_in_center, enabled, notification_rule_recipients(recipient_type, recipient_value)")
+      .select("id, event_type, severity, requires_ack, blocking, play_sound, show_in_center, enabled, in_app_notification_enabled, require_open_before_ack, web_push_enabled, notification_rule_recipients(recipient_type, recipient_value)")
       .order("event_type");
     if (re) { setError(re.message); return; }
     setRules((r as RuleRow[]) ?? []);
+    const { data: p } = await db
+      .from("notification_policy")
+      .select("require_pwa_installation, require_push_permission, block_work_until_push_setup_complete")
+      .eq("id", true)
+      .maybeSingle();
+    setPolicy((p as PolicyRow) ?? null);
     const { data: a } = await db
       .from("notification_admin_audit_log")
       .select("id, rule_event_type, field, old_value, new_value, changed_by_name, changed_at")
@@ -171,6 +188,13 @@ function AdminRulesPanel() {
     setSavingId(rule.id);
     const ok = await notificationsApi.updateRule(rule.id, { [field]: value });
     setSavingId(null);
+    if (ok) void load();
+  };
+
+  const savePolicy = async (field: keyof PolicyRow, value: boolean) => {
+    setSavingPolicy(true);
+    const ok = await notificationsApi.updatePolicy({ [field]: value });
+    setSavingPolicy(false);
     if (ok) void load();
   };
 
@@ -194,6 +218,9 @@ function AdminRulesPanel() {
                 <th className="px-2 py-2 font-semibold">חוסם</th>
                 <th className="px-2 py-2 font-semibold">צליל</th>
                 <th className="px-2 py-2 font-semibold">במרכז</th>
+                <th className="px-2 py-2 font-semibold">בתוך האפליקציה</th>
+                <th className="px-2 py-2 font-semibold">פתיחה לפני אישור</th>
+                <th className="px-2 py-2 font-semibold">Web Push</th>
                 <th className="px-2 py-2 font-semibold">נמענים</th>
               </tr>
             </thead>
@@ -218,6 +245,9 @@ function AdminRulesPanel() {
                   <td className="px-2 py-2"><RuleToggle on={r.blocking} disabled={savingId === r.id} onToggle={() => saveField(r, "blocking", !r.blocking)} /></td>
                   <td className="px-2 py-2"><RuleToggle on={r.play_sound} disabled={savingId === r.id} onToggle={() => saveField(r, "play_sound", !r.play_sound)} /></td>
                   <td className="px-2 py-2"><RuleToggle on={r.show_in_center} disabled={savingId === r.id} onToggle={() => saveField(r, "show_in_center", !r.show_in_center)} /></td>
+                  <td className="px-2 py-2"><RuleToggle on={r.in_app_notification_enabled} disabled={savingId === r.id} onToggle={() => saveField(r, "in_app_notification_enabled", !r.in_app_notification_enabled)} /></td>
+                  <td className="px-2 py-2"><RuleToggle on={r.require_open_before_ack} disabled={savingId === r.id} onToggle={() => saveField(r, "require_open_before_ack", !r.require_open_before_ack)} /></td>
+                  <td className="px-2 py-2"><RuleToggle on={r.web_push_enabled} disabled={savingId === r.id} onToggle={() => saveField(r, "web_push_enabled", !r.web_push_enabled)} /></td>
                   <td className="px-2 py-2 text-gray-600">
                     {(r.notification_rule_recipients ?? [])
                       .map(x => `${x.recipient_type}:${x.recipient_value}`)
@@ -229,6 +259,31 @@ function AdminRulesPanel() {
           </table>
         </div>
       )}
+
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 space-y-3">
+        <h3 className="text-sm font-bold text-indigo-900">מדיניות התקנה והתראות (כלל-ארגונית)</h3>
+        <p className="text-[11px] text-indigo-700/80">
+          שכבות נפרדות. ברירת המחדל כבויה — דרישות נכפות רק כאשר מנהל מפעיל אותן. חסימת עבודה לא חלה על מנהל ראשי.
+        </p>
+        {policy ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
+              <span className="text-xs text-gray-700">דרישת התקנת אפליקציה (PWA)</span>
+              <RuleToggle on={policy.require_pwa_installation} disabled={savingPolicy} onToggle={() => savePolicy("require_pwa_installation", !policy.require_pwa_installation)} />
+            </div>
+            <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
+              <span className="text-xs text-gray-700">דרישת אישור הרשאת התראות</span>
+              <RuleToggle on={policy.require_push_permission} disabled={savingPolicy} onToggle={() => savePolicy("require_push_permission", !policy.require_push_permission)} />
+            </div>
+            <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
+              <span className="text-xs text-gray-700">חסימת עבודה עד השלמת ההתקנה</span>
+              <RuleToggle on={policy.block_work_until_push_setup_complete} disabled={savingPolicy} onToggle={() => savePolicy("block_work_until_push_setup_complete", !policy.block_work_until_push_setup_complete)} />
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400">טוען מדיניות…</p>
+        )}
+      </div>
 
       <div>
         <h3 className="text-xs font-bold text-gray-500 px-1 mb-2">יומן שינויים (20 אחרונים)</h3>
