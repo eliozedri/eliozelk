@@ -180,7 +180,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const isDirtyGuard = guard?.isDirty ?? false;
 
   return (
-    <aside className="ek-sidebar w-64 md:w-56 h-full min-h-screen flex flex-col shrink-0">
+    <aside className="ek-sidebar w-64 lg:w-56 h-full min-h-screen flex flex-col shrink-0">
 
       {/* Header — brand logo with gold glow halo */}
       <div className="px-3 pt-5 pb-4 flex items-center justify-between gap-2" style={{ borderBottom: `1px solid rgba(148,197,255,0.12)` }}>

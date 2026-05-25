@@ -54,10 +54,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         {/* Operations-center scene grid + glow, fixed behind all content */}
         <div className="scene-overlay no-print" aria-hidden />
 
-        {/* Mobile hamburger */}
+        {/* Mobile/tablet hamburger — persistent sidebar only kicks in at lg (≥1024px) */}
         <button
           onClick={() => setSidebarOpen(true)}
-          className="fixed top-3 right-3 z-30 flex items-center justify-center w-10 h-10 rounded-xl shadow-md md:hidden no-print"
+          className="fixed top-3 right-3 z-30 flex items-center justify-center w-10 h-10 rounded-xl shadow-md lg:hidden no-print"
           style={{ backgroundColor: NAVY }}
           aria-label="פתח תפריט"
         >
@@ -67,10 +67,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         {/* Notification bell (fixed, opens the מרכז התראות drawer) */}
         <NotificationBell />
 
-        {/* Mobile backdrop */}
+        {/* Mobile/tablet backdrop */}
         {sidebarOpen && (
           <div
-            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}
@@ -80,7 +80,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             className={`
               fixed inset-y-0 right-0 z-50
               transition-transform duration-300 ease-in-out
-              md:sticky md:top-0 md:inset-auto md:z-auto md:translate-x-0 md:h-screen
+              lg:sticky lg:top-0 lg:inset-auto lg:z-auto lg:translate-x-0 lg:h-screen
               ${sidebarOpen ? "translate-x-0" : "translate-x-full"}
             `}
           >

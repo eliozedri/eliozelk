@@ -53,6 +53,19 @@
   --glow-cyan: 0 0 26px rgba(34, 211, 238, 0.4);
 }
 
+/* ─── Global responsive guards ─────────────────────── */
+/* Prevent any single wide element (off-canvas drawer, wide table, etc.)
+   from creating page-level horizontal scroll. Wide tables get their own
+   internal overflow-x-auto wrapper instead. */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 /* ─── Refined royal-navy scene backdrop ────────────── */
 body {
   background:
