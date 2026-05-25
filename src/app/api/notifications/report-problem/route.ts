@@ -5,9 +5,9 @@ import { serverAckAllowed } from "@/lib/notifications/state";
 
 // Resolve an order notification by REPORTING A PROBLEM (distinct from acknowledging
 // receipt). Like acknowledge: requires the related item to have been opened first.
-// Records resolution='problem_reported' + an immutable audit row with the description.
-// (Wiring this to create an order_problems row / fire field.issue escalation is a
-// documented follow-up; this route records the distinct, auditable problem response.)
+// Records resolution='problem_reported' + an immutable audit row with the description,
+// AND (for work_order-related notifications) creates an order_problems row, which the
+// order_problems trigger escalates into a field.issue critical notification to managers.
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
   if (!auth.ok) return auth.response;
@@ -72,6 +72,30 @@ export async function POST(req: NextRequest) {
   });
   if (auditErr) {
     console.error("[notifications] problem-report audit insert failed:", auditErr.message);
+  }
+
+  // Escalation wiring: a problem reported on an order becomes a real order_problems
+  // row, which the existing order_problems trigger turns into a field.issue critical
+  // notification to the responsible managers. Best-effort — the problem report is
+  // already recorded above, so a failure here is logged, not fatal. Only for
+  // work_order-related notifications (no order_problem for diary/other entities).
+  if (relatedType === "work_order" && relatedId) {
+    const deptByRole: Record<string, string> = {
+      graphics_manager: "graphics",
+      fabrication_manager: "fabrication",
+      warehouse_manager: "warehouse",
+    };
+    const { error: opErr } = await db.from("order_problems").insert({
+      id: crypto.randomUUID(),
+      order_id: relatedId,
+      department: deptByRole[auth.user.profile.role] ?? "office",
+      description: description || "בעיה דווחה מתוך מרכז ההתראות",
+      reported_by: auth.user.profile.name || null,
+      // category ('other'), status ('open'), reported_at default at the DB level
+    });
+    if (opErr) {
+      console.error("[notifications] report-problem order_problems insert failed:", opErr.message);
+    }
   }
 
   return NextResponse.json({ ok: true });
