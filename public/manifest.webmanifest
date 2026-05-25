@@ -1,0 +1,20 @@
+{
+  "name": "אלקיים סימון כבישים | מרכז שליטה",
+  "short_name": "אלקיים",
+  "description": "מערכת ניהול פנימית — אלקיים סימון כבישים בע״מ",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a1628",
+  "theme_color": "#0a1628",
+  "icons": [
+    {
+      "src": "/elkayam-logo.png",
+      "sizes": "425x95",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

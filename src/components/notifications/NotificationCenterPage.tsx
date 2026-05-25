@@ -8,6 +8,7 @@ import { useNotifications } from "@/context/NotificationContext";
 import { getSupabase } from "@/lib/supabase/client";
 import { relatedEntityHref } from "@/lib/notifications/state";
 import { notificationsApi } from "@/lib/notifications/client";
+import { getReadiness, enablePush, disablePush, type PushReadiness } from "@/lib/notifications/webpush";
 import { NotificationItem } from "@/components/notifications/NotificationItem";
 import type { NotificationView } from "@/types/notification";
 
@@ -46,6 +47,63 @@ function RuleToggle({ on, disabled, onToggle }: { on: boolean; disabled: boolean
     >
       {on ? "כן" : "לא"}
     </button>
+  );
+}
+
+// Opt-in browser-push control. Never auto-prompts: permission is only requested when
+// the user clicks "enable". OS push is a transport hint — acking still happens in-app.
+function PushOptIn({ isMaster }: { isMaster: boolean }) {
+  const [ready, setReady] = useState<PushReadiness | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => setReady(await getReadiness()), []);
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  if (!ready) return null;
+
+  if (!ready.supported) {
+    return <div className="rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">הדפדפן הזה לא תומך בהתראות דחיפה.</div>;
+  }
+  if (!ready.configured) {
+    return <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">התראות דפדפן עדיין לא הופעלו בשרת (חסר מפתח VAPID).</div>;
+  }
+
+  const onEnable = async () => {
+    setBusy(true); setTestMsg(null);
+    await enablePush();
+    await refresh();
+    setBusy(false);
+  };
+  const onDisable = async () => {
+    setBusy(true); setTestMsg(null);
+    await disablePush();
+    await refresh();
+    setBusy(false);
+  };
+  const onTest = async () => {
+    setBusy(true); setTestMsg(null);
+    const ok = await notificationsApi.testPush();
+    setTestMsg(ok ? "נשלחה התראת בדיקה למכשיר הזה." : "שליחת הבדיקה נכשלה.");
+    setBusy(false);
+  };
+
+  return (
+    <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 flex flex-wrap items-center gap-3">
+      <span className="text-sm font-bold text-sky-900">התראות דפדפן</span>
+      {ready.permission === "denied" ? (
+        <span className="text-xs text-red-600">ההרשאה נחסמה בדפדפן — יש לאפשר התראות בהגדרות האתר.</span>
+      ) : ready.subscribed ? (
+        <>
+          <span className="text-xs text-emerald-700 font-semibold">פעיל במכשיר הזה ✓</span>
+          <button onClick={onDisable} disabled={busy} className="px-3 py-1 rounded-lg text-xs font-bold bg-gray-200 text-gray-700 disabled:opacity-50">כבה</button>
+          {isMaster && <button onClick={onTest} disabled={busy} className="px-3 py-1 rounded-lg text-xs font-bold bg-sky-600 text-white disabled:opacity-50">שלח בדיקה</button>}
+        </>
+      ) : (
+        <button onClick={onEnable} disabled={busy} className="px-3 py-1 rounded-lg text-xs font-bold bg-sky-600 text-white disabled:opacity-50">הפעל במכשיר הזה</button>
+      )}
+      {testMsg && <span className="text-xs text-gray-600 w-full">{testMsg}</span>}
+    </div>
   );
 }
 
@@ -275,6 +333,7 @@ export function NotificationCenterPage() {
       <div className="p-6 max-w-3xl">
         {tab === "mine" || !isMaster ? (
           <div className="space-y-5">
+            <PushOptIn isMaster={isMaster} />
             {views.length === 0 && (
               <p className="text-sm text-gray-400 text-center mt-10">אין התראות</p>
             )}

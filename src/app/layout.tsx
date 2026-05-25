@@ -20,6 +20,8 @@ const heebo = Heebo({
 export const metadata: Metadata = {
   title: "אלקיים סימון כבישים | מרכז שליטה",
   description: "מערכת ניהול פנימית — אלקיים סימון כבישים בע״מ",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "אלקיים", statusBarStyle: "black-translucent" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
