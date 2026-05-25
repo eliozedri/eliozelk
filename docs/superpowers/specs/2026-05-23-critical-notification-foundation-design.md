@@ -487,3 +487,79 @@ groups, delivery-attempt tracking, admin monitoring dashboard.
    sound) to office/graphics/master, excluding the creator.
 8. Create a real `work_diaries` row → `diary.submitted` (info, no sound) to fleet/office/master.
 9. RLS: a `viewer` who is not a recipient sees none of the above; `master` sees all.
+
+---
+
+## 18. Audit reconciliation & Phase 1.5 (2026-05-25)
+
+Authoritative business logic + status after the post-Phase-1 audit. Two notification classes:
+
+### 18.1 Class A — Department order-intake (strong, persistent)
+`order.created` is a **production/department intake event**, NOT a generic office toast. In the
+**final** behavior it must reach the **relevant production departments** by order content:
+- **Graphics / גרפיקה** (graphics/print/design/stickers/signage), **Warehouse / מחסן**
+  (stock/cones/inventory/safety accessories/picking), **Metal Workshop / מסגרייה**
+  (metal fabrication/posts/frames/barriers/workshop).
+- The notification **stays pending until a real response**: the relevant user **opens/views the
+  order** and then **either (a) acknowledges receipt, or (b) reports a problem with the order**.
+- It must **not** behave like a 5-second toast and must **not** silently disappear.
+
+**Implemented now (Phase 1.5):** `order.created` = `requires_ack=true`, view-before-ack,
+non-blocking, persistent in the Notification Center; acknowledged from the drawer. Recipients =
+`graphics_manager + office_manager + master` (static).
+**Still pending (follow-up):** (a) the **"report a problem"** resolution path (§18.4), (b) true
+**content-aware department routing** + Warehouse/Metal-Workshop roles (§18.5).
+
+### 18.2 Class B — General informational notifications (light) — IMPLEMENTED
+Examples: `diary.submitted`, Telegram intake, `finance.document_new` / `finance.duplicate_suspected`
+/ `finance.needs_classification` (added by a parallel session), scanned document, fleet/field
+updates. Behavior: small **top-left toast, auto-dismiss ~5s**, RTL, optional gentle ping per rule,
+**non-blocking, no acknowledgement**, also visible in the Notification Center. Implemented via a
+client-side rule in `NotificationProvider`: a notification gets a transient toast iff
+`!blocking && !requires_ack` (severity → info/warning styling). `auto_dismiss_seconds`/`display_mode`
+DB fields remain a future enhancement; the current behavior is derived from `blocking`/`requires_ack`.
+
+### 18.3 Sound / mute policy — IMPLEMENTED
+Normal employees/users **cannot** mute mandatory notification sounds: the Notification Center
+mute control (and test-send) renders **only for `MANAGER_ROLES` = master/office_manager/fleet_manager**.
+The sound system itself is unchanged; blocking criticals still display even when muted. Full,
+server-side, per-rule mandatory-sound policy is a future **admin "מרכז התראות"** capability.
+
+### 18.4 "Report a problem" resolution — DESIGN (pending approval; needs a prod DB change)
+A department user resolves an `order.created` notification by **acknowledge receipt** OR
+**report a problem** — these are distinct outcomes. The current `notification_recipients.status`
+CHECK (`pending/delivered/seen/acknowledged/escalated/failed/expired`) has no distinct
+"problem reported" value. **Smallest safe additive change (not yet applied):**
+```sql
+-- (proposed) additive, non-destructive: distinguish the resolution outcome
+alter table public.notification_recipients
+  add column if not exists resolution text;   -- null | 'acknowledged' | 'problem_reported'
+```
+Flow: `POST /api/notifications/report-problem {recipientId, description}` (service-role + ownership +
+view-before-ack): set `status='acknowledged'` (leaves the pending queue) **and** `resolution=
+'problem_reported'`, write the immutable `notification_acknowledgements` row, and create the matching
+`order_problems` row via the existing mechanism (which fires the `field.issue` critical → escalation
+path). UI: a **"דווח על בעיה"** action on order-related notification items, enabled after the item is
+opened. Auditability preserved (who/when/related notification/related order). **Apply only after
+explicit approval — production DB change.**
+
+### 18.5 Department routing readiness (gap)
+Roles today: `graphics_manager` exists; **no** Warehouse or Metal-Workshop role (fabrication/
+warehouse are tabs; `procurement_manager` holds the warehouse tab). Order content signals exist as
+columns (`fabrication_required`, `warehouse_required`, graphics proxy `graphics_sent_at`/
+`status='graphics_pending'`). The recipient model is a **static role list**; there is no creator-uuid
+(so `exclude_actor` is inert) and only a **per-notification** blocking flag (no per-recipient mode).
+**True department routing is a follow-up phase** — do not hardcode fragile routing; add
+Warehouse/Metal-Workshop roles (or a department-membership model) + content-aware recipient
+resolution first.
+
+### 18.6 Out of scope here — Phase 2 (future, separate brainstorm→spec→plan)
+- **PWA + native Web Push (VAPID, self-hosted — NO Firebase/OneSignal/etc.)**: manifest, service
+  worker, per-user/device push subscriptions, push-when-closed, standalone detection.
+- **Mandatory employee setup gate**: require department users (graphics/warehouse/workshop) to
+  install to home screen + enable notifications + keep an active push subscription, blockable by
+  admin policy until complete.
+- **Admin "מרכז התראות" management panel**: configure rules/recipients/severity/sound/blocking/
+  reminders + audit log; control sound policy and setup enforcement.
+- **Escalation / reminders / snooze**; hard-block decision for `order.created`.
+None of these are implemented; none may be claimed as done.
