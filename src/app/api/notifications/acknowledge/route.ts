@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   const db = getServiceSupabase();
   const { data: rec, error } = await db
     .from("notification_recipients")
-    .select("id, user_id, related_opened_at, status, notification_id, notifications(related_entity_type)")
+    .select("id, user_id, related_opened_at, status, notification_id, notifications(related_entity_type, notification_rules(require_open_before_ack))")
     .eq("id", recipientId)
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -31,12 +31,17 @@ export async function POST(req: NextRequest) {
     status: string;
     notification_id: string;
     user_id: string;
-    notifications: { related_entity_type: string | null } | null;
+    notifications: {
+      related_entity_type: string | null;
+      notification_rules: { require_open_before_ack: boolean } | null;
+    } | null;
   };
   const relatedType = related.notifications?.related_entity_type ?? null;
   const relatedOpenedAt = related.related_opened_at ?? null;
+  // Default true when the rule is unknown (deleted) — never relax view-before-ack implicitly.
+  const requireOpen = related.notifications?.notification_rules?.require_open_before_ack ?? true;
 
-  if (!serverAckAllowed(relatedType, relatedOpenedAt)) {
+  if (!serverAckAllowed(relatedType, relatedOpenedAt, requireOpen)) {
     return NextResponse.json({ error: "must_open_item_first" }, { status: 400 });
   }
   if (related.status === "acknowledged") return NextResponse.json({ ok: true, already: true });

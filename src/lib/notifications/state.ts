@@ -87,10 +87,15 @@ export function mergeViews(prev: NotificationView[], incoming: NotificationView)
 }
 
 // Server-side mirror of isOpenedSatisfied, working on raw values (no view object).
+// `requireOpenBeforeAck` is the per-rule policy flag; it defaults to true so existing
+// callers keep today's "must view the related item before acking" behavior. When an
+// admin turns the flag off for a rule, acking no longer requires opening the item.
 export function serverAckAllowed(
   relatedEntityType: string | null,
   relatedOpenedAt: string | null,
+  requireOpenBeforeAck: boolean = true,
 ): boolean {
+  if (!requireOpenBeforeAck) return true;
   if (!relatedEntityType) return true;
   return relatedOpenedAt != null;
 }
