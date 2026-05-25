@@ -65,7 +65,13 @@ const NAV_SECTIONS: NavSection[] = [
       { tabId: "orders", href: "/new-order", label: "הזמנה חדשה", icon: <FileText className={ICON_CLS} />, matchFn: (p) => p === "/new-order", noBadge: true },
       { tabId: "work-diary", href: "/work-diary", label: "יומן עבודה חדש", icon: <BookOpen className={ICON_CLS} />, matchFn: (p) => p.startsWith("/work-diary") },
       { tabId: "team-bot-orders", href: "/team-bot-orders", label: "הזמנות מהבוט", icon: <Send className={ICON_CLS} />, matchFn: (p) => p.startsWith("/team-bot-orders"), noBadge: true, title: "טיוטות הזמנה שהתקבלו דרך בוט הטלגרם" },
+    ],
+  },
+  {
+    label: "כלים",
+    items: [
       { tabId: "supplier-documents", href: "/supplier-documents", label: "סריקת מסמך", icon: <ScanLine className={ICON_CLS} />, matchFn: (p) => p.startsWith("/supplier-documents"), noBadge: true },
+      { tabId: "plan-scanner", href: "/plan-scanner", label: "סורק תוכניות", icon: <ScanText className={ICON_CLS} />, matchFn: (p) => p.startsWith("/plan-scanner"), noBadge: true },
     ],
   },
   {
@@ -74,7 +80,6 @@ const NAV_SECTIONS: NavSection[] = [
       { tabId: "graphics", href: "/graphics", label: "מחלקת גרפיקה", icon: <Palette className={ICON_CLS} />, matchFn: (p) => p.startsWith("/graphics") },
       { tabId: "warehouse", href: "/warehouse", label: "מחלקת מחסן", icon: <Warehouse className={ICON_CLS} />, matchFn: (p) => p.startsWith("/warehouse") },
       { tabId: "fabrication", href: "/fabrication", label: "מחלקת מסגריה", icon: <Wrench className={ICON_CLS} />, matchFn: (p) => p.startsWith("/fabrication") },
-      { tabId: "fleet", href: "/fleet", label: "צי רכב ומכונות", icon: <Truck className={ICON_CLS} />, matchFn: (p) => p.startsWith("/fleet"), noBadge: true },
     ],
   },
   {
@@ -82,6 +87,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "catalog", href: "/catalog", label: "קטלוג מוצרים ופריטים", icon: <Database className={ICON_CLS} />, matchFn: (p) => p === "/catalog" || (p.startsWith("/catalog") && !p.startsWith("/catalog-showcase")) },
       { tabId: "catalog", href: "/catalog-showcase", label: "קטלוג חזותי", icon: <LayoutGrid className={ICON_CLS} />, matchFn: (p) => p.startsWith("/catalog-showcase"), noBadge: true },
+      { tabId: "fleet", href: "/fleet", label: "צי רכב ומכונות", icon: <Truck className={ICON_CLS} />, matchFn: (p) => p.startsWith("/fleet"), noBadge: true },
       { tabId: "catalog", href: "/sales-site", label: "אתר מכירה", icon: <Store className={ICON_CLS} />, matchFn: (p) => p.startsWith("/sales-site"), noBadge: true },
     ],
   },
@@ -97,12 +103,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "profitability", href: "/profitability", label: "דשבורד רווחיות", icon: <TrendingUp className={ICON_CLS} />, matchFn: (p) => p.startsWith("/profitability") },
       { tabId: "cost-settings", href: "/cost-settings", label: "תעריפי עלות", icon: <Settings className={ICON_CLS} />, matchFn: (p) => p.startsWith("/cost-settings") },
-    ],
-  },
-  {
-    label: "מחקר ותכנון",
-    items: [
-      { tabId: "plan-scanner", href: "/plan-scanner", label: "סורק תוכניות", icon: <ScanText className={ICON_CLS} />, matchFn: (p) => p.startsWith("/plan-scanner"), noBadge: true },
     ],
   },
 ];
@@ -238,14 +238,13 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           );
         })}
 
-        {/* מרכז התראות — universal: every authenticated user has their own notification center */}
+        {/* מערכת — מרכז התראות (אוניברסלי לכל משתמש) + כלי ניהול */}
+        {(profile || canManageAccess || canSeeTab("integrations")) && (
+          <SectionLabel label="מערכת" />
+        )}
         {profile && (
           <SidebarLink href="/notifications" label="מרכז התראות" active={pathname.startsWith("/notifications")} icon={<Bell className={ICON_CLS} />} onClick={handleNavClick}
             onGuardedNavigate={isDirtyGuard ? guardedNavigate : undefined} />
-        )}
-
-        {(canManageAccess || canSeeTab("integrations")) && (
-          <SectionLabel label="מערכת" />
         )}
         {canManageAccess && (
           <SidebarLink href="/access" label="הרשאות גישה" active={pathname.startsWith("/access")} icon={<ShieldPlus className={ICON_CLS} />} onClick={handleNavClick}
