@@ -117,3 +117,29 @@ Until set, `sendWebPush` is a no-op and the UI shows push as unavailable.
 - End-to-end push (subscribe → master test → OS banner → click opens item) requires a
   real browser + HTTPS (Vercel) + VAPID env — **manual browser verification**, flagged
   in the completion report.
+
+## Phase 2d — delivered (2026-05-25, follow-on)
+
+Implemented on top of this foundation (no PWA SaaS; VAPID self-hosted):
+
+- **Automatic push fan-out + reminder/escalation/expiry worker** —
+  `src/lib/notifications/worker.ts` (idempotent) invoked by `/api/notifications/cron`
+  (GET for Vercel Cron, POST manual), guarded by `CRON_SECRET`. `vercel.json` schedules
+  `*/5 * * * *`. No DB migration — reuses the Phase-1 columns (`last_push_sent_at`,
+  `next_reminder_at`, `escalation_level`, rule `reminder_*`/`escalation_*`/`expires_*`).
+  Push is best-effort (no-op without VAPID); reminder/escalation/expiry state still runs.
+  Sub-daily cron needs Vercel **Pro**; on Hobby the route is still callable manually.
+- **Policy layers now admin-editable (master only)** — per-rule
+  `in_app_notification_enabled`/`require_open_before_ack`/`web_push_enabled` in the rules
+  table; global gates via `/api/notifications/policy/update` + a new "מדיניות התקנה" admin
+  section; all changes audited.
+- **Readiness + setup gate** — `isStandalone()` PWA detection; `NotificationSetupGate`
+  (default-inert) soft banner / admin-gated hard block (master-exempt, push-permission
+  only, never traps).
+- **require_open_before_ack wired** in the ack route (live rule flag, default-strict);
+  backfill migration `20260525210000` preserves current behavior.
+- **Snooze API** `/api/notifications/snooze` (reuses `next_reminder_at`, never acks).
+- **PWA icons** — real 192/512 maskable icons generated from branding.
+
+Additional env beyond VAPID: **`CRON_SECRET`** (enables the worker route + Vercel Cron
+auth). Without it the worker is dormant (503).
