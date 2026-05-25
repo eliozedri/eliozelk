@@ -543,15 +543,14 @@ path). UI: a **"דווח על בעיה"** action on order-related notification i
 opened. Auditability preserved (who/when/related notification/related order). **Apply only after
 explicit approval — production DB change.**
 
-### 18.5 Department routing readiness (gap)
-Roles today: `graphics_manager` exists; **no** Warehouse or Metal-Workshop role (fabrication/
-warehouse are tabs; `procurement_manager` holds the warehouse tab). Order content signals exist as
-columns (`fabrication_required`, `warehouse_required`, graphics proxy `graphics_sent_at`/
-`status='graphics_pending'`). The recipient model is a **static role list**; there is no creator-uuid
-(so `exclude_actor` is inert) and only a **per-notification** blocking flag (no per-recipient mode).
-**True department routing is a follow-up phase** — do not hardcode fragile routing; add
-Warehouse/Metal-Workshop roles (or a department-membership model) + content-aware recipient
-resolution first.
+### 18.5 Department routing — ✅ IMPLEMENTED (Phase 2a, 2026-05-25; see §22)
+Roles `warehouse_manager` + `fabrication_manager` were added alongside `graphics_manager`, and
+`order.created` now routes **content-aware** from the order columns (`fabrication_required`,
+`warehouse_required`, graphics proxy `graphics_sent_at`/`status='graphics_pending'`) via the new
+optional `fn_emit_notification(... , p_target_roles)`. Master is always included for monitoring; no
+signal → fallback to the rule's configured recipients. Full details in §22. *(Remaining refinements:
+a dedicated `graphics_required` column instead of the proxy, per-recipient blocking mode, and a
+department-membership/tagging model for item-level routing — still future.)*
 
 ### 18.6 Out of scope here — Phase 2 (future, separate brainstorm→spec→plan)
 - **PWA + native Web Push (VAPID, self-hosted — NO Firebase/OneSignal/etc.)**: manifest, service
@@ -610,14 +609,13 @@ and `viewer` is not targeted by any current rule. Required Phase-2 capability.**
 ## 21. Phase 2 decomposition (each = its own brainstorm → spec → plan → build)
 
 Phase 2 is **multiple large subsystems** — not buildable safely in one run. Sequenced sub-phases:
-- **2a — Department model & routing:** add `warehouse` + `metal_workshop` roles (or a
-  department-membership/tagging model); content-aware `order.created` routing from
-  `fabrication_required`/`warehouse_required`/graphics signals; recipient rules target departments.
-  (Graphics role already exists.) Additive migrations only.
-- **2b — "מרכז התראות" sidebar:** new tab/route + full user Notification Center page (reuse existing
-  components) + **admin management foundation** (start read-only rules view → editable rules +
-  `notification_admin_audit_log`). Admin area gated to master. Touches shared `auth.ts`/`Sidebar.tsx`
-  (coordinate with concurrent sessions).
+- **2a — Department model & routing — ✅ DONE (2026-05-25, see §22):** added `warehouse_manager` +
+  `fabrication_manager` roles; content-aware `order.created` routing from `fabrication_required`/
+  `warehouse_required`/graphics-proxy via `fn_emit_notification(... , p_target_roles)`. (Remaining:
+  `graphics_required` column, dept-membership/tagging for item-level routing.)
+- **2b — "מרכז התראות" sidebar — ✅ DONE (minimal):** `/notifications` route + full user Notification
+  Center page (reuses existing components) + master-only **read-only** rules viewer (admin
+  foundation). **Still future:** editable rules / recipients UI + `notification_admin_audit_log`.
 - **2c — PWA + native Web Push (VAPID, self-hosted; NO Firebase/OneSignal/etc.):** manifest, service
   worker, `push_subscriptions` (per user/device, multi-device), VAPID keys in env (never client),
   push-when-closed, order push payload (name/number/title/action). Security-sensitive (keys, SW).
@@ -631,3 +629,35 @@ Phase 2 is **multiple large subsystems** — not buildable safely in one run. Se
 **Recommended order:** 2a (unblocks real department intake) → 2b (visibility + admin control) →
 2c/2d (push + setup) → 2e. Each needs its own design + approval; 2c involves secrets/SW and 2a/2b
 touch the shared auth/sidebar files — handle with cross-session coordination.
+
+---
+
+## 22. Phase 2a — Department routing IMPLEMENTED (2026-05-25)
+
+Department routing for `order.created` is **implemented and applied to production** (commits
+`6964a18` roles, `38f41eb` migration; both local/unpushed at time of writing).
+
+- **`warehouse_manager` role added** (`auth.ts`; label "מנהל מחסן") — a human recipient role, not an AI agent.
+- **`fabrication_manager` role added** (`auth.ts`; label "מנהל מסגריה") — human recipient role, not an AI agent.
+- **`order.created` now supports content-aware routing** via a new optional
+  `fn_emit_notification(..., p_target_roles text[] default null)` (migration
+  `20260525180000_order_created_content_aware_routing.sql`, applied to prod `gtevmcnasvrahzfdqrqk`).
+- **`fabrication_required` routes to `fabrication_manager`.**
+- **`warehouse_required` routes to `warehouse_manager`.**
+- **Graphics currently uses a proxy signal** (`graphics_sent_at IS NOT NULL` OR
+  `status='graphics_pending'`) → `graphics_manager`. A dedicated `graphics_required` column is a
+  future refinement.
+- **`master` remains included for monitoring** on every order (via the resolver's master clause),
+  and is not hard-blocked.
+- **Old 5-arg `fn_emit_notification` callers remain behavior-preserved:** `diary.submitted` /
+  `field.issue` triggers and the finance `supplier-documents` upload route call the 5-arg form →
+  `p_target_roles` is null → the role fan-out uses the rule's configured recipients exactly as
+  before (smoke-verified).
+- **No-signal fallback:** an order with no department signal → `p_target_roles` null → routes to the
+  rule's configured recipients (office_manager + graphics_manager) + master.
+- **⚠️ Operational prerequisite:** **no `warehouse_manager`/`fabrication_manager` users exist yet**, so
+  those department inboxes are empty (only `master` is reached for those events) until the roles are
+  **assigned to real users in access management** (`/access`). Routing is live; assign users to activate it.
+- `order.created` behavior unchanged: `requires_ack=true`, `blocking=false`, open-before-ack required.
+- **Rollback:** `drop function fn_emit_notification(text,text,text,uuid,jsonb,text[])` then restore the
+  5-arg `fn_emit_notification` + original `trg_work_orders_notify` from migration `20260601000000`.
