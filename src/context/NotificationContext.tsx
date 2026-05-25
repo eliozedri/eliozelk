@@ -7,6 +7,16 @@ import type { NotificationRow, RecipientRow, NotificationView } from "@/types/no
 import { toView, mergeViews, unseenCount, pickPendingCritical } from "@/lib/notifications/state";
 import { notificationsApi } from "@/lib/notifications/client";
 import { playChime, primeAudio } from "@/lib/notifications/sound";
+import { toast } from "sonner";
+
+// Light informational toast (top-left, auto-dismiss ~5s) for non-blocking,
+// non-ack notifications only. Strong intake (requires_ack) and blocking criticals
+// surface via the drawer / CriticalAlertGate instead, never as a transient toast.
+function showInfoToast(v: NotificationView) {
+  const opts = { description: v.message, duration: 5000, position: "top-left" as const };
+  if (v.severity === "warning") toast.warning(v.title, opts);
+  else toast.info(v.title, opts);
+}
 
 interface NotificationContextValue {
   views: NotificationView[];
@@ -56,8 +66,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!n) return;
     const v = toView(rec, n);
     setViews(prev => mergeViews(prev, v));
-    if (withSound && v.playSound && (v.status === "pending" || v.status === "delivered")) {
-      playChime();
+    const fresh = v.status === "pending" || v.status === "delivered";
+    if (withSound && fresh) {
+      if (v.playSound) playChime();
+      // Light info notifications get a transient toast; strong/blocking ones don't.
+      if (!v.blocking && !v.requiresAck) showInfoToast(v);
     }
   }, []);
 
