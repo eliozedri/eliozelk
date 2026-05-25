@@ -7,12 +7,15 @@ import { getSupabase } from "@/lib/supabase/client";
 type CartLine = { name: string; quantity: number; unit: string | null; notes: string | null };
 type Draft = {
   id: string;
-  telegram_user_id: string;
+  telegram_user_id: string | null;
   submitted_by_name: string | null;
   customer: string | null;
+  contact_person: string | null;
+  customer_phone: string | null;
   city: string | null;
   notes: string | null;
   cart: CartLine[];
+  source: string | null;
   created_at: string;
 };
 
@@ -123,7 +126,8 @@ export function TeamBotOrders() {
       )}
 
       <p className="text-xs text-gray-500 mb-4">
-        טיוטות שנשלחו דרך בוט הטלגרם. קידום יוצר הזמנה רגילה המסומנת כ&quot;הזמנה דרך הבוט מהטלגרם&quot;.
+        בקשות הזמנה הממתינות לאישור — מבוט הטלגרם ומהטופס החיצוני. קידום הופך בקשה להזמנה רגילה
+        (ואז רץ זרימת ההתראות הרגילה למחלקות).
       </p>
 
       {error && <div className="mb-4 rounded-lg bg-red-50 text-red-700 text-sm px-3 py-2">{error}</div>}
@@ -138,9 +142,15 @@ export function TeamBotOrders() {
         {drafts.map((d) => (
           <div key={d.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-700">
-                📱 טלגרם
-              </span>
+              {d.source === "external_web_form" ? (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700">
+                  🌐 טופס חיצוני
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-700">
+                  📱 טלגרם
+                </span>
+              )}
               <span className="font-mono text-[11px] text-gray-400">
                 {new Date(d.created_at).toLocaleString("he-IL")}
               </span>
@@ -148,8 +158,11 @@ export function TeamBotOrders() {
             <div className="mt-2 text-sm text-gray-900 font-semibold">{d.customer || "ללא לקוח"}</div>
             <div className="text-xs text-gray-500">
               {d.city ? `${d.city} · ` : ""}
-              נשלח ע&quot;י {d.submitted_by_name || d.telegram_user_id}
+              נשלח ע&quot;י {d.submitted_by_name || d.telegram_user_id || "טופס חיצוני"}
             </div>
+            {d.customer_phone && (
+              <div className="text-xs text-gray-500">📞 {d.customer_phone}</div>
+            )}
 
             {d.cart.length > 0 && (
               <ul className="mt-2 text-sm text-gray-700 list-disc pr-5 space-y-0.5">

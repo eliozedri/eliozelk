@@ -14,12 +14,15 @@ import type { CartLine } from "./types";
 
 export type DraftRow = {
   id: string;
-  telegram_user_id: string;
+  telegram_user_id: string | null;
   submitted_by_name: string | null;
   customer: string | null;
+  contact_person: string | null;
+  customer_phone: string | null;
   city: string | null;
   notes: string | null;
   cart: CartLine[];
+  source: string;
   status: string;
   created_at: string;
 };
@@ -28,7 +31,7 @@ export async function listPendingDrafts(): Promise<DraftRow[]> {
   const db = getServiceSupabase();
   const { data } = await db
     .from("team_bot_order_drafts")
-    .select("id,telegram_user_id,submitted_by_name,customer,city,notes,cart,status,created_at")
+    .select("id,telegram_user_id,submitted_by_name,customer,contact_person,customer_phone,city,notes,cart,source,status,created_at")
     .eq("status", "pending_review")
     .order("created_at", { ascending: true });
   return (data ?? []) as DraftRow[];
@@ -76,7 +79,7 @@ export async function promoteDraft(draftId: string, reviewerName: string): Promi
 
   const { data: draft } = await db
     .from("team_bot_order_drafts")
-    .select("id,customer,city,notes,cart,status")
+    .select("id,customer,city,notes,cart,status,source")
     .eq("id", draftId)
     .maybeSingle();
 
@@ -111,7 +114,7 @@ export async function promoteDraft(draftId: string, reviewerName: string): Promi
     version: 1,
     order_type: "field_work",
     customer_approval_status: "approved",
-    source: "telegram_bot",
+    source: (draft as { source?: string }).source ?? "telegram_bot",
     source_ref: draftId,
     data: dataBlob,
     created_at: now,
