@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Plus, LayoutGrid, Table2, Loader2, Truck } from "lucide-react";
+import { Plus, LayoutGrid, Table2, Loader2, Truck, ScanLine } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { canPerformAction } from "@/types/auth";
 import { useEquipment } from "@/hooks/useEquipment";
@@ -13,6 +13,7 @@ import { EquipmentCard } from "./EquipmentCard";
 import { EquipmentTable } from "./EquipmentTable";
 import { EquipmentDetailDrawer } from "./EquipmentDetailDrawer";
 import { EquipmentFormModal } from "./EquipmentFormModal";
+import { FleetScanModal } from "./FleetScanModal";
 import { computeKpis, isInspectionDueSoon, isMaintenanceDueSoon } from "./fleetUtils";
 
 export default function Fleet() {
@@ -21,13 +22,14 @@ export default function Fleet() {
 
   const {
     equipment, openIncidentsByAsset, loading, error,
-    createEquipment, updateEquipment, deleteEquipment, applyServerRow,
+    createEquipment, updateEquipment, deleteEquipment, applyServerRow, refetch,
   } = useEquipment();
 
   const [filters, setFilters] = useState<FleetFilterState>(EMPTY_FILTERS);
   const [view, setView] = useState<"grid" | "table">("grid");
   const [selected, setSelected] = useState<Equipment | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Equipment | null>(null);
 
   // Deep-link: /fleet?asset=<id> opens that asset's card (finance → asset navigation).
@@ -37,6 +39,7 @@ export default function Fleet() {
   useEffect(() => {
     if (deepLinkHandled.current || !assetParam || equipment.length === 0) return;
     const match = equipment.find(e => e.id === assetParam);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot deep-link, ref-guarded
     if (match) { setSelected(match); deepLinkHandled.current = true; }
   }, [assetParam, equipment]);
 
@@ -95,9 +98,14 @@ export default function Fleet() {
             <button onClick={() => setView("table")} className={`p-2 ${view === "table" ? "bg-ek-blue text-white" : "bg-white text-slate-500"}`} title="טבלה"><Table2 className="w-4 h-4" /></button>
           </div>
           {canManage && (
-            <button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="btn-glow text-sm">
-              <Plus className="w-4 h-4" /> הוסף כלי
-            </button>
+            <>
+              <button onClick={() => setScanOpen(true)} className="text-sm inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 font-semibold">
+                <ScanLine className="w-4 h-4" /> סרוק מסמך
+              </button>
+              <button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="btn-glow text-sm">
+                <Plus className="w-4 h-4" /> הוסף כלי
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -140,6 +148,14 @@ export default function Fleet() {
           initial={editTarget}
           onClose={() => { setFormOpen(false); setEditTarget(null); }}
           onSubmit={handleSubmit}
+        />
+      )}
+
+      {scanOpen && (
+        <FleetScanModal
+          equipment={equipment}
+          onClose={() => setScanOpen(false)}
+          onDone={() => { void refetch(); }}
         />
       )}
     </div>

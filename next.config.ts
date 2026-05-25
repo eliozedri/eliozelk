@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   // Prevent webpack from bundling WASM/native packages — loaded from node_modules at runtime
-  serverExternalPackages: ["tesseract.js", "heic-convert", "pdf-parse", "sharp"],
+  serverExternalPackages: ["tesseract.js", "heic-convert", "pdf-parse", "sharp", "@napi-rs/canvas"],
   // Ensure the Heebo TTF files used by server-side PDF rendering ship with the
   // work-diary email routes on Vercel. public/ is normally CDN-only, not bundled
   // into function code.

@@ -245,7 +245,11 @@ export async function POST(req: NextRequest) {
       if (h.vatAmount != null)         ocrUpdate.vat_amount = h.vatAmount;
       if (h.totalAfterVat != null)     ocrUpdate.total_after_vat = h.totalAfterVat;
       ocrUpdate.extraction_confidence = h.confidence;
-      ocrUpdate.extraction_notes      = h.notes ?? "OCR הושלם";
+      const fieldWarnings = extraction.fieldWarnings ?? [];
+      ocrUpdate.extraction_notes =
+        fieldWarnings.length > 0
+          ? `${h.notes ?? "OCR הושלם"} · ${fieldWarnings.join(" · ")}`
+          : (h.notes ?? "OCR הושלם");
       const mismatchWarning =
         selectedDocumentType &&
         h.documentType !== "unknown" &&
@@ -257,6 +261,16 @@ export async function POST(req: NextRequest) {
         ...(selectedDocumentType ? { selectedDocumentType } : {}),
         detectedDocumentType: h.documentType,
         ...(mismatchWarning ? { typeMismatchWarning: mismatchWarning } : {}),
+        // ── Engine-upgrade metadata (audit + review hints) ──
+        ...(extraction.vehicle ? { vehicle: extraction.vehicle } : {}),
+        ...(fieldWarnings.length > 0 ? { fieldWarnings } : {}),
+        ...(extraction.vatValid != null ? { vatValid: extraction.vatValid } : {}),
+        ...(extraction.lowConfidenceTerms && extraction.lowConfidenceTerms.length > 0
+          ? { lowConfidenceTerms: extraction.lowConfidenceTerms }
+          : {}),
+        ...(extraction.pageConfidence != null ? { ocrPageConfidence: extraction.pageConfidence } : {}),
+        ...(extraction.scanned != null ? { scannedPdf: extraction.scanned } : {}),
+        ...(extraction.engine ? { ocrEngine: extraction.engine } : {}),
       };
     } else {
       ocrUpdate.extraction_confidence = 0;

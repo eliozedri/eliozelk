@@ -224,6 +224,11 @@ export function DocumentReview({
   const selectedCard = doc.parsedJson?.selectedDocumentType as UserDocumentCard | undefined;
   const typeMismatchWarning = doc.parsedJson?.typeMismatchWarning as string | undefined;
   const businessEffect = USER_CARD_BUSINESS_EFFECT[docTypeToUserCard(editedDocType)];
+  const fieldWarnings = (doc.parsedJson?.fieldWarnings as string[] | undefined) ?? [];
+  const lowConfTerms = (doc.parsedJson?.lowConfidenceTerms as string[] | undefined) ?? [];
+  const vehicleFields = doc.parsedJson?.vehicle as
+    | { plateNumber?: string; chassisNumber?: string; licenseValidUntil?: string; insuranceValidUntil?: string; mileage?: number }
+    | undefined;
 
   return (
     <Overlay onClose={onClose}>
@@ -274,6 +279,38 @@ export function DocumentReview({
         <div className="mx-5 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
           <p className="text-sm font-semibold text-amber-800">אי-התאמה בסוג מסמך</p>
           <p className="text-xs text-amber-700 mt-0.5">{typeMismatchWarning} — יש לאמת ולתקן אם נדרש</p>
+        </div>
+      )}
+
+      {/* Critical-field warnings (VAT check digit, totals balance, etc.) */}
+      {fieldWarnings.length > 0 && (
+        <div className="mx-5 mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm font-semibold text-red-800">אזהרות שדות קריטיים</p>
+          <ul className="text-xs text-red-700 mt-1 list-disc pr-4 space-y-0.5">
+            {fieldWarnings.map((w, i) => <li key={i}>{w}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {/* Vehicle-document fields extracted by OCR */}
+      {vehicleFields && (
+        <div className="mx-5 mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm font-semibold text-blue-800">שדות מסמך רכב (יש לאמת)</p>
+          <div className="text-xs text-blue-700 mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
+            {vehicleFields.plateNumber && <span>מס׳ רכב: <b>{vehicleFields.plateNumber}</b></span>}
+            {vehicleFields.chassisNumber && <span>שלדה: <b>{vehicleFields.chassisNumber}</b></span>}
+            {vehicleFields.licenseValidUntil && <span>תוקף רישיון: <b>{vehicleFields.licenseValidUntil}</b></span>}
+            {vehicleFields.insuranceValidUntil && <span>תוקף ביטוח: <b>{vehicleFields.insuranceValidUntil}</b></span>}
+            {vehicleFields.mileage != null && <span>ק״מ: <b>{vehicleFields.mileage.toLocaleString("he-IL")}</b></span>}
+          </div>
+        </div>
+      )}
+
+      {/* Low-confidence OCR terms — verify these specifically */}
+      {lowConfTerms.length > 0 && (
+        <div className="mx-5 mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-sm font-semibold text-amber-800">מילים בביטחון נמוך — מומלץ לאמת מול המקור</p>
+          <p className="text-xs text-amber-700 mt-1 leading-relaxed" dir="rtl">{lowConfTerms.join(" · ")}</p>
         </div>
       )}
 

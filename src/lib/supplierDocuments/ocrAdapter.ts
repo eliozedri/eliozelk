@@ -1,8 +1,17 @@
 // OCR / extraction adapter — provider-agnostic interface.
-// tesseract.js WASM provider: Hebrew + English, server-side only, no external APIs.
+// tesseract.js engine (best Hebrew+English LSTM models) for images and scanned
+// PDFs; direct text extraction for digital PDFs. Server-side only, no paid APIs.
+// This is the SINGLE central engine used by both "סריקת מסמך" and "צי רכב".
 
 import type { SupplierDocumentType } from "@/types/supplierDocument";
+import type { VehicleFields } from "./parser";
 import { classifyDocumentType } from "./classification";
+
+// Engine labels kept as local literals so this module does not eagerly import
+// tesseract.js (the engine is dynamically imported only when a file is present).
+const ENGINE_BEST = "tesseract.js 7 · tessdata_best (עברית + אנגלית, LSTM)";
+const ENGINE_FALLBACK = "tesseract.js 7 · מודל ברירת מחדל (עברית + אנגלית)";
+const ENGINE_PDF_TEXT = "pdf-parse · טקסט מוטמע (ללא OCR)";
 
 export interface ExtractionInput {
   fileBuffer?: Buffer;
@@ -47,6 +56,18 @@ export interface ExtractionResult {
   lines?: ExtractedLine[];
   rawText?: string;
   error?: string;
+  // ── Extended metadata (engine upgrade) ──
+  vehicle?: VehicleFields;
+  fieldWarnings?: string[];
+  vatValid?: boolean;
+  /** Distinct terms the OCR engine was least confident about. */
+  lowConfidenceTerms?: string[];
+  /** Page-level OCR confidence 0..1 (separate from the parser's field score). */
+  pageConfidence?: number;
+  /** true when text came from OCR over a scanned/photographed PDF. */
+  scanned?: boolean;
+  /** Human-readable engine label for audit/UX. */
+  engine?: string;
 }
 
 // ── Extraction interface ──────────────────────────────────────────────────────
@@ -76,7 +97,7 @@ const rawTextProvider: ExtractionProvider = async (input) => {
   };
 };
 
-// ── Provider: tesseract.js WASM (images) + pdf-parse (digital PDFs) ───────────
+// ── Provider: tesseract engine (images + scanned PDF) + pdf-parse (digital PDF) ─
 
 const tesseractProvider: ExtractionProvider = async (input) => {
   if (!input.fileBuffer) return rawTextProvider(input);
@@ -85,24 +106,33 @@ const tesseractProvider: ExtractionProvider = async (input) => {
   const fileName = input.fileName?.toLowerCase() ?? "";
   const isPdf = fileType === "application/pdf" || fileName.endsWith(".pdf");
 
-  let rawText: string;
+  let rawText = "";
+  let pageConfidence: number | undefined;
+  let lowConfidenceTerms: string[] = [];
+  let scanned = false;
+  let engine = ENGINE_BEST;
 
   if (isPdf) {
     const { extractPdfText } = await import("./pdfExtractor");
     const result = await extractPdfText(input.fileBuffer);
     rawText = result.text;
+    scanned = result.scanned;
+    if (result.scanned) {
+      pageConfidence = result.ocrConfidence;
+      lowConfidenceTerms = result.lowConfidenceTerms ?? [];
+    } else {
+      engine = ENGINE_PDF_TEXT;
+      pageConfidence = 0.95; // embedded text is exact, not OCR-guessed
+    }
   } else {
     const { preprocessImage } = await import("./imagePreprocessor");
-    const { createWorker } = await import("tesseract.js");
-
+    const { runTesseract } = await import("./ocrConfig");
     const preprocessed = await preprocessImage(input.fileBuffer, fileType);
-    const worker = await createWorker(["heb", "eng"], 1, { langPath: "/tmp" });
-    try {
-      const { data } = await worker.recognize(preprocessed.buffer);
-      rawText = data.text;
-    } finally {
-      await worker.terminate();
-    }
+    const ocr = await runTesseract(preprocessed.buffer);
+    rawText = ocr.text;
+    pageConfidence = ocr.pageConfidence;
+    lowConfidenceTerms = ocr.lowConfidenceTerms;
+    if (!ocr.usedBestModel) engine = ENGINE_FALLBACK;
   }
 
   if (!rawText.trim()) {
@@ -119,12 +149,27 @@ const tesseractProvider: ExtractionProvider = async (input) => {
         notes: "OCR לא הצליח לחלץ טקסט — יש להזין נתונים ידנית",
       },
       lines: [],
+      scanned,
+      engine,
+      pageConfidence: 0,
     };
   }
 
   const { parseOcrText } = await import("./parser");
   const parsed = parseOcrText(rawText, input.documentTypeHint);
-  return { available: true, rawText, header: parsed.header, lines: parsed.lines };
+  return {
+    available: true,
+    rawText,
+    header: parsed.header,
+    lines: parsed.lines,
+    vehicle: parsed.vehicle,
+    fieldWarnings: parsed.fieldWarnings,
+    vatValid: parsed.vatValid,
+    lowConfidenceTerms,
+    pageConfidence,
+    scanned,
+    engine,
+  };
 };
 
 // ── Provider registry ─────────────────────────────────────────────────────────
@@ -151,5 +196,5 @@ export function isOcrAvailable(): boolean {
 }
 
 export function getOcrStatusMessage(): string {
-  return "OCR פעיל — tesseract.js (עברית + אנגלית)";
+  return "OCR פעיל — tesseract.js (מודל עברית מיטבי tessdata_best)";
 }

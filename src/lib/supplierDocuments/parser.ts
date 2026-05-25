@@ -6,9 +6,40 @@ import { classifyDocumentType, normalizeUnit } from "./classification";
 import type { SupplierDocumentType } from "@/types/supplierDocument";
 import type { ExtractedHeader, ExtractedLine } from "./ocrAdapter";
 
+export interface VehicleFields {
+  plateNumber?: string;       // מספר רכב / רישוי
+  chassisNumber?: string;     // מספר שלדה / VIN
+  licenseValidUntil?: string; // תוקף רישיון (YYYY-MM-DD)
+  insuranceValidUntil?: string; // תוקף ביטוח (YYYY-MM-DD)
+  mileage?: number;           // קילומטראז'
+}
+
 export interface ParseResult {
   header: ExtractedHeader;
   lines: ExtractedLine[];
+  /** Vehicle-document fields (present only when something was detected). */
+  vehicle?: VehicleFields;
+  /** Per-field human-verification warnings (e.g. invalid VAT check digit). */
+  fieldWarnings?: string[];
+  /** Whether the extracted VAT/company number passed the Israeli check digit. */
+  vatValid?: boolean;
+}
+
+// ── Israeli ID / company-number (ח.פ / עוסק מורשה / ת.ז) check digit ──────────
+// Same algorithm for personal IDs and company numbers: weighted mod-10.
+
+export function isValidIsraeliId(raw: string): boolean {
+  const s = (raw || "").replace(/\D/g, "");
+  if (s.length < 5 || s.length > 9) return false;
+  const padded = s.padStart(9, "0");
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    const factor = (i % 2) + 1; // 1,2,1,2,...
+    let inc = Number(padded[i]) * factor;
+    if (inc > 9) inc -= 9;
+    sum += inc;
+  }
+  return sum % 10 === 0;
 }
 
 // ── OCR character correction ──────────────────────────────────────────────────
@@ -346,6 +377,84 @@ function extractSupplierName(text: string): string {
   return lines.find(l => l.length >= 3) ?? "";
 }
 
+// ── Vehicle document field extractors ─────────────────────────────────────────
+
+function normalizeDate(d: string, mo: string, yr: string): string | undefined {
+  const dd = d.padStart(2, "0");
+  const mm = mo.padStart(2, "0");
+  let yyyy = yr;
+  if (yyyy.length === 2) yyyy = (Number(yyyy) > 50 ? "19" : "20") + yyyy;
+  if (parseInt(mm) < 1 || parseInt(mm) > 12) return undefined;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Find a date that appears on a line containing any of the keywords.
+function findDateNear(text: string, keywords: string[]): string | undefined {
+  const lines = text.split(/\n/);
+  for (const line of lines) {
+    const low = line.toLowerCase();
+    if (!keywords.some(k => low.includes(k.toLowerCase()))) continue;
+    const m = line.match(/(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})/);
+    if (m) {
+      const norm = normalizeDate(m[1], m[2], m[3]);
+      if (norm) return norm;
+    }
+  }
+  return undefined;
+}
+
+function extractPlateNumber(text: string): string | undefined {
+  // Keyword-anchored first (most reliable)
+  const kw = text.match(
+    /(?:מספר\s*רכב|מס['׳]?\s*רכב|מספר\s*רישוי|מס['׳]?\s*רישוי|לוחית\s*זיהוי|מ\.?ר\.?)[:\s]*([0-9]{2,3}[-\s]?[0-9]{2,3}[-\s]?[0-9]{2,3})/
+  );
+  if (kw) {
+    const digits = kw[1].replace(/\D/g, "");
+    if (digits.length === 7 || digits.length === 8) return digits;
+  }
+  // Bare Israeli plate patterns: 12-345-67 / 123-45-678 / 12-345-678
+  const bare = text.match(/\b(\d{2,3}[-]\d{2,3}[-]\d{2,3})\b/);
+  if (bare) {
+    const digits = bare[1].replace(/\D/g, "");
+    if (digits.length === 7 || digits.length === 8) return digits;
+  }
+  return undefined;
+}
+
+function extractChassisNumber(text: string): string | undefined {
+  const kw = text.match(/(?:מספר\s*שלדה|מס['׳]?\s*שלדה|שלדה|chassis|vin)[:\s#]*([A-HJ-NPR-Z0-9]{8,17})/i);
+  if (kw && /[A-Z]/i.test(kw[1])) return kw[1].toUpperCase();
+  // Bare 17-char VIN (no I/O/Q)
+  const vin = text.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
+  if (vin) return vin[1].toUpperCase();
+  return undefined;
+}
+
+function extractMileage(text: string): number | undefined {
+  const m = text.match(/(\d[\d,]{2,})\s*(?:ק["'״]?מ|קילומטר|km\b)/i)
+        ?? text.match(/(?:ק["'״]?מ|קילומטר|מד\s*אוץ|קריאת\s*מד)[:\s]*(\d[\d,]{2,})/i);
+  if (m) {
+    const n = parseInt(m[1].replace(/\D/g, ""), 10);
+    if (!isNaN(n) && n > 0 && n < 5_000_000) return n;
+  }
+  return undefined;
+}
+
+export function parseVehicleFields(text: string): VehicleFields {
+  const v: VehicleFields = {};
+  const plate = extractPlateNumber(text);
+  if (plate) v.plateNumber = plate;
+  const chassis = extractChassisNumber(text);
+  if (chassis) v.chassisNumber = chassis;
+  const lic = findDateNear(text, ["תוקף", "בתוקף עד", "תאריך תפוגה", "תוקף הרישיון", "עד תאריך", "רישוי עד"]);
+  if (lic) v.licenseValidUntil = lic;
+  const ins = findDateNear(text, ["ביטוח", "פוליסה", "בתוקף עד", "תוקף הביטוח"]);
+  if (ins) v.insuranceValidUntil = ins;
+  const mileage = extractMileage(text);
+  if (mileage != null) v.mileage = mileage;
+  return v;
+}
+
 // ── Main parser ───────────────────────────────────────────────────────────────
 
 export function parseOcrText(rawText: string, typeHint?: SupplierDocumentType): ParseResult {
@@ -395,6 +504,22 @@ export function parseOcrText(rawText: string, typeHint?: SupplierDocumentType): 
     ? typeHint
     : classification.type as SupplierDocumentType;
 
+  // ── Critical-field validation + vehicle fields ──────────────────────────────
+  const fieldWarnings: string[] = [];
+  const vatValid = vatNumber ? isValidIsraeliId(vatNumber) : undefined;
+  if (vatNumber && vatValid === false) {
+    fieldWarnings.push(`מס׳ עוסק/ח.פ ("${vatNumber}") נכשל בבדיקת ספרת ביקורת — יש לאמת ידנית`);
+  }
+  if (subtotalBeforeVat != null && vatAmount != null && totalAfterVat != null) {
+    const sum = subtotalBeforeVat + vatAmount;
+    if (Math.abs(sum - totalAfterVat) / totalAfterVat > 0.02) {
+      fieldWarnings.push('סכומים אינם מאזנים: לפני מע"מ + מע"מ ≠ סה"כ — יש לאמת');
+    }
+  }
+
+  const vehicle = parseVehicleFields(rawText);
+  const hasVehicleData = Object.keys(vehicle).length > 0;
+
   return {
     header: {
       documentType: finalDocType,
@@ -410,5 +535,8 @@ export function parseOcrText(rawText: string, typeHint?: SupplierDocumentType): 
       notes: missing.length > 0 ? missing.join("; ") : "OCR הושלם — יש לאמת נתונים",
     },
     lines,
+    vehicle: hasVehicleData ? vehicle : undefined,
+    fieldWarnings: fieldWarnings.length > 0 ? fieldWarnings : undefined,
+    vatValid,
   };
 }
