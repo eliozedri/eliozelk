@@ -12,6 +12,7 @@ import { useAuth } from "@/context/AuthContext";
 import { canAccessTab, canPerformAction, ROLE_LABELS } from "@/types/auth";
 import type { TabId } from "@/types/auth";
 import { useNotifications } from "@/hooks/useNotifications";
+import { usePendingBotOrders } from "@/hooks/usePendingBotOrders";
 import { useNavigationGuard } from "@/context/NavigationGuardContext";
 
 const EK_GOLD = "#f59e0b";
@@ -157,6 +158,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const router = useRouter();
   const { profile, loading, logout } = useAuth();
   const notif = useNotifications();
+  const pendingBotOrders = usePendingBotOrders();
   const { guard, requestNavigate } = useNavigationGuard();
 
   const showAll = loading || !profile;
@@ -225,12 +227,22 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
             <div key={section.label}>
               <SectionLabel label={section.label} />
               {visibleItems.map((item) => {
-                const cfg = item.noBadge ? undefined : TAB_BADGES[item.tabId];
+                // Pending bot/JARVIS/external order requests live in their own table
+                // (team_bot_order_drafts), not in work_orders, so they have a dedicated
+                // count source rather than the derived useNotifications() counts.
+                let badge: number | undefined;
+                let badgeVariant: "amber" | "red" | "blue" | "teal" | undefined;
+                if (item.href === "/team-bot-orders") {
+                  badge = pendingBotOrders;
+                  badgeVariant = "amber";
+                } else if (!item.noBadge) {
+                  const cfg = TAB_BADGES[item.tabId];
+                  if (cfg) { badge = notif[cfg.count]; badgeVariant = cfg.variant; }
+                }
                 return (
                   <SidebarLink key={item.href} href={item.href} label={item.label}
                     active={item.matchFn(pathname)} icon={item.icon} onClick={handleNavClick}
-                    badge={cfg ? notif[cfg.count] : undefined}
-                    badgeVariant={cfg?.variant} title={item.title}
+                    badge={badge} badgeVariant={badgeVariant} title={item.title}
                     onGuardedNavigate={isDirtyGuard ? guardedNavigate : undefined} />
                 );
               })}
