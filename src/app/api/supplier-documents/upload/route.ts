@@ -19,6 +19,8 @@ import {
   isTypeMismatch,
 } from "@/types/supplierDocument";
 import type { UserDocumentCard } from "@/types/supplierDocument";
+import { runDuplicateCheck } from "@/lib/supplierDocuments/duplicateCheck";
+import { suggestExpenseType } from "@/types/financial";
 
 const BUCKET = "supplier-documents";
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
@@ -66,6 +68,14 @@ export async function POST(req: NextRequest) {
 
   const selectedDocumentType = (formData.get("selectedDocumentType") as UserDocumentCard | null) || null;
   const hintType = selectedDocumentType ? USER_CARD_DEFAULT_TYPE[selectedDocumentType] : undefined;
+
+  // Fleet ↔ finance link + classification (optional — set when uploaded from a vehicle/machine card)
+  const equipmentId        = (formData.get("equipmentId") as string | null)?.trim() || null;
+  const uploadSource       = (formData.get("uploadSource") as string | null)?.trim() || "general_scan";
+  const linkedMaintenanceId = (formData.get("linkedMaintenanceId") as string | null)?.trim() || null;
+  const linkedIncidentId   = (formData.get("linkedIncidentId") as string | null)?.trim() || null;
+  const expenseType        = (formData.get("expenseType") as string | null)?.trim() || null;
+  const businessArea       = (formData.get("businessArea") as string | null)?.trim() || (equipmentId ? "fleet" : null);
 
   const file = formData.get("file") as File | null;
   if (!file) {
@@ -165,6 +175,13 @@ export async function POST(req: NextRequest) {
     file_hash:     fileHash,
     extraction_confidence: classification.confidence,
     extraction_notes: "מעבד מסמך — OCR בביצוע",
+    equipment_id:  equipmentId,
+    upload_source: uploadSource,
+    linked_maintenance_id: linkedMaintenanceId,
+    linked_incident_id: linkedIncidentId,
+    expense_type:  expenseType,
+    business_area: businessArea,
+    requires_classification: !expenseType,
     created_by:    createdBy,
     created_at:    now,
     updated_at:    now,
@@ -254,6 +271,38 @@ export async function POST(req: NextRequest) {
         };
       });
       await db.from("supplier_document_lines").insert(lineRows);
+    }
+
+    // ── Auto-suggest expense type when not provided (never silently guess if unsure) ──
+    if (!expenseType) {
+      const guess = suggestExpenseType(
+        [
+          (ocrUpdate.supplier_name_raw as string) ?? "",
+          (ocrUpdate.document_type as string) ?? "",
+          extraction.rawText ?? "",
+        ].join(" ")
+      );
+      if (guess) {
+        await db.from("supplier_documents")
+          .update({ expense_type: guess, requires_classification: false })
+          .eq("id", docId);
+      }
+      // else: requires_classification stays true → surfaces in הנהלת כספים "דורש סיווג"
+    }
+
+    // ── Cross-system duplicate detection (against ALL financial documents) ──
+    const dup = await runDuplicateCheck(db, {
+      documentId:      docId,
+      fileHash:        fileHash,
+      supplierNameRaw: (ocrUpdate.supplier_name_raw as string) ?? "",
+      documentNumber:  (ocrUpdate.document_number as string) ?? "",
+      documentDate:    (ocrUpdate.document_date as string) ?? undefined,
+      totalAfterVat:   (ocrUpdate.total_after_vat as number) ?? undefined,
+    });
+    if (dup.hasDuplicate && dup.candidates.some(c => c.matchScore >= 0.9)) {
+      await db.from("supplier_documents")
+        .update({ status: "duplicate_suspected", updated_at: new Date().toISOString() })
+        .eq("id", docId);
     }
   } catch (err) {
     // Unexpected OCR crash — still open the review screen so user can fill manually

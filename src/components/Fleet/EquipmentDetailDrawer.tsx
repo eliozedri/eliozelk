@@ -13,6 +13,7 @@ import { MaintenancePanel } from "./panels/MaintenancePanel";
 import { IncidentsPanel } from "./panels/IncidentsPanel";
 import { TasksPanel } from "./panels/TasksPanel";
 import { DocumentsPanel } from "./panels/DocumentsPanel";
+import { FinancePanel } from "./panels/FinancePanel";
 
 type TabKey = "overview" | "technical" | "maintenance" | "incidents" | "documents" | "finance" | "tasks";
 
@@ -190,12 +191,7 @@ export function EquipmentDetailDrawer({
               onChange={docs => { setLocal({ ...e, documents: docs as unknown as Equipment["documents"] }); onPatchLocal(e.id, { documents: docs as unknown as Equipment["documents"] }); }}
             />
           )}
-          {tab === "finance" && (
-            <div className="bg-white rounded-xl border border-dashed border-slate-300 p-6 text-center text-slate-400">
-              <p className="text-sm">מודול הכספים יחובר בשלב 2</p>
-              <p className="text-xs mt-1">חשבוניות, תעודות משלוח וקישור להנהלת כספים</p>
-            </div>
-          )}
+          {tab === "finance" && <FinancePanel equipmentId={e.id} canManage={canManage} />}
         </div>
       </aside>
     </div>

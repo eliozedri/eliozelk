@@ -43,6 +43,13 @@ function mapDocumentToCamelCase(doc: Record<string, any>) {
     postedAt: doc.posted_at,
     createdAt: doc.created_at,
     updatedAt: doc.updated_at,
+    equipmentId: doc.equipment_id,
+    linkedMaintenanceId: doc.linked_maintenance_id,
+    linkedIncidentId: doc.linked_incident_id,
+    uploadSource: doc.upload_source,
+    businessArea: doc.business_area,
+    expenseType: doc.expense_type,
+    requiresClassification: doc.requires_classification,
     suppliers: doc.suppliers, // kept snake_case — DocumentReview reads sub-fields directly
   };
 }
@@ -177,6 +184,14 @@ export async function PATCH(
     linkedDeliveryNoteId?: string;
     notes?: string;
     status?: string;
+    // Fleet ↔ finance link + classification
+    equipmentId?: string | null;
+    linkedMaintenanceId?: string | null;
+    linkedIncidentId?: string | null;
+    uploadSource?: string;
+    businessArea?: string | null;
+    expenseType?: string | null;
+    requiresClassification?: boolean;
     // Line updates
     lineUpdates?: Array<{
       id: string;
@@ -218,6 +233,17 @@ export async function PATCH(
   if (body.linkedDeliveryNoteId !== undefined) docUpdate.linked_delivery_note_id = body.linkedDeliveryNoteId;
   if (body.notes !== undefined) docUpdate.notes = body.notes;
   if (body.status !== undefined) docUpdate.status = body.status;
+  if (body.equipmentId !== undefined) docUpdate.equipment_id = body.equipmentId;
+  if (body.linkedMaintenanceId !== undefined) docUpdate.linked_maintenance_id = body.linkedMaintenanceId;
+  if (body.linkedIncidentId !== undefined) docUpdate.linked_incident_id = body.linkedIncidentId;
+  if (body.uploadSource !== undefined) docUpdate.upload_source = body.uploadSource;
+  if (body.businessArea !== undefined) docUpdate.business_area = body.businessArea;
+  if (body.expenseType !== undefined) {
+    docUpdate.expense_type = body.expenseType;
+    // Classifying clears the "requires classification" flag unless explicitly set.
+    if (body.requiresClassification === undefined) docUpdate.requires_classification = body.expenseType ? false : true;
+  }
+  if (body.requiresClassification !== undefined) docUpdate.requires_classification = body.requiresClassification;
 
   if (Object.keys(docUpdate).length > 1) {
     const { error: updateErr } = await db

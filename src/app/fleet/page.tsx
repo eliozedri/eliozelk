@@ -1,5 +1,10 @@
+import { Suspense } from "react";
 import Fleet from "@/components/Fleet";
 
 export default function FleetPage() {
-  return <Fleet />;
+  return (
+    <Suspense fallback={null}>
+      <Fleet />
+    </Suspense>
+  );
 }

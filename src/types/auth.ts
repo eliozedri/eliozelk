@@ -43,6 +43,7 @@ export type TabId =
   | "catalog"
   | "accounting"
   | "supplier-documents"
+  | "financial-management"
   | "fleet"
   | "workmap"
   | "schedule"
@@ -66,6 +67,7 @@ export const ALL_TABS: { id: TabId; label: string; path: string; section: string
   { id: "fabrication", label: "מחלקת מסגריה", path: "/fabrication", section: "מחלקות" },
   { id: "catalog", label: "מוצרים ושירותים", path: "/catalog", section: "מחלקות" },
   { id: "accounting", label: "הנהלת חשבונות", path: "/accounting", section: "מחלקות" },
+  { id: "financial-management", label: "הנהלת כספים", path: "/financial-management", section: "חשבונות" },
   { id: "supplier-documents", label: "סריקת מסמך", path: "/supplier-documents", section: "ניהול" },
   { id: "fleet", label: "צי רכב ומכונות", path: "/fleet", section: "מחלקות" },
   { id: "team-bot-orders", label: "הזמנות מהבוט", path: "/team-bot-orders", section: "ניהול" },
@@ -148,8 +150,8 @@ export const ROLE_DEFAULTS: Record<Role, { tabs: TabId[] | ["*"]; actions: Actio
     actions: ["create_order", "view_accounting"],
   },
   finance_manager: {
-    tabs: ["dashboard", "accounting", "supplier-documents", "profitability", "cost-settings", "agents", "integrations"],
-    actions: ["view_accounting", "export_accounting", "review_supplier_document", "post_supplier_document"],
+    tabs: ["dashboard", "accounting", "financial-management", "supplier-documents", "profitability", "cost-settings", "agents", "integrations"],
+    actions: ["view_accounting", "export_accounting", "review_supplier_document", "post_supplier_document", "override_duplicate"],
   },
   fleet_manager: {
     tabs: ["dashboard", "fleet", "crews", "schedule", "workmap"],

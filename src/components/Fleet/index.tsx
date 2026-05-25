@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus, LayoutGrid, Table2, Loader2, Truck } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { canPerformAction } from "@/types/auth";
@@ -28,6 +29,16 @@ export default function Fleet() {
   const [selected, setSelected] = useState<Equipment | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Equipment | null>(null);
+
+  // Deep-link: /fleet?asset=<id> opens that asset's card (finance → asset navigation).
+  const searchParams = useSearchParams();
+  const assetParam = searchParams.get("asset");
+  const deepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (deepLinkHandled.current || !assetParam || equipment.length === 0) return;
+    const match = equipment.find(e => e.id === assetParam);
+    if (match) { setSelected(match); deepLinkHandled.current = true; }
+  }, [assetParam, equipment]);
 
   const filtered = useMemo(() => {
     const q = filters.search.trim().toLowerCase();
@@ -68,14 +79,14 @@ export default function Fleet() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-surface p-4 sm:p-6 flex flex-col gap-4">
+    <div dir="rtl" className="min-h-screen p-4 sm:p-6 flex flex-col gap-4">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2.5">
-          <span className="w-10 h-10 rounded-xl bg-navy-900 text-white flex items-center justify-center"><Truck className="w-5 h-5" /></span>
+          <span className="w-10 h-10 rounded-xl text-white flex items-center justify-center" style={{ background: "linear-gradient(135deg, #1d6fd8, #22d3ee)", boxShadow: "0 0 20px rgba(34,211,238,0.4)" }}><Truck className="w-5 h-5" /></span>
           <div>
-            <h1 className="text-xl font-black text-navy-900 leading-tight">צי רכב ומכונות</h1>
-            <p className="text-xs text-slate-500">ניהול תפעולי של רכבים, מכונות וציוד</p>
+            <h1 className="text-xl font-black scene-title leading-tight">צי רכב ומכונות</h1>
+            <p className="text-xs scene-subtitle">ניהול תפעולי של רכבים, מכונות וציוד</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -84,7 +95,7 @@ export default function Fleet() {
             <button onClick={() => setView("table")} className={`p-2 ${view === "table" ? "bg-ek-blue text-white" : "bg-white text-slate-500"}`} title="טבלה"><Table2 className="w-4 h-4" /></button>
           </div>
           {canManage && (
-            <button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="px-3 py-2 bg-ek-blue text-white rounded-lg text-sm font-semibold flex items-center gap-1.5">
+            <button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="btn-glow text-sm">
               <Plus className="w-4 h-4" /> הוסף כלי
             </button>
           )}

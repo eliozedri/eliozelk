@@ -197,6 +197,14 @@ export interface SupplierDocument {
   postedAt?: string;
   createdAt: string;
   updatedAt: string;
+  // Fleet ↔ finance link + classification layer (Phase 2/3)
+  equipmentId?: string | null;
+  linkedMaintenanceId?: string | null;
+  linkedIncidentId?: string | null;
+  uploadSource?: string;
+  businessArea?: string | null;
+  expenseType?: string | null;
+  requiresClassification?: boolean;
   // Joined data
   supplier?: SupplierMeta;
   lines?: SupplierDocumentLine[];

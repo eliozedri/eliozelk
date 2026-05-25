@@ -6,7 +6,7 @@ import {
   FileText, Table2, LayoutDashboard, Users, Palette, Wrench,
   Database, ShieldCheck, Warehouse, DollarSign, Map, Calendar,
   UsersRound, BookOpen, TrendingUp, Bot, Settings, ShieldPlus,
-  LogOut, X, Cable, ScanLine, ScanText, LayoutGrid, Send, Store, Truck,
+  LogOut, X, Cable, ScanLine, ScanText, LayoutGrid, Send, Store, Truck, Wallet,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { canAccessTab, canPerformAction, ROLE_LABELS } from "@/types/auth";
@@ -14,9 +14,6 @@ import type { TabId } from "@/types/auth";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useNavigationGuard } from "@/context/NavigationGuardContext";
 
-const NAVY = "#0d1b2e";
-const NAVY_MID = "#1a2d4a";
-const EK_BLUE = "#1d6fd8";
 const EK_GOLD = "#f59e0b";
 
 function NavBadge({ count, variant = "amber" }: { count: number; variant?: "amber" | "red" | "blue" | "teal" }) {
@@ -58,6 +55,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "חשבונות",
     items: [
       { tabId: "accounting", href: "/accounting", label: "הנהלת חשבונות", icon: <DollarSign className={ICON_CLS} />, matchFn: (p) => p.startsWith("/accounting") },
+      { tabId: "financial-management", href: "/financial-management", label: "הנהלת כספים", icon: <Wallet className={ICON_CLS} />, matchFn: (p) => p.startsWith("/financial-management"), noBadge: true },
       { tabId: "customers", href: "/customers", label: "לקוחות", icon: <Users className={ICON_CLS} />, matchFn: (p) => p.startsWith("/customers") },
     ],
   },
@@ -115,7 +113,7 @@ function SidebarLink({ href, label, active, icon, onClick, badge, badgeVariant, 
   onGuardedNavigate?: (href: string) => void;
 }) {
   const sharedStyle = active
-    ? { backgroundColor: "rgba(255,255,255,0.10)", color: "#ffffff", fontWeight: 600, borderRightColor: EK_GOLD, borderRightWidth: 3, borderRightStyle: "solid" as const }
+    ? { background: "linear-gradient(90deg, rgba(34,211,238,0.16), rgba(255,255,255,0.04))", color: "#ffffff", fontWeight: 600, borderRightColor: EK_GOLD, borderRightWidth: 3, borderRightStyle: "solid" as const, boxShadow: "0 0 22px rgba(34,211,238,0.12)" }
     : { color: "rgba(255,255,255,0.55)", borderRightColor: "transparent", borderRightWidth: 3, borderRightStyle: "solid" as const };
   const sharedCls = "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all group hover:bg-white/10 hover:!text-white w-full text-right";
   const iconEl = <span style={{ color: active ? EK_GOLD : "rgba(255,255,255,0.35)" }} className="shrink-0 group-hover:!text-white/70 transition-colors">{icon}</span>;
@@ -186,13 +184,17 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const isDirtyGuard = guard?.isDirty ?? false;
 
   return (
-    <aside className="w-64 md:w-52 h-full min-h-screen flex flex-col shrink-0"
-      style={{ backgroundColor: NAVY, borderLeft: `1px solid ${NAVY_MID}` }}>
+    <aside className="w-64 md:w-52 h-full min-h-screen flex flex-col shrink-0 backdrop-blur-xl"
+      style={{
+        background: "linear-gradient(180deg, rgba(13,27,46,0.96) 0%, rgba(6,17,31,0.94) 100%)",
+        borderLeft: `1px solid rgba(34,211,238,0.14)`,
+        boxShadow: "0 0 60px rgba(2,8,20,0.6), inset 1px 0 0 rgba(255,255,255,0.04)",
+      }}>
 
       {/* Header */}
       <div className="px-4 pt-5 pb-4 flex items-center justify-between" style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-lg" style={{ backgroundColor: EK_BLUE }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg, #1d6fd8, #22d3ee)", boxShadow: "0 0 20px rgba(34,211,238,0.45)" }}>
             <span className="text-white font-black text-base leading-none select-none">א</span>
           </div>
           <div className="min-w-0">
