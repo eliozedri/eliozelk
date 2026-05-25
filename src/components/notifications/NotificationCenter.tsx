@@ -10,7 +10,11 @@ import { isMuted, setMuted } from "@/lib/notifications/sound";
 import { NotificationItem } from "./NotificationItem";
 import type { NotificationView } from "@/types/notification";
 
-const DEMO_ROLES = ["master", "office_manager", "fleet_manager"];
+// Managers/admin who may control the in-app sound and send test notifications.
+// POLICY: normal employees/users must NOT be able to mute mandatory notification
+// sounds, so the mute control is hidden from non-managers (see audit Part 4).
+// Sound policy will later be configurable from the admin "מרכז התראות".
+const MANAGER_ROLES = ["master", "office_manager", "fleet_manager"];
 
 export function NotificationCenter({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
@@ -57,7 +61,7 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
     setMutedState(next);
   };
 
-  const canDemo = profile != null && DEMO_ROLES.includes(profile.role);
+  const isManager = profile != null && MANAGER_ROLES.includes(profile.role);
 
   const Section = ({ title, items }: { title: string; items: NotificationView[] }) =>
     items.length === 0 ? null : (
@@ -99,19 +103,21 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
           <Section title="נקרא" items={history} />
         </div>
 
-        <footer className="border-t bg-white px-4 py-2 flex items-center justify-between">
-          <button onClick={toggleMute} className="text-xs text-gray-600 hover:text-navy-900">
-            {muted ? "🔕 צליל כבוי" : "🔔 צליל פעיל"}
-          </button>
-          {canDemo && (
+        {/* Manager/admin-only footer. Normal users get NO mute control —
+            mandatory notification sounds cannot be silenced by regular employees. */}
+        {isManager && (
+          <footer className="border-t bg-white px-4 py-2 flex items-center justify-between">
+            <button onClick={toggleMute} className="text-xs text-gray-600 hover:text-navy-900">
+              {muted ? "🔕 צליל כבוי" : "🔔 צליל פעיל"}
+            </button>
             <button
               onClick={() => void sendDemo("field.issue")}
               className="text-xs font-semibold text-ek-blue hover:underline"
             >
               שלח התראת בדיקה
             </button>
-          )}
-        </footer>
+          </footer>
+        )}
       </aside>
     </>
   );
