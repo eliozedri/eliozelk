@@ -132,7 +132,7 @@ export function FinancialDocDrawer({
                 <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${DOCUMENT_STATUS_COLORS[doc.status as SupplierDocumentStatus]}`}>{DOCUMENT_STATUS_LABELS[doc.status as SupplierDocumentStatus] ?? doc.status}</span>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><div className="text-[11px] text-slate-400">ספק</div><div className="text-navy-900">{doc.supplier?.name ?? doc.supplierNameRaw || "—"}</div></div>
+                <div><div className="text-[11px] text-slate-400">ספק</div><div className="text-navy-900">{doc.supplier?.name ?? (doc.supplierNameRaw || "—")}</div></div>
                 <div><div className="text-[11px] text-slate-400">תאריך</div><div className="text-navy-900">{doc.documentDate ? new Date(doc.documentDate).toLocaleDateString("he-IL") : "—"}</div></div>
                 <div><div className="text-[11px] text-slate-400">לפני מע"מ</div><div className="text-navy-900">{money(doc.subtotalBeforeVat, doc.currency)}</div></div>
                 <div><div className="text-[11px] text-slate-400">מע"מ</div><div className="text-navy-900">{money(doc.vatAmount, doc.currency)}</div></div>
