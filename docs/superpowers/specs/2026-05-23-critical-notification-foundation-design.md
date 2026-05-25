@@ -613,9 +613,13 @@ Phase 2 is **multiple large subsystems** — not buildable safely in one run. Se
   `fabrication_manager` roles; content-aware `order.created` routing from `fabrication_required`/
   `warehouse_required`/graphics-proxy via `fn_emit_notification(... , p_target_roles)`. (Remaining:
   `graphics_required` column, dept-membership/tagging for item-level routing.)
-- **2b — "מרכז התראות" sidebar — ✅ DONE (minimal):** `/notifications` route + full user Notification
-  Center page (reuses existing components) + master-only **read-only** rules viewer (admin
-  foundation). **Still future:** editable rules / recipients UI + `notification_admin_audit_log`.
+- **2b — "מרכז התראות" sidebar — ✅ DONE:** `/notifications` route + full user Notification Center
+  (reuses existing components) + master-only admin tab with **EDITABLE** rule flags
+  (enabled/severity/requires_ack/blocking/play_sound/show_in_center) via master-gated
+  `POST /api/notifications/rules/update`, and a **change audit log** (`notification_admin_audit_log`,
+  master-only RLS; who/field/old→new/when). report-problem→`order_problems`/`field.issue` escalation
+  also wired. **Still future:** recipients-editing UI, `require_open_before_ack` as an editable+wired
+  column, Web Push/`display_mode` policy fields, viewer policy.
 - **2c — PWA + native Web Push (VAPID, self-hosted; NO Firebase/OneSignal/etc.):** manifest, service
   worker, `push_subscriptions` (per user/device, multi-device), VAPID keys in env (never client),
   push-when-closed, order push payload (name/number/title/action). Security-sensitive (keys, SW).
