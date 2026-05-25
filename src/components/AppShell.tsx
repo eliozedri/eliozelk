@@ -31,6 +31,41 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
+  // Lock background scroll while the mobile/tablet drawer is open. Plain
+  // `overflow:hidden` on <body> does NOT stop touch-scroll on iOS Safari, so the
+  // page behind the drawer kept scrolling instead of the sidebar nav. The reliable
+  // fix is to pin <body> with position:fixed, preserving and restoring scrollY.
+  // Only below lg (≥1024px the sidebar is a persistent part of the layout).
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    if (typeof window === "undefined" || window.innerWidth >= 1024) return;
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      body.style.overflow = prev.overflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [sidebarOpen]);
+
   async function handleSaveDraft() {
     await confirmSaveDraft();
     // After draft saved, navigate to the pending href
@@ -67,15 +102,19 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         {/* Notification bell (fixed, opens the מרכז התראות drawer) */}
         <NotificationBell />
 
-        {/* Mobile/tablet backdrop */}
-        {sidebarOpen && (
-          <div
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
-
         <div className="relative z-10 flex min-h-screen">
+          {/* Mobile/tablet backdrop — kept INSIDE this stacking context (alongside the
+              z-50 drawer) on purpose. If it lived outside the `relative z-10` wrapper,
+              its z-40 would paint above the whole wrapper — including the drawer whose
+              z-50 is trapped in the wrapper's context — so the backdrop would intercept
+              every touch over the sidebar and the gesture would scroll the page behind.
+              Here the drawer (z-50) correctly sits above the backdrop (z-40). */}
+          {sidebarOpen && (
+            <div
+              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
           <div
             className={`
               fixed inset-y-0 right-0 z-50
