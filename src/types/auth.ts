@@ -155,7 +155,7 @@ export const ROLE_DEFAULTS: Record<Role, { tabs: TabId[] | ["*"]; actions: Actio
   },
   fleet_manager: {
     tabs: ["dashboard", "fleet", "crews", "schedule", "workmap"],
-    actions: ["manage_crews", "manage_equipment"],
+    actions: ["manage_crews", "manage_equipment", "upload_supplier_document"],
   },
   field_worker: {
     tabs: ["work-diary", "schedule"],

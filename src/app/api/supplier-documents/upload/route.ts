@@ -47,6 +47,32 @@ async function ensureBucket(db: ReturnType<typeof getServiceSupabase>): Promise<
   }
 }
 
+// Best-effort: emit ONE prioritized finance notification via the existing
+// notification foundation. Never throws — a failed notification must not fail
+// the document upload.
+async function emitFinanceNotification(
+  db: ReturnType<typeof getServiceSupabase>,
+  docId: string,
+  opts: { isDuplicate: boolean; needsClassification: boolean; supplierName: string; total?: number; equipmentId: string | null },
+): Promise<void> {
+  const eventType = opts.isDuplicate
+    ? "finance.duplicate_suspected"
+    : opts.needsClassification
+      ? "finance.needs_classification"
+      : "finance.document_new";
+  try {
+    await db.rpc("fn_emit_notification", {
+      p_event_type:  eventType,
+      p_entity_type: "supplier_document",
+      p_entity_id:   docId,
+      p_created_by:  null,
+      p_metadata:    { supplier: opts.supplierName, total: opts.total ?? null, equipment_id: opts.equipmentId },
+    });
+  } catch {
+    // swallow — notifications are best-effort
+  }
+}
+
 export async function POST(req: NextRequest) {
   const auth = await requireAction(req, "upload_supplier_document");
   if (!auth.ok) return auth.response;
@@ -274,6 +300,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Auto-suggest expense type when not provided (never silently guess if unsure) ──
+    let needsClassification = !expenseType;
     if (!expenseType) {
       const guess = suggestExpenseType(
         [
@@ -286,6 +313,7 @@ export async function POST(req: NextRequest) {
         await db.from("supplier_documents")
           .update({ expense_type: guess, requires_classification: false })
           .eq("id", docId);
+        needsClassification = false;
       }
       // else: requires_classification stays true → surfaces in הנהלת כספים "דורש סיווג"
     }
@@ -299,11 +327,21 @@ export async function POST(req: NextRequest) {
       documentDate:    (ocrUpdate.document_date as string) ?? undefined,
       totalAfterVat:   (ocrUpdate.total_after_vat as number) ?? undefined,
     });
-    if (dup.hasDuplicate && dup.candidates.some(c => c.matchScore >= 0.9)) {
+    const isDuplicate = dup.hasDuplicate && dup.candidates.some(c => c.matchScore >= 0.9);
+    if (isDuplicate) {
       await db.from("supplier_documents")
         .update({ status: "duplicate_suspected", updated_at: new Date().toISOString() })
         .eq("id", docId);
     }
+
+    // ── Emit ONE prioritized finance notification (bell/center) ──
+    await emitFinanceNotification(db, docId, {
+      isDuplicate,
+      needsClassification,
+      supplierName: (ocrUpdate.supplier_name_raw as string) ?? "",
+      total:        (ocrUpdate.total_after_vat as number) ?? undefined,
+      equipmentId,
+    });
   } catch (err) {
     // Unexpected OCR crash — still open the review screen so user can fill manually
     await db.from("supplier_documents").update({

@@ -29,7 +29,7 @@ export function toView(rec: RecipientRow, n: NotificationRow): NotificationView 
 // without touching any other file.
 export function relatedEntityHref(
   type: RelatedEntityType | null,
-  _id: string | null,
+  id: string | null,
   _metadata?: Record<string, unknown>,
 ): string | null {
   if (!type) return null;
@@ -37,6 +37,7 @@ export function relatedEntityHref(
     case "work_order": return "/orders";
     case "order_problem": return "/orders";
     case "work_diary": return "/work-diary";
+    case "supplier_document": return id ? `/financial-management?doc=${encodeURIComponent(id)}` : "/financial-management";
     default: return null;
   }
 }

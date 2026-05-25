@@ -6,7 +6,7 @@ export type NotificationSourceModule =
 export type NotificationStatus =
   | "pending" | "delivered" | "seen" | "acknowledged" | "escalated" | "failed" | "expired";
 
-export type RelatedEntityType = "work_order" | "work_diary" | "order_problem";
+export type RelatedEntityType = "work_order" | "work_diary" | "order_problem" | "supplier_document";
 
 export interface NotificationRow {
   id: string;
