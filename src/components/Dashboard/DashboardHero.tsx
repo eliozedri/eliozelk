@@ -30,7 +30,8 @@ export function DashboardHero() {
             </h1>
             <p className="text-white/40 text-sm mt-1.5">{todayLabel()} · תמונת מצב תפעולית</p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* ml-14 keeps these buttons clear of the fixed notification bell (top-left) */}
+          <div className="flex items-center gap-2 flex-wrap ml-14">
             <Link
               href="/new-order"
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-ek-blue hover:bg-ek-blue-600 text-white text-sm font-semibold transition-colors shadow-lg shadow-ek-blue/20"
