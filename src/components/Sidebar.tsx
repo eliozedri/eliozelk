@@ -203,7 +203,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex flex-col p-2.5 flex-1 min-h-0 overflow-y-auto overscroll-contain">
+      <nav className="flex flex-col p-2.5 flex-1 min-h-0 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
         {/* Primary entry point — standalone top-level, visually separated from sections */}
         {canSeeTab(AGENTS_NAV_ITEM.tabId) && (
           <div className="pb-2 mb-1" style={{ borderBottom: "1px solid rgba(148,197,255,0.12)" }}>
