@@ -17,7 +17,7 @@ function rec(over: Partial<RecipientRow> = {}): RecipientRow {
   return {
     id: "rc1", notification_id: "n1", user_id: "u1", matched_role: "office_manager",
     status: "pending", delivered_at: null, seen_at: null, related_opened_at: null,
-    acknowledged_at: null, ack_was_direct: false, escalation_level: 0,
+    acknowledged_at: null, ack_was_direct: false, resolution: null, escalation_level: 0,
     last_push_sent_at: null, next_reminder_at: null, created_at: "2026-06-01T10:00:00Z", ...over,
   };
 }

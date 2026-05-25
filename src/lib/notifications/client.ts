@@ -27,5 +27,7 @@ export const notificationsApi = {
   seen: (recipientIds: string[]) => post("/api/notifications/seen", { recipientIds }),
   markOpened: (recipientId: string) => post("/api/notifications/mark-opened", { recipientId }),
   acknowledge: (recipientId: string) => post("/api/notifications/acknowledge", { recipientId }),
+  reportProblem: (recipientId: string, description?: string) =>
+    post("/api/notifications/report-problem", { recipientId, description }),
   demo: (eventType: string) => post("/api/notifications/demo", { eventType }),
 };

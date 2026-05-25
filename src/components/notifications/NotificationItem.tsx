@@ -33,10 +33,12 @@ export function NotificationItem({
   view,
   onOpen,
   onAcknowledge,
+  onReportProblem,
 }: {
   view: NotificationView;
   onOpen: () => void;
   onAcknowledge: () => void;
+  onReportProblem: () => void;
 }) {
   const sev = SEVERITY_STYLES[view.severity];
   const isUnseen = view.status === "pending" || view.status === "delivered";
@@ -67,6 +69,11 @@ export function NotificationItem({
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
               {STATUS_LABEL[view.status] ?? view.status}
             </span>
+            {view.resolution === "problem_reported" && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-semibold">
+                דווח על בעיה
+              </span>
+            )}
             {needsAck && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">
                 דורש אישור
@@ -101,6 +108,16 @@ export function NotificationItem({
                   className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold disabled:opacity-50"
                 >
                   אישור קבלה
+                </button>
+              )}
+              {needsAck && hasEntity && (
+                <button
+                  onClick={onReportProblem}
+                  disabled={!ackEnabled}
+                  title={!ackEnabled ? "צפה/י בפריט לפני דיווח" : undefined}
+                  className="px-3 py-1 rounded-lg bg-amber-600 text-white text-xs font-bold disabled:opacity-50"
+                >
+                  דווח על בעיה
                 </button>
               )}
             </div>

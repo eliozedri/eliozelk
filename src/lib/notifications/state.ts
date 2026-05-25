@@ -20,6 +20,10 @@ export function toView(rec: RecipientRow, n: NotificationRow): NotificationView 
     seenAt: rec.seen_at,
     relatedOpenedAt: rec.related_opened_at,
     acknowledgedAt: rec.acknowledged_at,
+    resolution:
+      rec.resolution === "acknowledged" || rec.resolution === "problem_reported"
+        ? rec.resolution
+        : null,
     createdAt: n.created_at,
   };
 }

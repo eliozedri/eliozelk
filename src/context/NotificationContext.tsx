@@ -25,6 +25,7 @@ interface NotificationContextValue {
   markSeen: (recipientIds: string[]) => Promise<void>;
   markOpened: (recipientId: string) => Promise<void>;
   acknowledge: (recipientId: string) => Promise<boolean>;
+  reportProblem: (recipientId: string, description?: string) => Promise<boolean>;
   sendDemo: (eventType: string) => Promise<void>;
 }
 
@@ -35,6 +36,7 @@ const NotificationContext = createContext<NotificationContextValue>({
   markSeen: async () => {},
   markOpened: async () => {},
   acknowledge: async () => false,
+  reportProblem: async () => false,
   sendDemo: async () => {},
 });
 
@@ -186,6 +188,25 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     return ok;
   }, []);
 
+  const reportProblem = useCallback(async (recipientId: string, description?: string) => {
+    const ok = await notificationsApi.reportProblem(recipientId, description);
+    if (ok) {
+      setViews(prev =>
+        prev.map(v =>
+          v.recipientId === recipientId
+            ? {
+                ...v,
+                status: "acknowledged",
+                acknowledgedAt: new Date().toISOString(),
+                resolution: "problem_reported",
+              }
+            : v,
+        ),
+      );
+    }
+    return ok;
+  }, []);
+
   const sendDemo = useCallback(async (eventType: string) => {
     await notificationsApi.demo(eventType);
   }, []);
@@ -199,6 +220,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         markSeen,
         markOpened,
         acknowledge,
+        reportProblem,
         sendDemo,
       }}
     >

@@ -38,6 +38,7 @@ export interface RecipientRow {
   related_opened_at: string | null;
   acknowledged_at: string | null;
   ack_was_direct: boolean;
+  resolution: string | null; // null | 'acknowledged' | 'problem_reported'
   escalation_level: number;
   last_push_sent_at: string | null;
   next_reminder_at: string | null;
@@ -61,5 +62,6 @@ export interface NotificationView {
   seenAt: string | null;
   relatedOpenedAt: string | null;
   acknowledgedAt: string | null;
+  resolution: "acknowledged" | "problem_reported" | null;
   createdAt: string;
 }

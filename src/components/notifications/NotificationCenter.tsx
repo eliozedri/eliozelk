@@ -19,7 +19,7 @@ const MANAGER_ROLES = ["master", "office_manager", "fleet_manager"];
 export function NotificationCenter({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
   const { profile } = useAuth();
-  const { views, markSeen, markOpened, acknowledge, sendDemo } = useNotifications();
+  const { views, markSeen, markOpened, acknowledge, reportProblem, sendDemo } = useNotifications();
   const [muted, setMutedState] = useState(false);
 
   // Sync the mute toggle label with persisted state whenever the drawer opens.
@@ -55,6 +55,12 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
     onClose();
   };
 
+  const handleReportProblem = (v: NotificationView) => {
+    const description = window.prompt("תאר/י את הבעיה בפריט (אופציונלי):");
+    if (description === null) return; // user cancelled
+    void reportProblem(v.recipientId, description || undefined);
+  };
+
   const toggleMute = () => {
     const next = !muted;
     setMuted(next);
@@ -73,6 +79,7 @@ export function NotificationCenter({ open, onClose }: { open: boolean; onClose: 
             view={v}
             onOpen={() => openItem(v)}
             onAcknowledge={() => void acknowledge(v.recipientId)}
+            onReportProblem={() => handleReportProblem(v)}
           />
         ))}
       </div>
