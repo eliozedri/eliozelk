@@ -45,6 +45,22 @@ export async function createOrderDraft(input: CreateDraftInput): Promise<Created
     throw new Error(error?.message ?? "draft insert failed");
   }
   const id = String(data.id);
+
+  // Light review notification → master + office review role only (same behavior as the
+  // external web form). Not a work_order, no department routing, no ack/blocking/push —
+  // those run only when staff promote the draft. Best-effort: never fail the draft.
+  try {
+    await db.rpc("fn_emit_notification", {
+      p_event_type: "telegram.order_request",
+      p_entity_type: null,
+      p_entity_id: null,
+      p_created_by: null,
+      p_metadata: { draft_id: id, customer: input.customer ?? null, source: "telegram_bot" },
+    });
+  } catch (err) {
+    console.error("[team-bot] order-request notification emit failed:", (err as Error).message);
+  }
+
   // Short, human-friendly reference for the confirmation message.
   return { id, shortRef: id.slice(0, 8).toUpperCase() };
 }
