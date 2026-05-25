@@ -22,6 +22,7 @@ export const metadata: Metadata = {
   description: "מערכת ניהול פנימית — אלקיים סימון כבישים בע״מ",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "אלקיים", statusBarStyle: "black-translucent" },
+  icons: { icon: "/icon-192.png", apple: "/icon-192.png" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
