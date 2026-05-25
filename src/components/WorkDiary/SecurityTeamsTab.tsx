@@ -127,7 +127,7 @@ export function SecurityTeamsTab({ diary, onChange, disabled = false }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="glass-card p-5">
         <h3 className="text-sm font-bold text-gray-700 mb-4">צוות אבטחה וניטור תנועה</h3>
 
         <div className="space-y-4">

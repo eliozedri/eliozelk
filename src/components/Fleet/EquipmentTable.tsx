@@ -18,7 +18,7 @@ export function EquipmentTable({
   onOpen: (e: Equipment) => void;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto" dir="rtl">
+    <div className="glass-card overflow-x-auto" dir="rtl">
       <table className="w-full text-sm text-right min-w-[760px]">
         <thead>
           <tr className="text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-200">

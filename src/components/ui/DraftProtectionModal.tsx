@@ -39,13 +39,13 @@ export function DraftProtectionModal({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 z-[200] backdrop-blur-sm"
+        className="fixed inset-0 bg-[#050f1d]/70 z-[200] backdrop-blur-md"
         onClick={saving ? undefined : onStay}
       />
 
       {/* Modal */}
       <div className="fixed inset-0 z-[201] flex items-center justify-center p-4" dir="rtl">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4">
+        <div className="bg-white rounded-2xl shadow-[0_40px_120px_rgba(2,8,20,0.6)] ring-1 ring-black/5 border border-white/80 max-w-sm w-full p-6 space-y-4">
 
           {/* Icon + Title */}
           <div className="flex items-center gap-3">

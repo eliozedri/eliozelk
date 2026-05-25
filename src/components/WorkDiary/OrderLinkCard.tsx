@@ -43,7 +43,7 @@ export function OrderLinkCard({ orderId, onChange, disabled = false }: Props) {
   const linked = orderId ? orders.find((o) => o.id === orderId) : undefined;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+    <div className="glass-card p-5">
       <label className="flex items-center gap-3 cursor-pointer select-none">
         <input
           type="checkbox"

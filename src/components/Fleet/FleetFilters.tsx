@@ -51,7 +51,7 @@ export function FleetFilters({
     filters.onlyUpcomingInspection || filters.onlyUnidentified;
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-3 flex flex-col gap-3" dir="rtl">
+    <div className="glass-card p-3 flex flex-col gap-3" dir="rtl">
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />

@@ -18,8 +18,9 @@ function todayLabel(): string {
 
 export function DashboardHero() {
   return (
-    <div style={{ background: "linear-gradient(135deg, #05111f 0%, #0d1b2e 55%, #1a2d4a 100%)" }}>
-      <div className="px-6 pt-14 pb-6 md:pt-6">
+    <div className="relative overflow-hidden" style={{ background: "linear-gradient(135deg, #05111f 0%, #0d1b2e 55%, #1a2d4a 100%)" }}>
+      <div className="pointer-events-none absolute -top-24 right-1/4 w-[480px] h-[480px] rounded-full" style={{ background: "radial-gradient(circle, rgba(34,211,238,0.16), transparent 60%)", filter: "blur(20px)" }} />
+      <div className="relative px-6 pt-14 pb-6 md:pt-6">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <p className="text-ek-gold text-[9px] font-bold uppercase tracking-[0.25em] mb-2 opacity-80">
@@ -34,21 +35,21 @@ export function DashboardHero() {
           <div className="flex items-center gap-2 flex-wrap ml-14">
             <Link
               href="/new-order"
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-ek-blue hover:bg-ek-blue-600 text-white text-sm font-semibold transition-colors shadow-lg shadow-ek-blue/20"
+              className="btn-glow text-sm"
             >
               <PlusIcon />
               הזמנה חדשה
             </Link>
             <Link
               href="/work-diary"
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-ek-blue hover:bg-ek-blue-600 text-white text-sm font-semibold transition-colors shadow-lg shadow-ek-blue/20"
+              className="btn-glow text-sm"
             >
               <PlusIcon />
               יומן חדש
             </Link>
             <Link
               href="/orders"
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-sm font-medium transition-colors border border-white/15 hover:bg-white/8"
+              className="btn-glass text-sm"
             >
               כל ההזמנות
             </Link>

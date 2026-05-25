@@ -48,7 +48,7 @@ function CollapsibleSection({ title, defaultOpen = true, badge, children }: {
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-xl border border-gray-200 shadow-sm hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 glass-card hover:bg-gray-50 transition-colors"
       >
         <div className="flex items-center gap-2">
           <span className="text-sm font-bold text-gray-700">{title}</span>
@@ -269,19 +269,19 @@ export function OrderForm({ draftId }: { draftId?: string }) {
   };
 
   return (
-    <div className="min-h-screen bg-surface py-6 px-4">
+    <div className="min-h-screen py-6 px-4">
       <div className="max-w-4xl mx-auto">
 
         <div className="flex items-center gap-3 mb-5 no-print">
           <div>
-            <div className="text-2xl font-black text-[#1e3a5f] leading-tight">אלקיים</div>
-            <div className="text-xs text-gray-500 leading-tight">סימון כבישים בע״מ</div>
+            <div className="text-2xl font-black text-white leading-tight">אלקיים</div>
+            <div className="text-xs scene-subtitle leading-tight">סימון כבישים בע״מ</div>
           </div>
           <RoadIcon />
         </div>
 
         <div className="flex items-center gap-2 mb-5">
-          <h1 className="text-2xl font-bold text-gray-900">פתיחת הזמנה חדשה</h1>
+          <h1 className="text-2xl font-bold scene-title">פתיחת הזמנה חדשה</h1>
           <svg className="w-7 h-7 text-blue-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
             <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
@@ -311,7 +311,7 @@ export function OrderForm({ draftId }: { draftId?: string }) {
         )}
 
         {/* ── אופי ההזמנה (required) ─────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mb-4">
+        <div className="glass-card p-5 mb-4">
           <p className="text-sm font-bold text-gray-700 mb-3">
             אופי ההזמנה
             <span className="text-red-500 mr-1">*</span>

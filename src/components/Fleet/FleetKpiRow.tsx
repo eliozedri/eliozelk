@@ -23,7 +23,7 @@ export function FleetKpiRow({ kpis }: { kpis: FleetKpis }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       {KPIS.map(k => (
-        <div key={k.key} className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3">
+        <div key={k.key} className="glass-card p-3 flex items-center gap-3">
           <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${k.tone}`}>{k.icon}</span>
           <div className="min-w-0">
             <div className="text-xl font-bold text-navy-900 leading-none">{kpis[k.key]}</div>

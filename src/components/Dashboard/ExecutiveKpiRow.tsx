@@ -35,11 +35,10 @@ function KpiCard({
       onClick={onClick}
       disabled={!onClick}
       className={`
-        w-full min-w-0 rounded-xl px-4 py-4 text-right
-        border border-gray-100 shadow-sm
+        glass-card w-full min-w-0 px-4 py-4 text-right
         flex flex-col gap-1.5
         ${onClick
-          ? "hover:-translate-y-px hover:shadow-md hover:border-gray-200 transition-all duration-150 cursor-pointer active:scale-[0.99]"
+          ? "glass-card-interactive cursor-pointer active:scale-[0.99]"
           : "cursor-default transition-none"}
       `}
       style={{

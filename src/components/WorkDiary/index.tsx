@@ -131,7 +131,7 @@ function SavedDiariesPanel({ onOpen }: { onOpen: (d: WorkDiary) => void }) {
 
   return (
     <div className="max-w-3xl mx-auto px-4 mb-4">
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="glass-card overflow-hidden">
         <div
           className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between cursor-pointer hover:bg-gray-50"
           onClick={() => setExpanded(e => !e)}
@@ -341,14 +341,14 @@ export function WorkDiaryForm() {
   const disabled = isSubmitted;
 
   return (
-    <div className="min-h-screen bg-surface pb-24">
+    <div className="min-h-screen pb-24">
       {/* Page header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4 no-print">
+      <div className="scene-header px-4 py-4 no-print">
         <div className="max-w-5xl mx-auto flex items-center gap-3 flex-wrap">
-          <DiaryIcon className="w-7 h-7 text-blue-600 shrink-0" />
+          <DiaryIcon className="w-7 h-7 text-blue-400 shrink-0" />
           <div className="min-w-0">
-            <h1 className="text-xl font-bold text-gray-900">יומן עבודה</h1>
-            <p className="text-xs text-gray-400">
+            <h1 className="text-xl font-bold scene-title">יומן עבודה</h1>
+            <p className="text-xs scene-subtitle">
               {diary.diaryNumber !== "—" ? diary.diaryNumber : "יומן חדש"}
               {diary.customerName ? ` · ${diary.customerName}` : ""}
               {diary.executionDate ? ` · ${diary.executionDate}` : ""}
@@ -365,7 +365,7 @@ export function WorkDiaryForm() {
               <button
                 type="button"
                 onClick={handleNew}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors shadow-sm whitespace-nowrap"
+                className="btn-glow text-sm whitespace-nowrap"
               >
                 <PlusIcon />
                 יומן חדש

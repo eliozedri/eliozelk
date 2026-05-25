@@ -98,19 +98,19 @@ export default function FinancialManagement() {
   ];
 
   return (
-    <div dir="rtl" className="min-h-screen bg-surface p-4 sm:p-6 flex flex-col gap-4">
+    <div dir="rtl" className="min-h-screen p-4 sm:p-6 flex flex-col gap-4">
       <div className="flex items-center gap-2.5">
-        <span className="w-10 h-10 rounded-xl bg-navy-900 text-white flex items-center justify-center"><Wallet className="w-5 h-5" /></span>
+        <span className="scene-icon-tile w-10 h-10"><Wallet className="w-5 h-5" /></span>
         <div>
-          <h1 className="text-xl font-black text-navy-900 leading-tight">הנהלת כספים</h1>
-          <p className="text-xs text-slate-500">מרכז כל המסמכים הכספיים — חשבוניות, קבלות, תעודות משלוח ומסמכי ספקים</p>
+          <h1 className="text-xl font-black scene-title leading-tight">הנהלת כספים</h1>
+          <p className="text-xs scene-subtitle">מרכז כל המסמכים הכספיים — חשבוניות, קבלות, תעודות משלוח ומסמכי ספקים</p>
         </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {KPIS.map((k, i) => (
-          <div key={i} className="bg-white rounded-xl border border-slate-200 p-3 flex items-center gap-3">
+          <div key={i} className="glass-card p-3 flex items-center gap-3">
             <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${k.tone}`}>{k.icon}</span>
             <div className="min-w-0"><div className="text-lg font-bold text-navy-900 leading-none truncate">{k.value}</div><div className="text-[11px] text-slate-500 truncate mt-1">{k.label}</div></div>
           </div>
@@ -118,7 +118,7 @@ export default function FinancialManagement() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 p-3 flex flex-col gap-3">
+      <div className="glass-card p-3 flex flex-col gap-3">
         <div className="flex flex-col lg:flex-row gap-2">
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -160,7 +160,7 @@ export default function FinancialManagement() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-16 text-slate-400"><Wallet className="w-10 h-10 mx-auto mb-2 opacity-40" /><p className="text-sm">{documents.length === 0 ? "אין מסמכים כספיים" : "אין תוצאות לסינון"}</p></div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <div className="glass-card overflow-x-auto">
           <table className="w-full text-sm text-right min-w-[820px]">
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-200">

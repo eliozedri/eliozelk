@@ -881,24 +881,24 @@ export function AccountingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface py-6 px-4">
+    <div className="min-h-screen py-6 px-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-2 mb-2">
-          <h1 className="text-2xl font-bold text-gray-900">הנהלת חשבונות</h1>
+          <h1 className="text-2xl font-bold scene-title">הנהלת חשבונות</h1>
           <AccountingIcon />
         </div>
-        <p className="text-sm text-gray-500 mb-4">סיכום עבודות, כמויות ודוחות לפי לקוחות</p>
+        <p className="text-sm scene-subtitle mb-4">סיכום עבודות, כמויות ודוחות לפי לקוחות</p>
 
         {/* Tab switcher */}
-        <div className="flex gap-1 bg-white rounded-xl border border-gray-200 shadow-sm p-1 mb-5 w-fit">
+        <div className="flex gap-1 glass-toolbar p-1 mb-5 w-fit">
           <button
             type="button"
             onClick={() => setActiveTab("orders")}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === "orders"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-gradient-to-l from-ek-blue to-neon-cyan text-white shadow-[0_0_18px_rgba(34,211,238,0.4)]"
+                : "text-white/60 hover:bg-white/10 hover:text-white"
             }`}
           >
             הזמנות
@@ -908,8 +908,8 @@ export function AccountingPage() {
             onClick={() => setActiveTab("work-diaries")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === "work-diaries"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-gradient-to-l from-ek-blue to-neon-cyan text-white shadow-[0_0_18px_rgba(34,211,238,0.4)]"
+                : "text-white/60 hover:bg-white/10 hover:text-white"
             }`}
           >
             יומני עבודה
@@ -924,8 +924,8 @@ export function AccountingPage() {
             onClick={() => setActiveTab("billing")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === "billing"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-gradient-to-l from-ek-blue to-neon-cyan text-white shadow-[0_0_18px_rgba(34,211,238,0.4)]"
+                : "text-white/60 hover:bg-white/10 hover:text-white"
             }`}
           >
             ממתין לחיוב
@@ -940,8 +940,8 @@ export function AccountingPage() {
             onClick={() => setActiveTab("invoiced")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === "invoiced"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-gradient-to-l from-ek-blue to-neon-cyan text-white shadow-[0_0_18px_rgba(34,211,238,0.4)]"
+                : "text-white/60 hover:bg-white/10 hover:text-white"
             }`}
           >
             היסטוריית חיוב
@@ -956,8 +956,8 @@ export function AccountingPage() {
             onClick={() => setActiveTab("archive")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === "archive"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-gradient-to-l from-ek-blue to-neon-cyan text-white shadow-[0_0_18px_rgba(34,211,238,0.4)]"
+                : "text-white/60 hover:bg-white/10 hover:text-white"
             }`}
           >
             ארכיון חשבוניות
@@ -972,8 +972,8 @@ export function AccountingPage() {
             onClick={() => setActiveTab("diary-archive")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === "diary-archive"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-gradient-to-l from-ek-blue to-neon-cyan text-white shadow-[0_0_18px_rgba(34,211,238,0.4)]"
+                : "text-white/60 hover:bg-white/10 hover:text-white"
             }`}
           >
             ארכיון יומנים
@@ -1013,7 +1013,7 @@ export function AccountingPage() {
             </div>
 
             {/* Billing filters */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-4 px-5 py-4">
+            <div className="glass-card mb-4 px-5 py-4">
               <p className="text-xs font-semibold text-gray-600 mb-3">סינון</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -1148,7 +1148,7 @@ export function AccountingPage() {
 
             {/* Customer-grouped view */}
             {billingByCustomer.length === 0 ? (
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm py-16 text-center">
+              <div className="glass-card py-16 text-center">
                 <p className="text-gray-500 font-medium">אין הזמנות הממתינות לחיוב</p>
                 <p className="text-sm text-gray-400 mt-1">
                   {pendingBilling.length > 0 ? "נסה לשנות את טווח התאריכים" : "הזמנות שהושלמו ועדיין לא חויבו יופיעו כאן"}
@@ -1159,7 +1159,7 @@ export function AccountingPage() {
                 {billingByCustomer.map((group) => {
                   const isOpen = expandedBillingCustomers.has(group.customerName);
                   return (
-                    <div key={group.customerName} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div key={group.customerName} className="glass-card overflow-hidden">
                       {/* Customer header row */}
                       <div
                         className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-amber-50/30 transition-colors"
@@ -1340,7 +1340,7 @@ export function AccountingPage() {
             </div>
 
             {/* Diary filters */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-4 px-5 py-4">
+            <div className="glass-card mb-4 px-5 py-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">לקוח</label>
@@ -1371,7 +1371,7 @@ export function AccountingPage() {
             </div>
 
             {/* Diary list */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="glass-card overflow-hidden">
               {filteredDiaries.length === 0 ? (
                 <div className="py-16 text-center">
                   <p className="text-gray-500 font-medium">
@@ -1471,7 +1471,7 @@ export function AccountingPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="glass-card overflow-hidden">
               {invoicedOrders.length === 0 ? (
                 <div className="py-16 text-center">
                   <p className="text-gray-500 font-medium">אין הזמנות שחויבו עדיין</p>
@@ -1555,7 +1555,7 @@ export function AccountingPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="glass-card overflow-hidden">
               {cancelledOrders.length === 0 ? (
                 <div className="py-16 text-center">
                   <div className="text-gray-200 mb-3">
@@ -1656,7 +1656,7 @@ export function AccountingPage() {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="glass-card overflow-hidden">
               {cancelledDiaries.length === 0 ? (
                 <div className="py-16 text-center">
                   <div className="text-gray-200 mb-3">
@@ -1722,7 +1722,7 @@ export function AccountingPage() {
         </div>
 
         {/* Filter card */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-4 px-5 py-4">
+        <div className="glass-card mb-4 px-5 py-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">לקוח</label>
@@ -1864,7 +1864,7 @@ export function AccountingPage() {
         </div>
 
         {/* Results table */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="glass-card overflow-hidden">
           {filtered.length === 0 ? (
             <div className="py-16 text-center">
               <div className="text-gray-300 mb-3">

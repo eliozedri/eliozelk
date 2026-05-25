@@ -40,7 +40,7 @@ interface Props {
 
 export function ActivitySection({ orders }: Props) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="glass-card overflow-hidden">
       <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
         <h2 className="text-sm font-bold text-navy-900">פעילות אחרונה</h2>
         <Link href="/orders" className="text-xs text-blue-500 hover:underline flex items-center gap-1">

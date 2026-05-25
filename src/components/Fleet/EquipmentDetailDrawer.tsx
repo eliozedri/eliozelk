@@ -121,7 +121,7 @@ export function EquipmentDetailDrawer({
                   <span className="font-semibold">סיבת אי-שימוש: </span>{e.out_of_service_reason}
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3 bg-white rounded-xl border border-slate-200 p-3">
+              <div className="grid grid-cols-2 gap-3 glass-card p-3">
                 <Field label="מזהה פנימי" value={e.id} />
                 <Field label="יצרן" value={e.manufacturer} />
                 <Field label="דגם" value={e.model} />
@@ -136,12 +136,12 @@ export function EquipmentDetailDrawer({
                 <Field label="תוקף רישיון" value={fmt(e.license_expiry_date)} />
               </div>
               {e.business_use && (
-                <div className="bg-white rounded-xl border border-slate-200 p-3">
+                <div className="glass-card p-3">
                   <Field label="תיאור שימוש עסקי" value={e.business_use} />
                 </div>
               )}
               {e.notes && (
-                <div className="bg-white rounded-xl border border-slate-200 p-3">
+                <div className="glass-card p-3">
                   <Field label="הערות" value={e.notes} />
                 </div>
               )}
@@ -150,7 +150,7 @@ export function EquipmentDetailDrawer({
 
           {tab === "technical" && (
             <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-3 bg-white rounded-xl border border-slate-200 p-3">
+              <div className="grid grid-cols-2 gap-3 glass-card p-3">
                 <Field label="סוג כלי" value={e.equipment_type} />
                 <Field label="יצרן" value={e.manufacturer} />
                 <Field label="דגם" value={e.model} />
@@ -168,7 +168,7 @@ export function EquipmentDetailDrawer({
                 )}
               </div>
               {Object.keys(specs).length > 0 && (
-                <div className="bg-white rounded-xl border border-slate-200 p-3">
+                <div className="glass-card p-3">
                   <div className="text-[11px] text-slate-400 mb-2">נתונים טכניים</div>
                   <div className="grid grid-cols-2 gap-2">
                     {Object.entries(specs).map(([k, v]) => (

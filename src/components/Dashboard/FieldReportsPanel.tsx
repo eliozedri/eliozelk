@@ -56,7 +56,7 @@ export function FieldReportsPanel({
   const allClear = missingDiaryJobs === 0 && draftDiariesCount === 0 && diariesPending === 0;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden h-full">
+    <div className="glass-card overflow-hidden h-full">
       <div className="px-4 py-3 border-b border-gray-100">
         <h2 className="text-sm font-bold text-gray-900">דוחות שדה ותיעוד</h2>
         <p className="text-[10px] text-gray-400 mt-0.5">יומנים · חתימות · אישורים</p>

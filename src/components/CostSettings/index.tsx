@@ -59,26 +59,26 @@ export function CostSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface pb-10">
+    <div className="min-h-screen pb-10">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
+      <div className="scene-header px-4 py-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
-              <svg className="w-5 h-5 text-blue-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-blue-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="3" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">תעריפי עלות</h1>
-              <p className="text-xs text-gray-400">בסיס לחישוב רווחיות יומי · עודכן {new Date(rates.updatedAt).toLocaleDateString("he-IL")}</p>
+              <h1 className="text-xl font-bold scene-title">תעריפי עלות</h1>
+              <p className="text-xs scene-subtitle">בסיס לחישוב רווחיות יומי · עודכן {new Date(rates.updatedAt).toLocaleDateString("he-IL")}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleReset}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 border border-gray-200 hover:bg-gray-50 transition-colors"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-white/70 border border-white/15 hover:bg-white/10 transition-colors"
             >
               אפס לברירת מחדל
             </button>
@@ -96,7 +96,7 @@ export function CostSettingsPage() {
       {/* Sections */}
       <div className="max-w-2xl mx-auto px-4 mt-4 space-y-4">
         {SECTIONS.map((section) => (
-          <div key={section.label} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div key={section.label} className="glass-card overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
               <h2 className="text-sm font-bold text-gray-700">{section.label}</h2>
             </div>

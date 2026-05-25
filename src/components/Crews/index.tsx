@@ -318,20 +318,20 @@ export function Crews() {
   const inactiveCrews = crews.filter((c) => !c.active);
 
   return (
-    <div className="min-h-screen bg-surface py-6 px-4">
+    <div className="min-h-screen py-6 px-4">
       <div className="max-w-5xl mx-auto space-y-5">
 
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">צוותי שטח</h1>
-            <p className="text-sm text-gray-500 mt-0.5">ניהול צוותי ביצוע לעבודות שטח</p>
+            <h1 className="text-2xl font-bold scene-title">צוותי שטח</h1>
+            <p className="text-sm scene-subtitle mt-0.5">ניהול צוותי ביצוע לעבודות שטח</p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-500">{activeCrews.length} צוותים פעילים</span>
+            <span className="text-sm text-white/60">{activeCrews.length} צוותים פעילים</span>
             {!showAddForm && (
               <button
                 onClick={() => setShowAddForm(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm"
+                className="btn-glow text-sm"
               >
                 <PlusIcon />
                 צוות חדש

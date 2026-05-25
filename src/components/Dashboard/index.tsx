@@ -111,7 +111,7 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen">
 
       {/* ── Hero ──────────────────────────────────────────────────────── */}
       <DashboardHero />
@@ -175,7 +175,7 @@ export function DashboardPage() {
             submittedDiariesCount={kpis.submittedDiariesCount}
             onDiariesClick={openDiariesDrill}
           />
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="glass-card overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-bold text-gray-900">מפת פרויקטים</h2>

@@ -28,7 +28,7 @@ export function PaintingTab({ items, onChange, disabled = false }: Props) {
     onChange(updateItem(items, id, partial));
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="glass-card overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-3.5 bg-yellow-50 border-b border-yellow-100">
         <svg
           className="w-5 h-5 text-yellow-600 shrink-0"

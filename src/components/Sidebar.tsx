@@ -38,7 +38,7 @@ function NavBadge({ count, variant = "amber" }: { count: number; variant?: "ambe
 interface NavItem { tabId: TabId; href: string; label: string; icon: React.ReactNode; matchFn: (p: string) => boolean; noBadge?: boolean; title?: string; }
 interface NavSection { label: string; items: NavItem[]; }
 
-const ICON_CLS = "w-4 h-4 shrink-0";
+const ICON_CLS = "w-[18px] h-[18px] shrink-0";
 
 const AGENTS_NAV_ITEM: NavItem = { tabId: "agents", href: "/agents", label: "מרכז הפיקוד הדיגיטלי", icon: <Bot className={ICON_CLS} />, matchFn: (p) => p.startsWith("/agents"), noBadge: true };
 
@@ -112,14 +112,10 @@ function SidebarLink({ href, label, active, icon, onClick, badge, badgeVariant, 
   onClick?: () => void; badge?: number; badgeVariant?: "amber" | "red" | "blue" | "teal"; title?: string;
   onGuardedNavigate?: (href: string) => void;
 }) {
-  const sharedStyle = active
-    ? { background: "linear-gradient(90deg, rgba(34,211,238,0.16), rgba(255,255,255,0.04))", color: "#ffffff", fontWeight: 600, borderRightColor: EK_GOLD, borderRightWidth: 3, borderRightStyle: "solid" as const, boxShadow: "0 0 22px rgba(34,211,238,0.12)" }
-    : { color: "rgba(255,255,255,0.55)", borderRightColor: "transparent", borderRightWidth: 3, borderRightStyle: "solid" as const };
-  const sharedCls = "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all group hover:bg-white/10 hover:!text-white w-full text-right";
-  const iconEl = <span style={{ color: active ? EK_GOLD : "rgba(255,255,255,0.35)" }} className="shrink-0 group-hover:!text-white/70 transition-colors">{icon}</span>;
+  const cls = `ek-nav-item${active ? " is-active" : ""}`;
   const inner = (
     <>
-      {iconEl}
+      <span className="ek-nav-icon">{icon}</span>
       <span className="truncate flex-1">{label}</span>
       {badge !== undefined && <NavBadge count={badge} variant={badgeVariant} />}
     </>
@@ -127,7 +123,7 @@ function SidebarLink({ href, label, active, icon, onClick, badge, badgeVariant, 
 
   if (onGuardedNavigate) {
     return (
-      <button type="button" title={title} style={sharedStyle} className={sharedCls}
+      <button type="button" title={title} className={cls}
         onClick={() => { onGuardedNavigate(href); onClick?.(); }}>
         {inner}
       </button>
@@ -135,14 +131,14 @@ function SidebarLink({ href, label, active, icon, onClick, badge, badgeVariant, 
   }
 
   return (
-    <Link href={href} onClick={onClick} title={title} style={sharedStyle} className={sharedCls}>
+    <Link href={href} onClick={onClick} title={title} className={cls}>
       {inner}
     </Link>
   );
 }
 
 function SectionLabel({ label }: { label: string }) {
-  return <span className="block px-3 pt-4 pb-1 text-[9px] font-bold uppercase tracking-[0.15em]" style={{ color: "rgba(255,255,255,0.25)" }}>{label}</span>;
+  return <span className="ek-nav-label">{label}</span>;
 }
 
 // Per-tab badge config: which notification count + which colour variant
@@ -184,26 +180,23 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
   const isDirtyGuard = guard?.isDirty ?? false;
 
   return (
-    <aside className="w-64 md:w-52 h-full min-h-screen flex flex-col shrink-0 backdrop-blur-xl"
-      style={{
-        background: "linear-gradient(180deg, rgba(13,27,46,0.96) 0%, rgba(6,17,31,0.94) 100%)",
-        borderLeft: `1px solid rgba(34,211,238,0.14)`,
-        boxShadow: "0 0 60px rgba(2,8,20,0.6), inset 1px 0 0 rgba(255,255,255,0.04)",
-      }}>
+    <aside className="ek-sidebar w-64 md:w-56 h-full min-h-screen flex flex-col shrink-0">
 
-      {/* Header */}
-      <div className="px-4 pt-5 pb-4 flex items-center justify-between" style={{ borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg, #1d6fd8, #22d3ee)", boxShadow: "0 0 20px rgba(34,211,238,0.45)" }}>
-            <span className="text-white font-black text-base leading-none select-none">א</span>
-          </div>
-          <div className="min-w-0">
-            <div className="text-white font-black text-sm leading-tight tracking-tight">אלקיים</div>
-            <div className="text-[10px] font-semibold leading-tight truncate" style={{ color: EK_GOLD }}>סימון כבישים בע״מ</div>
+      {/* Header — brand logo with gold glow halo */}
+      <div className="px-3 pt-5 pb-4 flex items-center justify-between gap-2" style={{ borderBottom: `1px solid rgba(148,197,255,0.12)` }}>
+        <div className="flex-1 min-w-0 flex justify-center">
+          <div className="ek-logo-plate">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/elkayam-logo.png"
+              alt="אלקיים — סימון כבישים בע״מ"
+              className="w-full max-w-[200px] h-auto select-none"
+              draggable={false}
+            />
           </div>
         </div>
         {onClose && (
-          <button onClick={onClose} className="text-white/40 hover:text-white/80 transition-colors p-1 rounded" aria-label="סגור תפריט">
+          <button onClick={onClose} className="text-white/40 hover:text-white/80 transition-colors p-1 rounded shrink-0" aria-label="סגור תפריט">
             <X className="w-5 h-5" />
           </button>
         )}
@@ -213,7 +206,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       <nav className="flex flex-col p-2.5 flex-1 overflow-y-auto">
         {/* Primary entry point — standalone top-level, visually separated from sections */}
         {canSeeTab(AGENTS_NAV_ITEM.tabId) && (
-          <div className="pb-2 mb-1" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <div className="pb-2 mb-1" style={{ borderBottom: "1px solid rgba(148,197,255,0.12)" }}>
             <SidebarLink
               href={AGENTS_NAV_ITEM.href}
               label={AGENTS_NAV_ITEM.label}
@@ -263,7 +256,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       </nav>
 
       {/* Footer */}
-      <div className="px-3 py-3" style={{ borderTop: `1px solid rgba(255,255,255,0.06)` }}>
+      <div className="px-3 py-3" style={{ borderTop: `1px solid rgba(148,197,255,0.12)` }}>
         {profile && (
           <div className="mb-2">
             <p className="text-white text-xs font-semibold truncate">{profile.name}</p>

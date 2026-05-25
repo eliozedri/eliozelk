@@ -22,25 +22,25 @@ export function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   return (
-    <div className="min-h-screen bg-surface py-6 px-4">
+    <div className="min-h-screen py-6 px-4">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-2 mb-2">
-          <h1 className="text-2xl font-bold text-gray-900">לקוחות</h1>
+          <h1 className="text-2xl font-bold scene-title">לקוחות</h1>
           <CustomersIcon />
           {syncStatus === "offline" && (
-            <span className="text-xs bg-yellow-100 text-yellow-700 border border-yellow-200 rounded-full px-2 py-0.5 font-medium">
+            <span className="text-xs bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/40 rounded-full px-2 py-0.5 font-medium backdrop-blur">
               מצב לא מקוון — נתונים אינם מסונכרנים
             </span>
           )}
           {syncStatus === "error" && (
-            <span className="text-xs bg-red-100 text-red-700 border border-red-200 rounded-full px-2 py-0.5 font-medium">
+            <span className="text-xs bg-red-500/15 text-red-300 ring-1 ring-red-400/40 rounded-full px-2 py-0.5 font-medium backdrop-blur">
               שגיאת סנכרון — מוצגים נתונים מקומיים
             </span>
           )}
         </div>
 
         {(syncStatus === "offline" || syncStatus === "error") && (
-          <div className="mb-4 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+          <div className="mb-4 text-sm text-amber-200 bg-amber-500/12 border border-amber-400/30 rounded-lg px-4 py-3 backdrop-blur">
             ⚠️ המערכת אינה מחוברת לענן. שינויים שתבצע לא יישמרו עד לחזרת החיבור.
           </div>
         )}

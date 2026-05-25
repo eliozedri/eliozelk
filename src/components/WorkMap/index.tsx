@@ -51,7 +51,7 @@ function KpiCard({ value, label, dotColor, onClick, active }: KpiCardProps) {
 
 function Legend() {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 flex flex-wrap gap-4 text-xs">
+    <div className="glass-card p-3 flex flex-wrap gap-4 text-xs">
       <span className="text-gray-500 font-semibold self-center">מקרא:</span>
       {(["green", "yellow", "red", "gray"] as SlaColor[]).map((color) => {
         const info = SLA_COLORS[color];
@@ -84,7 +84,7 @@ interface FiltersProps {
 
 function FilterBar({ slaFilter, setSlaFilter, showScheduled, setShowScheduled, showNonReady, setShowNonReady, totalShown }: FiltersProps) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-3 flex flex-wrap items-center gap-3">
+    <div className="glass-card px-4 py-3 flex flex-wrap items-center gap-3">
       <span className="text-xs font-semibold text-gray-500">סינון לפי SLA:</span>
       {(["all", "red", "yellow", "green", "gray"] as const).map((v) => {
         const label = v === "all" ? "הכל" : SLA_COLORS[v].label;
@@ -178,17 +178,17 @@ export function WorkMap() {
   );
 
   return (
-    <div className="min-h-screen bg-surface py-6 px-4 flex flex-col gap-4">
+    <div className="min-h-screen py-6 px-4 flex flex-col gap-4">
       <div className="max-w-[1400px] mx-auto w-full space-y-4">
 
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">מפת עבודות</h1>
-            <p className="text-sm text-gray-500 mt-0.5">בקרת עבודות ארצית — {crews.length} צוותים פעילים</p>
+            <h1 className="text-2xl font-bold scene-title">מפת עבודות</h1>
+            <p className="text-sm scene-subtitle mt-0.5">בקרת עבודות ארצית — {crews.length} צוותים פעילים</p>
           </div>
           {totalEstHours > 0 && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-4 py-2 text-sm">
+            <div className="glass-card px-4 py-2 text-sm">
               <span className="text-gray-500">סה״כ שעות מוצגות: </span>
               <span className="font-bold text-gray-900">{totalEstHours.toFixed(1)} שע׳</span>
             </div>
@@ -220,7 +220,7 @@ export function WorkMap() {
         <Legend />
 
         {/* Map */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden" style={{ height: "600px" }}>
+        <div className="glass-card overflow-hidden" style={{ height: "600px" }}>
           {visibleOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2">
               <div className="text-4xl">🗺️</div>

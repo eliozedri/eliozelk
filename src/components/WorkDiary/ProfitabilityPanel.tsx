@@ -66,7 +66,7 @@ export function ProfitabilityPanel({ diary }: Props) {
   return (
     <div className="space-y-5 pb-6">
       {/* Status banner */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="glass-card p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-bold text-gray-700">תוצאה פיננסית יומית</h3>
           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${STATUS_COLORS[result.status]}`}>
@@ -106,7 +106,7 @@ export function ProfitabilityPanel({ diary }: Props) {
 
       {/* Cost breakdown */}
       {!isNoData && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <div className="glass-card p-5">
           <h3 className="text-sm font-bold text-gray-700 mb-3">פירוט עלויות</h3>
           <MetricRow label="עלות עבודה" value={fmt(result.laborCost)}
             sub={result.totalWorkers > 0 ? `${result.totalWorkers} עובדים` : undefined} />
@@ -124,7 +124,7 @@ export function ProfitabilityPanel({ diary }: Props) {
 
       {/* Planning */}
       {!isNoData && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <div className="glass-card p-5">
           <h3 className="text-sm font-bold text-gray-700 mb-3">נקודות איזון ויעדים</h3>
           <MetricRow
             label="מינימום חיוב לנקודת איזון"
@@ -146,7 +146,7 @@ export function ProfitabilityPanel({ diary }: Props) {
 
       {/* Time analysis */}
       {result.totalHours > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <div className="glass-card p-5">
           <h3 className="text-sm font-bold text-gray-700 mb-3">ניתוח זמנים</h3>
           <MetricRow label="סה״כ שעות ביום" value={`${result.totalHours.toFixed(1)} שעות`} />
           <MetricRow label="זמן ביצוע בפועל" value={`${result.executionHours.toFixed(1)} שעות`}
@@ -166,7 +166,7 @@ export function ProfitabilityPanel({ diary }: Props) {
 
       {/* Alerts */}
       {result.alerts.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <div className="glass-card p-5">
           <h3 className="text-sm font-bold text-gray-700 mb-3">התראות</h3>
           <div className="space-y-2">
             {result.alerts.map((a, i) => (

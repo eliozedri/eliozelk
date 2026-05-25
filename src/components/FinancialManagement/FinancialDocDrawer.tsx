@@ -126,7 +126,7 @@ export function FinancialDocDrawer({
             )}
 
             {/* Status + classification */}
-            <div className="bg-white rounded-xl border border-slate-200 p-3 flex flex-col gap-3">
+            <div className="glass-card p-3 flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-slate-400">סטטוס</span>
                 <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${DOCUMENT_STATUS_COLORS[doc.status as SupplierDocumentStatus]}`}>{DOCUMENT_STATUS_LABELS[doc.status as SupplierDocumentStatus] ?? doc.status}</span>
@@ -167,7 +167,7 @@ export function FinancialDocDrawer({
             </div>
 
             {/* Links */}
-            <div className="bg-white rounded-xl border border-slate-200 p-3 flex flex-col gap-2">
+            <div className="glass-card p-3 flex flex-col gap-2">
               {doc.equipmentId ? (
                 <button onClick={() => router.push(`/fleet?asset=${encodeURIComponent(doc.equipmentId!)}`)} className="flex items-center justify-between text-sm text-ek-blue hover:underline">
                   <span className="flex items-center gap-2"><Truck className="w-4 h-4" /> כלי משויך</span>
@@ -186,7 +186,7 @@ export function FinancialDocDrawer({
 
             {/* Audit trail */}
             {(doc.reviewEvents?.length ?? 0) > 0 && (
-              <div className="bg-white rounded-xl border border-slate-200 p-3">
+              <div className="glass-card p-3">
                 <div className="text-xs font-semibold text-navy-900 mb-2">היסטוריית פעולות</div>
                 <ul className="flex flex-col gap-1.5 text-xs text-slate-500">
                   {doc.reviewEvents!.map(ev => (

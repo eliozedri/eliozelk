@@ -70,7 +70,7 @@ export function PolesSignsTab({ poleItems, signItems, onPolesChange, onSignsChan
   return (
     <div className="space-y-6">
       {/* POLES */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="glass-card overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-3.5 bg-blue-50 border-b border-blue-100">
           <svg className="w-5 h-5 text-blue-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="2" x2="12" y2="22" />
@@ -138,7 +138,7 @@ export function PolesSignsTab({ poleItems, signItems, onPolesChange, onSignsChan
       </div>
 
       {/* SIGNS */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="glass-card overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-3.5 bg-orange-50 border-b border-orange-100">
           <svg className="w-5 h-5 text-orange-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />

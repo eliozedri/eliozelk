@@ -72,9 +72,9 @@ export function ConfirmDialog({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" onClick={isLoading ? undefined : onClose} />
+      <div className="fixed inset-0 bg-[#050f1d]/70 z-50 backdrop-blur-md" onClick={isLoading ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" dir="rtl">
+        <div className="bg-white rounded-2xl shadow-[0_40px_120px_rgba(2,8,20,0.6)] ring-1 ring-black/5 border border-white/80 w-full max-w-sm p-6" dir="rtl">
           <div className="flex items-center gap-3 mb-4">
             <VariantIcon variant={variant} />
             <p className="font-bold text-gray-900 text-base">{title}</p>

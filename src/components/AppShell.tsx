@@ -10,6 +10,9 @@ import { GlobalChatLauncher } from "@/components/AgentChat/GlobalChatLauncher";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { NavigationGuardProvider, useNavigationGuard } from "@/context/NavigationGuardContext";
 import { DraftProtectionModal } from "@/components/ui/DraftProtectionModal";
+import { NotificationProvider } from "@/context/NotificationContext";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { CriticalAlertGate } from "@/components/notifications/CriticalAlertGate";
 
 const AUTH_PATHS = ["/login", "/setup"];
 
@@ -47,6 +50,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     <>
       <OfflineBanner />
       <GlobalFloatingChatProvider>
+        {/* Operations-center scene grid + glow, fixed behind all content */}
+        <div className="scene-overlay no-print" aria-hidden />
+
         {/* Mobile hamburger */}
         <button
           onClick={() => setSidebarOpen(true)}
@@ -57,6 +63,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           <Menu className="w-5 h-5 text-white" />
         </button>
 
+        {/* Notification bell (fixed, opens the מרכז התראות drawer) */}
+        <NotificationBell />
+
         {/* Mobile backdrop */}
         {sidebarOpen && (
           <div
@@ -65,7 +74,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           />
         )}
 
-        <div className="flex min-h-screen">
+        <div className="relative z-10 flex min-h-screen">
           <div
             className={`
               fixed inset-y-0 right-0 z-50
@@ -93,6 +102,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             {...(guard?.modalOverride ?? {})}
           />
         )}
+
+        {/* Blocking gate for critical (blocking + requires_ack) notifications */}
+        <CriticalAlertGate />
       </GlobalFloatingChatProvider>
     </>
   );
@@ -113,9 +125,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthProvider>
-      <NavigationGuardProvider>
-        <AppShellInner>{children}</AppShellInner>
-      </NavigationGuardProvider>
+      <NotificationProvider>
+        <NavigationGuardProvider>
+          <AppShellInner>{children}</AppShellInner>
+        </NavigationGuardProvider>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

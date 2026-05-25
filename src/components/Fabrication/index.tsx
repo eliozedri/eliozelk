@@ -280,15 +280,15 @@ export function Fabrication() {
   );
 
   return (
-    <div className="min-h-screen bg-surface py-6 px-4">
+    <div className="min-h-screen py-6 px-4">
       <div className="max-w-5xl mx-auto">
 
         <div className="flex items-center justify-between gap-3 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">מחלקת מסגריה</h1>
-            <p className="text-sm text-gray-500 mt-0.5">עבודות מסגרות פעילות</p>
+            <h1 className="text-2xl font-bold scene-title">מחלקת מסגריה</h1>
+            <p className="text-sm scene-subtitle mt-0.5">עבודות מסגרות פעילות</p>
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none no-print">
+          <label className="flex items-center gap-2 text-sm text-white/70 cursor-pointer select-none no-print">
             <input
               type="checkbox"
               checked={showCompleted}

@@ -204,8 +204,8 @@ export function CustomerDetailPage() {
 
   if (!customer) {
     return (
-      <div className="min-h-screen bg-surface py-12 px-4 flex flex-col items-center justify-center gap-4">
-        <p className="text-gray-500">לקוח לא נמצא</p>
+      <div className="min-h-screen py-12 px-4 flex flex-col items-center justify-center gap-4">
+        <p className="text-white/70">לקוח לא נמצא</p>
         <Link href="/customers" className="text-blue-600 text-sm hover:underline flex items-center gap-1">
           <BackIcon /> חזור ללקוחות
         </Link>
@@ -221,17 +221,17 @@ export function CustomerDetailPage() {
   const risk = customerMetrics ? RISK_CONFIG[customerMetrics.riskLevel] : null;
 
   return (
-    <div className="min-h-screen bg-surface py-6 px-4">
+    <div className="min-h-screen py-6 px-4">
       <div className="max-w-5xl mx-auto space-y-5">
 
         {/* Back */}
-        <Link href="/customers" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors">
+        <Link href="/customers" className="inline-flex items-center gap-1.5 text-sm text-white/60 hover:text-white transition-colors">
           <BackIcon />
           חזור ללקוחות
         </Link>
 
         {/* Header card */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <div className="glass-card p-5">
           <div className="flex items-start justify-between flex-wrap gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2.5 mb-1">
@@ -423,7 +423,7 @@ export function CustomerDetailPage() {
 
         {/* Financial P&L panel */}
         {customerMetrics && customerMetrics.totalRevenue > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="glass-card overflow-hidden">
             <div className="px-5 py-3.5 border-b border-gray-100">
               <h2 className="text-sm font-bold text-gray-900">תמונה פיננסית</h2>
               <p className="text-[10px] text-gray-400 mt-0.5">מבוסס יומני ביצוע מאושרים ומוגשים</p>
@@ -488,7 +488,7 @@ export function CustomerDetailPage() {
 
         {/* Active order risk summary */}
         {riskyActiveOrders.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="glass-card overflow-hidden">
             <div className="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-sm font-bold text-gray-900">הזמנות פעילות בסיכון</h2>
               <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
@@ -524,7 +524,7 @@ export function CustomerDetailPage() {
 
         {/* Per-order profitability table */}
         {customerProfitOrders.length > 0 && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="glass-card overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100">
               <h2 className="text-base font-bold text-gray-900">רווחיות לפי הזמנה</h2>
               <p className="text-[10px] text-gray-400 mt-0.5">מבוסס יומני ביצוע שהוגשו</p>
@@ -553,7 +553,7 @@ export function CustomerDetailPage() {
         )}
 
         {/* Full order history table */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="glass-card overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="text-base font-bold text-gray-900">היסטוריית הזמנות</h2>
           </div>

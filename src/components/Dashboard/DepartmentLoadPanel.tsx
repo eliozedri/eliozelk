@@ -42,7 +42,7 @@ export function DepartmentLoadPanel({ notifications }: Props) {
   ];
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden h-full">
+    <div className="glass-card overflow-hidden h-full">
       <div className="px-4 py-3 border-b border-gray-100">
         <h2 className="text-sm font-bold text-gray-900">עומס מחלקות</h2>
         <p className="text-[10px] text-gray-400 mt-0.5">פריטים ממתינים לטיפול לפי מחלקה</p>

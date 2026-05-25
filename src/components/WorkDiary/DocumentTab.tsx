@@ -46,7 +46,7 @@ function SignatureBlock({ title, sig, onChange, disabled, hasError = false }: Si
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
+    <div className="glass-card p-5 space-y-4">
       <h3 className="text-sm font-bold text-gray-700 border-b border-gray-100 pb-3">
         {title}
       </h3>
@@ -153,7 +153,7 @@ export function DocumentTab({ diary, onChange, disabled = false, signatureError 
   return (
     <div className="space-y-6">
       {/* Photos */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="glass-card p-5">
         <h3 className="text-sm font-bold text-gray-700 mb-4">תמונות מהשטח</h3>
         <PhotoUpload
           photos={diary.photos}
@@ -163,7 +163,7 @@ export function DocumentTab({ diary, onChange, disabled = false, signatureError 
       </div>
 
       {/* Notes */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="glass-card p-5">
         <h3 className="text-sm font-bold text-gray-700 mb-3">הערות כלליות</h3>
         <textarea
           value={diary.generalNotes}

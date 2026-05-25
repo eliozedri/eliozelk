@@ -1126,13 +1126,13 @@ export function CatalogPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen">
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="scene-header">
         <div className="max-w-6xl mx-auto px-4 pt-6 pb-5">
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold text-gray-900">ניהול קטלוג</h1>
+            <h1 className="text-2xl font-bold scene-title">ניהול קטלוג</h1>
             <CatalogIcon />
           </div>
           <div className="flex items-center gap-3 flex-wrap mt-3">

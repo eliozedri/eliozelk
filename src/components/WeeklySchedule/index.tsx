@@ -527,7 +527,7 @@ function MonthlyView({ orders, onJobClick, showCompleted }: MonthlyViewProps) {
   })();
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="glass-card overflow-hidden">
       {/* Month navigation */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
         <button
@@ -719,14 +719,14 @@ export function WeeklySchedule() {
   const todayStr = toISODate(new Date());
 
   return (
-    <div className="min-h-screen bg-surface py-6 px-4">
+    <div className="min-h-screen py-6 px-4">
       <div className="max-w-[1400px] mx-auto space-y-4">
 
         {/* Header */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{viewMode === "month" ? "סידור חודשי" : "סידור שבועי"}</h1>
-            <p className="text-sm text-gray-500 mt-0.5">שיבוץ עבודות לצוותים לפי ימים</p>
+            <h1 className="text-2xl font-bold scene-title">{viewMode === "month" ? "סידור חודשי" : "סידור שבועי"}</h1>
+            <p className="text-sm scene-subtitle mt-0.5">שיבוץ עבודות לצוותים לפי ימים</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {/* View mode toggle */}
@@ -844,7 +844,7 @@ export function WeeklySchedule() {
                 לא הוגדרו צוותים. עבור ל<a href="/crews" className="text-blue-600 underline">צוותי שטח</a> כדי להוסיף צוות.
               </div>
             ) : (
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="glass-card overflow-hidden">
                 {/* Header row */}
                 <div className="grid border-b border-gray-200" style={{ gridTemplateColumns: `180px repeat(6, 1fr)` }}>
                   <div className="px-3 py-2.5 text-xs font-semibold text-gray-500 bg-gray-50 border-l border-gray-200">צוות</div>

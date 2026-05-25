@@ -99,13 +99,13 @@ export function SupplierDocumentsModule() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
+    <div className="min-h-screen" dir="rtl">
       {/* Page header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <div className="scene-header px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">מנוע קליטת מסמכי ספקים</h1>
-            <p className="text-sm text-gray-500 mt-0.5">חשבוניות · תעודות משלוח · הוצאות · מלאי</p>
+            <h1 className="text-xl font-bold scene-title">מנוע קליטת מסמכי ספקים</h1>
+            <p className="text-sm scene-subtitle mt-0.5">חשבוניות · תעודות משלוח · הוצאות · מלאי</p>
           </div>
           <button
             onClick={() => setShowModal(true)}
@@ -134,8 +134,8 @@ export function SupplierDocumentsModule() {
             onClick={() => setStatusFilter(opt.value)}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
               statusFilter === opt.value
-                ? "bg-gray-900 text-white border-gray-900"
-                : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"
+                ? "bg-ek-blue text-white border-ek-blue shadow-[0_0_16px_rgba(34,211,238,0.35)]"
+                : "bg-white/90 text-gray-600 border-white/40 hover:border-ek-blue/50"
             }`}
           >
             {opt.label}

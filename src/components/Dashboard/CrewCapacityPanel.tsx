@@ -24,7 +24,7 @@ export function CrewCapacityPanel({
   const barWidth = Math.min(100, capacityUtilizationPct);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden h-full flex flex-col">
+    <div className="glass-card overflow-hidden h-full flex flex-col">
       <div className="px-4 py-3 border-b border-gray-100">
         <h2 className="text-sm font-bold text-gray-900">כושר ייצור שבועי</h2>
         <p className="text-[10px] text-gray-400 mt-0.5">ניצולת צוותי שדה</p>

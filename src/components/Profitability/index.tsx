@@ -47,7 +47,7 @@ function KpiCard({ label, value, sub, accent, small }: {
   label: string; value: string; sub?: string; accent: string; small?: boolean;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="glass-card overflow-hidden">
       <div className={`h-1 ${accent}`} />
       <div className="px-4 py-4">
         <div className={`font-black leading-none ${small ? "text-2xl" : "text-3xl"} text-gray-900`}>{value}</div>
@@ -169,7 +169,7 @@ function DiariesTab({ filterStatus, filterFrom, filterTo, setFilterStatus, setFi
   return (
     <div className="space-y-3">
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+      <div className="glass-card p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-xs text-gray-500 font-medium">סטטוס:</span>
@@ -200,7 +200,7 @@ function DiariesTab({ filterStatus, filterFrom, filterTo, setFilterStatus, setFi
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="glass-card overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
           <span className="text-sm font-bold text-gray-700">פירוט ימי עבודה</span>
           <span className="text-xs text-gray-400">{filtered.length} יומנים</span>
@@ -270,13 +270,13 @@ function OrderRow({ o }: { o: OrderProfitabilitySummary }) {
 function OrdersTab({ byOrder }: { byOrder: OrderProfitabilitySummary[] }) {
   if (byOrder.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-10 text-center text-sm text-gray-400">
+      <div className="glass-card p-10 text-center text-sm text-gray-400">
         קשר יומני עבודה להזמנות כדי לראות רווחיות לפי פרויקט
       </div>
     );
   }
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="glass-card overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <span className="text-sm font-bold text-gray-700">רווחיות לפי הזמנה</span>
         <span className="text-xs text-gray-400">{byOrder.length} הזמנות</span>
@@ -376,7 +376,7 @@ function CrewCard({ c }: { c: CrewMetrics }) {
 function CrewsTab({ byCrew }: { byCrew: CrewMetrics[] }) {
   if (byCrew.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-10 text-center text-sm text-gray-400">
+      <div className="glass-card p-10 text-center text-sm text-gray-400">
         מלא יומני עבודה עם שם ראש צוות כדי לראות ביצועי צוות
       </div>
     );
@@ -399,7 +399,7 @@ function TrendsTab({ byWeek, labor, executionVariance }: {
 }) {
   if (byWeek.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-10 text-center text-sm text-gray-400">
+      <div className="glass-card p-10 text-center text-sm text-gray-400">
         אין נתונים לתצוגת מגמות. מלא יומנים עם תאריך ביצוע.
       </div>
     );
@@ -410,7 +410,7 @@ function TrendsTab({ byWeek, labor, executionVariance }: {
   return (
     <div className="space-y-4">
       {/* Weekly bar chart */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="glass-card p-5">
         <div className="flex items-center justify-between mb-4">
           <span className="text-sm font-bold text-gray-700">מגמת הכנסות שבועית</span>
           <span className="text-xs text-gray-400">{byWeek.length} שבועות</span>
@@ -451,7 +451,7 @@ function TrendsTab({ byWeek, labor, executionVariance }: {
       </div>
 
       {/* Labor utilization panel */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="glass-card p-5">
         <div className="text-sm font-bold text-gray-700 mb-4">ניצולת כוח אדם</div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div>
@@ -499,7 +499,7 @@ function TrendsTab({ byWeek, labor, executionVariance }: {
 
       {/* Execution variance panel */}
       {executionVariance.measurableOrders > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <div className="glass-card p-5">
           <div className="text-sm font-bold text-gray-700 mb-4">שעות מתוכנן vs בפועל</div>
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div>
@@ -598,7 +598,7 @@ function CustomerTable({ byCustomer }: { byCustomer: CustomerMetrics[] }) {
   }
   const RISK_COLORS = { green: "bg-green-100 text-green-700", amber: "bg-amber-100 text-amber-700", red: "bg-red-100 text-red-700" };
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="glass-card overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <span className="text-sm font-bold text-gray-700">רווחיות לפי לקוח</span>
         <span className="text-xs text-gray-400">{byCustomer.length} לקוחות</span>
@@ -654,7 +654,7 @@ function ManagementTab({ diagnostics, byCustomer, billingLeakage }: {
     <div className="space-y-4">
       {/* Summary bar */}
       {diagnostics.length > 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm px-5 py-4 flex items-center gap-6 flex-wrap">
+        <div className="glass-card px-5 py-4 flex items-center gap-6 flex-wrap">
           <div className="flex items-center gap-2">
             <div className="text-2xl font-black text-gray-900">{diagnostics.length}</div>
             <div className="text-xs text-gray-500">ממצאים</div>
@@ -957,7 +957,7 @@ function CfoTab() {
       )}
 
       {/* ── Orders table ── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="glass-card overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
           <h3 className="text-sm font-semibold text-gray-800">רווחיות הזמנות</h3>
           <div className="flex items-center gap-2">
@@ -1110,7 +1110,7 @@ function CfoTab() {
 
       {/* ── Customer profitability section with drill-down (Phase 4.8) ── */}
       {customerStats.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="glass-card overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <h3 className="text-sm font-bold text-gray-800">רווחיות לפי לקוח</h3>
             <span className="text-xs text-gray-400">{customerStats.length} לקוחות · לחץ לקוח לפירוט עבודות</span>
@@ -1309,19 +1309,19 @@ export function ProfitabilityPage() {
   const criticalCount = diagnostics.filter(d => d.severity === "critical").length;
 
   return (
-    <div className="min-h-screen bg-surface pb-10">
+    <div className="min-h-screen pb-10">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-4">
+      <div className="scene-header px-4 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-              <svg className="w-5 h-5 text-emerald-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-emerald-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">מודיעין תפעולי</h1>
-              <p className="text-xs text-gray-400">רווחיות · צוותים · מגמות · ניתוח ביצוע · ניהול</p>
+              <h1 className="text-xl font-bold scene-title">מודיעין תפעולי</h1>
+              <p className="text-xs scene-subtitle">רווחיות · צוותים · מגמות · ניתוח ביצוע · ניהול</p>
             </div>
           </div>
           <Link href="/cost-settings" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
@@ -1363,7 +1363,7 @@ export function ProfitabilityPage() {
         </div>
 
         {/* Tab bar */}
-        <div className="flex items-center gap-1 bg-white rounded-xl border border-gray-200 shadow-sm p-1 w-fit">
+        <div className="flex items-center gap-1 glass-card p-1 w-fit">
           {TABS.map(t => (
             <button key={t.id} type="button" onClick={() => setActiveTab(t.id)}
               className={`relative px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === t.id ? "bg-blue-600 text-white shadow-sm" : "text-gray-600 hover:bg-gray-100"}`}>

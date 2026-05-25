@@ -287,12 +287,12 @@ export function Graphics() {
   ];
 
   return (
-    <div className="min-h-screen bg-surface py-6 px-4">
+    <div className="min-h-screen py-6 px-4">
       <div className="max-w-5xl mx-auto">
 
         {/* Header — same pattern as Warehouse */}
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center shadow">
+          <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center" style={{ boxShadow: "0 0 20px rgba(245,158,11,0.45)" }}>
             <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
               <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
@@ -302,18 +302,18 @@ export function Graphics() {
             </svg>
           </div>
           <div>
-            <h1 className="text-2xl font-black text-gray-900">מחלקת גרפיקה</h1>
-            <p className="text-sm text-gray-500">ניהול הזמנות נכנסות ועבודות פעילות</p>
+            <h1 className="text-2xl font-black scene-title">מחלקת גרפיקה</h1>
+            <p className="text-sm scene-subtitle">ניהול הזמנות נכנסות ועבודות פעילות</p>
           </div>
           <div className="mr-auto flex items-center gap-3">
             {urgentPending > 0 && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold bg-red-100 text-red-700">
-                <span className="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold bg-red-500/20 text-red-300 ring-1 ring-red-400/50 backdrop-blur" style={{ boxShadow: "0 0 16px rgba(239,68,68,0.25)" }}>
+                <span className="w-2 h-2 rounded-full bg-red-400 inline-block"></span>
                 {urgentPending} דחופות
               </span>
             )}
-            <span className="text-sm text-gray-500">פתוחות:</span>
-            <span className="font-black text-gray-900">{pending.length + active.length}</span>
+            <span className="text-sm text-white/60">פתוחות:</span>
+            <span className="font-black text-white">{pending.length + active.length}</span>
             <button
               type="button"
               onClick={() => setShowCompleted(v => !v)}

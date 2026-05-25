@@ -214,7 +214,7 @@ interface KpiCardProps {
 
 function KpiCard({ icon, iconBg, value, label, onFilter }: KpiCardProps) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col gap-3">
+    <div className="glass-card p-5 flex flex-col gap-3">
       <div className="flex items-start justify-between">
         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${iconBg}`}>
           {icon}
@@ -1187,7 +1187,7 @@ function EmptyState({ hasFilters, onClear }: { hasFilters: boolean; onClear: () 
       <p className="text-sm text-gray-400 mb-4">צור את ההזמנה הראשונה שלך</p>
       <Link
         href="/"
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+        className="btn-glow text-sm"
       >
         <PlusIcon />
         פתח הזמנה חדשה
@@ -1391,39 +1391,39 @@ export function OrdersTable() {
   );
 
   return (
-    <div className="min-h-screen bg-surface py-6 px-4">
+    <div className="min-h-screen py-6 px-4">
       <div className="max-w-7xl mx-auto space-y-5">
 
         {/* ── Page Header ── */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-white" style={{ background: "linear-gradient(135deg, #1d6fd8, #22d3ee)", boxShadow: "0 0 20px rgba(34,211,238,0.4)" }}>
               <TableIcon />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 leading-tight">טבלת הזמנות</h1>
-              <p className="text-sm text-gray-500">מרכז מעקב לכל ההזמנות במערכת</p>
+              <h1 className="text-2xl font-bold scene-title leading-tight">טבלת הזמנות</h1>
+              <p className="text-sm scene-subtitle">מרכז מעקב לכל ההזמנות במערכת</p>
             </div>
           </div>
 
           {/* Quick status chips */}
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-white/10 text-white/80 ring-1 ring-white/15 backdrop-blur">
               <span className="font-bold">{counts.total}</span> פעילות
             </span>
             {counts.graphicsPending > 0 && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/15 text-amber-300 ring-1 ring-amber-400/40 backdrop-blur">
                 <span className="font-bold">{counts.graphicsPending}</span> ממתינות לגרפיקה
               </span>
             )}
             {counts.graphicsActive > 0 && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-300 ring-1 ring-blue-400/40 backdrop-blur">
                 <span className="font-bold">{counts.graphicsActive}</span> בטיפול גרפיקה
               </span>
             )}
             {counts.urgent > 0 && (
-              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block"></span>
+              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold bg-red-500/20 text-red-300 ring-1 ring-red-400/50 backdrop-blur" style={{ boxShadow: "0 0 16px rgba(239,68,68,0.25)" }}>
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"></span>
                 {counts.urgent} דחופות
               </span>
             )}
@@ -1561,7 +1561,7 @@ export function OrdersTable() {
           <div className="mr-auto">
             <Link
               href="/"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-sm whitespace-nowrap"
+              className="btn-glow text-sm whitespace-nowrap"
             >
               <PlusIcon />
               הזמנה חדשה
@@ -1570,7 +1570,7 @@ export function OrdersTable() {
         </div>
 
         {/* ── Table ── */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="glass-card overflow-hidden">
           {filtered.length === 0 ? (
             <EmptyState hasFilters={hasFilters} onClear={clearFilters} />
           ) : (
@@ -1671,7 +1671,7 @@ export function OrdersTable() {
               <span className="text-sm font-bold text-gray-500">הושלמו ({counts.completed})</span>
               {counts.completed > 30 && <span className="text-xs text-gray-400">מוצגות 30 האחרונות</span>}
             </div>
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden opacity-80">
+            <div className="glass-card overflow-hidden opacity-80">
               {completedOrders.length === 0 ? (
                 <div className="py-10 text-center text-xs text-gray-400">אין הזמנות שהושלמו</div>
               ) : (

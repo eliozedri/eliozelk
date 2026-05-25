@@ -24,7 +24,7 @@ export function PipelineHealthTable({ stages, bottleneck, onStageClick }: Props)
   const hasOrders = stages.some(s => s.count > 0);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden h-full">
+    <div className="glass-card overflow-hidden h-full">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-bold text-gray-900">בריאות צנרת</h2>

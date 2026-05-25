@@ -1190,23 +1190,23 @@ export function Warehouse() {
   ];
 
   return (
-    <div className="min-h-screen bg-surface py-6 px-4">
+    <div className="min-h-screen py-6 px-4">
       <div className="max-w-6xl mx-auto">
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center shadow">
+          <div className="w-10 h-10 rounded-xl bg-teal-600 flex items-center justify-center" style={{ boxShadow: "0 0 20px rgba(20,184,166,0.45)" }}>
             <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
             </svg>
           </div>
           <div>
-            <h1 className="text-2xl font-black text-gray-900">מחלקת מחסן</h1>
-            <p className="text-sm text-gray-500">הכנת הזמנות, ניהול מלאי וקליטת סחורה</p>
+            <h1 className="text-2xl font-black scene-title">מחלקת מחסן</h1>
+            <p className="text-sm scene-subtitle">הכנת הזמנות, ניהול מלאי וקליטת סחורה</p>
           </div>
           {activeTab === "orders" && (
             <div className="mr-auto flex items-center gap-3">
-              <span className="text-sm text-gray-500">פתוחות: <strong className="text-gray-900">{warehouseOrders.filter(o => o.warehouseStatus !== "ready").length}</strong></span>
+              <span className="text-sm text-white/60">פתוחות: <strong className="text-white">{warehouseOrders.filter(o => o.warehouseStatus !== "ready").length}</strong></span>
               <button
                 type="button"
                 onClick={() => setShowCompletedWarehouse(v => !v)}
