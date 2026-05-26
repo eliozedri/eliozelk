@@ -18,6 +18,8 @@ export type WhatsAppDraftInput = {
   senderId: string;
   contactName: string | null;
   body: string;
+  /** Overrides the "submitted by" label (e.g. owner-initiated drafts from master mode). */
+  submittedByName?: string | null;
 };
 
 export async function createWhatsAppDraft(input: WhatsAppDraftInput): Promise<void> {
@@ -36,7 +38,7 @@ export async function createWhatsAppDraft(input: WhatsAppDraftInput): Promise<vo
     .from("team_bot_order_drafts")
     .insert({
       telegram_user_id: null,
-      submitted_by_name: input.contactName ?? input.senderId,
+      submitted_by_name: input.submittedByName ?? input.contactName ?? input.senderId,
       customer: input.contactName,
       customer_phone: input.senderId,
       contact_person: input.contactName,

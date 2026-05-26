@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { getServiceSupabase } from "@/lib/supabase/server";
-import { sendWhatsAppText } from "@/lib/whatsapp/send";
-import { createWhatsAppDraft } from "@/lib/whatsapp/intake";
-
-// Professional, natural Hebrew acknowledgement. Confirms receipt without promising
-// an order is approved — promotion to a real order is a deliberate staff action.
-const HEBREW_ACK =
-  "שלום 👋 קיבלנו את פנייתך לאלקיים סימון כבישים. ההודעה הועברה לצוות לבדיקה ונחזור אליך בהקדם. תודה רבה!";
+import { classifyInbound, dispatchInbound } from "@/lib/whatsapp/gateway";
 
 // ── Minimal WhatsApp Cloud API types ─────────────────────────────────────────
 
@@ -132,6 +126,10 @@ async function handleInboundMessages(payload: WaWebhookPayload) {
         const isText = msg.type === "text";
         const body = isText ? (msg.text?.body ?? null) : null;
 
+        // Classify the sender at the gateway BEFORE logging so the row carries the
+        // routing decision (master/owner vs external customer).
+        const classification = classifyInbound(msg.from);
+
         await supabase.from("whatsapp_messages").insert({
           wa_message_id: msg.id,
           wa_sender_id: msg.from,
@@ -140,29 +138,22 @@ async function handleInboundMessages(payload: WaWebhookPayload) {
           body,
           timestamp_wa: parseInt(msg.timestamp, 10),
           raw_payload: payload,
+          sender_role: classification.senderRole,
+          routed_by: classification.routedBy,
         });
 
         console.log(
-          `[whatsapp] received ${msg.type} from ${msg.from} id=${msg.id}`
+          `[whatsapp] received ${msg.type} from ${msg.from} id=${msg.id} role=${classification.senderRole}`
         );
 
-        // Inbound text → PENDING review draft (source=whatsapp). Never a work_order.
-        // Best-effort: a draft/notification failure must not block the ack reply.
+        // Route through the Jarvis Gateway. External → pending draft (never a
+        // work_order). Master → Jarvis Master Mode. Errors are swallowed by the
+        // outer try so Meta is not retried indefinitely.
         if (isText && body) {
-          try {
-            await createWhatsAppDraft({
-              waMessageId: msg.id,
-              senderId: msg.from,
-              contactName,
-              body,
-            });
-          } catch (err) {
-            console.error(
-              "[whatsapp] draft creation failed:",
-              err instanceof Error ? err.message : String(err)
-            );
-          }
-          await sendWhatsAppText(msg.from, HEBREW_ACK);
+          await dispatchInbound(
+            { waMessageId: msg.id, senderId: msg.from, contactName, body },
+            classification,
+          );
         }
       }
     }
