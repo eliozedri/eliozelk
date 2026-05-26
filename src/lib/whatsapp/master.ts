@@ -14,7 +14,7 @@ import type { InboundMessage } from "./types";
 import type { JarvisInput, Skill } from "@/lib/jarvis/types";
 import { ceoManagerSkill } from "@/lib/jarvis/skills/ceoManager/skill";
 import { ocrDocumentSkill } from "@/lib/jarvis/skills/ocrDocument/skill";
-import { classifyIntent } from "@/lib/jarvis/intent";
+import { classifyIntentSmart } from "@/lib/jarvis/llm/classifier";
 import { personalAreaSkill } from "@/lib/jarvis/skills/personalArea/skill";
 
 /**
@@ -269,8 +269,8 @@ async function freeTextRouter(inbound: InboundMessage, text: string): Promise<vo
     return sendOrdersMenu(phone);
   }
 
-  // Central Brain intent classification → route to the right skill (buttons are optional).
-  const { intent } = classifyIntent(text, "master");
+  // Central Brain intent classification (LLM if enabled, else deterministic) → route.
+  const { intent } = await classifyIntentSmart(text, "master");
   switch (intent) {
     case "ceo_manager":
       await runSkill(inbound, ceoManagerSkill);

@@ -21,7 +21,8 @@ Source of truth for how Jarvis is structured as a personal-assistant agent. Code
 Channels:  WhatsApp adapter (src/lib/whatsapp/gateway.ts) · Telegram (future) · Web (future)
               ↓ JarvisInput
 Brain:     src/lib/jarvis/orchestrator.ts  (runJarvis: classify → resolve skill → execute)
-           src/lib/jarvis/intent.ts        (central deterministic intent classifier — LLM-swappable)
+           src/lib/jarvis/llm/classifier.ts (classifyIntentSmart: LLM-first if enabled → deterministic fallback)
+           src/lib/jarvis/intent.ts        (central DETERMINISTIC intent classifier — the fallback/default)
            src/lib/jarvis/registry.ts      (intent → skill, role-gated; external = order intake only)
 Contracts: src/lib/jarvis/types.ts  (JarvisInput, JarvisContext, JarvisResponse, OutboundMessage,
                                       Intent, IntentResult, Confidence, ConversationState,
@@ -49,6 +50,27 @@ Actions/DB: team_bot_order_drafts (pending) · whatsapp_sessions (state.order) �
 
 OCR is pluggable via `ocrDocument/providers.ts` (`OcrProvider`: current = tesseract; placeholder
 for a future cloud / LLM-vision provider) — swap engines without touching the skill.
+
+## LLM Brain layer (optional, dormant by default)
+
+`classifyIntentSmart` (used by the orchestrator + owner adapter) tries an **LLM classifier**
+first, then falls back to the deterministic one. The LLM is OFF unless `JARVIS_LLM_ENABLED=true`
+**and** `ANTHROPIC_API_KEY` are set (optional `JARVIS_LLM_MODEL`; a Vercel AI Gateway base can
+sit behind the same interface). With no key, behavior is byte-identical to the deterministic
+layer. Implemented with plain `fetch` (no new dependency); the key lives only in env and is
+never logged. **Safety:** the classifier only chooses an intent — role gating is the registry's
+job, so an LLM misclassification can never escalate an external sender to owner skills.
+
+## Async OCR worker
+
+OCR runs OFF the WhatsApp webhook (tesseract is slow; Meta retries a slow webhook). At receipt
+the skill downloads the media (Meta URLs expire ~5 min) and persists it to the private
+`jarvis-docs` Storage bucket, setting the document `status='queued'` (best-effort — a failure
+leaves it 'received', nothing breaks). The worker `processQueuedDocuments` (`skills/ocrDocument/
+worker.ts`) — invoked by `/api/jarvis/ocr-worker` (Vercel Cron `GET` or manual `POST`, both
+CRON_SECRET-guarded; daily on Hobby) — downloads from storage, runs the active OCR provider, and
+writes `extracted_text`/`summary`/`classification` onto the row (`status='processed'`). Sending the
+summary back to the owner over WhatsApp is a later step.
 ```
 
 ## Current reality (honest)

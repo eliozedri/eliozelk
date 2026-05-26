@@ -19,7 +19,8 @@ Skills live under `src/lib/jarvis/skills/` and return channel-agnostic messages.
 | **Finance / Operations** | ⬜ | — | Future skills. |
 
 ## Cross-cutting upgrades
-- **LLM brain:** swap deterministic parsers (`parse.ts`, intent detectors) for an LLM behind the same skill interfaces — no change to state/persistence/adapters.
+- **LLM brain (🟡 dormant layer built):** `llm/classifier.ts` `classifyIntentSmart` tries an LLM then falls back to deterministic. OFF until `JARVIS_LLM_ENABLED=true` + `ANTHROPIC_API_KEY` (optional `JARVIS_LLM_MODEL`). To extend to skill-level parsing (`parse.ts`), implement the same interfaces — no state/adapter change.
+- **Async OCR (🟡 built):** receipt persists media to the private `jarvis-docs` bucket → `status='queued'`; `/api/jarvis/ocr-worker` (CRON_SECRET, daily on Hobby + manual) runs the OCR provider and writes results to the doc row. Next: WhatsApp follow-up with the summary; faster/cloud provider.
 - **Skill registry/router:** generalize `orchestrator.selectSkills` as more skills + the owner path migrate fully into the brain.
 - **Channel adapters:** Telegram + Web adapters call `runJarvis` like WhatsApp does.
 

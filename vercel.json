@@ -3,6 +3,10 @@
     {
       "path": "/api/notifications/cron",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/jarvis/ocr-worker",
+      "schedule": "0 6 * * *"
     }
   ]
 }

@@ -2,6 +2,7 @@ import "server-only";
 import type { Skill, SkillContext, SkillResult } from "../../types";
 import { text } from "../../types";
 import { logDocument } from "./store";
+import { persistMediaForOcr } from "./storage";
 
 /**
  * OCR / Document skill — OWNER-only (external documents are handled as customer-intake
@@ -16,10 +17,12 @@ import { logDocument } from "./store";
 const ASK_FOR_DOC =
   "שלח לי עכשיו צילום, PDF או מסמך ואטפל בו. ('תפריט' לחזרה)";
 
-const RECEIVED_OWNER =
-  "קיבלתי את המסמך 📄 ושמרתי הפניה אליו.\n" +
-  "קריאה אוטומטית של מסמכים מוואטסאפ נמצאת בהקמה (מנוע ה-OCR קיים, החיבור החי בתהליך) — לא אמציא תוכן.\n" +
+const QUEUED_OWNER =
+  "קיבלתי את המסמך 📄 ושלחתי אותו לעיבוד ברקע. ברגע שאסיים לקרוא, התוצאה תופיע ברשומת המסמך.\n" +
   "בינתיים מה תרצה? כתוב: 'צור הזמנה' / 'העבר ל-CEO' / 'שמור כפתק'.";
+const LOGGED_OWNER =
+  "קיבלתי את המסמך 📄 ושמרתי הפניה אליו (קריאה אוטומטית עדיין בהקמה — לא אמציא תוכן).\n" +
+  "מה תרצה? כתוב: 'צור הזמנה' / 'העבר ל-CEO' / 'שמור כפתק'.";
 
 export const ocrDocumentSkill: Skill = {
   name: "ocrDocument",
@@ -27,7 +30,7 @@ export const ocrDocumentSkill: Skill = {
     const { channel, senderId, senderRole, media } = ctx.input;
 
     if (media) {
-      await logDocument({
+      const docId = await logDocument({
         channel,
         senderPhone: senderId,
         senderRole,
@@ -37,7 +40,12 @@ export const ocrDocumentSkill: Skill = {
         caption: ctx.input.text ?? null,
         status: "received",
       });
-      return { handled: true, messages: [text(RECEIVED_OWNER)] };
+      // Best-effort: persist the bytes now (Meta URLs expire) + queue for the async worker.
+      let queued = false;
+      if (docId) {
+        queued = await persistMediaForOcr({ docId, channel, mediaId: media.id, senderRole });
+      }
+      return { handled: true, messages: [text(queued ? QUEUED_OWNER : LOGGED_OWNER)] };
     }
 
     // OCR intent but no file yet → prompt to send one.

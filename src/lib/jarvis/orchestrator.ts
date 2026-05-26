@@ -1,7 +1,7 @@
 import "server-only";
 import type { JarvisInput, JarvisResponse } from "./types";
 import { text } from "./types";
-import { classifyIntent } from "./intent";
+import { classifyIntentSmart } from "./llm/classifier";
 import { resolveSkill } from "./registry";
 import { orderIntakeSkill } from "./skills/orderIntake/skill";
 
@@ -19,7 +19,7 @@ import { orderIntakeSkill } from "./skills/orderIntake/skill";
  */
 
 export async function runJarvis(input: JarvisInput): Promise<JarvisResponse> {
-  const intent = classifyIntent(input.text ?? "", input.senderRole);
+  const intent = await classifyIntentSmart(input.text ?? "", input.senderRole);
 
   if (input.senderRole === "external" || input.senderRole === "unknown") {
     const result = await orderIntakeSkill.handle({ input });
