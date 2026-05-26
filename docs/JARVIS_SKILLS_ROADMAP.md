@@ -18,9 +18,26 @@ Skills live under `src/lib/jarvis/skills/` and return channel-agnostic messages.
 | **Inventory / Availability** | ⬜ | Extension point only (`orderIntake/catalog.ts`) — never invents stock. | Connect catalog/stock source; availability checks; alternatives. |
 | **Finance / Operations** | ⬜ | — | Future skills. |
 
+## Reasoning-first Brain + departments
+Jarvis is a **reasoning-first orchestrator**: understand → pick the business **department** →
+execute a read-only skill/routine, ask clarification, or file a pending department request.
+**Commands are tools; departments/agents are consultable business brains; the LLM is the reasoning
+layer.** If a skill is missing, Jarvis must NOT fake it or run an unrelated command — it files a
+pending request and states the missing data source. See `docs/JARVIS_AGENT_ARCHITECTURE.md`.
+
+| Department | Read-only capability | Status |
+|---|---|---|
+| Warehouse/Inventory | stock lookup, low stock, missing/zero, purchase reco | ✅ |
+| Catalog/Pricing | missing price, missing supplier | ✅ |
+| Orders | open-orders overview, pending drafts | ✅ |
+| Operations | stuck/SLA, exceptions, multi-step risk routine | ✅ |
+| Fleet/Equipment | unusable / dispatch-blocked equipment | ✅ |
+| Finance (AR) | open customer balance | ⬜ pending request (no verified payments/AR source) |
+| Management (CEO) | free-text delegation → tracked task | ✅ |
+
 ## Cross-cutting upgrades
-- **LLM Router (🟡 built, live OFF):** multi-provider router `src/lib/jarvis/llm/` (gemini→groq→anthropic→openai→local) behind `classifyIntentSmart`, with safety validator + budget guards + deterministic fallback. Disabled (no key) → identical to deterministic. Anthropic/OpenAI paid & gated by `JARVIS_LLM_ALLOW_PAID`. See `docs/JARVIS_LLM_ROUTER.md`.
-- **Agent Reasoning (🟡 built, deterministic):** `src/lib/jarvis/agent/` — owner-only safe planner that composes existing read-only commands into multi-step reports (e.g. "מה יכול לתקוע עבודות"). LLM planner dormant. See `docs/JARVIS_AGENT_REASONING.md`. Next: skill-level parameter extraction via `classifyMessageRich`; DB-backed budget; write-class actions behind approvals.
+- **LLM Router (✅ live: Gemini→Groq→deterministic):** multi-provider router `src/lib/jarvis/llm/` behind `brain.ts`/`decideBrain`, with safety validator + budget guards + deterministic fallback. Anthropic/OpenAI paid & gated by `JARVIS_LLM_ALLOW_PAID`. See `docs/JARVIS_LLM_ROUTER.md`.
+- **Agent Reasoning (✅ built):** `src/lib/jarvis/agent/` — owner-only safe planner composing read-only commands into multi-step reports across departments (e.g. "מה יכול לתקוע עבודות"). LLM planner active when enabled. See `docs/JARVIS_AGENT_REASONING.md`. Next: connect a Finance AR data source; skill-level parameter extraction in order intake; DB-backed budget; write-class actions behind approvals.
 - **Async OCR (🟡 built):** receipt persists media to the private `jarvis-docs` bucket → `status='queued'`; `/api/jarvis/ocr-worker` (CRON_SECRET, daily on Hobby + manual) runs the OCR provider and writes results to the doc row. Next: WhatsApp follow-up with the summary; faster/cloud provider.
 - **Skill registry/router:** generalize `orchestrator.selectSkills` as more skills + the owner path migrate fully into the brain.
 - **Channel adapters:** Telegram + Web adapters call `runJarvis` like WhatsApp does.

@@ -18,9 +18,20 @@ export type LlmIntent =
   | "personal_note"
   | "reminder_request"
   | "daily_report"
-  | "operations_inventory_query"
   | "system_status"
-  | "agent_reasoning"
+  // owner — operations / inventory / catalog (each a DISTINCT read-only intent)
+  | "inventory_stock_lookup"
+  | "inventory_low_stock"
+  | "inventory_missing_or_zero"
+  | "catalog_missing_price"
+  | "catalog_missing_supplier"
+  | "purchase_recommendation_readonly"
+  | "orders_status"
+  | "stuck_orders"
+  | "pending_order_drafts"
+  | "operations_risk_report"
+  | "finance_open_balance"
+  | "fleet_equipment_status"
   // external customer
   | "external_greeting"
   | "external_order_request"
@@ -29,8 +40,9 @@ export type LlmIntent =
   | "representative_request"
   | "cancellation"
   | "confirmation"
+  | "unknown_customer_intake"
   // shared
-  | "clarification"
+  | "clarification_needed"
   | "unknown";
 
 /** How risky the selected action is — gates whether it may auto-run. */

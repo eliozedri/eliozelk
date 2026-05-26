@@ -3,35 +3,31 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import { writeAgentActivity, updateAgentRunStatus } from "@/lib/agents/scan-utils";
 import { ceoTitle, ceoPriority } from "./intent";
 import { createCeoRequest, closeCeoRequest } from "./store";
-import { matchCommand, type ManagerCommand, type CommandReport } from "./commands";
-import { planDeterministic } from "../../agent/planner";
-import { actionsCatalogText } from "../../agent/catalog";
+import { commandById, type ManagerCommand, type CommandReport } from "./commands";
 import { executePlan, formatPlanReport } from "../../agent/runner";
-import { routePlan } from "../../llm/index";
-import type { LLMPlanResult } from "../../llm/types";
+import { departmentFor } from "../../departments";
+import { logBrainDecision } from "../../brainLog";
+import { loadLlmConfig } from "../../llm/config";
+import { decideBrain, type BrainDecision } from "../../brain";
 import type { PlanExecution } from "../../agent/types";
 
 /**
- * System-Manager dispatcher — the manager's "brain".
- *
- * A directive forwarded from Jarvis is handled in three tiers, all honest and read-only:
- *   1. single read-only command (matchCommand) — e.g. "כמה מוצרים ללא מחיר";
- *   2. multi-step Agent-Reasoning plan (LLM if enabled+safe, else deterministic known patterns)
- *      — e.g. "מה יכול לתקוע עבודות השבוע" → stuck/drafts/pricing/exceptions, summarized;
- *   3. otherwise a human `agent_task` is queued — never faked.
- *
- * Every tier records the JARVIS→manager directive and the result in `agent_activity_feed` so the
- * exchange surfaces in the Digital Command Center.
+ * System-Manager EXECUTOR. It does not decide — `brain.ts` already produced a `BrainDecision`.
+ * This executes that decision honestly:
+ *   - clarification        → ask the question (no command runs);
+ *   - routine              → run a multi-step read-only plan;
+ *   - action (command)     → run the resolved read-only command (verified answer);
+ *   - pending department   → the owning department has no verified data source → file an honest
+ *                            pending request to that department's agent and say what's missing.
+ * Every path records the JARVIS→department exchange in the command center. Nothing is faked.
  */
 
 const MANAGER_AGENT_ID = "ceo";
-const MANAGER_AGENT_NAME = "מנהל פעילות";
 
 export interface DispatchResult {
-  kind: "command" | "plan" | "task";
-  /** True when a read-only command/plan actually produced a result. */
+  kind: "command" | "plan" | "clarification" | "pending_department";
+  decision: BrainDecision;
   executed: boolean;
-  queuedTask: boolean;
   command: ManagerCommand | null;
   report: CommandReport | null;
   planExecution: PlanExecution | null;
@@ -41,141 +37,149 @@ export interface DispatchResult {
   refId: string;
 }
 
-export async function dispatchManagerRequest(args: {
+export interface DispatchCtx {
   text: string;
   sourcePhone: string;
   channel: string;
-}): Promise<DispatchResult> {
+  msgId?: string;
+}
+
+/** Convenience for the ceo_wait / skill path: reason then execute. */
+export async function dispatchManagerRequest(ctx: DispatchCtx): Promise<DispatchResult> {
+  const decision = await decideBrain({ text: ctx.text, role: "master", channel: "whatsapp" });
+  return executeManagerDecision(decision, ctx);
+}
+
+export async function executeManagerDecision(decision: BrainDecision, ctx: DispatchCtx): Promise<DispatchResult> {
   const db = getServiceSupabase();
-  const title = ceoTitle(args.text);
-  const priority = ceoPriority(args.text);
-
-  // 1. File the directive (status starts in_progress — the manager is on it now).
-  const masterItemId = await createCeoRequest({
-    sourcePhone: args.sourcePhone,
-    channel: args.channel,
-    text: args.text,
-    title,
-    priority,
-    status: "in_progress",
-  });
+  const title = ceoTitle(ctx.text);
+  const priority = ceoPriority(ctx.text);
+  const masterItemId = await createCeoRequest({ sourcePhone: ctx.sourcePhone, channel: ctx.channel, text: ctx.text, title, priority, status: "in_progress" });
   const refId = masterItemId ? masterItemId.slice(0, 8) : "—";
+  const base = { decision, masterItemId, title, priority, refId };
 
-  // 2. Record the incoming JARVIS → manager directive in the command center.
-  await writeAgentActivity(db, MANAGER_AGENT_ID, "directive", `📥 פנייה מ-JARVIS: ${title}`, {
-    source: "jarvis_whatsapp",
-    request: args.text,
-    masterItemId,
-    priority,
+  const resolvedCmd = decision.action ? commandById(decision.action) : null;
+  const primaryAgent = resolvedCmd?.agentId ?? decision.targetAgents[0] ?? MANAGER_AGENT_ID;
+
+  logBrainDecision({
+    role: "master", channel: ctx.channel, llmEnabled: loadLlmConfig().enabled, provider: decision.provider,
+    source: decision.source, intent: decision.intent, coarseIntent: decision.coarseIntent,
+    businessDomain: decision.businessDomain, targetAgents: decision.targetAgents, skill: decision.skill,
+    action: decision.action, confidence: decision.confidence, requiresClarification: decision.requiresClarification,
+    verifiedAnswerPossible: decision.verifiedAnswerPossible, msgId: ctx.msgId, snippet: ctx.text,
+  });
+
+  await writeAgentActivity(db, primaryAgent, "directive", `📥 פנייה מ-JARVIS: ${title}`, {
+    source: "jarvis_whatsapp", request: ctx.text, masterItemId, businessDomain: decision.businessDomain, intent: decision.intent,
   }).catch(() => {});
-  await updateAgentRunStatus(db, MANAGER_AGENT_ID, "active").catch(() => {});
+  await updateAgentRunStatus(db, primaryAgent, "active").catch(() => {});
 
-  const base = { masterItemId, title, priority, refId };
-
-  // ── Tier 1: single read-only command ─────────────────────────────────────────
-  const command = matchCommand(args.text);
-  if (command) {
-    let report: CommandReport;
-    try {
-      report = await command.run(db);
-    } catch (err) {
-      report = { ok: false, title, headline: `שגיאה בביצוע: ${err instanceof Error ? err.message : String(err)}`, details: [] };
-    }
-    await updateAgentRunStatus(db, command.agentId, "idle").catch(() => {});
-    const reportLine = `${report.ok ? "✅" : "⚠️"} ${report.title}: ${report.headline}`;
-    await writeAgentActivity(db, command.agentId, "report", reportLine, {
-      source: "jarvis_dispatch", command: command.id, requestedBy: "ceo", masterItemId, count: report.count ?? null, details: report.details,
-    }).catch(() => {});
-    await writeAgentActivity(db, MANAGER_AGENT_ID, "report", `📋 דוח מ-${command.agentName}: ${report.headline}`, {
-      source: "jarvis_dispatch", command: command.id, delegatedTo: command.agentId, masterItemId,
-    }).catch(() => {});
-    await updateAgentRunStatus(db, MANAGER_AGENT_ID, "idle").catch(() => {});
-    await closeCeoRequest(masterItemId, {
-      status: report.ok ? "done" : "error",
-      report: { command: command.id, agentId: command.agentId, headline: report.headline, count: report.count ?? null, details: report.details },
-    });
-    return { kind: "command", executed: report.ok, queuedTask: false, command, report, planExecution: null, ...base };
+  // 1. Clarification — never run a command when unsure.
+  if (decision.requiresClarification) {
+    await closeCeoRequest(masterItemId, { status: "pending", report: { kind: "clarification", domain: decision.businessDomain } });
+    await updateAgentRunStatus(db, primaryAgent, "idle").catch(() => {});
+    return { kind: "clarification", executed: false, command: null, report: null, planExecution: null, ...base };
   }
 
-  // ── Tier 2: multi-step Agent-Reasoning plan ──────────────────────────────────
-  const planned = await buildPlan(args.text);
-  if (planned) {
-    const exec = await executePlan(planned.plan, planned.source);
-    const okMost = exec.ranSteps > 0;
+  // 2. Multi-step read-only routine.
+  if (decision.routine) {
+    const exec = await executePlan(decision.routine, decision.source);
     await writeAgentActivity(db, MANAGER_AGENT_ID, "report", `🧭 דוח רב-שלבי: ${exec.goal} (${exec.ranSteps}/${exec.steps.length} שלבים)`, {
-      source: "jarvis_dispatch", reasoning: planned.source, masterItemId,
+      source: "jarvis_dispatch", reasoning: decision.source, masterItemId,
       steps: exec.steps.map((s) => ({ action: s.action, ok: s.ok, headline: s.report?.headline ?? null })),
     }).catch(() => {});
     await updateAgentRunStatus(db, MANAGER_AGENT_ID, "idle").catch(() => {});
-    await closeCeoRequest(masterItemId, {
-      status: okMost ? "done" : "error",
-      report: { plan: exec.goal, source: planned.source, ranSteps: exec.ranSteps, steps: exec.steps.map((s) => ({ action: s.action, ok: s.ok, headline: s.report?.headline ?? null })) },
-    });
-    return { kind: "plan", executed: okMost, queuedTask: false, command: null, report: null, planExecution: exec, ...base };
+    await closeCeoRequest(masterItemId, { status: exec.ranSteps > 0 ? "done" : "error", report: { plan: exec.goal, source: decision.source, ranSteps: exec.ranSteps } });
+    return { kind: "plan", executed: exec.ranSteps > 0, command: null, report: null, planExecution: exec, ...base };
   }
 
-  // ── Tier 3: queue a human task (honest, never faked) ─────────────────────────
-  await queueManagerTask(db, { masterItemId, title, text: args.text, priority });
-  await writeAgentActivity(db, MANAGER_AGENT_ID, "task_created", `🗂️ נפתחה משימת מנהל לטיפול ידני: ${title}`, {
-    source: "jarvis_dispatch", masterItemId, priority,
-  }).catch(() => {});
-  await updateAgentRunStatus(db, MANAGER_AGENT_ID, "idle").catch(() => {});
-  return { kind: "task", executed: false, queuedTask: true, command: null, report: null, planExecution: null, ...base };
+  // 3. Single read-only action with a verified data source.
+  if (resolvedCmd) {
+    let report: CommandReport;
+    try {
+      report = await resolvedCmd.run(db, { itemName: pickItemName(decision.parameters), raw: ctx.text });
+    } catch (err) {
+      report = { ok: false, title, headline: `שגיאה בביצוע: ${err instanceof Error ? err.message : String(err)}`, details: [] };
+    }
+    await updateAgentRunStatus(db, resolvedCmd.agentId, "idle").catch(() => {});
+
+    if (report.needsClarification) {
+      await writeAgentActivity(db, resolvedCmd.agentId, "report", `❓ ${report.title}: ${report.headline}`, { source: "jarvis_dispatch", command: resolvedCmd.id, masterItemId }).catch(() => {});
+      await closeCeoRequest(masterItemId, { status: "pending", report: { command: resolvedCmd.id, needsClarification: true, headline: report.headline } });
+      return { kind: "clarification", executed: false, command: resolvedCmd, report, planExecution: null, ...base };
+    }
+    await writeAgentActivity(db, resolvedCmd.agentId, "report", `${report.ok ? "✅" : "⚠️"} ${report.title}: ${report.headline}`, {
+      source: "jarvis_dispatch", command: resolvedCmd.id, requestedBy: "ceo", masterItemId, count: report.count ?? null, details: report.details,
+    }).catch(() => {});
+    await writeAgentActivity(db, MANAGER_AGENT_ID, "report", `📋 דוח מ-${resolvedCmd.agentName}: ${report.headline}`, { source: "jarvis_dispatch", command: resolvedCmd.id, delegatedTo: resolvedCmd.agentId, masterItemId }).catch(() => {});
+    await closeCeoRequest(masterItemId, { status: report.ok ? "done" : "error", report: { command: resolvedCmd.id, agentId: resolvedCmd.agentId, headline: report.headline, count: report.count ?? null } });
+    return { kind: "command", executed: report.ok, command: resolvedCmd, report, planExecution: null, ...base };
+  }
+
+  // 4. Department has no verified data source (or genuine delegation) → honest pending request.
+  await queueDepartmentTask(db, { masterItemId, title, text: ctx.text, priority, agentId: primaryAgent, domain: decision.businessDomain });
+  await writeAgentActivity(db, primaryAgent, "task_created", `🗂️ בקשה ל${departmentFor(decision.intent).label}: ${title}`, { source: "jarvis_dispatch", masterItemId, businessDomain: decision.businessDomain, dataSourceNeeded: decision.dataSourceNeeded }).catch(() => {});
+  await updateAgentRunStatus(db, primaryAgent, "idle").catch(() => {});
+  await closeCeoRequest(masterItemId, { status: "pending", report: { delegatedTo: primaryAgent, domain: decision.businessDomain, dataSourceNeeded: decision.dataSourceNeeded } });
+  return { kind: "pending_department", executed: false, command: null, report: null, planExecution: null, ...base };
 }
 
-/** Render the WhatsApp reply the owner receives back. */
+/** Render the WhatsApp reply for a dispatch result. */
 export function formatDispatchReply(result: DispatchResult): string {
+  const d = result.decision;
+  if (result.kind === "clarification") {
+    if (result.report) {
+      return [result.report.headline, ...(result.report.details.length ? ["", ...result.report.details] : [])].join("\n");
+    }
+    return d.clarificationQuestion ?? "תוכל לפרט קצת יותר? 🙂";
+  }
   if (result.kind === "plan" && result.planExecution) {
     return formatPlanReport(result.planExecution, result.refId);
   }
-  if (result.kind === "command" && result.executed && result.report) {
+  if (result.kind === "command" && result.report) {
     const r = result.report;
+    if (!r.ok) return `נתקלתי בבעיה בביצוע "${r.title}" (#${result.refId}):\n${r.headline}\nתועד במרכז הפיקוד.`;
     return [
       `📋 דוח ביצוע — ${r.title} (#${result.refId})`,
       r.headline,
       ...(r.details.length ? ["", ...r.details] : []),
       "",
-      `✅ בוצע ע״י ${result.command?.agentName ?? MANAGER_AGENT_NAME} · בדיקה בלבד, ללא שינויים.`,
+      `✅ בוצע ע״י ${result.command?.agentName ?? "מנהל פעילות"} · בדיקה בלבד, ללא שינויים.`,
       "🖥️ מתועד במרכז הפיקוד הדיגיטלי.",
     ].join("\n");
   }
-  if (result.report && !result.report.ok) {
-    return `נתקלתי בבעיה בביצוע "${result.title}" (#${result.refId}):\n${result.report.headline}\nתועד במרכז הפיקוד.`;
+  // pending_department
+  const dept = departmentFor(d.intent);
+  const lines = [`קיבלתי (#${result.refId}). העברתי ל${dept.label}.`];
+  if (d.dataSourceNeeded) lines.push(`אין כרגע מקור נתונים מאומת לבקשה הזו — ${d.dataSourceNeeded}.`);
+  lines.push(`פתחתי בקשת בדיקה ל${dept.label}; היא מופיעה במרכז הפיקוד הדיגיטלי לטיפול.`);
+  return lines.join("\n");
+}
+
+// ── helpers ─────────────────────────────────────────────────────────────────────
+
+function pickItemName(params: Record<string, unknown>): string | undefined {
+  for (const k of ["item_name", "item", "name", "product"]) {
+    const v = params?.[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
   }
-  return (
-    `קיבלתי (#${result.refId}). העברתי למנהל המערכת ופתחתי משימה לטיפול ידני` +
-    (result.priority === "high" ? " (סומן דחוף 🔴)" : "") +
-    `.\nלא זוהתה בדיקה אוטומטית מתאימה לבקשה הזו — היא מופיעה כעת במרכז הפיקוד הדיגיטלי לטיפול.`
-  );
+  return undefined;
 }
 
-// ── Agent-Reasoning plan builder (LLM if safely enabled, else deterministic) ────
-
-async function buildPlan(text: string): Promise<{ plan: LLMPlanResult; source: "llm" | "deterministic" } | null> {
-  // LLM planner goes through the budget/paid-guarded router; returns null when LLM is off.
-  const viaLlm = await routePlan({ text, role: "master", channel: "whatsapp", actionsCatalog: actionsCatalogText() });
-  if (viaLlm?.plan?.steps?.length) return { plan: viaLlm.plan, source: "llm" };
-  const det = planDeterministic(text);
-  if (det) return { plan: det, source: "deterministic" };
-  return null;
-}
-
-// ── Human-task queue for non-executable directives ──────────────────────────────
-
-async function queueManagerTask(
+async function queueDepartmentTask(
   db: ReturnType<typeof getServiceSupabase>,
-  args: { masterItemId: string | null; title: string; text: string; priority: "high" | "normal" },
+  args: { masterItemId: string | null; title: string; text: string; priority: "high" | "normal"; agentId: string; domain: string },
 ): Promise<void> {
   const { error } = await db.from("agent_tasks").insert({
-    agent_id: MANAGER_AGENT_ID,
+    agent_id: args.agentId,
     related_entity_type: "jarvis_request",
     related_entity_id: args.masterItemId ?? "unknown",
     title: `פנייה מ-JARVIS: ${args.title}`,
     description: args.text,
     priority: args.priority === "high" ? "high" : "normal",
     status: "open",
-    recommended_action: "סקור את הבקשה והפעל את הסוכן/המחלקה הרלוונטיים, או בצע ידנית.",
+    recommended_action: `סקור את הבקשה (תחום: ${args.domain}) ובצע ידנית או חבר מקור נתונים מאומת.`,
     requires_approval: false,
   });
-  if (error) console.error("[jarvis:ceo] queueManagerTask failed:", error.message);
+  if (error) console.error("[jarvis:ceo] queueDepartmentTask failed:", error.message);
 }

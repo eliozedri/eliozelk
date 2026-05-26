@@ -19,15 +19,27 @@ interface Rule {
 
 const OWNER_RULES: Rule[] = [
   { re: /תפריט|menu/i, intent: "owner_menu", skill: null, safety: "read_only" },
+  // Inventory/catalog — specific intents BEFORE the generic ones (order matters).
+  { re: /נגמר|אזל|אפס\s*מלאי|חסר\s+במלאי|ללא\s+מלאי|out\s*of\s*stock/i, intent: "inventory_missing_or_zero", skill: "operations_inventory", safety: "read_only" },
+  { re: /נמוך|עומד\s+להיגמר|להיגמר|לקראת\s+סיום|מתחת\s+למינימום|low\s*stock/i, intent: "inventory_low_stock", skill: "operations_inventory", safety: "read_only" },
+  { re: /(ללא|בלי|חסר|אין)\s+ספק/i, intent: "catalog_missing_supplier", skill: "operations_inventory", safety: "read_only" },
+  { re: /(ללא|בלי|חסר)\s+מחיר|ללא\s+תמחור/i, intent: "catalog_missing_price", skill: "operations_inventory", safety: "read_only" },
+  { re: /מה\s+כדאי\s+להזמין|המלצ.*רכש|מה\s+להזמין|רשימת\s+קניות|לרכוש/i, intent: "purchase_recommendation_readonly", skill: "operations_inventory", safety: "read_only" },
+  { re: /חשבון.{0,12}(פתוח|לקוח)|(פתוח|חוב|יתר|חייב).{0,14}לקוח|כמה\s+כסף|סך\s+(כל\s+)?ה?חשבון|גביי?ה|חובות|מאזן\s+לקוח/i, intent: "finance_open_balance", skill: "finance", safety: "read_only" },
+  { re: /כלי(ם)?\s+(לא\s+שמיש|תקול)|לא\s+שמיש|ציוד\s+(תקול|בטיפול)|רכב.*(תקול|בטיפול)|טסט\s+פג|ביטוח\s+פג|מושבת/i, intent: "fleet_equipment_status", skill: "fleet", safety: "read_only" },
+  { re: /סיכון|מה\s+(יכול\s+)?לתקוע|דוח\s+תפעולי|בעיות\s+תפעוליות/i, intent: "operations_risk_report", skill: "operations", safety: "read_only" },
+  { re: /הזמנות\s+תקועות|הזמנ.*תקוע|מה\s+תקוע/i, intent: "stuck_orders", skill: "operations", safety: "read_only" },
+  { re: /טיוט(ות|ה)|ממתינ.*לאישור|תור\s+הזמנות/i, intent: "pending_order_drafts", skill: "orders", safety: "read_only" },
+  { re: /הזמנות\s+פתוחות|כמה\s+הזמנות|מצב\s+ההזמנות/i, intent: "orders_status", skill: "orders", safety: "read_only" },
+  { re: /(כמה|מלאי\s+של|יש|נשאר|נותר|כמות).*(נשאר|נותר|מלאי|במלאי|כמות)|מלאי\s+של/i, intent: "inventory_stock_lookup", skill: "operations_inventory", safety: "read_only" },
   { re: /ceo|מנהל\s+המערכת|מנכ"?ל/i, intent: "ceo_manager_request", skill: "ceoManager", safety: "pending" },
-  { re: /מלאי|חוסר|low\s*stock|ללא\s+מחיר|סיכון/i, intent: "operations_inventory_query", skill: "ceoManager", safety: "read_only" },
-  { re: /סטטוס|מצב\s+המערכת|תקוע/i, intent: "system_status", skill: "ceoManager", safety: "read_only" },
+  { re: /סטטוס|מצב\s+המערכת/i, intent: "system_status", skill: "ceoManager", safety: "read_only" },
   { re: /תזכיר|תזכורת/i, intent: "reminder_request", skill: "personalArea", safety: "pending" },
   { re: /משימה|תרשום/i, intent: "personal_task", skill: "personalArea", safety: "pending" },
   { re: /פתק/i, intent: "personal_note", skill: "personalArea", safety: "pending" },
   { re: /דוח\s+יומי/i, intent: "daily_report", skill: "personalArea", safety: "read_only" },
   { re: /סרוק|מסמך|קרא\s+את/i, intent: "ocr_document", skill: "ocrDocument", safety: "pending" },
-  { re: /הזמנה|טיוטה|הוסף|הסר|כמות/i, intent: "order_intake", skill: "orderIntake", safety: "pending" },
+  { re: /הזמנה|טיוטה|הוסף|הסר/i, intent: "order_intake", skill: "orderIntake", safety: "pending" },
 ];
 
 const EXTERNAL_RULES: Rule[] = [

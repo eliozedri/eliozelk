@@ -24,7 +24,7 @@ export function planDeterministic(text: string): LLMPlanResult | null {
   if (FULL_OVERVIEW.test(t)) {
     return {
       goal: "תמונת מצב ניהולית מלאה",
-      steps: [step("stuck_orders"), step("open_orders_overview"), step("pending_drafts"), step("items_missing_price"), step("exceptions_overview")],
+      steps: [step("stuck_orders"), step("open_orders_overview"), step("pending_drafts"), step("inventory_low_stock"), step("items_missing_price"), step("fleet_unusable_equipment"), step("exceptions_overview")],
       requiresApproval: false,
       riskLevel: "low",
     };
@@ -32,7 +32,7 @@ export function planDeterministic(text: string): LLMPlanResult | null {
   if (RISK_REPORT.test(t)) {
     return {
       goal: "דוח סיכונים תפעולי — מה עלול לתקוע עבודות",
-      steps: [step("stuck_orders"), step("pending_drafts"), step("items_missing_price"), step("exceptions_overview")],
+      steps: [step("stuck_orders"), step("pending_drafts"), step("inventory_low_stock"), step("items_missing_price"), step("fleet_unusable_equipment"), step("exceptions_overview")],
       requiresApproval: false,
       riskLevel: "low",
     };
@@ -40,7 +40,7 @@ export function planDeterministic(text: string): LLMPlanResult | null {
   if (ORDER_INVENTORY.test(t)) {
     return {
       goal: "סיכון הזמנות מול מלאי/תמחור",
-      steps: [step("open_orders_overview"), step("items_missing_price"), step("pending_drafts")],
+      steps: [step("open_orders_overview"), step("inventory_low_stock"), step("items_missing_price"), step("pending_drafts")],
       requiresApproval: false,
       riskLevel: "low",
     };

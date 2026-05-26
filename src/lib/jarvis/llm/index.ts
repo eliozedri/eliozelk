@@ -26,13 +26,17 @@ export interface RouteMessageInput {
 
 const OWNER_INTENTS: LlmIntent[] = [
   "owner_menu", "order_intake", "order_update", "ceo_manager_request", "ocr_document",
-  "personal_task", "personal_note", "reminder_request", "daily_report",
-  "operations_inventory_query", "system_status", "agent_reasoning", "clarification", "unknown",
+  "personal_task", "personal_note", "reminder_request", "daily_report", "system_status",
+  "inventory_stock_lookup", "inventory_low_stock", "inventory_missing_or_zero",
+  "catalog_missing_price", "catalog_missing_supplier", "purchase_recommendation_readonly",
+  "orders_status", "stuck_orders", "pending_order_drafts",
+  "operations_risk_report", "finance_open_balance", "fleet_equipment_status",
+  "clarification_needed", "unknown",
 ];
 const EXTERNAL_INTENTS: LlmIntent[] = [
   "external_greeting", "external_order_request", "external_order_update",
   "external_document_attachment", "representative_request", "cancellation", "confirmation",
-  "clarification", "unknown",
+  "unknown_customer_intake", "clarification_needed", "unknown",
 ];
 
 function allowedIntentsForRole(role: SenderRole): LlmIntent[] {

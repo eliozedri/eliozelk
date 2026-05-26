@@ -4,14 +4,22 @@ Multi-provider LLM layer that understands natural language, classifies intent, s
 extracts parameters, and decides whether to ask clarification — **behind the existing Brain**.
 Code: `src/lib/jarvis/llm/`.
 
-> **Status: live LLM DISABLED.** No provider key exists in env, so Jarvis runs on the permanent
-> deterministic fallback. All infrastructure below is built and tested via the mock provider.
+> **Status: live LLM ENABLED** with Gemini (1st) → Groq (2nd) → deterministic fallback
+> (`JARVIS_LLM_ENABLED=true`, `JARVIS_LLM_PROVIDER=auto`, `JARVIS_LLM_PROVIDER_PRIORITY=gemini,groq`).
+> Anthropic/OpenAI remain off (paid; `JARVIS_LLM_ALLOW_PAID` unset). On any provider error/timeout/
+> quota/low-confidence/unsafe/invalid output → automatic deterministic fallback. Jarvis never stops.
 
-## Core principle
+## Core principle — reasoning-first
 
 The LLM is a **reasoning/router layer only**. It never mutates the DB and never performs actions.
-It proposes an intent; the **safety validator** decides what may route; the **skill** does the
-work through safe tools. An LLM misclassification cannot escalate privileges or mutate data.
+It reasons about the request; the Brain attaches the owning **business department**; the **safety
+validator** decides what may route; a **read-only command/routine** (the tool) executes — or, when
+the department has no verified data source, Jarvis files an honest **pending request** instead of
+running a wrong command or inventing an answer. The structured `BrainDecision`
+(`src/lib/jarvis/brain.ts`) — intent / department / skill / action / routine / parameters /
+confidence / clarification / safety / verifiedAnswerPossible / dataSourceNeeded — flows end-to-end;
+nothing is collapsed into a command id at the door. Departments + capabilities are documented in
+`docs/JARVIS_AGENT_ARCHITECTURE.md`.
 
 ## Pipeline
 

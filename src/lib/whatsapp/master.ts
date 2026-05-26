@@ -14,8 +14,9 @@ import type { InboundMessage } from "./types";
 import type { JarvisInput, Skill } from "@/lib/jarvis/types";
 import { ceoManagerSkill } from "@/lib/jarvis/skills/ceoManager/skill";
 import { ocrDocumentSkill } from "@/lib/jarvis/skills/ocrDocument/skill";
-import { classifyIntentSmart } from "@/lib/jarvis/llm/classifier";
 import { personalAreaSkill } from "@/lib/jarvis/skills/personalArea/skill";
+import { decideBrain } from "@/lib/jarvis/brain";
+import { executeManagerDecision, formatDispatchReply } from "@/lib/jarvis/skills/ceoManager/dispatcher";
 
 /**
  * Jarvis Master Mode — owner-only stateful WhatsApp wizard.
@@ -269,12 +270,19 @@ async function freeTextRouter(inbound: InboundMessage, text: string): Promise<vo
     return sendOrdersMenu(phone);
   }
 
-  // Central Brain intent classification (LLM if enabled, else deterministic) → route.
-  const { intent } = await classifyIntentSmart(text, "master");
-  switch (intent) {
-    case "ceo_manager":
-      await runSkill(inbound, ceoManagerSkill);
+  // Reasoning-first Brain: ONE structured decision (LLM if enabled+safe, else deterministic),
+  // then route by the chosen business department/capability — never a guessed command.
+  const decision = await decideBrain({ text, role: "master", channel: "whatsapp" });
+  switch (decision.coarseIntent) {
+    case "ceo_manager": {
+      // Operations / inventory / catalog / orders / finance / fleet / management — the executor
+      // runs the resolved read-only action/routine, asks clarification, or files a department request.
+      const result = await executeManagerDecision(decision, {
+        text, sourcePhone: phone, channel: "whatsapp", msgId: inbound.waMessageId,
+      });
+      await sendWhatsAppText(phone, formatDispatchReply(result));
       return toMain(phone);
+    }
     case "personal":
     case "status":
       await runSkill(inbound, personalAreaSkill);
@@ -288,7 +296,8 @@ async function freeTextRouter(inbound: InboundMessage, text: string): Promise<vo
     case "greeting":
       return runAction(phone, "main");
     default:
-      await sendWhatsAppText(phone, "לא בטוח שהבנתי 🙂 הנה התפריט:");
+      // Uncertain → ask, never run an unrelated command.
+      await sendWhatsAppText(phone, decision.clarificationQuestion ?? "לא בטוח שהבנתי 🙂 הנה התפריט:");
       return toMain(phone);
   }
 }

@@ -17,7 +17,8 @@ const EXTERNAL_ALLOWED: ReadonlySet<LlmIntent> = new Set<LlmIntent>([
   "representative_request",
   "cancellation",
   "confirmation",
-  "clarification",
+  "unknown_customer_intake",
+  "clarification_needed",
   "unknown",
 ]);
 
@@ -95,10 +96,22 @@ export function llmIntentToCoarse(intent: LlmIntent): Intent {
     case "cancellation":
     case "confirmation":
       return "order_intake";
+    // CEO/manager + ALL operations/inventory/catalog intents route to the manager dispatcher,
+    // which then picks the EXACT read-only command from the rich intent (intent-first).
     case "ceo_manager_request":
-    case "operations_inventory_query":
     case "system_status":
-    case "agent_reasoning":
+    case "inventory_stock_lookup":
+    case "inventory_low_stock":
+    case "inventory_missing_or_zero":
+    case "catalog_missing_price":
+    case "catalog_missing_supplier":
+    case "purchase_recommendation_readonly":
+    case "orders_status":
+    case "stuck_orders":
+    case "pending_order_drafts":
+    case "operations_risk_report":
+    case "finance_open_balance":
+    case "fleet_equipment_status":
       return "ceo_manager";
     case "ocr_document":
     case "external_document_attachment":
@@ -111,7 +124,8 @@ export function llmIntentToCoarse(intent: LlmIntent): Intent {
     case "owner_menu":
     case "external_greeting":
       return "greeting";
-    case "clarification":
+    case "clarification_needed":
+    case "unknown_customer_intake":
     case "unknown":
     default:
       return "unclear";

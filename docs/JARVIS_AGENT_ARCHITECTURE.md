@@ -51,24 +51,65 @@ Actions/DB: team_bot_order_drafts (pending) · whatsapp_sessions (state.order) �
 OCR is pluggable via `ocrDocument/providers.ts` (`OcrProvider`: current = tesseract; placeholder
 for a future cloud / LLM-vision provider) — swap engines without touching the skill.
 
-## LLM Router + Agent Reasoning (Stage 2 + 3) — built, live LLM disabled
+## Reasoning-first Brain + department routing (Stage 2 + 3)
 
-`classifyIntentSmart` now delegates to a **multi-provider LLM Router** (`src/lib/jarvis/llm/`)
-and falls back to the deterministic classifier whenever the LLM can't/shouldn't run. Providers:
-`gemini → groq → anthropic → openai → local` (priority configurable). Gemini/Groq are free-tier
-friendly; Anthropic/OpenAI are code-supported but **paid** and stay off unless
-`JARVIS_LLM_ALLOW_PAID=true`. The Anthropic API is NOT covered by a Claude/Claude Code subscription.
+**Jarvis is REASONING-FIRST, commands-second.** It does not map a message to the closest command.
+It understands the request, decides which business **department** owns the answer, and only then
+resolves an execution path. Commands are *tools*; departments/agents are *consultable business
+brains*; the LLM Router is the *reasoning layer*.
 
-**Currently DISABLED** (no provider key in env) → behavior is byte-identical to the deterministic
-layer. A strict **safety validator** (`llm/safety.ts`) sits after the LLM: confidence gate,
-role gating (external clamped to customer intake), no auto-mutation, write/blocked → fallback —
-on top of `sanitizeIntentForRole` + the registry gate. **Budget guards** (`llm/budget.ts`) cap
-tokens/timeout/daily requests. **Agent Reasoning** (`src/lib/jarvis/agent/`) lets the owner ask a
-complex question; a deterministic planner (LLM optional) composes existing **read-only** commands
-and the runner executes only read-only steps — never faked, never a write.
+### Mandatory pipeline (every free-text message)
+```
+message
+→ identify sender + role (gateway: master vs external) — ALWAYS before the LLM
+→ load conversation state/context
+→ decideBrain (src/lib/jarvis/brain.ts):
+     LLM Router reasons (intent, skill, parameters, confidence, clarification, safety)
+     → attach business department (src/lib/jarvis/departments.ts)
+     → resolve ONE path: single read-only action | multi-step routine | clarification |
+       pending department request (when the department has no verified data source)
+   (LLM unavailable/low-confidence/unsafe/invalid → deterministic decision, which ASKS
+    clarification rather than guessing a command)
+→ safety validator (llm/safety.ts): role gate, confidence, no auto-mutation, external clamp
+→ executor (skills/ceoManager/dispatcher.ts executeManagerDecision): run approved read-only
+   work, or file an honest pending request — never a wrong/unrelated command
+→ Hebrew answer (verified) or an honest "no verified source / pending" reply
+```
 
-See `docs/JARVIS_LLM_ROUTER.md` and `docs/JARVIS_AGENT_REASONING.md` for the full design,
-env vars, billing rules, and the exact steps to enable Gemini/Groq safely later.
+### BrainDecision (the structured decision that flows end-to-end)
+`{ source, provider, intent, coarseIntent, businessDomain, targetAgents,
+requiresDepartmentConsultation, skill, action, parameters, confidence, requiresClarification,
+clarificationQuestion, routine, safetyLevel, verifiedAnswerPossible, dataSourceNeeded }`.
+Intent, skill, action/command, routine, clarification, confidence and safety are kept **distinct** —
+nothing is collapsed into a command id at the door.
+
+### Departments (consultable business brains)
+| Domain | Agent(s) | Read-only capability today |
+|---|---|---|
+| Warehouse / Inventory | inventory-agent | stock lookup, low stock, missing/zero, purchase reco ✅ |
+| Catalog / Pricing | catalog-pricing-agent | missing price, missing supplier ✅ |
+| Orders | orders-agent | open-orders overview, pending drafts ✅ |
+| Operations | ceo | stuck/SLA, exceptions, multi-step risk routine ✅ |
+| Fleet / Equipment | equipment-fleet-agent | unusable / dispatch-blocked equipment ✅ |
+| Finance | cfo-agent / billing-collections-agent | **no verified AR source → pending request** ⬜ |
+| Management (CEO) | ceo | free-text delegation → tracked task ✅ |
+| Documents / Personal | — | OCR audit / personal capture (existing skills) |
+
+**Missing capability rule:** if a domain has no executable read-only skill (e.g. Finance AR — no
+customer-payments table), Jarvis does **not** run an unrelated command and does **not** invent an
+answer. It files a pending request to that department's agent and tells the owner exactly what
+data source must be connected (`dataSourceNeeded`). A new safe capability = a new read-only command
+(`commands.ts`) + a row in `departments.ts`/`match.ts` — the brain picks it up automatically.
+
+### Providers / safety / budget
+Multi-provider router `gemini → groq → anthropic → openai → local` (priority configurable).
+Gemini/Groq are free-tier friendly and enabled when a key exists; Anthropic/OpenAI are
+code-supported but **paid** and stay off unless `JARVIS_LLM_ALLOW_PAID=true` (Anthropic API is NOT
+covered by a Claude/Claude Code subscription). Safety validator + role gate + budget caps as above.
+Every decision is logged secrets-free via `brainLog.ts`.
+
+See `docs/JARVIS_LLM_ROUTER.md` and `docs/JARVIS_AGENT_REASONING.md` for full detail, env vars,
+billing rules, and how to enable a provider safely.
 
 ## Async OCR worker
 
