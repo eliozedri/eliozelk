@@ -370,6 +370,8 @@ const FEED_SEVERITY_MAP: Record<string, FeedSeverity> = {
   approval_request: "warn",
   action_taken:     "ok",
   collaboration:    "meeting",
+  directive:        "meeting",
+  report:           "ok",
   status_change:    "info",
 };
 

@@ -1,14 +1,16 @@
 import "server-only";
 import type { Skill, SkillContext, SkillResult } from "../../types";
 import { text } from "../../types";
-import { isCeoStatusQuery, ceoTitle, ceoPriority } from "./intent";
-import { createCeoRequest, listOpenCeoRequests } from "./store";
+import { isCeoStatusQuery } from "./intent";
+import { listOpenCeoRequests } from "./store";
+import { dispatchManagerRequest, formatDispatchReply } from "./dispatcher";
 
 /**
- * CEO / Manager Communication skill — owner-only (the orchestrator/adapter never routes
- * external senders here). Stage 1: a pending request queue + status listing. There is no
- * CEO executor agent yet, so Jarvis records requests honestly and NEVER claims execution.
- * When a real CEO module exists, route in createCeoRequest / report its result here.
+ * CEO / System-Manager skill — owner-only (the orchestrator/adapter never routes external
+ * senders here). A directive is handed to the manager DISPATCHER, which understands it,
+ * activates the relevant agent, executes read-only commands, records the exchange in the
+ * Digital Command Center, and returns an execution report. Requests that need a write are
+ * queued as a human task — Jarvis never claims an action it did not perform.
  */
 
 export const ceoManagerSkill: Skill = {
@@ -17,35 +19,27 @@ export const ceoManagerSkill: Skill = {
     const { senderId, channel } = ctx.input;
     const body = (ctx.input.text ?? "").trim();
 
-    // Status / list query.
+    // Status / list query → show what the manager is currently handling.
     if (isCeoStatusQuery(body)) {
       const open = await listOpenCeoRequests();
       if (open.length === 0) {
-        return { handled: true, messages: [text("אין כרגע משימות CEO פתוחות בתור. 🙂")] };
+        return { handled: true, messages: [text("אין כרגע משימות מנהל פתוחות בתור. 🙂")] };
       }
       const lines = open
-        .map((r, i) => `${i + 1}. ${r.priority === "high" ? "🔴 " : ""}${r.title}`)
+        .map((r, i) => `${i + 1}. ${r.priority === "high" ? "🔴 " : ""}${r.title}${r.status === "in_progress" ? " ⏳" : ""}`)
         .join("\n");
       return {
         handled: true,
-        messages: [text(`משימות CEO פתוחות (${open.length}) — ממתינות לטיפול:\n${lines}`)],
+        messages: [text(`משימות מנהל פתוחות (${open.length}):\n${lines}`)],
       };
     }
 
-    // New CEO request → pending queue (honest; no execution).
     if (!body) {
-      return { handled: true, messages: [text("כתוב לי מה להעביר ל-CEO / מנהל המערכת ואתעד את הבקשה.")] };
+      return { handled: true, messages: [text("כתוב לי מה להעביר למנהל המערכת ואטפל בזה.")] };
     }
-    const title = ceoTitle(body);
-    const priority = ceoPriority(body);
-    const id = await createCeoRequest({ sourcePhone: senderId, channel, text: body, title, priority });
-    const ref = id ? ` (#${id.slice(0, 8)})` : "";
-    return {
-      handled: true,
-      messages: [text(
-        `קיבלתי${ref}. רשמתי את הבקשה לתור ה-CEO / מנהל המערכת ואעדכן כשיהיה טיפול.` +
-        (priority === "high" ? "\nסומן כדחוף 🔴." : ""),
-      )],
-    };
+
+    // New directive → dispatch (think → activate agent → execute → report).
+    const result = await dispatchManagerRequest({ text: body, sourcePhone: senderId, channel });
+    return { handled: true, messages: [text(formatDispatchReply(result))] };
   },
 };

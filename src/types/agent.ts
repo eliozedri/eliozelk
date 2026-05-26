@@ -121,6 +121,8 @@ export type ActivityMessageType =
   | "approval_request"
   | "action_taken"
   | "collaboration"
+  | "directive"
+  | "report"
   | "status_change";
 
 export interface AgentActivityFeedItem {
@@ -249,6 +251,8 @@ export const ACTIVITY_TYPE_LABELS: Record<ActivityMessageType, string> = {
   approval_request: "בקשת אישור",
   action_taken:     "פעולה בוצעה",
   collaboration:    "שיתוף פעולה",
+  directive:        "פנייה מ-JARVIS",
+  report:           "דוח ביצוע",
   status_change:    "שינוי סטטוס",
 };
 
@@ -260,6 +264,8 @@ export const ACTIVITY_TYPE_COLORS: Record<ActivityMessageType, string> = {
   approval_request: "text-amber-600",
   action_taken:     "text-green-600",
   collaboration:    "text-indigo-600",
+  directive:        "text-cyan-600",
+  report:           "text-emerald-600",
   status_change:    "text-gray-500",
 };
 
