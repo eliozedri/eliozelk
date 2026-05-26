@@ -17,6 +17,11 @@ import type { InboundMessage } from "./types";
 
 // ── Menu copy (concise, assistant-style Hebrew) ──────────────────────────────
 
+// Owner-only guidance: encourage keyboard dictation-as-text (NOT WhatsApp voice notes —
+// there is no backend audio transcription). Shown only inside Master Mode.
+const DICTATION_TIP =
+  "💡 טיפ: לא נוח להקליד? לחץ על כפתור ההכתבה במקלדת של הטלפון, דבר חופשי, ושלח לי את הטקסט שנוצר — כך אבין את הבקשה מיד ואטפל בה במדויק.";
+
 const MAIN_MENU =
   "ג׳ארוויס — העוזר האישי שלך 👋\n" +
   "מה נעשה?\n" +
@@ -25,7 +30,8 @@ const MAIN_MENU =
   "3. 🧑‍💼 פנייה ל-CEO / מנהל המערכת\n" +
   "4. 👤 האזור האישי שלי\n" +
   "5. ⚙️ הגדרות\n" +
-  "0. ביטול";
+  "0. ביטול\n\n" +
+  DICTATION_TIP;
 
 const ORDERS_MENU =
   "📋 הזמנות וטיוטות — מה תרצה?\n" +
@@ -35,7 +41,9 @@ const ORDERS_MENU =
   "0. חזור";
 
 const ORDERS_CREATE_PROMPT =
-  "כתוב לי את פרטי ההזמנה (לקוח, פריטים, כמויות, מיקום…) ואפתח טיוטה ממתינה לאישור. ('חזור' לתפריט)";
+  "כתוב לי את פרטי ההזמנה (לקוח, פריטים, כמויות, מיקום…) ואפתח טיוטה ממתינה לאישור.\n" +
+  DICTATION_TIP +
+  "\n('חזור' לתפריט)";
 
 const OCR_PROMPT =
   "שלח לי עכשיו צילום, PDF או מסמך. אנסה לקרוא, לסכם, ולשאול מה לעשות איתו. ('חזור' לתפריט)";
