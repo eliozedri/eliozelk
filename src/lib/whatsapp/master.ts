@@ -7,6 +7,7 @@ import {
   sendMainMenu, sendOrdersMenu, sendPersonalMenu, sendSettingsMenu,
   sendOrdersCreatePrompt, sendOcrPrompt, sendCeoPrompt, sendPersonalPrompt, sendDictationHelp,
 } from "./masterMenus";
+import { JARVIS_CUSTOMER_LINK } from "./assets";
 import type { InboundMessage } from "./types";
 
 /**
@@ -180,7 +181,11 @@ async function runAction(phone: string, action: string): Promise<void> {
     }
 
     case "settings.whatsapp":
-      await sendWhatsAppText(phone, "מצב WhatsApp: פעיל ✅ (מחובר ל-Cloud API).");
+      await sendWhatsAppText(
+        phone,
+        "מצב WhatsApp: פעיל ✅ (מחובר ל-Cloud API).\n\nקישור הזמנה ללקוחות (לשיתוף — לחיצה פותחת וואטסאפ עם הודעה מוכנה):\n" +
+          JARVIS_CUSTOMER_LINK,
+      );
       return sendSettingsMenu(phone);
     case "settings.owner":
       await sendWhatsAppText(phone, "מצב זיהוי בעלים: פעיל ✅ — אתה מזוהה כבעלים.\nמצב ג׳ארוויס: Master Gateway פעיל.");

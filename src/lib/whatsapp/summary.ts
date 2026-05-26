@@ -24,6 +24,24 @@ function stripLeadIns(s: string): string {
   return out;
 }
 
+// Matches a "start an order request" intent (the pre-filled link message and variants).
+const STARTER_HINT = /(לפתוח|פתיחת|רוצה|מעוניין|לבצע)\s*.*\s*הזמנה|בקשת\s+הזמנה/;
+
+/**
+ * True when the message is a BARE starter ("שלום ג׳ארוויס, אני רוצה לפתוח בקשת הזמנה")
+ * with no actual order details. A message that also lists items (e.g. "...5 תמרורי עצור")
+ * returns false → caller skips the wizard and creates the draft directly.
+ */
+export function isPureStarter(message: string): boolean {
+  if (!STARTER_HINT.test(message)) return false;
+  const rest = message
+    .replace(/שלום|היי|ג׳ארוויס|גארוויס/g, "")
+    .replace(/אני|רוצה|מעוניין|לפתוח|פתיחת|בקשת|בקשה|הזמנה|חדשה|בבקשה|נא|לבצע/g, "")
+    .replace(/[\s,.\-!?״"']/g, "")
+    .trim();
+  return rest.length <= 2;
+}
+
 export function buildOrderItems(message: string): string[] {
   const cleaned = stripLeadIns(message.trim());
   if (!cleaned) return [];
