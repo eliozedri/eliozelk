@@ -3,26 +3,17 @@ import { isMasterPhone } from "./phone";
 import { createWhatsAppDraft } from "./intake";
 import { sendWhatsAppText } from "./send";
 import { handleMasterMessage } from "./master";
+import type { InboundClassification, InboundMessage } from "./types";
+
+export type { SenderRole, InboundClassification, InboundMessage } from "./types";
 
 /**
- * Jarvis WhatsApp Gateway.
- *
- * Single entry point for every inbound WhatsApp text. It classifies the sender and
- * routes accordingly:
- *   - master/owner  → Jarvis Master Mode (personal assistant; safe foundation)
+ * Jarvis WhatsApp Gateway — single entry point for every inbound message.
+ * Classifies the sender and routes:
+ *   - master/owner  → Jarvis Master Mode (stateful personal-assistant menu)
  *   - everyone else → Elkayam customer intake (pending draft + professional reply)
- *
- * The gateway never exposes master/admin capabilities to external senders, and never
- * creates a real work_order — external messages only ever become pending drafts.
+ * External senders NEVER reach master capabilities and never create a work_order.
  */
-
-export type SenderRole = "master" | "external";
-
-export interface InboundClassification {
-  senderRole: SenderRole;
-  routedBy: "jarvis_gateway";
-  targetFlow: "jarvis_master" | "elkayam_order_intake";
-}
 
 /** Professional Elkayam intake reply for external senders (unchanged copy). */
 const EXTERNAL_ACK =
@@ -36,25 +27,27 @@ export function classifyInbound(senderId: string): InboundClassification {
 }
 
 export async function dispatchInbound(
-  args: { waMessageId: string; senderId: string; contactName: string | null; body: string },
+  inbound: InboundMessage,
   classification: InboundClassification,
 ): Promise<void> {
   if (classification.senderRole === "master") {
-    await handleMasterMessage(args);
+    await handleMasterMessage(inbound);
     return;
   }
 
-  // External customer: pending draft (source=whatsapp) + professional Hebrew reply.
-  // Best-effort draft so an intake failure never blocks the acknowledgement.
-  try {
-    await createWhatsAppDraft({
-      waMessageId: args.waMessageId,
-      senderId: args.senderId,
-      contactName: args.contactName,
-      body: args.body,
-    });
-  } catch (err) {
-    console.error("[whatsapp:gateway] external draft failed:", err instanceof Error ? err.message : String(err));
+  // External customer: only text becomes a pending draft. Any inbound (text or media)
+  // still gets the professional acknowledgement; admin/menu capabilities are never shown.
+  if (inbound.type === "text" && inbound.body) {
+    try {
+      await createWhatsAppDraft({
+        waMessageId: inbound.waMessageId,
+        senderId: inbound.senderId,
+        contactName: inbound.contactName,
+        body: inbound.body,
+      });
+    } catch (err) {
+      console.error("[whatsapp:gateway] external draft failed:", err instanceof Error ? err.message : String(err));
+    }
   }
-  await sendWhatsAppText(args.senderId, EXTERNAL_ACK);
+  await sendWhatsAppText(inbound.senderId, EXTERNAL_ACK);
 }

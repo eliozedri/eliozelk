@@ -5,12 +5,21 @@ import { classifyInbound, dispatchInbound } from "@/lib/whatsapp/gateway";
 
 // ── Minimal WhatsApp Cloud API types ─────────────────────────────────────────
 
+interface WaMediaPart {
+  id: string;
+  mime_type?: string;
+  filename?: string;
+  caption?: string;
+}
+
 interface WaTextMessage {
   from: string;
   id: string;
   timestamp: string;
   type: string;
   text?: { body: string };
+  image?: WaMediaPart;
+  document?: WaMediaPart;
 }
 
 interface WaContact {
@@ -123,8 +132,19 @@ async function handleInboundMessages(payload: WaWebhookPayload) {
 
         const contactName =
           contacts.find((c) => c.wa_id === msg.from)?.profile?.name ?? null;
-        const isText = msg.type === "text";
-        const body = isText ? (msg.text?.body ?? null) : null;
+
+        // Normalize text + media into a single inbound shape for the gateway.
+        const mediaPart = msg.image ?? msg.document ?? null;
+        const media =
+          mediaPart && (msg.type === "image" || msg.type === "document")
+            ? {
+                id: mediaPart.id,
+                mimeType: mediaPart.mime_type ?? null,
+                kind: msg.type as "image" | "document",
+                filename: mediaPart.filename ?? null,
+              }
+            : null;
+        const body = msg.text?.body ?? mediaPart?.caption ?? null;
 
         // Classify the sender at the gateway BEFORE logging so the row carries the
         // routing decision (master/owner vs external customer).
@@ -147,14 +167,12 @@ async function handleInboundMessages(payload: WaWebhookPayload) {
         );
 
         // Route through the Jarvis Gateway. External → pending draft (never a
-        // work_order). Master → Jarvis Master Mode. Errors are swallowed by the
-        // outer try so Meta is not retried indefinitely.
-        if (isText && body) {
-          await dispatchInbound(
-            { waMessageId: msg.id, senderId: msg.from, contactName, body },
-            classification,
-          );
-        }
+        // work_order). Master → stateful Jarvis Master Mode. Errors are swallowed by
+        // the outer try so Meta is not retried indefinitely.
+        await dispatchInbound(
+          { waMessageId: msg.id, senderId: msg.from, contactName, type: msg.type, body, media },
+          classification,
+        );
       }
     }
   }
