@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Send, Check, X, RefreshCw, Link2 } from "lucide-react";
+import { Send, Check, X, RefreshCw, Link2, MessageCircle } from "lucide-react";
 import { getSupabase } from "@/lib/supabase/client";
+import { JARVIS_CUSTOMER_LINK } from "@/lib/whatsapp/assets";
 
 type CartLine = { name: string; quantity: number; unit: string | null; notes: string | null };
 type Draft = {
@@ -51,6 +52,20 @@ export function TeamBotOrders() {
     } catch {
       // Clipboard API can be blocked (insecure context / permissions) — offer manual copy.
       window.prompt("העתקה אוטומטית נכשלה. העתק/י את הקישור ידנית:", url);
+      setCopyMsg("העתק/י את הקישור ידנית מהחלון שנפתח");
+    }
+    setTimeout(() => setCopyMsg(null), 4000);
+  };
+
+  // Copy the customer-facing WhatsApp order link (wa.me deep link with the pre-filled
+  // starter). Mirrors copyExternalOrderLink (copy-to-clipboard). The link is the single
+  // source of truth in src/lib/whatsapp/assets.ts — no DB record is created.
+  const copyWhatsAppOrderLink = async () => {
+    try {
+      await navigator.clipboard.writeText(JARVIS_CUSTOMER_LINK);
+      setCopyMsg("קישור ה-WhatsApp הועתק");
+    } catch {
+      window.prompt("העתקה אוטומטית נכשלה. העתק/י את הקישור ידנית:", JARVIS_CUSTOMER_LINK);
       setCopyMsg("העתק/י את הקישור ידנית מהחלון שנפתח");
     }
     setTimeout(() => setCopyMsg(null), 4000);
@@ -111,6 +126,13 @@ export function TeamBotOrders() {
             className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-700"
           >
             <Link2 className="w-4 h-4" /> לינק לקישור הזמנות חיצוני
+          </button>
+          <button
+            onClick={copyWhatsAppOrderLink}
+            title="העתק את קישור הזמנות ה-WhatsApp"
+            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"
+          >
+            <MessageCircle className="w-4 h-4" /> WhatsApp Orders Link
           </button>
           <button
             onClick={() => void load()}
