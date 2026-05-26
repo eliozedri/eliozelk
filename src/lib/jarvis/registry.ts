@@ -31,3 +31,19 @@ export function resolveSkill(role: SenderRole, intent: Intent): Skill | null {
 export function isOwnerOnlyIntent(intent: Intent): boolean {
   return intent !== "order_intake";
 }
+
+/** Intents an external/unknown sender is ever allowed to act on. */
+const EXTERNAL_ALLOWED: Intent[] = ["order_intake", "greeting", "unclear"];
+
+/**
+ * Defense-in-depth: clamp a classified intent to what the role may reach BEFORE routing.
+ * External/unknown → owner-only intents (ceo/ocr/personal/status) collapse to order_intake.
+ * This protects against any classifier (deterministic OR a future LLM) leaking owner intents
+ * to a customer, independent of the registry's skill-resolution gate.
+ */
+export function sanitizeIntentForRole(intent: Intent, role: SenderRole): Intent {
+  if (role === "external" || role === "unknown") {
+    return EXTERNAL_ALLOWED.includes(intent) ? intent : "order_intake";
+  }
+  return intent;
+}

@@ -1,6 +1,15 @@
 import "server-only";
 import type { Intent, IntentResult, SenderRole } from "../types";
 import { classifyIntent } from "../intent";
+import { sanitizeIntentForRole } from "../registry";
+
+/** Below this, an LLM result is discarded in favor of the deterministic classifier. */
+const MIN_LLM_CONFIDENCE = 0.6;
+
+/** PII-free audit: never logs the message text — only the routing decision. */
+function auditIntent(role: SenderRole, intent: Intent, source: "llm" | "deterministic"): void {
+  console.log(`[jarvis:brain] route role=${role} intent=${intent} via=${source}`);
+}
 
 /**
  * LLM intent classifier — the optional semantic layer ON TOP of the deterministic one.
@@ -59,11 +68,22 @@ async function classifyViaLlm(text: string, role: SenderRole): Promise<IntentRes
   }
 }
 
-/** LLM-first (if enabled) with deterministic fallback. Always resolves to a valid intent. */
+/**
+ * LLM-first (if enabled, above the confidence threshold) with deterministic fallback. The
+ * resulting intent is ALWAYS clamped to the sender role (`sanitizeIntentForRole`) so neither
+ * the LLM nor the deterministic classifier can hand an external sender an owner-only intent.
+ */
 export async function classifyIntentSmart(text: string, role: SenderRole): Promise<IntentResult> {
   if (llmEnabled()) {
     const llm = await classifyViaLlm(text, role);
-    if (llm) return llm;
+    if (llm && llm.confidence >= MIN_LLM_CONFIDENCE) {
+      const intent = sanitizeIntentForRole(llm.intent, role);
+      auditIntent(role, intent, "llm");
+      return { intent, confidence: llm.confidence };
+    }
   }
-  return classifyIntent(text, role);
+  const det = classifyIntent(text, role);
+  const intent = sanitizeIntentForRole(det.intent, role);
+  auditIntent(role, intent, "deterministic");
+  return { intent, confidence: det.confidence };
 }

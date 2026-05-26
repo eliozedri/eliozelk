@@ -58,8 +58,16 @@ first, then falls back to the deterministic one. The LLM is OFF unless `JARVIS_L
 **and** `ANTHROPIC_API_KEY` are set (optional `JARVIS_LLM_MODEL`; a Vercel AI Gateway base can
 sit behind the same interface). With no key, behavior is byte-identical to the deterministic
 layer. Implemented with plain `fetch` (no new dependency); the key lives only in env and is
-never logged. **Safety:** the classifier only chooses an intent — role gating is the registry's
-job, so an LLM misclassification can never escalate an external sender to owner skills.
+never logged. **Safety (defense-in-depth):** the classifier only chooses an intent, and every
+result — LLM or deterministic — is clamped by `sanitizeIntentForRole` (external/unknown →
+owner-only intents collapse to order_intake) on top of the registry's skill-resolution gate. An
+LLM result below `MIN_LLM_CONFIDENCE` is discarded for the deterministic one. Routing decisions
+are audit-logged WITHOUT message content (`[jarvis:brain] route role=… intent=… via=…`).
+
+**Billing (must stay honest):** the Anthropic API is **separate metered/paid billing** — NOT
+covered by a Claude / Claude Code subscription. The LLM is therefore left **disabled**; enabling
+it requires a paid API key the owner provisions and accepts. The deterministic layer is the
+permanent safe default; the LLM is strictly optional/gated.
 
 ## Async OCR worker
 
@@ -68,9 +76,10 @@ the skill downloads the media (Meta URLs expire ~5 min) and persists it to the p
 `jarvis-docs` Storage bucket, setting the document `status='queued'` (best-effort — a failure
 leaves it 'received', nothing breaks). The worker `processQueuedDocuments` (`skills/ocrDocument/
 worker.ts`) — invoked by `/api/jarvis/ocr-worker` (Vercel Cron `GET` or manual `POST`, both
-CRON_SECRET-guarded; daily on Hobby) — downloads from storage, runs the active OCR provider, and
-writes `extracted_text`/`summary`/`classification` onto the row (`status='processed'`). Sending the
-summary back to the owner over WhatsApp is a later step.
+CRON_SECRET-guarded; daily on Hobby) — downloads from storage, runs the active OCR provider,
+writes `extracted_text`/`summary`/`classification` onto the row (`status='processed'`), and then
+**sends the Hebrew summary back to the OWNER over WhatsApp** (best-effort; owner docs only —
+external senders already got their acknowledgement). Still no inline OCR in the webhook.
 ```
 
 ## Current reality (honest)

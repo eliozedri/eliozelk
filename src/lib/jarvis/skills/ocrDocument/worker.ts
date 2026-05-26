@@ -2,6 +2,7 @@ import "server-only";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { downloadMedia } from "./storage";
 import { analyzeDocument } from "./analyze";
+import { sendWhatsAppText } from "@/lib/whatsapp/send";
 
 /**
  * Async OCR worker. Processes queued jarvis_documents OFF the WhatsApp webhook (OCR is slow):
@@ -23,7 +24,7 @@ export async function processQueuedDocuments(limit = 5): Promise<OcrWorkerResult
   const db = getServiceSupabase();
   const { data } = await db
     .from("jarvis_documents")
-    .select("id, media_storage_path, mime_type")
+    .select("id, media_storage_path, mime_type, channel, sender_phone, sender_role")
     .eq("status", "queued")
     .not("media_storage_path", "is", null)
     .order("created_at", { ascending: true })
@@ -55,8 +56,17 @@ export async function processQueuedDocuments(limit = 5): Promise<OcrWorkerResult
           updated_at: new Date().toISOString(),
         })
         .eq("id", id);
-      if (result.available) processed++;
-      else failed++;
+      if (result.available) {
+        processed++;
+        // Complete the loop: send the owner the Hebrew summary over WhatsApp (best-effort).
+        // Owner only — external senders already got their acknowledgement; no follow-up.
+        if (result.text && row.channel === "whatsapp" && row.sender_role === "master" && row.sender_phone) {
+          const head = `סיימתי לקרוא את המסמך 📄 (סיווג: ${result.classification}).\n\nתקציר כפי שזוהה:\n`;
+          await sendWhatsAppText(String(row.sender_phone), head + result.summary.slice(0, 600));
+        }
+      } else {
+        failed++;
+      }
     } catch (err) {
       console.error(`[jarvis:ocr-worker] doc ${id} failed:`, err instanceof Error ? err.message : String(err));
       await db.from("jarvis_documents").update({ status: "failed", updated_at: new Date().toISOString() }).eq("id", id);
