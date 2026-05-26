@@ -17,6 +17,7 @@ type Draft = {
   notes: string | null;
   cart: CartLine[];
   source: string | null;
+  customer_confirmed: boolean | null;
   created_at: string;
 };
 
@@ -164,6 +165,7 @@ export function TeamBotOrders() {
         {drafts.map((d) => (
           <div key={d.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
               {d.source === "jarvis" ? (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700">
                   👤 הזמנת מנהל (JARVIS)
@@ -185,6 +187,12 @@ export function TeamBotOrders() {
                   📱 טלגרם
                 </span>
               )}
+              {d.customer_confirmed ? (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-600 text-white">
+                  ✓ אושר ע״י הלקוח
+                </span>
+              ) : null}
+              </div>
               <span className="font-mono text-[11px] text-gray-400">
                 {new Date(d.created_at).toLocaleString("he-IL")}
               </span>

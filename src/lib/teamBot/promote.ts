@@ -24,6 +24,7 @@ export type DraftRow = {
   cart: CartLine[];
   source: string;
   status: string;
+  customer_confirmed: boolean | null;
   created_at: string;
 };
 
@@ -31,7 +32,7 @@ export async function listPendingDrafts(): Promise<DraftRow[]> {
   const db = getServiceSupabase();
   const { data } = await db
     .from("team_bot_order_drafts")
-    .select("id,telegram_user_id,submitted_by_name,customer,contact_person,customer_phone,city,notes,cart,source,status,created_at")
+    .select("id,telegram_user_id,submitted_by_name,customer,contact_person,customer_phone,city,notes,cart,source,status,customer_confirmed,created_at")
     .eq("status", "pending_review")
     .order("created_at", { ascending: true });
   return (data ?? []) as DraftRow[];

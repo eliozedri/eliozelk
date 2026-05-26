@@ -78,6 +78,28 @@ menu. Owner is never treated as an external customer.
   behavior and degrade safely (a misjudged opener just costs one extra guiding step; a
   misjudged order still lands a reviewable draft).
 
+## Jarvis Agent Brain / Intent Logic
+
+Jarvis is built as **Brain/Orchestrator + Skills** (see `docs/JARVIS_AGENT_ARCHITECTURE.md`).
+WhatsApp is a **channel adapter** (`gateway.ts`) — it normalizes inbound into a `JarvisInput`,
+calls `runJarvis()`, and renders the returned messages. The **Order Intake skill**
+(`src/lib/jarvis/skills/orderIntake`) is the first real skill and owns all order logic.
+
+- Natural Hebrew text is interpreted by **sender role + conversation state**, not just buttons.
+- **External order flow supports additions/corrections before AND after the summary**, via free
+  text: add ("תוסיף 20 קונוסים"), correct quantity ("בעצם 7 תמרורים במקום 5"), remove ("תמחק
+  את סימון החניה"), confirm ("מאשר/שלח/זה בסדר"), cancel, ask for a representative.
+- **In-progress order summaries are editable through text** — each edit updates the SAME draft and
+  regenerates the numbered summary. No duplicate drafts.
+- **Confirmation is handled naturally** — sets `customer_confirmed` (status stays `pending_review`).
+- **Draft-timing decision = Option 2 (create early, edit in place, never lose a lead):** a meaningful
+  request creates a pending draft immediately so no customer lead is lost; it stays editable; only
+  manual office promotion turns it into a real `work_order`.
+- **Inventory/product availability** is an extension point (`catalog.ts`) — Jarvis never invents stock;
+  if no data, it says the team will check.
+- **LLM is a future upgrade** behind the `parse.ts` interface — swap the deterministic parser for an
+  LLM with no change to state/persistence/adapters.
+
 ## Invariants (must always hold)
 
 - External never sees the owner menu / CEO / personal / settings.
