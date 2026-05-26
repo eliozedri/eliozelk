@@ -3,7 +3,8 @@ import { isMasterPhone } from "./phone";
 import { createWhatsAppDraft } from "./intake";
 import { sendWhatsAppText } from "./send";
 import { sendWhatsAppImage } from "./interactive";
-import { buildCustomerSummary, isPureStarter } from "./summary";
+import { buildCustomerSummary } from "./summary";
+import { looksLikeOrder, isPureGreetingOrNoise } from "./classify";
 import { ELKAYAM_LOGO_URL } from "./assets";
 import { isExternalAwaiting, setExternalAwaiting, clearExternalState } from "./externalSession";
 import { handleMasterMessage } from "./master";
@@ -19,13 +20,19 @@ export type { SenderRole, InboundClassification, InboundMessage } from "./types"
  * External senders NEVER reach master capabilities and never create a work_order.
  */
 
-/** Generic professional reply for external messages that aren't a clear text request. */
+/** Generic professional reply for external media/etc. (no order text to parse). */
 const EXTERNAL_ACK =
   "שלום 👋 קיבלנו את פנייתך לאלקיים סימון כבישים. ההודעה הועברה לצוות לבדיקה ונחזור אליך בהקדם. תודה רבה!";
 
-/** Wizard intro shown when an external customer sends the bare pre-filled starter. */
+/** Wizard intro — first response to ANY vague/greeting/starter external opener. */
 const EXTERNAL_INTRO =
-  "שלום 👋 הגעת לג׳ארוויס של אלקיים סימון כבישים.\nכדי לפתוח בקשת הזמנה, כתוב לי בקצרה מה צריך לבצע.";
+  "שלום 👋 הגעת לג׳ארוויס של אלקיים סימון כבישים.\n" +
+  "אפשר לפתוח כאן בקשת הזמנה בצורה פשוטה.\n" +
+  "כתוב לי בקצרה מה צריך לבצע — למשל סוג העבודה, מיקום וכמות.";
+
+/** Service-oriented re-prompt — used ONLY after we've already guided the customer. */
+const EXTERNAL_REPROMPT =
+  "לא הצלחתי להבין את הפרטים בצורה מספיק ברורה. אפשר לכתוב בקצרה מה העבודה הדרושה, למשל: סוג עבודה, מיקום וכמות?";
 
 export function classifyInbound(senderId: string): InboundClassification {
   if (isMasterPhone(senderId)) {
@@ -43,43 +50,49 @@ export async function dispatchInbound(
     return;
   }
 
-  // ── External customer: intake only. Never a work_order, never the owner menu. ──
+  // ── External Customer Mode: intake only. Never a work_order, never the owner menu. ──
   if (inbound.type === "text" && inbound.body) {
     const phone = inbound.senderId;
     const text = inbound.body.trim();
-    const awaiting = await isExternalAwaiting(phone);
-    const bareStarter = isPureStarter(text);
 
-    // Bare pre-filled starter (no details yet) → begin the guided wizard, ask for details.
-    if (bareStarter && !awaiting) {
-      await setExternalAwaiting(phone);
-      await sendWhatsAppText(phone, EXTERNAL_INTRO);
-      return;
-    }
-    // Still nothing concrete while awaiting → re-prompt instead of saving an empty draft.
-    if (bareStarter && awaiting) {
-      await sendWhatsAppText(phone, "כתוב לי בבקשה בקצרה מה צריך לבצע 🙂");
+    if (await isExternalAwaiting(phone)) {
+      // Already guided once → capture their reply as the request, unless it's still
+      // pure greeting/noise (then re-prompt service-style instead of an empty draft).
+      if (looksLikeOrder(text) || !isPureGreetingOrNoise(text)) {
+        return createExternalDraft(inbound, text);
+      }
+      await sendWhatsAppText(phone, EXTERNAL_REPROMPT);
       return;
     }
 
-    // Real details (either the customer's first full request, or their reply after the
-    // intro): create a PENDING draft, send a structured summary + the Elkayam logo.
-    try {
-      await createWhatsAppDraft({
-        waMessageId: inbound.waMessageId,
-        senderId: phone,
-        contactName: inbound.contactName,
-        body: text,
-      });
-    } catch (err) {
-      console.error("[whatsapp:gateway] external draft failed:", err instanceof Error ? err.message : String(err));
+    // First message: concrete request → draft directly; anything else (greeting /
+    // starter / vague / random / "1" / "?") → open the guided intake wizard.
+    if (looksLikeOrder(text)) {
+      return createExternalDraft(inbound, text);
     }
-    await sendWhatsAppText(phone, buildCustomerSummary(text));
-    await sendWhatsAppImage(phone, ELKAYAM_LOGO_URL, "אלקיים סימון כבישים בע״מ");
-    await clearExternalState(phone);
+    await setExternalAwaiting(phone);
+    await sendWhatsAppText(phone, EXTERNAL_INTRO);
     return;
   }
 
   // Non-text external (media/etc.): acknowledge professionally, no draft.
   await sendWhatsAppText(inbound.senderId, EXTERNAL_ACK);
+}
+
+/** Create the pending draft, send the structured summary + logo, clear wizard state. */
+async function createExternalDraft(inbound: InboundMessage, text: string): Promise<void> {
+  const phone = inbound.senderId;
+  try {
+    await createWhatsAppDraft({
+      waMessageId: inbound.waMessageId,
+      senderId: phone,
+      contactName: inbound.contactName,
+      body: text,
+    });
+  } catch (err) {
+    console.error("[whatsapp:gateway] external draft failed:", err instanceof Error ? err.message : String(err));
+  }
+  await sendWhatsAppText(phone, buildCustomerSummary(text));
+  await sendWhatsAppImage(phone, ELKAYAM_LOGO_URL, "אלקיים סימון כבישים בע״מ");
+  await clearExternalState(phone);
 }
