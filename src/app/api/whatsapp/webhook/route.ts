@@ -12,6 +12,12 @@ interface WaMediaPart {
   caption?: string;
 }
 
+interface WaInteractive {
+  type: string;
+  button_reply?: { id: string; title: string };
+  list_reply?: { id: string; title: string; description?: string };
+}
+
 interface WaTextMessage {
   from: string;
   id: string;
@@ -20,6 +26,7 @@ interface WaTextMessage {
   text?: { body: string };
   image?: WaMediaPart;
   document?: WaMediaPart;
+  interactive?: WaInteractive;
 }
 
 interface WaContact {
@@ -133,7 +140,7 @@ async function handleInboundMessages(payload: WaWebhookPayload) {
         const contactName =
           contacts.find((c) => c.wa_id === msg.from)?.profile?.name ?? null;
 
-        // Normalize text + media into a single inbound shape for the gateway.
+        // Normalize text + media + interactive replies into a single inbound shape.
         const mediaPart = msg.image ?? msg.document ?? null;
         const media =
           mediaPart && (msg.type === "image" || msg.type === "document")
@@ -144,7 +151,9 @@ async function handleInboundMessages(payload: WaWebhookPayload) {
                 filename: mediaPart.filename ?? null,
               }
             : null;
-        const body = msg.text?.body ?? mediaPart?.caption ?? null;
+        const reply = msg.interactive?.button_reply ?? msg.interactive?.list_reply ?? null;
+        const interactiveId = reply?.id ?? null;
+        const body = msg.text?.body ?? mediaPart?.caption ?? reply?.title ?? null;
 
         // Classify the sender at the gateway BEFORE logging so the row carries the
         // routing decision (master/owner vs external customer).
@@ -170,7 +179,7 @@ async function handleInboundMessages(payload: WaWebhookPayload) {
         // work_order). Master → stateful Jarvis Master Mode. Errors are swallowed by
         // the outer try so Meta is not retried indefinitely.
         await dispatchInbound(
-          { waMessageId: msg.id, senderId: msg.from, contactName, type: msg.type, body, media },
+          { waMessageId: msg.id, senderId: msg.from, contactName, type: msg.type, body, media, interactiveId },
           classification,
         );
       }

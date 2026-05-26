@@ -42,9 +42,10 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Auth-gate everything except Next internals, the API (self-guarded), and the
+    // Auth-gate everything except Next internals, the API (self-guarded), the
     // public PWA assets the browser must fetch without a session (service worker,
-    // web manifest, app icons) — otherwise SW registration / install break.
-    "/((?!_next/static|_next/image|favicon.ico|api/|sw.js|manifest.webmanifest|icon-192.png|icon-512.png).*)",
+    // web manifest, app icons), and jarvis/ — public images WhatsApp fetches by URL
+    // (owner dictation help + Elkayam logo). Otherwise those fetches 307→/login.
+    "/((?!_next/static|_next/image|favicon.ico|api/|sw.js|manifest.webmanifest|icon-192.png|icon-512.png|jarvis/).*)",
   ],
 };
