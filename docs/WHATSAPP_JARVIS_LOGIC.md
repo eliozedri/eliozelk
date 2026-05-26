@@ -106,7 +106,11 @@ calls `runJarvis()`, and renders the returned messages. The **Order Intake skill
   Nothing fakes execution/OCR/scheduling. See `docs/JARVIS_SKILLS_ROADMAP.md`.
 - **Central Brain routing:** owner free-text is classified by `src/lib/jarvis/intent.ts` (one classifier,
   role-gated by `registry.ts`) and routed to the matching skill — buttons/menus are optional shortcuts,
-  natural Hebrew works throughout. Deterministic Stage 1; LLM-swappable behind the same interface.
+  natural Hebrew works throughout. `classifyIntentSmart` now delegates to the **multi-provider LLM Router**
+  (`src/lib/jarvis/llm/`) with a safety validator + deterministic fallback; **live LLM is disabled** (no
+  key) so behavior is unchanged. The owner CEO/Manager path also gains **Agent Reasoning**: a directive
+  resolves to a single read-only command → a multi-step read-only plan → or a queued human task.
+  See `docs/JARVIS_LLM_ROUTER.md` + `docs/JARVIS_AGENT_REASONING.md`.
 
 ## Invariants (must always hold)
 

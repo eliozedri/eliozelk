@@ -3,33 +3,38 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import { writeAgentActivity, updateAgentRunStatus } from "@/lib/agents/scan-utils";
 import { ceoTitle, ceoPriority } from "./intent";
 import { createCeoRequest, closeCeoRequest } from "./store";
-import { MANAGER_COMMANDS, matchCommand, type ManagerCommand, type CommandReport } from "./commands";
+import { matchCommand, type ManagerCommand, type CommandReport } from "./commands";
+import { planDeterministic } from "../../agent/planner";
+import { actionsCatalogText } from "../../agent/catalog";
+import { executePlan, formatPlanReport } from "../../agent/runner";
+import { routePlan } from "../../llm/index";
+import type { LLMPlanResult } from "../../llm/types";
+import type { PlanExecution } from "../../agent/types";
 
 /**
  * System-Manager dispatcher — the manager's "brain".
  *
- * This is what was missing: when Jarvis forwarded a directive, the old skill only filed a
- * pending record and nothing happened. The dispatcher now actually THINKS about the
- * directive, picks the relevant agent/command, EXECUTES it (read-only), records the whole
- * exchange in the Digital Command Center, and returns a short execution report.
+ * A directive forwarded from Jarvis is handled in three tiers, all honest and read-only:
+ *   1. single read-only command (matchCommand) — e.g. "כמה מוצרים ללא מחיר";
+ *   2. multi-step Agent-Reasoning plan (LLM if enabled+safe, else deterministic known patterns)
+ *      — e.g. "מה יכול לתקוע עבודות השבוע" → stuck/drafts/pricing/exceptions, summarized;
+ *   3. otherwise a human `agent_task` is queued — never faked.
  *
- * Visibility: every dispatch writes to `agent_activity_feed` so the JARVIS→manager directive
- * and the agent's report both surface at /agents (Digital Command Center).
- *
- * Honesty: only read-only commands auto-execute. Anything requiring a write is queued as a
- * human `agent_task` and reported as such — we never claim an action that didn't happen.
+ * Every tier records the JARVIS→manager directive and the result in `agent_activity_feed` so the
+ * exchange surfaces in the Digital Command Center.
  */
 
 const MANAGER_AGENT_ID = "ceo";
 const MANAGER_AGENT_NAME = "מנהל פעילות";
 
 export interface DispatchResult {
-  /** True when a read-only command ran and produced a report. */
+  kind: "command" | "plan" | "task";
+  /** True when a read-only command/plan actually produced a result. */
   executed: boolean;
-  /** True when no command matched and a human task was queued instead. */
   queuedTask: boolean;
   command: ManagerCommand | null;
   report: CommandReport | null;
+  planExecution: PlanExecution | null;
   masterItemId: string | null;
   title: string;
   priority: "high" | "normal";
@@ -65,84 +70,78 @@ export async function dispatchManagerRequest(args: {
   }).catch(() => {});
   await updateAgentRunStatus(db, MANAGER_AGENT_ID, "active").catch(() => {});
 
-  // 3. Decide which agent/command handles it (LLM if enabled, else deterministic).
-  const command = await selectCommand(args.text);
+  const base = { masterItemId, title, priority, refId };
 
+  // ── Tier 1: single read-only command ─────────────────────────────────────────
+  const command = matchCommand(args.text);
   if (command) {
-    // 4a. Execute the read-only command and report into the command center.
     let report: CommandReport;
     try {
       report = await command.run(db);
     } catch (err) {
-      report = {
-        ok: false,
-        title,
-        headline: `שגיאה בביצוע: ${err instanceof Error ? err.message : String(err)}`,
-        details: [],
-      };
+      report = { ok: false, title, headline: `שגיאה בביצוע: ${err instanceof Error ? err.message : String(err)}`, details: [] };
     }
-
     await updateAgentRunStatus(db, command.agentId, "idle").catch(() => {});
-    const reportLine = report.ok
-      ? `✅ ${report.title}: ${report.headline}`
-      : `⚠️ ${report.title}: ${report.headline}`;
-    // Attribute the work to the owning agent's room…
+    const reportLine = `${report.ok ? "✅" : "⚠️"} ${report.title}: ${report.headline}`;
     await writeAgentActivity(db, command.agentId, "report", reportLine, {
-      source: "jarvis_dispatch",
-      command: command.id,
-      requestedBy: "ceo",
-      masterItemId,
-      count: report.count ?? null,
-      details: report.details,
+      source: "jarvis_dispatch", command: command.id, requestedBy: "ceo", masterItemId, count: report.count ?? null, details: report.details,
     }).catch(() => {});
-    // …and log the manager↔agent collaboration so the dialogue is visible end to end.
-    await writeAgentActivity(
-      db,
-      MANAGER_AGENT_ID,
-      "report",
-      `📋 דוח מ-${command.agentName}: ${report.headline}`,
-      { source: "jarvis_dispatch", command: command.id, delegatedTo: command.agentId, masterItemId },
-    ).catch(() => {});
+    await writeAgentActivity(db, MANAGER_AGENT_ID, "report", `📋 דוח מ-${command.agentName}: ${report.headline}`, {
+      source: "jarvis_dispatch", command: command.id, delegatedTo: command.agentId, masterItemId,
+    }).catch(() => {});
     await updateAgentRunStatus(db, MANAGER_AGENT_ID, "idle").catch(() => {});
-
     await closeCeoRequest(masterItemId, {
       status: report.ok ? "done" : "error",
       report: { command: command.id, agentId: command.agentId, headline: report.headline, count: report.count ?? null, details: report.details },
     });
-
-    return { executed: report.ok, queuedTask: false, command, report, masterItemId, title, priority, refId };
+    return { kind: "command", executed: report.ok, queuedTask: false, command, report, planExecution: null, ...base };
   }
 
-  // 4b. No auto-executable command → queue a human task (honest, never faked).
+  // ── Tier 2: multi-step Agent-Reasoning plan ──────────────────────────────────
+  const planned = await buildPlan(args.text);
+  if (planned) {
+    const exec = await executePlan(planned.plan, planned.source);
+    const okMost = exec.ranSteps > 0;
+    await writeAgentActivity(db, MANAGER_AGENT_ID, "report", `🧭 דוח רב-שלבי: ${exec.goal} (${exec.ranSteps}/${exec.steps.length} שלבים)`, {
+      source: "jarvis_dispatch", reasoning: planned.source, masterItemId,
+      steps: exec.steps.map((s) => ({ action: s.action, ok: s.ok, headline: s.report?.headline ?? null })),
+    }).catch(() => {});
+    await updateAgentRunStatus(db, MANAGER_AGENT_ID, "idle").catch(() => {});
+    await closeCeoRequest(masterItemId, {
+      status: okMost ? "done" : "error",
+      report: { plan: exec.goal, source: planned.source, ranSteps: exec.ranSteps, steps: exec.steps.map((s) => ({ action: s.action, ok: s.ok, headline: s.report?.headline ?? null })) },
+    });
+    return { kind: "plan", executed: okMost, queuedTask: false, command: null, report: null, planExecution: exec, ...base };
+  }
+
+  // ── Tier 3: queue a human task (honest, never faked) ─────────────────────────
   await queueManagerTask(db, { masterItemId, title, text: args.text, priority });
   await writeAgentActivity(db, MANAGER_AGENT_ID, "task_created", `🗂️ נפתחה משימת מנהל לטיפול ידני: ${title}`, {
-    source: "jarvis_dispatch",
-    masterItemId,
-    priority,
+    source: "jarvis_dispatch", masterItemId, priority,
   }).catch(() => {});
   await updateAgentRunStatus(db, MANAGER_AGENT_ID, "idle").catch(() => {});
-
-  return { executed: false, queuedTask: true, command: null, report: null, masterItemId, title, priority, refId };
+  return { kind: "task", executed: false, queuedTask: true, command: null, report: null, planExecution: null, ...base };
 }
 
-/** Render the WhatsApp execution report the owner receives back. */
+/** Render the WhatsApp reply the owner receives back. */
 export function formatDispatchReply(result: DispatchResult): string {
-  if (result.executed && result.report) {
+  if (result.kind === "plan" && result.planExecution) {
+    return formatPlanReport(result.planExecution, result.refId);
+  }
+  if (result.kind === "command" && result.executed && result.report) {
     const r = result.report;
-    const lines = [
+    return [
       `📋 דוח ביצוע — ${r.title} (#${result.refId})`,
       r.headline,
       ...(r.details.length ? ["", ...r.details] : []),
       "",
       `✅ בוצע ע״י ${result.command?.agentName ?? MANAGER_AGENT_NAME} · בדיקה בלבד, ללא שינויים.`,
       "🖥️ מתועד במרכז הפיקוד הדיגיטלי.",
-    ];
-    return lines.join("\n");
+    ].join("\n");
   }
   if (result.report && !result.report.ok) {
     return `נתקלתי בבעיה בביצוע "${result.title}" (#${result.refId}):\n${result.report.headline}\nתועד במרכז הפיקוד.`;
   }
-  // Queued task (no auto-command matched).
   return (
     `קיבלתי (#${result.refId}). העברתי למנהל המערכת ופתחתי משימה לטיפול ידני` +
     (result.priority === "high" ? " (סומן דחוף 🔴)" : "") +
@@ -150,7 +149,18 @@ export function formatDispatchReply(result: DispatchResult): string {
   );
 }
 
-// ── Persistence helpers (agent_tasks queue for non-executable directives) ───────
+// ── Agent-Reasoning plan builder (LLM if safely enabled, else deterministic) ────
+
+async function buildPlan(text: string): Promise<{ plan: LLMPlanResult; source: "llm" | "deterministic" } | null> {
+  // LLM planner goes through the budget/paid-guarded router; returns null when LLM is off.
+  const viaLlm = await routePlan({ text, role: "master", channel: "whatsapp", actionsCatalog: actionsCatalogText() });
+  if (viaLlm?.plan?.steps?.length) return { plan: viaLlm.plan, source: "llm" };
+  const det = planDeterministic(text);
+  if (det) return { plan: det, source: "deterministic" };
+  return null;
+}
+
+// ── Human-task queue for non-executable directives ──────────────────────────────
 
 async function queueManagerTask(
   db: ReturnType<typeof getServiceSupabase>,
@@ -168,51 +178,4 @@ async function queueManagerTask(
     requires_approval: false,
   });
   if (error) console.error("[jarvis:ceo] queueManagerTask failed:", error.message);
-}
-
-// ── Command selection: deterministic, with an optional dormant LLM layer ────────
-
-/**
- * Picks the command for a directive. Deterministic keyword match is the default and is what
- * runs with no API key. When `JARVIS_LLM_ENABLED=true` + `ANTHROPIC_API_KEY` are set, an LLM
- * disambiguates paraphrases the keywords miss; on any error it falls back to deterministic.
- * The LLM may only choose among the known command ids — it can never invent an action.
- */
-async function selectCommand(text: string): Promise<ManagerCommand | null> {
-  const deterministic = matchCommand(text);
-  if (deterministic) return deterministic;
-  if (process.env.JARVIS_LLM_ENABLED === "true" && process.env.ANTHROPIC_API_KEY) {
-    const viaLlm = await selectCommandViaLlm(text);
-    if (viaLlm) return viaLlm;
-  }
-  return null;
-}
-
-async function selectCommandViaLlm(text: string): Promise<ManagerCommand | null> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return null;
-  const model = process.env.JARVIS_LLM_MODEL ?? "claude-haiku-4-5-20251001";
-  const catalog = MANAGER_COMMANDS.map((c) => `${c.id}: ${c.description}`).join("\n");
-  const system =
-    "You map a Hebrew operational request to ONE read-only command id for a road-sign " +
-    "company manager. Reply with ONLY the command id, or the word none if nothing fits. " +
-    "Available commands:\n" + catalog;
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model, max_tokens: 16, system, messages: [{ role: "user", content: text }] }),
-    });
-    if (!res.ok) {
-      console.warn(`[jarvis:ceo] LLM command select failed: ${res.status}`);
-      return null;
-    }
-    const data = (await res.json()) as { content?: { text?: string }[] };
-    const out = (data.content?.[0]?.text ?? "").trim().toLowerCase();
-    const match = MANAGER_COMMANDS.find((c) => out.includes(c.id));
-    return match ?? null;
-  } catch (err) {
-    console.warn("[jarvis:ceo] LLM command select threw:", err instanceof Error ? err.message : String(err));
-    return null;
-  }
 }
