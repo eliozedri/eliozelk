@@ -6,7 +6,7 @@ import type { BusinessDomain } from "./departments";
 import { departmentFor, isBusinessConsultation } from "./departments";
 import { routeMessage, routePlan } from "./llm/index";
 import { classifyIntent } from "./intent";
-import { sanitizeIntentForRole } from "./registry";
+import { sanitizeIntentForRole } from "./roleGate";
 import { llmIntentToCoarse } from "./llm/safety";
 import { intentToCommandId, matchCommandId, deterministicDomainIntent } from "./skills/ceoManager/match";
 import { planDeterministic } from "./agent/planner";

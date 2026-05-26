@@ -1,7 +1,7 @@
 import "server-only";
 import type { Intent, IntentResult, SenderRole, Channel } from "../types";
 import { classifyIntent } from "../intent";
-import { sanitizeIntentForRole } from "../registry";
+import { sanitizeIntentForRole } from "../roleGate";
 import { routeMessage } from "./index";
 import { llmIntentToCoarse } from "./safety";
 import type { LLMIntentResult } from "./types";
