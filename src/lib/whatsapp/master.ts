@@ -8,6 +8,7 @@ import {
   sendOrdersCreatePrompt, sendOcrPrompt, sendCeoPrompt, sendPersonalPrompt, sendDictationHelp,
 } from "./masterMenus";
 import { JARVIS_CUSTOMER_LINK } from "./assets";
+import { isPureStarter } from "./summary";
 import type { InboundMessage } from "./types";
 
 /**
@@ -29,7 +30,7 @@ const OCR_RECEIVED =
 
 // Free-text intent detection (deterministic foundation; a future NLU/LLM can replace).
 const ORDER_INTENT =
-  /(צור|פתח|הוסף|תפתח|תוסיף|תיצור)\s+(לי\s+)?(טיוטת\s+)?הזמנה|טיוטת\s+הזמנה|הזמנה\s+חדשה/;
+  /(צור|פתח|הוסף|תפתח|תוסיף|תיצור|לפתוח)\s+(לי\s+)?(טיוטת\s+|בקשת\s+)?הזמנה|טיוטת\s+הזמנה|הזמנה\s+חדשה|בקשת\s+הזמנה/;
 const REMINDER_INTENT = /תזכיר\s+לי|תזכורת|תרשום\s+(לי\s+)?משימה|משימה\s+חדשה/;
 const OCR_INTENT = /קרא\s+(את\s+)?המסמך|תקרא|סרוק|סריקה|תסרוק/;
 const CEO_INTENT = /תעביר\s+ל-?\s*(ceo|מנהל)|מנהל\s+המערכת|\bceo\b|תבדוק|תכין\s+(לי\s+)?דוח|בעיה\s+במערכת/i;
@@ -247,6 +248,13 @@ function numericAction(flow: MasterFlow, d: string): string | null {
 async function freeTextRouter(inbound: InboundMessage, text: string): Promise<void> {
   const phone = inbound.senderId;
 
+  // Pre-filled wa.me starter (no details) → open the orders menu directly. Checked
+  // BEFORE the unclear fallback so the link message is a known intent, not confusion.
+  if (isPureStarter(text)) {
+    await sendWhatsAppText(phone, "פתחתי לך את תפריט ההזמנות 👇");
+    await saveMasterFlow(phone, "orders_menu");
+    return sendOrdersMenu(phone);
+  }
   if (REMINDER_INTENT.test(text)) {
     return captureToMain(phone, "personal_reminder", text,
       "שמרתי כתזכורת ✅ — שים לב: תזכורות עדיין לא נשלחות אוטומטית, נשמרה כפריט ממתין.");
