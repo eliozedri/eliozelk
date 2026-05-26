@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { sendWhatsAppText } from "@/lib/whatsapp/send";
+import { createWhatsAppDraft } from "@/lib/whatsapp/intake";
+
+// Professional, natural Hebrew acknowledgement. Confirms receipt without promising
+// an order is approved — promotion to a real order is a deliberate staff action.
+const HEBREW_ACK =
+  "שלום 👋 קיבלנו את פנייתך לאלקיים סימון כבישים. ההודעה הועברה לצוות לבדיקה ונחזור אליך בהקדם. תודה רבה!";
 
 // ── Minimal WhatsApp Cloud API types ─────────────────────────────────────────
 
@@ -139,46 +146,25 @@ async function handleInboundMessages(payload: WaWebhookPayload) {
           `[whatsapp] received ${msg.type} from ${msg.from} id=${msg.id}`
         );
 
-        if (isText) {
-          await sendReply(msg.from, "Jarvis received your message ✅");
+        // Inbound text → PENDING review draft (source=whatsapp). Never a work_order.
+        // Best-effort: a draft/notification failure must not block the ack reply.
+        if (isText && body) {
+          try {
+            await createWhatsAppDraft({
+              waMessageId: msg.id,
+              senderId: msg.from,
+              contactName,
+              body,
+            });
+          } catch (err) {
+            console.error(
+              "[whatsapp] draft creation failed:",
+              err instanceof Error ? err.message : String(err)
+            );
+          }
+          await sendWhatsAppText(msg.from, HEBREW_ACK);
         }
       }
     }
-  }
-}
-
-// ── Outbound reply ────────────────────────────────────────────────────────────
-
-async function sendReply(to: string, text: string) {
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-
-  if (!phoneNumberId || !accessToken) {
-    console.error("[whatsapp] missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN");
-    return;
-  }
-
-  const res = await fetch(
-    `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to,
-        type: "text",
-        text: { body: text },
-      }),
-    }
-  );
-
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error(`[whatsapp] reply failed: ${res.status} — ${errText}`);
-  } else {
-    console.log(`[whatsapp] auto-reply sent to ${to}`);
   }
 }

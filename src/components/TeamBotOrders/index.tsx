@@ -126,7 +126,7 @@ export function TeamBotOrders() {
       )}
 
       <p className="text-xs text-gray-500 mb-4">
-        בקשות הזמנה הממתינות לאישור — מבוט הטלגרם ומהטופס החיצוני. קידום הופך בקשה להזמנה רגילה
+        בקשות הזמנה הממתינות לאישור — מבוט הטלגרם, מוואטסאפ ומהטופס החיצוני. קידום הופך בקשה להזמנה רגילה
         (ואז רץ זרימת ההתראות הרגילה למחלקות).
       </p>
 
@@ -153,6 +153,10 @@ export function TeamBotOrders() {
               ) : d.source === "telegram_orders_bot" ? (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-700">
                   📱 בוט הזמנות
+                </span>
+              ) : d.source === "whatsapp" ? (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                  📱 וואטסאפ
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-700">
