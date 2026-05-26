@@ -23,22 +23,24 @@ Channels:  WhatsApp adapter (src/lib/whatsapp/gateway.ts) · Telegram (future) �
 Brain:     src/lib/jarvis/orchestrator.ts  (runJarvis → selectSkills → skill.handle)
 Contracts: src/lib/jarvis/types.ts  (JarvisInput, JarvisResponse, OutboundMessage,
                                       SkillContext, SkillResult, Skill, SenderRole, Channel)
-Skills:    src/lib/jarvis/skills/orderIntake/
-              state.ts   — editable cart (OrderItem[]) + pure ops + summary (stem-matched item lookup)
-              parse.ts   — deterministic Hebrew edit parser (add/remove/setQty/confirm/cancel/representative) — LLM-swappable
-              catalog.ts — availability hook (no-invent extension point)
-              store.ts   — session state + draft CRUD (the draft IS the state store)
-              skill.ts   — orchestration (load → parse → apply → persist → reply)
+Skills:    src/lib/jarvis/skills/
+              orderIntake/  state · parse · catalog · store · skill  (editable cart, Option-2 drafts)
+              ceoManager/   intent · store · skill  (pending CEO/manager request queue + status)
+              ocrDocument/  classify · analyze · store · skill  (doc audit + OCR service boundary)
               ↓
-Actions/DB: team_bot_order_drafts (pending), whatsapp_sessions (state.order), notifications
+Actions/DB: team_bot_order_drafts (pending) · whatsapp_sessions (state.order) ·
+            jarvis_master_items (ceo_request) · jarvis_documents (doc audit) · notifications
 ```
 
 ## Current reality (honest)
 
 - The **brain + skill skeleton is real**, and **Order Intake is a real channel-agnostic skill** (not inline WhatsApp handlers).
 - The **parser is deterministic** (rule/keyword + stem matching), **not an LLM** yet. It's isolated behind `parse.ts` so an LLM can replace it without touching state/persistence/adapters.
-- The **owner menu is still WhatsApp-adapter-direct** (`src/lib/whatsapp/master.ts`) — not yet migrated into the skill layer. That migration + additional skills are the next steps.
-- **Not built yet:** general skill registry beyond order intake, LLM parser, live inventory data, owner using the order skill, OCR-from-WhatsApp, CEO/reminder execution.
+- **Three skills exist:** Order Intake (full), CEO/Manager (pending queue), OCR/Document (audit + service boundary).
+- The owner menu (`src/lib/whatsapp/master.ts`) is still the WhatsApp owner adapter, but it now **delegates CEO + OCR to their skills** (via `runSkill` → `JarvisInput`). Order-for-owner is the remaining inline path.
+- **CEO/Manager skill (Stage 1):** owner-only. Detects CEO request / status query, stores a PENDING request in `jarvis_master_items` (kind=ceo_request; title/priority/links in metadata), lists open requests. **No CEO executor agent exists** (`/api/agents/ceo/scan` only monitors SLAs) → Jarvis never claims execution.
+- **OCR/Document skill (Stage 1):** owner-only owner-OCR. Real WhatsApp media **download** (`src/lib/whatsapp/media.ts`) + audit log (`jarvis_documents`) + honest reply. The tesseract engine (`src/lib/supplierDocuments/ocrAdapter`) is wired via `analyze.ts` as a callable **service boundary** but is **NOT run inline in the webhook** (tesseract is slow → Meta retry/timeout risk); in-chat extraction is the async next step. External documents are logged as **customer-intake attachments** by the Order Intake skill (never owner OCR).
+- **Not built yet:** general skill registry beyond these three, LLM parser, live inventory data, owner using the order skill, inline/async OCR extraction over WhatsApp, real CEO/reminder execution.
 
 ## Order Intake behavior (see also docs/WHATSAPP_JARVIS_LOGIC.md)
 

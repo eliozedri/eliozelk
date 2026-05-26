@@ -9,6 +9,7 @@ import {
 } from "./store";
 import { looksLikeOrder, isPureGreetingOrNoise } from "@/lib/whatsapp/classify";
 import { ELKAYAM_LOGO_URL } from "@/lib/whatsapp/assets";
+import { logDocument } from "../ocrDocument/store";
 
 /**
  * Order Intake — the first Jarvis skill. Channel-agnostic: it reads a JarvisInput and
@@ -37,9 +38,18 @@ const confirmMsg = (items: OrderItem[]) =>
 export const orderIntakeSkill: Skill = {
   name: "orderIntake",
   async handle(ctx: SkillContext): Promise<SkillResult> {
-    const { senderId, contactName, messageId } = ctx.input;
+    const { senderId, contactName, messageId, media, channel, senderRole } = ctx.input;
     const body = (ctx.input.text ?? "").trim();
     const reply = (...messages: OutboundMessage[]): SkillResult => ({ handled: true, messages });
+
+    // External document/media → log as a customer-intake attachment (no owner OCR).
+    if (media) {
+      await logDocument({
+        channel, senderPhone: senderId, senderRole, mediaId: media.id, mediaKind: media.kind,
+        mimeType: media.mimeType, caption: body || null, status: "received", routedAction: "customer_attachment",
+      });
+      return reply(text("קיבלנו את הקובץ וצירפנו לפנייתך 🙏 הצוות יבדוק ויחזור אליך בהקדם."));
+    }
 
     const session = await loadOrderSession(senderId);
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { sendWhatsAppText } from "./send";
+import { sendWhatsAppImage } from "./interactive";
 import { createWhatsAppDraft } from "./intake";
 import { createMasterItem, pendingDraftsSummary, type MasterItemKind } from "./masterItems";
 import { loadMasterFlow, saveMasterFlow, resetMasterFlow, type MasterFlow } from "./masterSession";
@@ -10,6 +11,10 @@ import {
 import { JARVIS_CUSTOMER_LINK } from "./assets";
 import { isPureStarter } from "./summary";
 import type { InboundMessage } from "./types";
+import type { JarvisInput, Skill } from "@/lib/jarvis/types";
+import { ceoManagerSkill } from "@/lib/jarvis/skills/ceoManager/skill";
+import { ocrDocumentSkill } from "@/lib/jarvis/skills/ocrDocument/skill";
+import { isCeoRequest, isCeoStatusQuery } from "@/lib/jarvis/skills/ceoManager/intent";
 
 /**
  * Jarvis Master Mode — owner-only stateful WhatsApp wizard.
@@ -24,16 +29,34 @@ import type { InboundMessage } from "./types";
 
 // Confirmation copy (sent after a capture, before returning to the main menu).
 const DRAFT_CREATED = "פתחתי טיוטת הזמנה חדשה ✅ ממתינה לאישור ב'הזמנות מהבוט'. אפשר לקדם אותה להזמנה משם.";
-const CEO_SAVED = "תיעדתי את הבקשה ל-CEO/מנהל המערכת ✅ נשמרה כפעולה ממתינה (אין ביצוע אוטומטי עדיין).";
-const OCR_RECEIVED =
-  "קיבלתי את המסמך 📄 ושמרתי הפניה אליו. קריאה אוטומטית של מסמכים מוואטסאפ עדיין לא מחוברת — אעדכן כשתהיה זמינה.";
 
 // Free-text intent detection (deterministic foundation; a future NLU/LLM can replace).
+// CEO + OCR are now handled by their Jarvis skills (see ceoManager/ocrDocument).
 const ORDER_INTENT =
   /(צור|פתח|הוסף|תפתח|תוסיף|תיצור|לפתוח)\s+(לי\s+)?(טיוטת\s+|בקשת\s+)?הזמנה|טיוטת\s+הזמנה|הזמנה\s+חדשה|בקשת\s+הזמנה/;
 const REMINDER_INTENT = /תזכיר\s+לי|תזכורת|תרשום\s+(לי\s+)?משימה|משימה\s+חדשה/;
 const OCR_INTENT = /קרא\s+(את\s+)?המסמך|תקרא|סרוק|סריקה|תסרוק/;
-const CEO_INTENT = /תעביר\s+ל-?\s*(ceo|מנהל)|מנהל\s+המערכת|\bceo\b|תבדוק|תכין\s+(לי\s+)?דוח|בעיה\s+במערכת/i;
+
+// ── Owner adapter → Jarvis skills (channel-agnostic skills return messages) ──
+function toJarvisInput(inbound: InboundMessage): JarvisInput {
+  return {
+    channel: "whatsapp",
+    senderId: inbound.senderId,
+    senderRole: "master",
+    contactName: inbound.contactName,
+    text: inbound.body,
+    interactiveId: inbound.interactiveId ?? null,
+    media: inbound.media ?? null,
+    messageId: inbound.waMessageId,
+  };
+}
+async function runSkill(inbound: InboundMessage, skill: Skill): Promise<void> {
+  const { messages } = await skill.handle({ input: toJarvisInput(inbound) });
+  for (const m of messages) {
+    if (m.kind === "text") await sendWhatsAppText(inbound.senderId, m.text);
+    else await sendWhatsAppImage(inbound.senderId, m.imageUrl, m.caption);
+  }
+}
 
 const MENU_FLOWS: MasterFlow[] = ["main_menu", "orders_menu", "personal_menu", "settings_menu"];
 
@@ -49,16 +72,10 @@ export async function handleMasterMessage(inbound: InboundMessage): Promise<void
 
   const flow = await loadMasterFlow(phone);
 
-  // 2. Media (image/document) — meaningful only while awaiting a document for OCR.
+  // 2. Media (image/document) — route to the OCR/Document skill when awaiting a doc.
   if (inbound.type !== "text") {
     if (inbound.media && flow === "ocr_wait") {
-      await createMasterItem({
-        sourcePhone: phone,
-        kind: "document",
-        body: inbound.body ?? inbound.media.filename ?? "(מסמך)",
-        metadata: { media_id: inbound.media.id, mime: inbound.media.mimeType, kind: inbound.media.kind },
-      });
-      await sendWhatsAppText(phone, OCR_RECEIVED);
+      await runSkill(inbound, ocrDocumentSkill);
       return toMain(phone);
     }
     await sendWhatsAppText(phone, "קיבלתי קובץ 📎 לקריאת מסמך בחר '📄 סריקת מסמך' מהתפריט (כתוב 'תפריט').");
@@ -88,8 +105,8 @@ export async function handleMasterMessage(inbound: InboundMessage): Promise<void
       await createOwnerDraft(inbound, text);
       return confirmToMain(phone, DRAFT_CREATED);
     case "ceo_wait":
-      await createMasterItem({ sourcePhone: phone, kind: "ceo_request", body: text });
-      return confirmToMain(phone, CEO_SAVED);
+      await runSkill(inbound, ceoManagerSkill);
+      return toMain(phone);
     case "personal_task_wait":
       return captureToMain(phone, "personal_task", text, "נשמר כמשימה ✅");
     case "personal_reminder_wait":
@@ -267,9 +284,9 @@ async function freeTextRouter(inbound: InboundMessage, text: string): Promise<vo
     await saveMasterFlow(phone, "ocr_wait");
     return sendOcrPrompt(phone);
   }
-  if (CEO_INTENT.test(text)) {
-    await createMasterItem({ sourcePhone: phone, kind: "ceo_request", body: text });
-    return confirmToMain(phone, CEO_SAVED);
+  if (isCeoRequest(text) || isCeoStatusQuery(text)) {
+    await runSkill(inbound, ceoManagerSkill);
+    return toMain(phone);
   }
   await sendWhatsAppText(phone, "לא בטוח שהבנתי 🙂 הנה התפריט:");
   return toMain(phone);
