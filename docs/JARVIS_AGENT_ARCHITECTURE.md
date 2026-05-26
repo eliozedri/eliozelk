@@ -42,6 +42,45 @@ Actions/DB: team_bot_order_drafts (pending) · whatsapp_sessions (state.order) �
 - **OCR/Document skill (Stage 1):** owner-only owner-OCR. Real WhatsApp media **download** (`src/lib/whatsapp/media.ts`) + audit log (`jarvis_documents`) + honest reply. The tesseract engine (`src/lib/supplierDocuments/ocrAdapter`) is wired via `analyze.ts` as a callable **service boundary** but is **NOT run inline in the webhook** (tesseract is slow → Meta retry/timeout risk); in-chat extraction is the async next step. External documents are logged as **customer-intake attachments** by the Order Intake skill (never owner OCR).
 - **Not built yet:** general skill registry beyond these three, LLM parser, live inventory data, owner using the order skill, inline/async OCR extraction over WhatsApp, real CEO/reminder execution.
 
+## Previous state vs current architecture direction (honest)
+
+**Before** (initial WhatsApp work): Jarvis was **not** a central assistant — it was a set of
+**per-channel handlers**. The WhatsApp webhook owned the business logic directly: it parsed
+text with regex, created drafts inline, and replied with static strings. There was **no brain,
+no skill abstraction, no shared state model, no channel-agnostic core**. Telegram was a
+separate handler stack; the in-app `/api/agents` chat-engine was a third, unrelated stack.
+"Skills" did not exist as a concept — flows were local deterministic handlers.
+
+**After**: Jarvis is defined as **Brain/Orchestrator + Skills**, with channels as **adapters**.
+- **Brain** (`orchestrator.ts`): identifies sender role + state, selects a skill, returns messages.
+- **Skills** (`src/lib/jarvis/skills/*`): channel-agnostic units that own a domain and return
+  messages — Order Intake (full), CEO/Manager (pending queue), OCR/Document (audit + boundary).
+- **WhatsApp** (`gateway.ts` / `master.ts`): a thin adapter — normalize → call skill → render.
+- **Telegram / Web / UI**: future adapters that will call the same `runJarvis` + skills.
+
+**Per-area before → after**
+- **Order Intake:** inline draft creation with thrown-away summary → a real skill with an editable
+  cart, free-text edits, confirmation, Option-2 persistence.
+- **CEO/Manager:** inline `createMasterItem('ceo_request')` from the menu → a skill with intent
+  detection, structured pending requests, and status listing (still no executor — honest).
+- **OCR/Document:** a placeholder that logged a `jarvis_master_items` row and said "not connected"
+  → a skill with real media download, a `jarvis_documents` audit trail, and the tesseract engine
+  wired as a callable service boundary (still not run inline — honest).
+- **Owner menu:** all logic inline in `master.ts` → menu/navigation stays, but CEO + OCR now
+  **delegate to their skills**; order-for-owner is the remaining inline path.
+- **External customer flow:** keyed off the exact link phrase, made garbage drafts for greetings →
+  content-classified intake routed through the Order Intake skill; documents = customer attachments.
+
+**What Jarvis is NOT yet (do not overstate):**
+- **No LLM brain.** All understanding is **deterministic** (regex/keyword + Hebrew stem matching),
+  isolated behind skill interfaces so an LLM can replace it later with no state/adapter changes.
+- **No general skill registry** — `selectSkills` is an initial structure (external → orderIntake;
+  owner CEO/OCR via the adapter). The owner path isn't fully migrated into the brain.
+- **No live inventory, no inline/async OCR extraction, no CEO executor, no reminder firing.**
+- **To become a stronger true AI assistant:** add an LLM classification/extraction layer behind the
+  parsers; a real skill registry + intent router; an async worker for OCR; executor integrations
+  for CEO/reminders/inventory; and Telegram/Web adapters on the same core.
+
 ## Order Intake behavior (see also docs/WHATSAPP_JARVIS_LOGIC.md)
 
 - **Draft timing = Option 2 (immediate + editable).** A meaningful customer request creates a pending draft right away (no lead is lost); follow-up free text edits the **same** draft (add / remove / correct quantity); "מאשר/שלח/זה בסדר" sets `customer_confirmed=true` (status stays `pending_review`, so it remains in the office queue, flagged ✓). A real work_order is never created automatically.
