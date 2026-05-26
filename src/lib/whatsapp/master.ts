@@ -14,7 +14,8 @@ import type { InboundMessage } from "./types";
 import type { JarvisInput, Skill } from "@/lib/jarvis/types";
 import { ceoManagerSkill } from "@/lib/jarvis/skills/ceoManager/skill";
 import { ocrDocumentSkill } from "@/lib/jarvis/skills/ocrDocument/skill";
-import { isCeoRequest, isCeoStatusQuery } from "@/lib/jarvis/skills/ceoManager/intent";
+import { classifyIntent } from "@/lib/jarvis/intent";
+import { personalAreaSkill } from "@/lib/jarvis/skills/personalArea/skill";
 
 /**
  * Jarvis Master Mode — owner-only stateful WhatsApp wizard.
@@ -30,12 +31,8 @@ import { isCeoRequest, isCeoStatusQuery } from "@/lib/jarvis/skills/ceoManager/i
 // Confirmation copy (sent after a capture, before returning to the main menu).
 const DRAFT_CREATED = "פתחתי טיוטת הזמנה חדשה ✅ ממתינה לאישור ב'הזמנות מהבוט'. אפשר לקדם אותה להזמנה משם.";
 
-// Free-text intent detection (deterministic foundation; a future NLU/LLM can replace).
-// CEO + OCR are now handled by their Jarvis skills (see ceoManager/ocrDocument).
-const ORDER_INTENT =
-  /(צור|פתח|הוסף|תפתח|תוסיף|תיצור|לפתוח)\s+(לי\s+)?(טיוטת\s+|בקשת\s+)?הזמנה|טיוטת\s+הזמנה|הזמנה\s+חדשה|בקשת\s+הזמנה/;
-const REMINDER_INTENT = /תזכיר\s+לי|תזכורת|תרשום\s+(לי\s+)?משימה|משימה\s+חדשה/;
-const OCR_INTENT = /קרא\s+(את\s+)?המסמך|תקרא|סרוק|סריקה|תסרוק/;
+// Free-text intent detection is now centralized in the Brain (src/lib/jarvis/intent.ts);
+// the owner free-text router delegates to it and routes to the matching skill.
 
 // ── Owner adapter → Jarvis skills (channel-agnostic skills return messages) ──
 function toJarvisInput(inbound: InboundMessage): JarvisInput {
@@ -265,29 +262,33 @@ function numericAction(flow: MasterFlow, d: string): string | null {
 async function freeTextRouter(inbound: InboundMessage, text: string): Promise<void> {
   const phone = inbound.senderId;
 
-  // Pre-filled wa.me starter (no details) → open the orders menu directly. Checked
-  // BEFORE the unclear fallback so the link message is a known intent, not confusion.
+  // Pre-filled wa.me starter (no details) → open the orders menu directly.
   if (isPureStarter(text)) {
     await sendWhatsAppText(phone, "פתחתי לך את תפריט ההזמנות 👇");
     await saveMasterFlow(phone, "orders_menu");
     return sendOrdersMenu(phone);
   }
-  if (REMINDER_INTENT.test(text)) {
-    return captureToMain(phone, "personal_reminder", text,
-      "שמרתי כתזכורת ✅ — שים לב: תזכורות עדיין לא נשלחות אוטומטית, נשמרה כפריט ממתין.");
+
+  // Central Brain intent classification → route to the right skill (buttons are optional).
+  const { intent } = classifyIntent(text, "master");
+  switch (intent) {
+    case "ceo_manager":
+      await runSkill(inbound, ceoManagerSkill);
+      return toMain(phone);
+    case "personal":
+    case "status":
+      await runSkill(inbound, personalAreaSkill);
+      return toMain(phone);
+    case "order_intake":
+      await createOwnerDraft(inbound, text);
+      return confirmToMain(phone, DRAFT_CREATED);
+    case "ocr_document":
+      await saveMasterFlow(phone, "ocr_wait");
+      return sendOcrPrompt(phone);
+    case "greeting":
+      return runAction(phone, "main");
+    default:
+      await sendWhatsAppText(phone, "לא בטוח שהבנתי 🙂 הנה התפריט:");
+      return toMain(phone);
   }
-  if (ORDER_INTENT.test(text)) {
-    await createOwnerDraft(inbound, text);
-    return confirmToMain(phone, DRAFT_CREATED);
-  }
-  if (OCR_INTENT.test(text)) {
-    await saveMasterFlow(phone, "ocr_wait");
-    return sendOcrPrompt(phone);
-  }
-  if (isCeoRequest(text) || isCeoStatusQuery(text)) {
-    await runSkill(inbound, ceoManagerSkill);
-    return toMain(phone);
-  }
-  await sendWhatsAppText(phone, "לא בטוח שהבנתי 🙂 הנה התפריט:");
-  return toMain(phone);
 }

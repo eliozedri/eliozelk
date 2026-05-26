@@ -1,29 +1,33 @@
 import "server-only";
-import type { JarvisInput, JarvisResponse, Skill } from "./types";
+import type { JarvisInput, JarvisResponse } from "./types";
 import { text } from "./types";
+import { classifyIntent } from "./intent";
+import { resolveSkill } from "./registry";
 import { orderIntakeSkill } from "./skills/orderIntake/skill";
 
 /**
  * Jarvis brain / orchestrator.
  *
- * Channel adapters call `runJarvis(input)` and render the returned messages. The brain
- * selects skill(s) by sender role + conversation state and returns the first handled
- * result. Today the registry holds the Order Intake skill (external customer context);
- * future skills (OCR, CEO request, personal tasks, inventory) register here, and the
- * owner menu will migrate into this layer too. Keeping selection here means adding a
- * skill never touches the adapters.
+ * Channel adapters call `runJarvis(input)` and render the returned messages. Pipeline:
+ * normalize (done by adapter) → classify intent → resolve a skill (role-gated registry) →
+ * execute → return messages.
+ *
+ * EXTERNAL/unknown senders are funneled to order intake regardless of intent — they can
+ * never reach owner skills (CEO/OCR/personal). The owner WhatsApp path is currently served
+ * by the owner-menu adapter (master.ts), which calls the same skills; this orchestrator is
+ * the channel-agnostic entry that Telegram/Web (and a future owner migration) will use.
  */
 
-function selectSkills(_input: JarvisInput): Skill[] {
-  // External customer context → order intake. (Registry grows; order matters = priority.)
-  return [orderIntakeSkill];
-}
-
 export async function runJarvis(input: JarvisInput): Promise<JarvisResponse> {
-  for (const skill of selectSkills(input)) {
-    const result = await skill.handle({ input });
-    if (result.handled) return { messages: result.messages };
+  const intent = classifyIntent(input.text ?? "", input.senderRole);
+
+  if (input.senderRole === "external" || input.senderRole === "unknown") {
+    const result = await orderIntakeSkill.handle({ input });
+    return { messages: result.messages };
   }
-  // Safety net — a skill should always handle; never leave the user with silence.
-  return { messages: [text("קיבלתי 🙂 כתוב לי בקצרה מה צריך לבצע ואשמח לעזור.")] };
+
+  const skill = resolveSkill(input.senderRole, intent.intent) ?? orderIntakeSkill;
+  const result = await skill.handle({ input });
+  if (result.handled) return { messages: result.messages };
+  return { messages: [text("קיבלתי 🙂 אפשר לנסח את הבקשה בקצרה — הזמנה, מסמך, משימה או פנייה ל-CEO?")] };
 }

@@ -12,7 +12,42 @@
  */
 
 export type Channel = "whatsapp" | "telegram" | "web";
-export type SenderRole = "master" | "external";
+export type SenderRole = "master" | "external" | "internal" | "unknown";
+
+/** Coarse intents the brain routes on (deterministic Stage 1; LLM-swappable). */
+export type Intent =
+  | "order_intake"
+  | "ocr_document"
+  | "ceo_manager"
+  | "personal"
+  | "status"
+  | "help"
+  | "greeting"
+  | "unclear";
+
+/** 0..1 classifier confidence (deterministic classifier uses coarse 0.5/0.9 bands). */
+export type Confidence = number;
+
+export interface IntentResult {
+  intent: Intent;
+  confidence: Confidence;
+}
+
+/** How risky an action is — gates whether confirmation is required before running it. */
+export type ActionSafetyLevel = "safe" | "confirm" | "blocked";
+
+/** Per-sender conversation state (free-form per skill; persisted by adapters/skills). */
+export interface ConversationState {
+  activeSkill?: Intent;
+  [key: string]: unknown;
+}
+
+/** Resolved context the brain passes to a skill. */
+export interface JarvisContext {
+  input: JarvisInput;
+  intent: IntentResult;
+  state: ConversationState;
+}
 
 /** A normalized inbound event from any channel. */
 export interface JarvisInput {

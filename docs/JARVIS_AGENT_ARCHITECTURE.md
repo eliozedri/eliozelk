@@ -20,23 +20,43 @@ Source of truth for how Jarvis is structured as a personal-assistant agent. Code
 ```
 Channels:  WhatsApp adapter (src/lib/whatsapp/gateway.ts) · Telegram (future) · Web (future)
               ↓ JarvisInput
-Brain:     src/lib/jarvis/orchestrator.ts  (runJarvis → selectSkills → skill.handle)
-Contracts: src/lib/jarvis/types.ts  (JarvisInput, JarvisResponse, OutboundMessage,
-                                      SkillContext, SkillResult, Skill, SenderRole, Channel)
+Brain:     src/lib/jarvis/orchestrator.ts  (runJarvis: classify → resolve skill → execute)
+           src/lib/jarvis/intent.ts        (central deterministic intent classifier — LLM-swappable)
+           src/lib/jarvis/registry.ts      (intent → skill, role-gated; external = order intake only)
+Contracts: src/lib/jarvis/types.ts  (JarvisInput, JarvisContext, JarvisResponse, OutboundMessage,
+                                      Intent, IntentResult, Confidence, ConversationState,
+                                      ActionSafetyLevel, SkillContext, SkillResult, Skill, SenderRole, Channel)
 Skills:    src/lib/jarvis/skills/
               orderIntake/  state · parse · catalog · store · skill  (editable cart, Option-2 drafts)
               ceoManager/   intent · store · skill  (pending CEO/manager request queue + status)
-              ocrDocument/  classify · analyze · store · skill  (doc audit + OCR service boundary)
+              ocrDocument/  classify · analyze · providers · store · skill  (doc audit + pluggable OCR boundary)
+              personalArea/ store · skill  (tasks/notes/reminders/daily capture + list; reminders not scheduled)
               ↓
 Actions/DB: team_bot_order_drafts (pending) · whatsapp_sessions (state.order) ·
-            jarvis_master_items (ceo_request) · jarvis_documents (doc audit) · notifications
+            jarvis_master_items (ceo_request + personal_*) · jarvis_documents (doc audit) · notifications
+
+## Brain pipeline (runJarvis)
+
+1. **Normalize** — the channel adapter builds a `JarvisInput` (channel, senderId, senderRole,
+   text, interactiveId, media, messageId).
+2. **Classify intent** — `classifyIntent(text, role)` → `{intent, confidence}` (deterministic
+   Stage 1; an LLM can implement the same signature later).
+3. **Resolve skill** — `registry.resolveSkill(role, intent)`, **role-gated**: external/unknown
+   reach ONLY order intake; CEO/OCR/personal/status are owner-only.
+4. **Execute** — `skill.handle({ input })` → `SkillResult { handled, messages }`.
+5. **Return** — `JarvisResponse { messages }`; the adapter renders them. Fallback asks a focused
+   clarification (owner) or guides into intake (external) — not a bare "לא הבנתי".
+
+OCR is pluggable via `ocrDocument/providers.ts` (`OcrProvider`: current = tesseract; placeholder
+for a future cloud / LLM-vision provider) — swap engines without touching the skill.
 ```
 
 ## Current reality (honest)
 
 - The **brain + skill skeleton is real**, and **Order Intake is a real channel-agnostic skill** (not inline WhatsApp handlers).
 - The **parser is deterministic** (rule/keyword + stem matching), **not an LLM** yet. It's isolated behind `parse.ts` so an LLM can replace it without touching state/persistence/adapters.
-- **Three skills exist:** Order Intake (full), CEO/Manager (pending queue), OCR/Document (audit + service boundary).
+- **Central intent classifier + role-gated skill registry now exist** (`intent.ts`, `registry.ts`) — the Brain routes by intent, not scattered per-adapter regexes. Owner free-text in `master.ts` delegates to `classifyIntent`.
+- **Four skills exist:** Order Intake (full), CEO/Manager (pending queue), OCR/Document (audit + pluggable boundary), Personal Area (capture + list).
 - The owner menu (`src/lib/whatsapp/master.ts`) is still the WhatsApp owner adapter, but it now **delegates CEO + OCR to their skills** (via `runSkill` → `JarvisInput`). Order-for-owner is the remaining inline path.
 - **CEO/Manager skill (Stage 1):** owner-only. Detects CEO request / status query, stores a PENDING request in `jarvis_master_items` (kind=ceo_request; title/priority/links in metadata), lists open requests. **No CEO executor agent exists** (`/api/agents/ceo/scan` only monitors SLAs) → Jarvis never claims execution.
 - **OCR/Document skill (Stage 1):** owner-only owner-OCR. Real WhatsApp media **download** (`src/lib/whatsapp/media.ts`) + audit log (`jarvis_documents`) + honest reply. The tesseract engine (`src/lib/supplierDocuments/ocrAdapter`) is wired via `analyze.ts` as a callable **service boundary** but is **NOT run inline in the webhook** (tesseract is slow → Meta retry/timeout risk); in-chat extraction is the async next step. External documents are logged as **customer-intake attachments** by the Order Intake skill (never owner OCR).

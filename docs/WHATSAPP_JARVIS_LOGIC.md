@@ -99,10 +99,14 @@ calls `runJarvis()`, and renders the returned messages. The **Order Intake skill
   if no data, it says the team will check.
 - **LLM is a future upgrade** behind the `parse.ts` interface — swap the deterministic parser for an
   LLM with no change to state/persistence/adapters.
-- **More skills (owner-only):** CEO/Manager (pending request queue + status, `jarvis_master_items`) and
-  OCR/Document (media download + audit `jarvis_documents` + tesseract service boundary, not run inline)
-  are wired via the owner adapter. External senders can NEVER reach them — external documents are logged
-  as customer-intake attachments only. Neither fakes execution/OCR. See `docs/JARVIS_SKILLS_ROADMAP.md`.
+- **More skills (owner-only):** CEO/Manager (pending request queue + status, `jarvis_master_items`),
+  OCR/Document (media download + audit `jarvis_documents` + pluggable OCR boundary, not run inline), and
+  Personal Area (tasks/notes/reminders/daily capture + list) are wired via the owner adapter. External
+  senders can NEVER reach them — external documents are logged as customer-intake attachments only.
+  Nothing fakes execution/OCR/scheduling. See `docs/JARVIS_SKILLS_ROADMAP.md`.
+- **Central Brain routing:** owner free-text is classified by `src/lib/jarvis/intent.ts` (one classifier,
+  role-gated by `registry.ts`) and routed to the matching skill — buttons/menus are optional shortcuts,
+  natural Hebrew works throughout. Deterministic Stage 1; LLM-swappable behind the same interface.
 
 ## Invariants (must always hold)
 

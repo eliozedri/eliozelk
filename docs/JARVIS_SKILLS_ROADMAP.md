@@ -13,8 +13,8 @@ Skills live under `src/lib/jarvis/skills/` and return channel-agnostic messages.
 |---|---|---|---|
 | **Order Intake** | ✅ | External + owner order text → editable pending draft (add/remove/correct-qty/confirm); summary + logo; Option-2 (create early, edit in place); `customer_confirmed` flag; never a work_order. | Owner uses the same skill; LLM extraction; structured location/contact fields. |
 | **CEO / Manager** | 🟡 | Owner-only. Detects CEO request + status query; stores PENDING request in `jarvis_master_items`; lists open requests. Honest — no execution claimed. | Real CEO executor/agent integration; status transitions; result capture; notifications. |
-| **OCR / Document** | 🟡 | Owner-only. Real WhatsApp media download + audit log (`jarvis_documents`) + honest reply; tesseract engine wired as a callable service boundary (`analyze.ts`). External docs = customer-intake attachments. | Run extraction (async/queue, off the webhook) → summarize → classify → route to Order Intake/CEO/personal; structured fields. |
-| **Personal Tasks / Reminders** | 🟡 | Capture only (`jarvis_master_items`: personal_task/note/reminder); reminders stored, not scheduled. | Reminder scheduling/firing; task lists; due dates. |
+| **OCR / Document** | 🟡 | Owner-only. Real WhatsApp media download + audit log (`jarvis_documents`) + honest reply; pluggable `OcrProvider` (current = tesseract via `analyze.ts`/`providers.ts`) wired as a callable boundary. External docs = customer-intake attachments. | Run extraction (async/queue, off the webhook) → summarize → classify → route; cloud/LLM-vision provider; structured fields. |
+| **Personal Area** | 🟡 | Owner-only **channel-agnostic skill** (`skills/personalArea`): capture tasks/notes/reminders/daily-report + **list open items** ("מה המשימות שלי?"). Reuses `jarvis_master_items`. Reminders stored, **not scheduled** (honest). | Reminder scheduling/firing; due dates; edit/complete items. |
 | **Inventory / Availability** | ⬜ | Extension point only (`orderIntake/catalog.ts`) — never invents stock. | Connect catalog/stock source; availability checks; alternatives. |
 | **Finance / Operations** | ⬜ | — | Future skills. |
 
