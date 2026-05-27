@@ -111,6 +111,10 @@ calls `runJarvis()`, and renders the returned messages. The **Order Intake skill
   key) so behavior is unchanged. The owner CEO/Manager path also gains **Agent Reasoning**: a directive
   resolves to a single read-only command → a multi-step read-only plan → or a queued human task.
   See `docs/JARVIS_LLM_ROUTER.md` + `docs/JARVIS_AGENT_REASONING.md`.
+- **Owner/Master Brain-First Invariant:** after owner identification, NO free-text/media message
+  skips the Brain. Non-Brain paths are only explicit UI (buttons / exact nav words / numeric menu /
+  capture states the owner tapped into), audited with `brain_called=false`. See the reverse-audit
+  table in `docs/JARVIS_AGENT_ARCHITECTURE.md`.
 - **Owner MEDIA goes through the Brain too (media = context, not intent):** an image+caption is
   classified by the caption — "תיצור תמונה/נאנו בננה" → Image/Creative skill, "קרא/סרוק" → OCR,
   image with no caption → clarification. The old media→OCR short-circuit was removed. External media

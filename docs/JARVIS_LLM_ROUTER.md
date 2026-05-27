@@ -21,6 +21,15 @@ confidence / clarification / safety / verifiedAnswerPossible / dataSourceNeeded 
 nothing is collapsed into a command id at the door. Departments + capabilities are documented in
 `docs/JARVIS_AGENT_ARCHITECTURE.md`.
 
+## Owner/Master Brain-First Invariant
+
+After the owner is identified, **no free-text or media message skips the Brain**. Media is context,
+not intent (caption decides; an image never auto-OCRs). Handlers are executors; the deterministic
+fallback runs only when the LLM is unavailable/rejected and never overrides an accepted decision.
+The only non-Brain owner paths are explicit UI (buttons / exact nav words / numeric menu / capture
+states the owner tapped into) — audited with `brain_called=false`. Full reverse-audit table:
+`docs/JARVIS_AGENT_ARCHITECTURE.md`.
+
 ## Pipeline
 
 ```

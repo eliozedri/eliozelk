@@ -69,6 +69,31 @@ exact command matching. Core principles:
   CEO/finance/inventory internals, personal area, or settings. No real `work_order` is ever
   created automatically. Risky/write actions require confirmation (no write tooling today).
 
+## Owner/Master Brain-First Invariant
+
+**After the owner/master is identified, NO free-text or media message skips the Jarvis Brain.**
+- Media is **context, not intent** — an image/file never triggers OCR by itself; the caption decides.
+- Handlers are **executors**, not decision-makers. Gemini/Groq are the primary understanding layer.
+- The dispatcher / deterministic / command fallback runs ONLY when the LLM is disabled / both
+  providers failed / timeout / low-confidence / invalid JSON / safety-rejected — and it never
+  overrides an accepted LLM decision.
+- A missing capability is NEVER a faked answer — it becomes a Capability Request (and an honest reply).
+
+**Reverse-audit of every owner entry path (`src/lib/whatsapp/master.ts`):**
+
+| Path | Brain? | Notes |
+|---|---|---|
+| Free text (idle / in-menu) | ✅ `freeTextRouter → decideBrain` | Gemini→Groq→deterministic |
+| Media (image/file) | ✅ `handleOwnerMedia → decideBrain` | caption + media metadata as context |
+| `ceo_wait` capture | ✅ `ceoManagerSkill → dispatchManagerRequest → decideBrain` | |
+| Interactive button / exact nav word (`תפריט/ביטול/חזור`) / numeric menu | ⚪ explicit UI | stable id / exact word / digit = an explicit owner choice, not free-text intent |
+| `orders_create_wait`, `personal_*_wait` captures | ⚪ explicit capture | owner navigated into the flow by tapping that item |
+
+The ⚪ paths are **executors of an explicit owner choice**, audited with `brain_called=false`
+(`reason=explicit_ui_or_capture`); they are the ONLY non-Brain owner paths. Every other owner
+message has `brain_called=true` with `provider_used` (gemini/groq/deterministic) in `jarvis_brain_audit`.
+External senders never reach this path (gateway → Order Intake only; role-gated; media = order attachment).
+
 ## Reasoning-first Brain + department routing (Stage 2 + 3)
 
 **Jarvis is REASONING-FIRST, commands-second.** It does not map a message to the closest command.

@@ -18,6 +18,12 @@ Skills live under `src/lib/jarvis/skills/` and return channel-agnostic messages.
 | **Inventory / Availability** | ⬜ | Extension point only (`orderIntake/catalog.ts`) — never invents stock. | Connect catalog/stock source; availability checks; alternatives. |
 | **Finance / Operations** | ⬜ | — | Future skills. |
 
+## Owner/Master Brain-First Invariant
+After owner identification, no free-text/media message skips the Brain; media is context not intent;
+handlers are executors; fallback never overrides an accepted LLM decision; missing capability →
+Capability Request (never faked). Only explicit UI/capture paths are non-Brain (`brain_called=false`).
+See `docs/JARVIS_AGENT_ARCHITECTURE.md`.
+
 ## Reasoning-first Brain + departments
 Jarvis is a **reasoning-first orchestrator**: understand → pick the business **department** →
 execute a read-only skill/routine, ask clarification, or file a pending department request.

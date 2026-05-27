@@ -20,7 +20,7 @@ import { developmentSkill } from "@/lib/jarvis/skills/development/skill";
 import { imageCreativeSkill } from "@/lib/jarvis/skills/imageCreative/skill";
 import { decideBrain } from "@/lib/jarvis/brain";
 import { executeManagerDecision, formatDispatchReply } from "@/lib/jarvis/skills/ceoManager/dispatcher";
-import { recordBrainAudit } from "@/lib/jarvis/audit";
+import { recordBrainAudit, recordExplicitAudit } from "@/lib/jarvis/audit";
 
 /**
  * Jarvis Master Mode — owner-only stateful WhatsApp wizard.
@@ -105,19 +105,24 @@ export async function handleMasterMessage(inbound: InboundMessage): Promise<void
   switch (flow) {
     case "orders_create_wait":
       await createOwnerDraft(inbound, text);
+      await recordExplicitAudit({
+        senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, messageType: inbound.type,
+        mediaPresent: !!inbound.media, inboundText: text, intent: "order_intake_capture",
+        skill: "orderIntake", action: "create_owner_draft", outgoingSummary: DRAFT_CREATED,
+      }).catch(() => {});
       return confirmToMain(phone, DRAFT_CREATED);
     case "ceo_wait":
       await runSkill(inbound, ceoManagerSkill);
       return toMain(phone);
     case "personal_task_wait":
-      return captureToMain(phone, "personal_task", text, "נשמר כמשימה ✅");
+      return captureToMain(inbound, "personal_task", text, "נשמר כמשימה ✅");
     case "personal_reminder_wait":
-      return captureToMain(phone, "personal_reminder", text,
+      return captureToMain(inbound, "personal_reminder", text,
         "שמרתי כתזכורת ✅ — שים לב: תזכורות עדיין לא נשלחות אוטומטית, נשמרה כפריט ממתין.");
     case "personal_note_wait":
-      return captureToMain(phone, "personal_note", text, "הפתק נשמר ✅");
+      return captureToMain(inbound, "personal_note", text, "הפתק נשמר ✅");
     case "personal_medical_wait":
-      return captureToMain(phone, "personal_medical", text,
+      return captureToMain(inbound, "personal_medical", text,
         "נשמר כפתק אישי ✅ (איני נותן ייעוץ רפואי — נשמר כפתק/תזכורת בלבד).");
     case "ocr_wait":
       await sendWhatsAppText(phone, "שלח צילום או PDF, או כתוב 'תפריט' לחזרה.");
@@ -228,9 +233,15 @@ async function confirmToMain(phone: string, confirm: string): Promise<void> {
   await toMain(phone);
 }
 
-async function captureToMain(phone: string, kind: MasterItemKind, body: string, confirm: string): Promise<void> {
-  await createMasterItem({ sourcePhone: phone, kind, body });
-  await confirmToMain(phone, confirm);
+async function captureToMain(inbound: InboundMessage, kind: MasterItemKind, body: string, confirm: string): Promise<void> {
+  await createMasterItem({ sourcePhone: inbound.senderId, kind, body });
+  // Explicit capture flow (owner navigated into it via a menu tap) — audited as a non-Brain action.
+  await recordExplicitAudit({
+    senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, messageType: inbound.type,
+    mediaPresent: !!inbound.media, inboundText: body, intent: kind, skill: "personalArea",
+    action: `capture_${kind}`, outgoingSummary: confirm,
+  }).catch(() => {});
+  await confirmToMain(inbound.senderId, confirm);
 }
 
 async function createOwnerDraft(inbound: InboundMessage, text: string): Promise<void> {
@@ -310,9 +321,13 @@ async function routeOwnerDecision(inbound: InboundMessage, text: string, hasMedi
     state: hasMedia ? { media: inbound.media?.kind ?? "image" } : undefined,
   });
   const auditText = hasMedia ? `[media:${inbound.media?.kind ?? "image"}] ${text}` : text;
+  const auditBase = {
+    decision, senderRole: "master" as const, channel: "whatsapp", msgId: inbound.waMessageId,
+    inboundText: auditText, messageType: inbound.type, mediaPresent: hasMedia,
+  };
 
   if (decision.coarseIntent === "ceo_manager") {
-    const result = await executeManagerDecision(decision, { text, sourcePhone: phone, channel: "whatsapp", msgId: inbound.waMessageId });
+    const result = await executeManagerDecision(decision, { text, sourcePhone: phone, channel: "whatsapp", msgId: inbound.waMessageId, mediaPresent: hasMedia, messageType: inbound.type });
     await sendWhatsAppText(phone, formatDispatchReply(result));
     return toMain(phone);
   }
@@ -342,14 +357,14 @@ async function routeOwnerDecision(inbound: InboundMessage, text: string, hasMedi
         outgoing = await runSkill(inbound, ocrDocumentSkill);
       } else {
         outgoing = "(הופנה לסריקת מסמך)";
-        await recordBrainAudit({ decision, senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, inboundText: auditText, outgoingSummary: outgoing });
+        await recordBrainAudit({ ...auditBase, outgoingSummary: outgoing });
         await saveMasterFlow(phone, "ocr_wait");
         return sendOcrPrompt(phone);
       }
       break;
     case "greeting":
       if (!hasMedia) {
-        await recordBrainAudit({ decision, senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, inboundText: auditText, outgoingSummary: "(תפריט ראשי)" });
+        await recordBrainAudit({ ...auditBase, outgoingSummary: "(תפריט ראשי)" });
         return runAction(phone, "main");
       }
       outgoing = "קיבלתי תמונה 📷 מה לעשות איתה? לקרוא (OCR) · ליצור/לערוך תמונה · לשמור כפתק · להעביר ל-CEO";
@@ -362,6 +377,6 @@ async function routeOwnerDecision(inbound: InboundMessage, text: string, hasMedi
       await sendWhatsAppText(phone, outgoing);
       break;
   }
-  await recordBrainAudit({ decision, senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, inboundText: auditText, outgoingSummary: outgoing, safetyResult: decision.requiresClarification ? "clarify" : "accept" });
+  await recordBrainAudit({ ...auditBase, outgoingSummary: outgoing, safetyResult: decision.requiresClarification ? "clarify" : "accept" });
   return toMain(phone);
 }

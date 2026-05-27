@@ -3,8 +3,13 @@
 Lets the **owner** issue a complex request that Jarvis breaks into a SAFE, ordered plan over
 **existing** read-only actions, executes it, and summarizes. Code: `src/lib/jarvis/agent/`.
 
-> **Status: deterministic planner live; LLM planner dormant** (no key). This is a *safe planner*,
-> not an autonomous code/SQL agent — be honest about that.
+> **Status: deterministic planner live; LLM planner active** (Gemini→Groq enabled). This is a *safe
+> planner* over existing read-only actions, not an autonomous code/SQL agent — be honest about that.
+
+> **Owner/Master Brain-First Invariant:** after owner identification, no free-text/media message
+> skips the Brain; media is context not intent; the deterministic fallback never overrides an
+> accepted LLM decision; a missing capability becomes a Capability Request, never a faked answer.
+> Reverse-audit table: `docs/JARVIS_AGENT_ARCHITECTURE.md`.
 
 ## Hard safety model
 

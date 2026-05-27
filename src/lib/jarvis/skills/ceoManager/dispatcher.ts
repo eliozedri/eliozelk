@@ -45,6 +45,8 @@ export interface DispatchCtx {
   sourcePhone: string;
   channel: string;
   msgId?: string;
+  mediaPresent?: boolean;
+  messageType?: string;
 }
 
 /** Convenience for the ceo_wait / skill path: reason then execute. */
@@ -61,6 +63,7 @@ export async function executeManagerDecision(decision: BrainDecision, ctx: Dispa
     inboundText: ctx.text, outgoingSummary: formatDispatchReply(result),
     safetyResult: decision.requiresClarification ? "clarify" : "accept",
     capabilityRequestId: result.capabilityRequestId,
+    messageType: ctx.messageType ?? "text", mediaPresent: ctx.mediaPresent ?? false,
   }).catch(() => {});
   return result;
 }
