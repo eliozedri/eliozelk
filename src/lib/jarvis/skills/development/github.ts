@@ -148,6 +148,14 @@ export async function triggerWorkflow(): Promise<GhResult> {
   return { ok: false, reason: "use_issue_comment_at_claude" }; // prefer the @claude comment path
 }
 
+export async function listWorkflowRuns(owner: string, repo: string, perPage = 5): Promise<{ ok: boolean; runs?: { name: string; status: string; conclusion: string | null; url: string; created_at: string }[]; reason?: string }> {
+  if (!githubAvailable()) return { ok: false, reason: "github_unavailable" };
+  const r = await ghFetch(`/repos/${owner}/${repo}/actions/runs?per_page=${perPage}`, "GET");
+  if (!r.ok) return { ok: false, reason: r.reason ?? "error" };
+  const d = r.json as { workflow_runs?: { name?: string; status?: string; conclusion?: string | null; html_url?: string; created_at?: string }[] };
+  return { ok: true, runs: (d?.workflow_runs ?? []).map((w) => ({ name: w.name ?? "", status: w.status ?? "", conclusion: w.conclusion ?? null, url: w.html_url ?? "", created_at: w.created_at ?? "" })) };
+}
+
 /** Rich config detector for status reporting (no secret values). */
 export function detectGitHubConfig(): { status: "configured" | "disabled" | "missing_token" | "partial"; authMode: string; canCreateRepo: boolean; owner: string | null; repo: string | null } {
   const cfg = loadGithubConfig();
