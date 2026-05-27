@@ -30,7 +30,7 @@ const OWNER_INTENTS: LlmIntent[] = [
   "inventory_stock_lookup", "inventory_low_stock", "inventory_missing_or_zero",
   "catalog_missing_price", "catalog_missing_supplier", "purchase_recommendation_readonly",
   "orders_status", "stuck_orders", "pending_order_drafts",
-  "operations_risk_report", "finance_open_balance", "fleet_equipment_status",
+  "operations_risk_report", "finance_open_balance", "fleet_equipment_status", "capability_request",
   "clarification_needed", "unknown",
 ];
 const EXTERNAL_INTENTS: LlmIntent[] = [

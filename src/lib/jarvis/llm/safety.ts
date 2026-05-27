@@ -112,6 +112,7 @@ export function llmIntentToCoarse(intent: LlmIntent): Intent {
     case "operations_risk_report":
     case "finance_open_balance":
     case "fleet_equipment_status":
+    case "capability_request":
       return "ceo_manager";
     case "ocr_document":
     case "external_document_attachment":

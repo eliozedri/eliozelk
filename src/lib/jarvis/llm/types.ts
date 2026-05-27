@@ -32,6 +32,7 @@ export type LlmIntent =
   | "operations_risk_report"
   | "finance_open_balance"
   | "fleet_equipment_status"
+  | "capability_request"
   // external customer
   | "external_greeting"
   | "external_order_request"

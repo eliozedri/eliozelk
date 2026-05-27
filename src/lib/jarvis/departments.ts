@@ -47,6 +47,10 @@ const ROUTES: Partial<Record<LlmIntent, DepartmentRoute>> = {
   operations_risk_report: { domain: "operations", agents: ["ceo", "inventory-agent", "orders-agent"], label: "מנהל תפעול", hasCapability: true },
   system_status: { domain: "operations", agents: ["ceo"], label: "מנהל תפעול", hasCapability: true },
   ceo_manager_request: { domain: "management", agents: ["ceo"], label: "מנהל המערכת", hasCapability: true },
+  capability_request: {
+    domain: "management", agents: ["ceo"], label: "מנהל המערכת", hasCapability: false,
+    dataSourceNeeded: "פיתוח יכולת/Skill חדשה — אין כרגע יכולת מובנית לבקשה הזו",
+  },
   fleet_equipment_status: { domain: "fleet", agents: ["equipment-fleet-agent"], label: "מנהל ציוד ורכבים", hasCapability: true },
   // Finance AR has NO verified customer-payments/balances source yet → pending finance request.
   finance_open_balance: {

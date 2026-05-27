@@ -19,6 +19,7 @@ export interface BrainAuditInput {
   outgoingSummary: string;
   safetyResult?: string;
   fallbackReason?: string | null;
+  capabilityRequestId?: string | null;
 }
 
 export async function recordBrainAudit(a: BrainAuditInput): Promise<void> {
@@ -44,6 +45,9 @@ export async function recordBrainAudit(a: BrainAuditInput): Promise<void> {
     safety_result: a.safetyResult ?? "accept",
     verified_answer_possible: d.verifiedAnswerPossible,
     outgoing_summary: (a.outgoingSummary ?? "").slice(0, 500),
+    missing_capability: d.missingCapability,
+    requires_capability_build: d.requiresCapabilityBuild,
+    capability_request_id: a.capabilityRequestId ?? null,
   });
   if (error) console.error("[jarvis:audit] insert failed:", error.message);
 }

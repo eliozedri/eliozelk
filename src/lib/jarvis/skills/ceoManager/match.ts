@@ -32,6 +32,10 @@ export const COMMAND_PATTERNS: CommandPattern[] = [
 // honest pending Finance request rather than guessing or running a wrong command.
 const FINANCE_RE = /חשבון.{0,12}(פתוח|לקוח)|(פתוח|חוב|יתר|חייב).{0,14}לקוח|כמה\s+כסף|סך\s+(כל\s+)?ה?חשבון|גביי?ה|חובות|מאזן\s+לקוח|accounts?\s+receivable|open\s+balance/i;
 
+// Owner asks to BUILD/ADD a capability (command-less) → routed to the System Manager as a
+// capability request, never answered with an unrelated report.
+const CAPABILITY_RE = /תבנה\s+(לי\s+)?יכולת|תוסיף\s+(לי\s+)?יכולת|תפתח\s+(לי\s+)?(סקיל|skill|יכולת)|בנה\s+(לי\s+)?(סקיל|יכולת)|build\s+(a\s+)?(skill|capability)|אין\s+לך\s+יכולת/i;
+
 /** Maps a rich LLM intent to an exact read-only command id (or null when handled otherwise). */
 const INTENT_TO_COMMAND: Record<string, string> = {
   inventory_stock_lookup: "inventory_stock_lookup",
@@ -84,9 +88,12 @@ export function matchCommandId(text: string): string | null {
  * (caller then tries other skills or asks clarification — never a wrong command).
  */
 export function deterministicDomainIntent(text: string): LlmIntent | null {
-  const id = matchCommandId(text);
+  const t = text ?? "";
+  // Capability-build request takes precedence (command-less, must not match a report command).
+  if (CAPABILITY_RE.test(t)) return "capability_request";
+  const id = matchCommandId(t);
   if (id) return commandIdToLlmIntent(id);
-  if (FINANCE_RE.test(text ?? "")) return "finance_open_balance";
+  if (FINANCE_RE.test(t)) return "finance_open_balance";
   return null;
 }
 

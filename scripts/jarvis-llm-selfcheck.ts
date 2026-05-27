@@ -60,6 +60,8 @@ async function main() {
 
   check("6. CEO delegation: 'תבקש מה-CEO לבדוק את ההתראות' → recognized as CEO request",
     isCeoRequest("תבקש מה-CEO לבדוק למה ההתראות לא מופיעות"));
+  check("6b. capability build: 'תבנה יכולת לבדוק חוסרים לפי הזמנות פתוחות' → capability_request (no fake report)",
+    deterministicDomainIntent("תבנה יכולת לבדוק חוסרים לפי הזמנות פתוחות") === "capability_request" && departmentFor("capability_request").hasCapability === false);
 
   check("7. orders: 'איזה הזמנות תקועות?' → stuck_orders (operations)",
     deterministicDomainIntent("איזה הזמנות תקועות?") === "stuck_orders");

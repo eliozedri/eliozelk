@@ -51,6 +51,12 @@ export interface BrainDecision {
   dataSourceNeeded: string | null;
   /** Why the deterministic fallback was used (null when the LLM decision was accepted). */
   fallbackReason: string | null;
+  /** True when the owner asked to BUILD/ADD a capability (→ capability request, not an answer). */
+  requiresCapabilityBuild: boolean;
+  /** What capability/data source is missing (drives a Capability Request). */
+  missingCapability: string | null;
+  /** Provenance for audit: gemini | groq | local | deterministic | fallback | safety_block | clarification. */
+  decisionSource: string;
 }
 
 export interface BrainInput {
@@ -150,17 +156,30 @@ function deterministicDecision(text: string, role: SenderRole, reason: string): 
   });
 }
 
-/** Attach department routing + verifiability to a partial decision. */
-function finalize(d: Omit<BrainDecision, "businessDomain" | "targetAgents" | "requiresDepartmentConsultation" | "verifiedAnswerPossible" | "dataSourceNeeded">): BrainDecision {
+/** Attach department routing + verifiability + capability/provenance to a partial decision. */
+function finalize(
+  d: Omit<BrainDecision, "businessDomain" | "targetAgents" | "requiresDepartmentConsultation" | "verifiedAnswerPossible" | "dataSourceNeeded" | "requiresCapabilityBuild" | "missingCapability" | "decisionSource">,
+): BrainDecision {
   const dept = departmentFor(d.intent);
   const verified = !!d.action || !!d.routine;
+  const dataSourceNeeded = verified ? null : dept.dataSourceNeeded ?? null;
+  const decisionSource = d.requiresClarification
+    ? "clarification"
+    : d.source === "llm"
+      ? d.provider ?? "llm"
+      : d.fallbackReason?.startsWith("safety")
+        ? "safety_block"
+        : "fallback";
   return {
     ...d,
     businessDomain: dept.domain,
     targetAgents: dept.agents,
     requiresDepartmentConsultation: isBusinessConsultation(dept.domain),
     verifiedAnswerPossible: verified,
-    dataSourceNeeded: verified ? null : dept.dataSourceNeeded ?? null,
+    dataSourceNeeded,
+    requiresCapabilityBuild: d.intent === "capability_request",
+    missingCapability: verified ? null : dataSourceNeeded,
+    decisionSource,
   };
 }
 

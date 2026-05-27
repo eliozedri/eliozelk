@@ -8,6 +8,7 @@ import { executePlan, formatPlanReport } from "../../agent/runner";
 import { departmentFor } from "../../departments";
 import { logBrainDecision } from "../../brainLog";
 import { recordBrainAudit } from "../../audit";
+import { createCapabilityRequest } from "../../capabilities";
 import { loadLlmConfig } from "../../llm/config";
 import { decideBrain, type BrainDecision } from "../../brain";
 import type { PlanExecution } from "../../agent/types";
@@ -26,12 +27,13 @@ import type { PlanExecution } from "../../agent/types";
 const MANAGER_AGENT_ID = "ceo";
 
 export interface DispatchResult {
-  kind: "command" | "plan" | "clarification" | "pending_department";
+  kind: "command" | "plan" | "clarification" | "pending_department" | "capability_request";
   decision: BrainDecision;
   executed: boolean;
   command: ManagerCommand | null;
   report: CommandReport | null;
   planExecution: PlanExecution | null;
+  capabilityRequestId: string | null;
   masterItemId: string | null;
   title: string;
   priority: "high" | "normal";
@@ -58,6 +60,7 @@ export async function executeManagerDecision(decision: BrainDecision, ctx: Dispa
     decision, senderRole: "master", channel: ctx.channel, msgId: ctx.msgId,
     inboundText: ctx.text, outgoingSummary: formatDispatchReply(result),
     safetyResult: decision.requiresClarification ? "clarify" : "accept",
+    capabilityRequestId: result.capabilityRequestId,
   }).catch(() => {});
   return result;
 }
@@ -90,7 +93,7 @@ async function runManagerDecision(decision: BrainDecision, ctx: DispatchCtx): Pr
   if (decision.requiresClarification) {
     await closeCeoRequest(masterItemId, { status: "pending", report: { kind: "clarification", domain: decision.businessDomain } });
     await updateAgentRunStatus(db, primaryAgent, "idle").catch(() => {});
-    return { kind: "clarification", executed: false, command: null, report: null, planExecution: null, ...base };
+    return { kind: "clarification", executed: false, command: null, report: null, planExecution: null, capabilityRequestId: null, ...base };
   }
 
   // 2. Multi-step read-only routine.
@@ -102,7 +105,7 @@ async function runManagerDecision(decision: BrainDecision, ctx: DispatchCtx): Pr
     }).catch(() => {});
     await updateAgentRunStatus(db, MANAGER_AGENT_ID, "idle").catch(() => {});
     await closeCeoRequest(masterItemId, { status: exec.ranSteps > 0 ? "done" : "error", report: { plan: exec.goal, source: decision.source, ranSteps: exec.ranSteps } });
-    return { kind: "plan", executed: exec.ranSteps > 0, command: null, report: null, planExecution: exec, ...base };
+    return { kind: "plan", executed: exec.ranSteps > 0, command: null, report: null, planExecution: exec, capabilityRequestId: null, ...base };
   }
 
   // 3. Single read-only action with a verified data source.
@@ -118,22 +121,52 @@ async function runManagerDecision(decision: BrainDecision, ctx: DispatchCtx): Pr
     if (report.needsClarification) {
       await writeAgentActivity(db, resolvedCmd.agentId, "report", `❓ ${report.title}: ${report.headline}`, { source: "jarvis_dispatch", command: resolvedCmd.id, masterItemId }).catch(() => {});
       await closeCeoRequest(masterItemId, { status: "pending", report: { command: resolvedCmd.id, needsClarification: true, headline: report.headline } });
-      return { kind: "clarification", executed: false, command: resolvedCmd, report, planExecution: null, ...base };
+      return { kind: "clarification", executed: false, command: resolvedCmd, report, planExecution: null, capabilityRequestId: null, ...base };
     }
     await writeAgentActivity(db, resolvedCmd.agentId, "report", `${report.ok ? "✅" : "⚠️"} ${report.title}: ${report.headline}`, {
       source: "jarvis_dispatch", command: resolvedCmd.id, requestedBy: "ceo", masterItemId, count: report.count ?? null, details: report.details,
     }).catch(() => {});
     await writeAgentActivity(db, MANAGER_AGENT_ID, "report", `📋 דוח מ-${resolvedCmd.agentName}: ${report.headline}`, { source: "jarvis_dispatch", command: resolvedCmd.id, delegatedTo: resolvedCmd.agentId, masterItemId }).catch(() => {});
     await closeCeoRequest(masterItemId, { status: report.ok ? "done" : "error", report: { command: resolvedCmd.id, agentId: resolvedCmd.agentId, headline: report.headline, count: report.count ?? null } });
-    return { kind: "command", executed: report.ok, command: resolvedCmd, report, planExecution: null, ...base };
+    return { kind: "command", executed: report.ok, command: resolvedCmd, report, planExecution: null, capabilityRequestId: null, ...base };
   }
 
-  // 4. Department has no verified data source (or genuine delegation) → honest pending request.
+  // 4. No verified capability/data source (or a capability-build request, or generic delegation)
+  //    → file an honest pending request + a structured Capability Request. Never fake an answer.
+  const isCapabilityBuild = decision.requiresCapabilityBuild;
+  const missing = isCapabilityBuild
+    ? `Skill/יכולת: ${ctx.text.slice(0, 160)}`
+    : decision.dataSourceNeeded ?? decision.missingCapability ?? null;
+
+  let capabilityRequestId: string | null = null;
+  if (isCapabilityBuild || missing) {
+    capabilityRequestId = await createCapabilityRequest({
+      requestedBy: ctx.sourcePhone,
+      channel: ctx.channel,
+      originalMessage: ctx.text,
+      interpretedIntent: decision.intent,
+      kind: isCapabilityBuild ? "skill_build" : "data_source",
+      missingSkillOrDataSource: missing ?? "(לא צויין)",
+      targetAgent: primaryAgent,
+      priority,
+      recommendedNextStep: isCapabilityBuild
+        ? "הוסף Skill/Routine קריאה-בלבד חדש + שורת departments/match; ראה JARVIS_SKILLS_ROADMAP."
+        : "חבר מקור נתונים מאומת לתחום זה, או בצע בדיקה ידנית.",
+    });
+  }
+
   await queueDepartmentTask(db, { masterItemId, title, text: ctx.text, priority, agentId: primaryAgent, domain: decision.businessDomain });
-  await writeAgentActivity(db, primaryAgent, "task_created", `🗂️ בקשה ל${departmentFor(decision.intent).label}: ${title}`, { source: "jarvis_dispatch", masterItemId, businessDomain: decision.businessDomain, dataSourceNeeded: decision.dataSourceNeeded }).catch(() => {});
+  await writeAgentActivity(
+    db, primaryAgent, "task_created",
+    `🗂️ ${isCapabilityBuild ? "בקשת יכולת" : "בקשה"} ל${departmentFor(decision.intent).label}: ${title}`,
+    { source: "jarvis_dispatch", masterItemId, businessDomain: decision.businessDomain, dataSourceNeeded: decision.dataSourceNeeded, capabilityRequestId },
+  ).catch(() => {});
   await updateAgentRunStatus(db, primaryAgent, "idle").catch(() => {});
-  await closeCeoRequest(masterItemId, { status: "pending", report: { delegatedTo: primaryAgent, domain: decision.businessDomain, dataSourceNeeded: decision.dataSourceNeeded } });
-  return { kind: "pending_department", executed: false, command: null, report: null, planExecution: null, ...base };
+  await closeCeoRequest(masterItemId, { status: "pending", report: { delegatedTo: primaryAgent, domain: decision.businessDomain, dataSourceNeeded: decision.dataSourceNeeded, capabilityRequestId } });
+  return {
+    kind: isCapabilityBuild ? "capability_request" : "pending_department",
+    executed: false, command: null, report: null, planExecution: null, capabilityRequestId, ...base,
+  };
 }
 
 /** Render the WhatsApp reply for a dispatch result. */
@@ -160,8 +193,16 @@ export function formatDispatchReply(result: DispatchResult): string {
       "🖥️ מתועד במרכז הפיקוד הדיגיטלי.",
     ].join("\n");
   }
-  // pending_department
   const dept = departmentFor(d.intent);
+  if (result.kind === "capability_request") {
+    // Owner asked to BUILD a capability we don't have yet — honest, never faked.
+    return [
+      `אין לי עדיין יכולת מובנית לזה (#${result.refId}).`,
+      `פתחתי בקשת יכולת ל${dept.label} ותיעדתי מה צריך לבנות.`,
+      "כשהיכולת תיבנה (Skill/Routine קריאה-בלבד), אדע לבצע את זה אוטומטית.",
+    ].join("\n");
+  }
+  // pending_department
   const lines = [`קיבלתי (#${result.refId}). העברתי ל${dept.label}.`];
   if (d.dataSourceNeeded) lines.push(`אין כרגע מקור נתונים מאומת לבקשה הזו — ${d.dataSourceNeeded}.`);
   lines.push(`פתחתי בקשת בדיקה ל${dept.label}; היא מופיעה במרכז הפיקוד הדיגיטלי לטיפול.`);

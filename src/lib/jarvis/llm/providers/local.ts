@@ -32,6 +32,7 @@ const OWNER_RULES: Rule[] = [
   { re: /טיוט(ות|ה)|ממתינ.*לאישור|תור\s+הזמנות/i, intent: "pending_order_drafts", skill: "orders", safety: "read_only" },
   { re: /הזמנות\s+פתוחות|כמה\s+הזמנות|מצב\s+ההזמנות/i, intent: "orders_status", skill: "orders", safety: "read_only" },
   { re: /(כמה|מלאי\s+של|יש|נשאר|נותר|כמות).*(נשאר|נותר|מלאי|במלאי|כמות)|מלאי\s+של/i, intent: "inventory_stock_lookup", skill: "operations_inventory", safety: "read_only" },
+  { re: /תבנה\s+(לי\s+)?יכולת|תוסיף\s+(לי\s+)?יכולת|תפתח\s+(לי\s+)?(סקיל|skill|יכולת)|build\s+(a\s+)?skill|אין\s+לך\s+יכולת/i, intent: "capability_request", skill: "ceoManager", safety: "pending" },
   { re: /ceo|מנהל\s+המערכת|מנכ"?ל/i, intent: "ceo_manager_request", skill: "ceoManager", safety: "pending" },
   { re: /סטטוס|מצב\s+המערכת/i, intent: "system_status", skill: "ceoManager", safety: "read_only" },
   { re: /תזכיר|תזכורת/i, intent: "reminder_request", skill: "personalArea", safety: "pending" },
