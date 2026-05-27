@@ -171,6 +171,28 @@ async function main() {
       elk.requiresApprovalForDeploy === true && elk.requiresApprovalForMigration === true && elk.requiresApprovalForSecrets === true);
   }
 
+  // ── Media is context, not intent (the Nano Banana bug) ──
+  {
+    // LLM (gemini-mock) decides image+caption → creative, NOT OCR. Proves the brain, not media type, decides.
+    const r = await routeViaProviders([fake("gemini", async () => ({ ok: true, result: result({ intent: "image_creation", confidence: 0.9 }) }))], req("אני רוצה שתיצור לי תמונה עם הכלי נאנו בננה 2"), { minConfidence: MIN });
+    check("31. image+caption 'תיצור לי תמונה…נאנו בננה' → image_creation→creative (NOT OCR)",
+      r.ok && r.provider === "gemini" && llmIntentToCoarse(r.result!.intent) === "creative" && llmIntentToCoarse(r.result!.intent) !== "ocr_document");
+    const r2 = await localProvider.classifyIntent(req("אני רוצה שתיצור לי תמונה עם הכלי נאנו בננה 2"));
+    check("31b. deterministic mock also → image_creation (not ocr)", r2.result?.intent === "image_creation");
+  }
+  {
+    const r = await localProvider.classifyIntent(req("קרא את המסמך"));
+    check("32. image+caption 'קרא את המסמך' → ocr_document", r.result?.intent === "ocr_document" && llmIntentToCoarse("ocr_document") === "ocr_document");
+  }
+  {
+    const r = await localProvider.classifyIntent(req("תחבר לי יכולת לייצר תמונות"));
+    check("33. 'תחבר לי יכולת לייצר תמונות' → development_request", r.result?.intent === "development_request");
+  }
+  check("34. EXTERNAL image-creation → clamped to customer intake (no owner creative)",
+    validateRoute(result({ intent: "image_creation" }), { role: "external", minConfidence: MIN }).action === "clamp" &&
+    validateRoute(result({ intent: "image_editing" }), { role: "external", minConfidence: MIN }).action === "clamp");
+  check("35. creative coarse mapping", llmIntentToCoarse("image_creation") === "creative" && llmIntentToCoarse("image_editing") === "creative");
+
   console.log(`\n${passed}/${passed + failed} checks passed`);
   if (failed > 0) process.exit(1);
 }

@@ -118,6 +118,9 @@ export function llmIntentToCoarse(intent: LlmIntent): Intent {
       return "development";
     case "general_assistant":
       return "general";
+    case "image_creation":
+    case "image_editing":
+      return "creative";
     case "ocr_document":
     case "external_document_attachment":
       return "ocr_document";

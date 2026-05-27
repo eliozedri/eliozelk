@@ -36,7 +36,8 @@ pending request and states the missing data source. See `docs/JARVIS_AGENT_ARCHI
 | Management (CEO) | free-text delegation → tracked task | ✅ |
 | Personal Assistant | tasks/notes/reminders/daily + list (reminders pending, not scheduled) | ✅ |
 | General Assistant | open reasoning/advice/planning via LLM (owner-only; read-only; honest safe-mode when LLM off) | ✅ |
-| Development / Claude Code | classify + risk-gate + Claude Code prompt/task + new-project proposal; no code/git/repo execution; DANGEROUS blocked; no GitHub API yet | 🟡 Stage 1 |
+| Development / Claude Code | classify + risk-gate + Claude Code prompt/task + new-project proposal; gated GitHub layer + Claude Code Action workflow (disabled until creds); DANGEROUS blocked | 🟡 Stage 2 |
+| Image / Creative Media | detect image generate/edit (owner); no provider connected → honest capability request + ready image prompt (never fakes generation); media = context not intent | 🟡 Stage 1 |
 
 ## Cross-cutting upgrades
 - **LLM Router (✅ live: Gemini→Groq→deterministic):** multi-provider router `src/lib/jarvis/llm/` behind `brain.ts`/`decideBrain`, with safety validator + budget guards + deterministic fallback. Anthropic/OpenAI paid & gated by `JARVIS_LLM_ALLOW_PAID`. See `docs/JARVIS_LLM_ROUTER.md`.

@@ -119,6 +119,19 @@ or re-maps an accepted LLM decision, and a valid stock-lookup can never become a
 re-classifies). The exact `fallbackReason` (and `provider_used` / `decision_source` / `safety_result`)
 is recorded in `jarvis_brain_audit`. This is the regression guarantee for the cones bug.
 
+### Media Intent Routing (media is CONTEXT, not intent)
+
+A received image/file does **NOT** mean OCR. EVERY owner message — text, **image+caption**, file —
+goes through the Brain first; old handlers never decide before it. The caption + media metadata are
+passed to the LLM Router as context; the **caption decides** the action:
+`"תיצור לי תמונה / נאנו בננה"` → `image_creation` (Creative skill) · `"קרא/סרוק"` → `ocr_document` ·
+`"שמור כפתק"` → personal · `"תעביר ל-CEO"` → manager · **image with no caption → clarification**
+("מה לעשות עם התמונה?"). Only explicit OCR mode (`ocr_wait`) + a read-style/empty caption OCRs
+immediately. The **Image/Creative skill** never fakes generation — with no image tool connected it
+files a Capability Request + prepares a ready prompt. External media stays customer/order-intake only.
+(Regression fixed: an image+"תיצור תמונה" caption was being auto-routed to OCR because the media
+handler short-circuited before the Brain — now it doesn't.)
+
 ### Departments (consultable business brains)
 | Domain | Agent(s) | Read-only capability today |
 |---|---|---|

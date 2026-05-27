@@ -23,6 +23,7 @@ export type Intent =
   | "status"
   | "general"
   | "development"
+  | "creative"
   | "help"
   | "greeting"
   | "unclear";

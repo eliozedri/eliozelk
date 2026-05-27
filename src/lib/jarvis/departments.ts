@@ -13,7 +13,7 @@ import type { LlmIntent } from "./llm/types";
 
 export type BusinessDomain =
   | "management" | "operations" | "finance" | "warehouse" | "orders"
-  | "catalog" | "fleet" | "documents" | "personal" | "development" | "customer" | "unknown";
+  | "catalog" | "fleet" | "documents" | "personal" | "development" | "creative" | "customer" | "unknown";
 
 export interface DepartmentRoute {
   domain: BusinessDomain;
@@ -61,6 +61,8 @@ const ROUTES: Partial<Record<LlmIntent, DepartmentRoute>> = {
   ocr_document: { domain: "documents", agents: [], label: "מסמכים", hasCapability: true },
   development_request: { domain: "development", agents: ["ceo"], label: "מנהל הפיתוח", hasCapability: true },
   general_assistant: { domain: "personal", agents: [], label: "עוזר אישי", hasCapability: true },
+  image_creation: { domain: "creative", agents: ["ceo"], label: "מדיה/יצירת תמונות", hasCapability: false, dataSourceNeeded: "חיבור כלי יצירת תמונות (ספק image-gen) — לא מחובר" },
+  image_editing: { domain: "creative", agents: ["ceo"], label: "מדיה/עריכת תמונות", hasCapability: false, dataSourceNeeded: "חיבור כלי עריכת תמונות — לא מחובר" },
   personal_task: PERSONAL,
   personal_note: PERSONAL,
   reminder_request: PERSONAL,

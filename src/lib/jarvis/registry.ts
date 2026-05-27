@@ -5,6 +5,7 @@ import { ocrDocumentSkill } from "./skills/ocrDocument/skill";
 import { personalAreaSkill } from "./skills/personalArea/skill";
 import { generalAssistantSkill } from "./skills/generalAssistant/skill";
 import { developmentSkill } from "./skills/development/skill";
+import { imageCreativeSkill } from "./skills/imageCreative/skill";
 
 /**
  * Skill registry — maps intent → skill, gated by sender role. EXTERNAL senders can ONLY
@@ -20,6 +21,7 @@ const OWNER_SKILLS: Partial<Record<Intent, Skill>> = {
   status: personalAreaSkill,
   general: generalAssistantSkill,
   development: developmentSkill,
+  creative: imageCreativeSkill,
 };
 
 const EXTERNAL_SKILLS: Partial<Record<Intent, Skill>> = {

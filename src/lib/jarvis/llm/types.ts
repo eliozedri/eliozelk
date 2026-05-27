@@ -35,6 +35,8 @@ export type LlmIntent =
   | "capability_request"
   | "development_request"
   | "general_assistant"
+  | "image_creation"
+  | "image_editing"
   // external customer
   | "external_greeting"
   | "external_order_request"

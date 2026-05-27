@@ -17,6 +17,7 @@ import { ocrDocumentSkill } from "@/lib/jarvis/skills/ocrDocument/skill";
 import { personalAreaSkill } from "@/lib/jarvis/skills/personalArea/skill";
 import { generalAssistantSkill } from "@/lib/jarvis/skills/generalAssistant/skill";
 import { developmentSkill } from "@/lib/jarvis/skills/development/skill";
+import { imageCreativeSkill } from "@/lib/jarvis/skills/imageCreative/skill";
 import { decideBrain } from "@/lib/jarvis/brain";
 import { executeManagerDecision, formatDispatchReply } from "@/lib/jarvis/skills/ceoManager/dispatcher";
 import { recordBrainAudit } from "@/lib/jarvis/audit";
@@ -75,13 +76,11 @@ export async function handleMasterMessage(inbound: InboundMessage): Promise<void
 
   const flow = await loadMasterFlow(phone);
 
-  // 2. Media (image/document) — route to the OCR/Document skill when awaiting a doc.
+  // 2. Media (image/document) — MEDIA IS CONTEXT, NOT INTENT. Route through the Brain (caption +
+  //    media metadata), never auto-OCR. Non-media (e.g. audio) with no handler falls through.
   if (inbound.type !== "text") {
-    if (inbound.media && flow === "ocr_wait") {
-      await runSkill(inbound, ocrDocumentSkill);
-      return toMain(phone);
-    }
-    await sendWhatsAppText(phone, "קיבלתי קובץ 📎 לקריאת מסמך בחר '📄 סריקת מסמך' מהתפריט (כתוב 'תפריט').");
+    if (inbound.media) return handleOwnerMedia(inbound, flow);
+    await sendWhatsAppText(phone, "קיבלתי הודעה שאינה טקסט. אפשר לכתוב לי מה לעשות 🙂");
     return;
   }
 
@@ -267,28 +266,57 @@ function numericAction(flow: MasterFlow, d: string): string | null {
 
 async function freeTextRouter(inbound: InboundMessage, text: string): Promise<void> {
   const phone = inbound.senderId;
-
   // Pre-filled wa.me starter (no details) → open the orders menu directly.
   if (isPureStarter(text)) {
     await sendWhatsAppText(phone, "פתחתי לך את תפריט ההזמנות 👇");
     await saveMasterFlow(phone, "orders_menu");
     return sendOrdersMenu(phone);
   }
+  return routeOwnerDecision(inbound, text, false);
+}
 
-  // Reasoning-first Brain: ONE structured decision (LLM if enabled+safe, else deterministic),
-  // then route by the chosen business department/capability — never a guessed command.
-  const decision = await decideBrain({ text, role: "master", channel: "whatsapp" });
+/**
+ * Owner MEDIA handler — media is CONTEXT, not intent. Everything goes through the Brain:
+ *  - explicit OCR mode (ocr_wait) + no contradicting caption → OCR the current media now;
+ *  - caption present → Brain reasons from the caption (image+"תיצור"→creative, image+"קרא"→OCR, …);
+ *  - no caption → ask what to do (read / create / save / forward), never assume OCR.
+ */
+async function handleOwnerMedia(inbound: InboundMessage, flow: MasterFlow): Promise<void> {
+  const phone = inbound.senderId;
+  const caption = (inbound.body ?? "").trim();
+  const isReadIntent = /קרא|תקרא|סרוק|תסרוק|סריקה|תוציא\s+טקסט|מסמך|extract|ocr/i.test(caption);
 
-  // The CEO/manager path (operations/inventory/catalog/orders/finance/fleet/management) runs the
-  // resolved read-only action/routine, asks clarification, or files a department request. The
-  // executor records its own audit row (covers free-text + ceo_wait), so we don't double-log here.
+  if (flow === "ocr_wait" && (!caption || isReadIntent)) {
+    await runSkill(inbound, ocrDocumentSkill);
+    return toMain(phone);
+  }
+  if (!caption) {
+    await sendWhatsAppText(phone,
+      "קיבלתי תמונה 📷 מה תרצה שאעשה איתה?\n• לקרוא/לסרוק טקסט (OCR)\n• ליצור/לערוך תמונה\n• לשמור כפתק\n• להעביר ל-CEO");
+    return; // stay in place; the follow-up text will be routed by the Brain
+  }
+  return routeOwnerDecision(inbound, caption, true);
+}
+
+/**
+ * Shared owner routing — REASONING-FIRST for BOTH text and media. ONE Brain decision (Gemini→Groq
+ * LLM Router if enabled, else deterministic), then route to the chosen skill. Media metadata is
+ * passed as CONTEXT to the Brain (never as the intent). Old handlers never decide before the Brain.
+ */
+async function routeOwnerDecision(inbound: InboundMessage, text: string, hasMedia: boolean): Promise<void> {
+  const phone = inbound.senderId;
+  const decision = await decideBrain({
+    text, role: "master", channel: "whatsapp",
+    state: hasMedia ? { media: inbound.media?.kind ?? "image" } : undefined,
+  });
+  const auditText = hasMedia ? `[media:${inbound.media?.kind ?? "image"}] ${text}` : text;
+
   if (decision.coarseIntent === "ceo_manager") {
     const result = await executeManagerDecision(decision, { text, sourcePhone: phone, channel: "whatsapp", msgId: inbound.waMessageId });
     await sendWhatsAppText(phone, formatDispatchReply(result));
     return toMain(phone);
   }
 
-  // Non-CEO owner branches: route to the matching skill, then record the audit trail centrally.
   let outgoing = "";
   switch (decision.coarseIntent) {
     case "personal":
@@ -301,25 +329,39 @@ async function freeTextRouter(inbound: InboundMessage, text: string): Promise<vo
     case "development":
       outgoing = await runSkill(inbound, developmentSkill);
       break;
+    case "creative":
+      outgoing = await runSkill(inbound, imageCreativeSkill);
+      break;
     case "order_intake":
       await createOwnerDraft(inbound, text);
       outgoing = DRAFT_CREATED;
       break;
     case "ocr_document":
-      await saveMasterFlow(phone, "ocr_wait");
-      outgoing = "(הופנה לסריקת מסמך)";
-      await recordBrainAudit({ decision, senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, inboundText: text, outgoingSummary: outgoing });
-      return sendOcrPrompt(phone);
+      if (hasMedia) {
+        // The image/document is already here → OCR it now (do not prompt for another).
+        outgoing = await runSkill(inbound, ocrDocumentSkill);
+      } else {
+        outgoing = "(הופנה לסריקת מסמך)";
+        await recordBrainAudit({ decision, senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, inboundText: auditText, outgoingSummary: outgoing });
+        await saveMasterFlow(phone, "ocr_wait");
+        return sendOcrPrompt(phone);
+      }
+      break;
     case "greeting":
-      outgoing = "(תפריט ראשי)";
-      await recordBrainAudit({ decision, senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, inboundText: text, outgoingSummary: outgoing });
-      return runAction(phone, "main");
+      if (!hasMedia) {
+        await recordBrainAudit({ decision, senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, inboundText: auditText, outgoingSummary: "(תפריט ראשי)" });
+        return runAction(phone, "main");
+      }
+      outgoing = "קיבלתי תמונה 📷 מה לעשות איתה? לקרוא (OCR) · ליצור/לערוך תמונה · לשמור כפתק · להעביר ל-CEO";
+      await sendWhatsAppText(phone, outgoing);
+      break;
     default:
-      // Uncertain → ask, never run an unrelated command.
-      outgoing = decision.clarificationQuestion ?? "לא בטוח שהבנתי 🙂 הנה התפריט:";
+      outgoing = decision.clarificationQuestion ?? (hasMedia
+        ? "קיבלתי תמונה 📷 מה לעשות איתה? לקרוא (OCR) · ליצור/לערוך תמונה · לשמור כפתק · להעביר ל-CEO"
+        : "לא בטוח שהבנתי 🙂 הנה התפריט:");
       await sendWhatsAppText(phone, outgoing);
       break;
   }
-  await recordBrainAudit({ decision, senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, inboundText: text, outgoingSummary: outgoing, safetyResult: decision.requiresClarification ? "clarify" : "accept" });
+  await recordBrainAudit({ decision, senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, inboundText: auditText, outgoingSummary: outgoing, safetyResult: decision.requiresClarification ? "clarify" : "accept" });
   return toMain(phone);
 }

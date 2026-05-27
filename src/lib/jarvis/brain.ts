@@ -193,6 +193,7 @@ function coarseToLlm(coarse: Intent): LlmIntent {
     case "ceo_manager": return "ceo_manager_request";
     case "general": return "general_assistant";
     case "development": return "development_request";
+    case "creative": return "image_creation";
     default: return "unknown";
   }
 }
