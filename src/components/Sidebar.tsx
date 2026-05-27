@@ -49,6 +49,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "dashboard", href: "/", label: "מרכז שליטה", icon: <LayoutDashboard className={ICON_CLS} />, matchFn: (p) => p === "/", title: "בעיות פתוחות בהזמנות" },
       { tabId: "orders", href: "/orders", label: "טבלת הזמנות", icon: <Table2 className={ICON_CLS} />, matchFn: (p) => p.startsWith("/orders") },
+      { tabId: "team-bot-orders", href: "/team-bot-orders", label: "הזמנות מהבוט", icon: <Send className={ICON_CLS} />, matchFn: (p) => p.startsWith("/team-bot-orders"), noBadge: true, title: "טיוטות הזמנה שהתקבלו דרך בוט הטלגרם" },
       { tabId: "schedule", href: "/schedule", label: "סידור שבועי", icon: <Calendar className={ICON_CLS} />, matchFn: (p) => p.startsWith("/schedule") },
     ],
   },
@@ -65,7 +66,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { tabId: "orders", href: "/new-order", label: "הזמנה חדשה", icon: <FileText className={ICON_CLS} />, matchFn: (p) => p === "/new-order", noBadge: true },
       { tabId: "work-diary", href: "/work-diary", label: "יומן עבודה חדש", icon: <BookOpen className={ICON_CLS} />, matchFn: (p) => p.startsWith("/work-diary") },
-      { tabId: "team-bot-orders", href: "/team-bot-orders", label: "הזמנות מהבוט", icon: <Send className={ICON_CLS} />, matchFn: (p) => p.startsWith("/team-bot-orders"), noBadge: true, title: "טיוטות הזמנה שהתקבלו דרך בוט הטלגרם" },
     ],
   },
   {
