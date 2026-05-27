@@ -112,7 +112,7 @@ function JobDetailModal({ order, crews, onEdit, onCancelAssignment, onClose }: J
         </div>
 
         {/* Details — scrollable if content is long */}
-        <div className="px-6 py-4 space-y-2.5 overflow-y-auto max-h-[55vh]">
+        <div className="px-6 py-4 space-y-2.5 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] max-h-[55dvh]">
 
           {/* Order identity */}
           <div className="flex justify-between items-center text-sm">

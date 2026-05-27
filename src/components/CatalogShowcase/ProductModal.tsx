@@ -117,7 +117,7 @@ export function ProductModal({ item, onClose }: Props) {
         </div>
 
         {/* Body */}
-        <div className="p-5 overflow-y-auto max-h-[60vh] sm:max-h-none">
+        <div className="p-5 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] max-h-[60dvh] sm:max-h-none">
           <h2 className="text-lg font-bold text-white">{item.name}</h2>
           <p className="text-xs text-white/40 mt-0.5 mb-3">{item.category}</p>
 

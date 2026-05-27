@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { AuthProvider } from "@/context/AuthContext";
+import { AuthGate } from "@/components/AuthGate";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { GlobalFloatingChatProvider, GlobalChatMount } from "@/context/GlobalFloatingChatContext";
 import { GlobalChatLauncher } from "@/components/AgentChat/GlobalChatLauncher";
 import { OfflineBanner } from "@/components/OfflineBanner";
@@ -31,40 +33,11 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setSidebarOpen(false); }, [pathname]);
 
-  // Lock background scroll while the mobile/tablet drawer is open. Plain
-  // `overflow:hidden` on <body> does NOT stop touch-scroll on iOS Safari, so the
-  // page behind the drawer kept scrolling instead of the sidebar nav. The reliable
-  // fix is to pin <body> with position:fixed, preserving and restoring scrollY.
-  // Only below lg (≥1024px the sidebar is a persistent part of the layout).
-  useEffect(() => {
-    if (!sidebarOpen) return;
-    if (typeof window === "undefined" || window.innerWidth >= 1024) return;
-    const scrollY = window.scrollY;
-    const body = document.body;
-    const prev = {
-      position: body.style.position,
-      top: body.style.top,
-      left: body.style.left,
-      right: body.style.right,
-      width: body.style.width,
-      overflow: body.style.overflow,
-    };
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
-    body.style.overflow = "hidden";
-    return () => {
-      body.style.position = prev.position;
-      body.style.top = prev.top;
-      body.style.left = prev.left;
-      body.style.right = prev.right;
-      body.style.width = prev.width;
-      body.style.overflow = prev.overflow;
-      window.scrollTo(0, scrollY);
-    };
-  }, [sidebarOpen]);
+  // Lock background scroll while the mobile/tablet drawer is open (only below lg;
+  // ≥1024px the sidebar is a persistent part of the layout). Shared hook — same
+  // position:fixed technique used by the Modal primitive, since plain
+  // overflow:hidden does NOT stop touch-scroll on iOS Safari.
+  useBodyScrollLock(sidebarOpen && typeof window !== "undefined" && window.innerWidth < 1024);
 
   async function handleSaveDraft() {
     await confirmSaveDraft();
@@ -165,12 +138,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthProvider>
-      <NotificationProvider>
-        <NavigationGuardProvider>
-          <AppShellInner>{children}</AppShellInner>
-          <NotificationSetupGate />
-        </NavigationGuardProvider>
-      </NotificationProvider>
+      <AuthGate>
+        <NotificationProvider>
+          <NavigationGuardProvider>
+            <AppShellInner>{children}</AppShellInner>
+            <NotificationSetupGate />
+          </NavigationGuardProvider>
+        </NotificationProvider>
+      </AuthGate>
     </AuthProvider>
   );
 }

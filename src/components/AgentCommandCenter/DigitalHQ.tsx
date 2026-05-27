@@ -964,7 +964,7 @@ export function DigitalHQ({
           className="border-t border-white/[0.07] lg:border-t-0 lg:relative"
           style={{ borderRight: "1px solid rgba(255,255,255,0.07)" }}
         >
-          <div className="p-4 max-h-[55vh] overflow-y-auto lg:absolute lg:inset-0 lg:max-h-none lg:overflow-y-auto">
+          <div className="p-4 max-h-[55dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] lg:absolute lg:inset-0 lg:max-h-none lg:overflow-y-auto">
             <ActivityFeedSidebar events={feedEvents} loading={loading} />
           </div>
         </div>

@@ -314,7 +314,7 @@ export function DocumentReview({
         </div>
       )}
 
-      <div className="flex gap-0 h-full overflow-hidden" style={{ maxHeight: "calc(90vh - 80px)" }}>
+      <div className="flex gap-0 h-full overflow-hidden" style={{ maxHeight: "calc(90dvh - 80px)" }}>
         {/* Left: file preview */}
         <div className="w-72 shrink-0 border-l border-gray-100 bg-gray-50 p-4 overflow-y-auto">
           {doc.fileUrl ? (
@@ -667,7 +667,7 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose: ()
       <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col"
+          className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92dvh] overflow-hidden flex flex-col"
           dir="rtl"
           onClick={e => e.stopPropagation()}
         >

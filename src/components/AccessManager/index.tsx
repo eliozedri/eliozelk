@@ -13,6 +13,7 @@ import {
   canPerformAction,
 } from "@/types/auth";
 import { useAuth } from "@/context/AuthContext";
+import { Modal } from "@/components/ui/Modal";
 import { toast } from "sonner";
 import {
   loadUsers,
@@ -465,99 +466,100 @@ function AddUserModal({ onClose, onCreated }: AddUserModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="font-black text-lg" style={{ color: NAVY }}>הוספת משתמש חדש</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+    <Modal
+      onClose={onClose}
+      title="הוספת משתמש חדש"
+      size="md"
+      footer={
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            form="add-user-form"
+            disabled={loading}
+            className="flex-1 py-2.5 rounded-lg font-bold text-sm text-white"
+            style={{ backgroundColor: loading ? "#9ca3af" : EK_BLUE }}
+          >
+            {loading ? "יוצר משתמש..." : "יצירת משתמש"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-lg text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50"
+          >
+            ביטול
+          </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">שם מלא</label>
-              <input
-                type="text"
-                required
-                value={form.name}
-                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-                placeholder="ישראל ישראלי"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">אימייל</label>
-              <input
-                type="email"
-                required
-                value={form.email}
-                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-                dir="ltr"
-                placeholder="user@company.co.il"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">סיסמה ראשונית</label>
-              <input
-                type="text"
-                required
-                minLength={8}
-                value={form.password}
-                onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-                dir="ltr"
-                placeholder="לפחות 8 תווים"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">תפקיד</label>
-              <select
-                value={form.role}
-                onChange={(e) => handleRoleChange(e.target.value as Role)}
-                className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
-              >
-                {ALL_ROLES.filter((r) => r !== "master").map((r) => (
-                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="border rounded-xl p-4 bg-gray-50">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">הגדרת הרשאות</p>
-            <PermissionEditor
-              tabs={form.allowed_tabs}
-              actions={form.action_permissions}
-              role={form.role}
-              onChange={(t, a) => setForm((p) => ({ ...p, allowed_tabs: t, action_permissions: a }))}
+      }
+    >
+      <form id="add-user-form" onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">שם מלא</label>
+            <input
+              type="text"
+              required
+              value={form.name}
+              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+              className="w-full px-3 py-2 border rounded-lg text-sm"
+              placeholder="ישראל ישראלי"
             />
           </div>
-          {error && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          )}
-          <div className="flex gap-2 pt-2">
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 py-2.5 rounded-lg font-bold text-sm text-white"
-              style={{ backgroundColor: loading ? "#9ca3af" : EK_BLUE }}
-            >
-              {loading ? "יוצר משתמש..." : "יצירת משתמש"}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-lg text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50"
-            >
-              ביטול
-            </button>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">אימייל</label>
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+              className="w-full px-3 py-2 border rounded-lg text-sm"
+              dir="ltr"
+              placeholder="user@company.co.il"
+            />
           </div>
-        </form>
-      </div>
-    </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">סיסמה ראשונית</label>
+            <input
+              type="text"
+              required
+              minLength={8}
+              value={form.password}
+              onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+              className="w-full px-3 py-2 border rounded-lg text-sm"
+              dir="ltr"
+              placeholder="לפחות 8 תווים"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">תפקיד</label>
+            <select
+              value={form.role}
+              onChange={(e) => handleRoleChange(e.target.value as Role)}
+              className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+            >
+              {ALL_ROLES.filter((r) => r !== "master").map((r) => (
+                <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="border rounded-xl p-4 bg-gray-50">
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">הגדרת הרשאות</p>
+          <PermissionEditor
+            tabs={form.allowed_tabs}
+            actions={form.action_permissions}
+            role={form.role}
+            onChange={(t, a) => setForm((p) => ({ ...p, allowed_tabs: t, action_permissions: a }))}
+          />
+        </div>
+        {error && (
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+      </form>
+    </Modal>
   );
 }
 
@@ -627,117 +629,115 @@ function EditUserModal({ user, allUsers, onClose, onSaved }: EditUserModalProps)
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b">
-          <div>
-            <h2 className="font-black text-lg" style={{ color: NAVY }}>עריכת משתמש</h2>
-            <p className="text-sm text-gray-500">{user.name} · {user.email}</p>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+    <Modal
+      onClose={onClose}
+      title="עריכת משתמש"
+      subtitle={`${user.name} · ${user.email}`}
+      size="md"
+      footer={
+        <div className="flex gap-2">
+          <button
+            onClick={handleSave}
+            disabled={loading}
+            className="flex-1 py-2.5 rounded-lg font-bold text-sm text-white"
+            style={{ backgroundColor: loading ? "#9ca3af" : EK_BLUE }}
+          >
+            {loading ? "שומר..." : "שמירת שינויים"}
+          </button>
+          {!isLastMaster && (
+            <button
+              onClick={handleDelete}
+              className="px-4 py-2.5 rounded-lg text-sm font-semibold text-red-600 border border-red-200 hover:bg-red-50"
+            >
+              מחיקה
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-lg text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50"
+          >
+            ביטול
+          </button>
         </div>
-        <div className="p-6 space-y-4">
-          {/* Basic details */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">שם מלא</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-                placeholder="שם מלא"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">אימייל</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-sm"
-                dir="ltr"
-                placeholder="email@company.co.il"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">תפקיד</label>
-              <select
-                value={role}
-                onChange={(e) => handleRoleChange(e.target.value as Role)}
-                className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
-                disabled={isLastMaster}
-              >
-                {ALL_ROLES.map((r) => (
-                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">סטטוס</label>
-              <select
-                value={isActive ? "active" : "inactive"}
-                onChange={(e) => setIsActive(e.target.value === "active")}
-                className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
-                disabled={isLastMaster}
-              >
-                <option value="active">פעיל</option>
-                <option value="inactive">מושבת</option>
-              </select>
-            </div>
-          </div>
-          <div className="border rounded-xl p-4 bg-gray-50">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">הרשאות</p>
-            <PermissionEditor
-              tabs={tabs}
-              actions={actions}
-              role={role}
-              onChange={(t, a) => { setTabs(t); setActions(a); }}
+      }
+    >
+      <div className="space-y-4">
+        {/* Basic details */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">שם מלא</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg text-sm"
+              placeholder="שם מלא"
             />
           </div>
-          <PasswordManagerSection userId={user.id} userEmail={user.email} />
-
-          {isLastMaster && (
-            <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
-              <p className="text-xs text-amber-700 font-semibold">
-                ⚠️ זהו המנהל הראשי האחרון — לא ניתן לשנות תפקידו או לבטלו.
-              </p>
-            </div>
-          )}
-          {error && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          )}
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={handleSave}
-              disabled={loading}
-              className="flex-1 py-2.5 rounded-lg font-bold text-sm text-white"
-              style={{ backgroundColor: loading ? "#9ca3af" : EK_BLUE }}
-            >
-              {loading ? "שומר..." : "שמירת שינויים"}
-            </button>
-            {!isLastMaster && (
-              <button
-                onClick={handleDelete}
-                className="px-4 py-2.5 rounded-lg text-sm font-semibold text-red-600 border border-red-200 hover:bg-red-50"
-              >
-                מחיקה
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-lg text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50"
-            >
-              ביטול
-            </button>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">אימייל</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg text-sm"
+              dir="ltr"
+              placeholder="email@company.co.il"
+            />
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">תפקיד</label>
+            <select
+              value={role}
+              onChange={(e) => handleRoleChange(e.target.value as Role)}
+              className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+              disabled={isLastMaster}
+            >
+              {ALL_ROLES.map((r) => (
+                <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">סטטוס</label>
+            <select
+              value={isActive ? "active" : "inactive"}
+              onChange={(e) => setIsActive(e.target.value === "active")}
+              className="w-full px-3 py-2 border rounded-lg text-sm bg-white"
+              disabled={isLastMaster}
+            >
+              <option value="active">פעיל</option>
+              <option value="inactive">מושבת</option>
+            </select>
+          </div>
+        </div>
+        <div className="border rounded-xl p-4 bg-gray-50">
+          <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">הרשאות</p>
+          <PermissionEditor
+            tabs={tabs}
+            actions={actions}
+            role={role}
+            onChange={(t, a) => { setTabs(t); setActions(a); }}
+          />
+        </div>
+        <PasswordManagerSection userId={user.id} userEmail={user.email} />
+
+        {isLastMaster && (
+          <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+            <p className="text-xs text-amber-700 font-semibold">
+              ⚠️ זהו המנהל הראשי האחרון — לא ניתן לשנות תפקידו או לבטלו.
+            </p>
+          </div>
+        )}
+        {error && (
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -46,7 +46,7 @@ export function SalesProductModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
     >
       <div className="absolute inset-0 bg-navy-950/75 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-white/15 bg-navy-900/80 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
+      <div className="relative z-10 max-h-[90dvh] w-full max-w-lg overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] rounded-3xl border border-white/15 bg-navy-900/80 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
         <div className="pointer-events-none absolute -top-20 -left-20 h-56 w-56 rounded-full bg-ek-blue/25 blur-3xl" />
         <button
           type="button"
