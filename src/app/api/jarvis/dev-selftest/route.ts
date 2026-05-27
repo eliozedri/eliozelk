@@ -30,8 +30,12 @@ export async function GET(req: NextRequest) {
   }
   const jobLogsId = req.nextUrl.searchParams.get("jobLogs");
   if (jobLogsId) {
-    const logs = await getJobLogsTail(cfg.owner ?? "", cfg.repo ?? "", Number(jobLogsId), 2500);
-    return NextResponse.json({ jobLogs: logs.ok ? logs.logTail : { error: logs.reason } });
+    const logs = await getJobLogsTail(cfg.owner ?? "", cfg.repo ?? "", Number(jobLogsId), 600000);
+    if (!logs.ok || !logs.logTail) return NextResponse.json({ jobLogs: { error: logs.reason } });
+    // Surface only the error-relevant lines (secrets are already masked as *** by GitHub).
+    const lines = logs.logTail.split("\n");
+    const hits = lines.filter((l) => /error|claude|oauth|token|invalid|fail|forbidden|401|403|usage|credit|rate.?limit|exit code|unauthor|denied/i.test(l)).slice(-40);
+    return NextResponse.json({ errorLines: hits });
   }
   const runs = await listWorkflowRuns(cfg.owner ?? "", cfg.repo ?? "", 5);
   return NextResponse.json({
