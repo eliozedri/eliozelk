@@ -25,6 +25,8 @@ export interface DevProject {
   requiresApprovalForDeploy: boolean;
   requiresApprovalForMigration: boolean;
   requiresApprovalForSecrets: boolean;
+  /** Extra name matches (Hebrew/English) for project resolution. */
+  aliases?: string[];
   notes: string;
 }
 
@@ -46,7 +48,28 @@ export const DEV_PROJECTS: DevProject[] = [
     requiresApprovalForDeploy: true,
     requiresApprovalForMigration: true,
     requiresApprovalForSecrets: true,
+    aliases: ["אלקיים", "elkayam", "eliozelk"],
     notes: "Production ERP + Jarvis. Read-only checks + task/prompt generation + branch/PR via Claude Code Action only. Push to main / deploy / migrations / auth / secrets / Meta callback ALWAYS require explicit owner approval.",
+  },
+  {
+    projectId: "jarvis",
+    displayName: "JARVIS",
+    repoOwner: "eliozedri",
+    repoName: "JARVIS",
+    repoUrl: "https://github.com/eliozedri/JARVIS",
+    localPath: null,
+    defaultBranch: "main",
+    projectType: "existing_project",
+    sensitivityLevel: "high",
+    allowedModes: ["READ_ONLY", "TASK_ONLY", "SAFE_EDIT_WITH_APPROVAL"],
+    requiresApprovalForCommit: "task-dependent",
+    requiresApprovalForPush: true,
+    requiresApprovalForMain: true,
+    requiresApprovalForDeploy: true,
+    requiresApprovalForMigration: true,
+    requiresApprovalForSecrets: true,
+    aliases: ["jarvis", "ג׳ארוויס", "גארוויס", "ג׳רוויס"],
+    notes: "Separate JARVIS repo. Same safety policy: branch/PR via Claude Code; no direct main/deploy/secrets without explicit approval.",
   },
 ];
 
@@ -55,11 +78,15 @@ const DEFAULT_PROJECT = DEV_PROJECTS[0];
 /** Resolve which registered project a request refers to, or null when it is genuinely unclear. */
 export function findProject(text: string): DevProject | null {
   const t = (text ?? "").toLowerCase();
-  const hit = DEV_PROJECTS.find((p) => t.includes(p.projectId) || t.includes("אלקיים") || t.includes(p.displayName.toLowerCase()));
+  const hit = DEV_PROJECTS.find((p) =>
+    t.includes(p.projectId) ||
+    t.includes(p.displayName.toLowerCase()) ||
+    (p.aliases ?? []).some((a) => t.includes(a.toLowerCase())),
+  );
   if (hit) return hit;
   // Single registered project + a code-ish request with no other project named → default to it.
   if (DEV_PROJECTS.length === 1) return DEFAULT_PROJECT;
-  return null;
+  return null; // multiple projects, none named → ambiguous → the skill asks which one
 }
 
 export function knownProjectsList(): string[] {

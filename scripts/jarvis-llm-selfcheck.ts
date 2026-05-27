@@ -16,7 +16,7 @@ import { deterministicDomainIntent, matchCommandId, intentToCommandId, extractIt
 import { departmentFor } from "../src/lib/jarvis/departments";
 import { isCeoRequest } from "../src/lib/jarvis/skills/ceoManager/intent";
 import { classifyDevIntent, classifyDevRisk, isAmbiguousDevRequest } from "../src/lib/jarvis/skills/development/classify";
-import { DEV_PROJECTS } from "../src/lib/jarvis/skills/development/registry";
+import { DEV_PROJECTS, findProject } from "../src/lib/jarvis/skills/development/registry";
 import { evaluateGate } from "../src/lib/jarvis/skills/development/approvalGate";
 import { makeMockGithubClient } from "../src/lib/jarvis/skills/development/githubClient";
 import type { LLMProvider } from "../src/lib/jarvis/llm/providers/types";
@@ -226,6 +226,11 @@ async function main() {
       issue.ok && !!issue.url && issue.number! > 0 && calls.some((c) => c.method === "createIssue"));
     check("48. mock github: createRepo returns url", repo.ok && !!repo.url);
   }
+
+  // ── Multi-project resolution ──
+  check("49. 'אלקיים' → elkayam project", findProject("תתקן את בעיית ההתראות באלקיים")?.projectId === "elkayam");
+  check("50. 'jarvis' → jarvis project", findProject("תבדוק את מודול ה-jarvis")?.projectId === "jarvis");
+  check("51. no project named (2 registered) → null (ambiguous → ask)", findProject("בדוק למה הבילד נפל") === null && DEV_PROJECTS.length >= 2);
 
   console.log(`\n${passed}/${passed + failed} checks passed`);
   if (failed > 0) process.exit(1);
