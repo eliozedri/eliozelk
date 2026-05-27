@@ -49,6 +49,8 @@ export interface BrainDecision {
   verifiedAnswerPossible: boolean;
   /** When !verifiedAnswerPossible: what data source must be connected. */
   dataSourceNeeded: string | null;
+  /** Why the deterministic fallback was used (null when the LLM decision was accepted). */
+  fallbackReason: string | null;
 }
 
 export interface BrainInput {
@@ -87,10 +89,13 @@ export async function decideBrain(input: BrainInput): Promise<BrainDecision> {
       clarificationQuestion: rich.clarificationQuestion,
       routine,
       safetyLevel: rich.safetyLevel,
+      fallbackReason: null, // LLM decision accepted — fallback NOT used.
     });
   }
 
-  return deterministicDecision(text ?? "", role);
+  // Reached ONLY when the LLM produced no accepted decision (disabled / both providers failed /
+  // timeout / quota / low-confidence / invalid JSON / unsafe). `outcome.reason` records which.
+  return deterministicDecision(text ?? "", role, outcome.reason);
 }
 
 async function buildRoutine(text: string, role: SenderRole, channel: Channel): Promise<AgentPlan | null> {
@@ -99,8 +104,12 @@ async function buildRoutine(text: string, role: SenderRole, channel: Channel): P
   return planDeterministic(text);
 }
 
-/** Deterministic fallback — still a decision; asks clarification rather than guessing a command. */
-function deterministicDecision(text: string, role: SenderRole): BrainDecision {
+/**
+ * Deterministic fallback — the EXCEPTIONAL path, reached only when the LLM produced no accepted
+ * decision. Still returns a structured decision and asks clarification rather than guessing a
+ * command. `reason` is the LLM-outcome reason (disabled / router_fallback / safety_* / budget_*).
+ */
+function deterministicDecision(text: string, role: SenderRole, reason: string): BrainDecision {
   const plan = planDeterministic(text);
   if (plan) {
     return finalize({
@@ -108,6 +117,7 @@ function deterministicDecision(text: string, role: SenderRole): BrainDecision {
       coarseIntent: sanitizeIntentForRole("ceo_manager", role),
       skill: "operations", action: null, parameters: {}, confidence: 0.6,
       requiresClarification: false, clarificationQuestion: null, routine: plan, safetyLevel: "read_only",
+      fallbackReason: reason,
     });
   }
   const di = deterministicDomainIntent(text);
@@ -117,6 +127,7 @@ function deterministicDecision(text: string, role: SenderRole): BrainDecision {
       coarseIntent: sanitizeIntentForRole(llmIntentToCoarse(di), role),
       skill: "operations", action: intentToCommandId(di), parameters: {}, confidence: 0.6,
       requiresClarification: false, clarificationQuestion: null, routine: null, safetyLevel: "read_only",
+      fallbackReason: reason,
     });
   }
   const det = classifyIntent(text, role);
@@ -128,13 +139,14 @@ function deterministicDecision(text: string, role: SenderRole): BrainDecision {
       requiresClarification: true,
       clarificationQuestion:
         "לא בטוח שהבנתי 🙂 אפשר לשאול על מלאי של פריט, מלאי נמוך, הזמנות, חריגות, חשבונות פתוחים, ציוד — או לבקש שאפתח משימה.",
-      routine: null, safetyLevel: "read_only",
+      routine: null, safetyLevel: "read_only", fallbackReason: reason,
     });
   }
   return finalize({
     source: "deterministic", intent: coarseToLlm(coarse), coarseIntent: coarse,
     skill: null, action: null, parameters: {}, confidence: det.confidence,
     requiresClarification: false, clarificationQuestion: null, routine: null, safetyLevel: "pending",
+    fallbackReason: reason,
   });
 }
 

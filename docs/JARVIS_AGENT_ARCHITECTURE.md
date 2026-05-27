@@ -83,6 +83,24 @@ clarificationQuestion, routine, safetyLevel, verifiedAnswerPossible, dataSourceN
 Intent, skill, action/command, routine, clarification, confidence and safety are kept **distinct** —
 nothing is collapsed into a command id at the door.
 
+### Decision priority — LLM-first; the dispatcher is a FALLBACK safety net (not the brain)
+```
+1. sender role          2. context/state        3. allowed skills for role
+4. Gemini (1st)         5. Groq (2nd, on Gemini fail/timeout/quota/low-conf/invalid/unsafe)
+6. deterministic dispatcher/command fallback  ← ONLY if 4 AND 5 produced no accepted decision,
+                                                 or the LLM is disabled by ENV
+7. safety validator (final authority)         8. execute approved skill/action/routine
+9. full audit trail (jarvis_brain_audit)
+```
+**Hard rule:** when Gemini or Groq returns a valid, safety-accepted decision, the brain executes
+*that exact* intent→action/routine. The deterministic resolver (`match.ts`) is reached **only** via
+`deterministicDecision` when `routeMessage` returned `mode:"deterministic"` (LLM disabled / both
+providers failed / timeout / quota / low-confidence / invalid JSON / unsafe). It **never** overrides
+or re-maps an accepted LLM decision, and a valid stock-lookup can never become a missing-price report
+(`brain.ts` uses `intentToCommandId(rich.intent)`; the dispatcher executes `decision.action` and never
+re-classifies). The exact `fallbackReason` (and `provider_used` / `decision_source` / `safety_result`)
+is recorded in `jarvis_brain_audit`. This is the regression guarantee for the cones bug.
+
 ### Departments (consultable business brains)
 | Domain | Agent(s) | Read-only capability today |
 |---|---|---|

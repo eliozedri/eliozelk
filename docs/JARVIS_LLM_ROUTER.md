@@ -108,6 +108,18 @@ OPENAI_API_KEY=...                    # + ALLOW_PAID to use
 Same as Gemini with `GROQ_API_KEY` (console.groq.com free tier). Keep `JARVIS_LLM_ALLOW_PAID`
 unset/false so Anthropic/OpenAI stay off.
 
+## Audit trail (`jarvis_brain_audit`)
+
+Every OWNER brain decision writes one row: `sender_role, channel, msg_id, inbound_text, llm_enabled,
+provider_used (gemini/groq/deterministic), decision_source (llm/deterministic), intent,
+business_domain, target_agent, skill, action, parameters, confidence, requires_clarification,
+fallback_reason, safety_result (accept/clamp/clarify), verified_answer_possible, outgoing_summary`.
+This reconstructs *incoming → decision → action → reply* without ephemeral console logs. Written by
+`src/lib/jarvis/audit.ts` (service-role only; message text truncated; no secrets). The dispatcher is a
+**fallback safety net, not the brain** — `fallback_reason` is null whenever the LLM decision was
+accepted, and set (e.g. `router_fallback`, `safety_low_confidence`, `llm_disabled`) only when the
+deterministic path ran.
+
 ## Tests
 
 `scripts/jarvis-llm-selfcheck.ts` (`npx tsx`) — 14 checks over the pure core + mock providers:

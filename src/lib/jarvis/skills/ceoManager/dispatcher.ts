@@ -7,6 +7,7 @@ import { commandById, type ManagerCommand, type CommandReport } from "./commands
 import { executePlan, formatPlanReport } from "../../agent/runner";
 import { departmentFor } from "../../departments";
 import { logBrainDecision } from "../../brainLog";
+import { recordBrainAudit } from "../../audit";
 import { loadLlmConfig } from "../../llm/config";
 import { decideBrain, type BrainDecision } from "../../brain";
 import type { PlanExecution } from "../../agent/types";
@@ -51,6 +52,17 @@ export async function dispatchManagerRequest(ctx: DispatchCtx): Promise<Dispatch
 }
 
 export async function executeManagerDecision(decision: BrainDecision, ctx: DispatchCtx): Promise<DispatchResult> {
+  const result = await runManagerDecision(decision, ctx);
+  // Persist the full incoming→decision→action→outgoing trail (best-effort; covers free-text + ceo_wait).
+  await recordBrainAudit({
+    decision, senderRole: "master", channel: ctx.channel, msgId: ctx.msgId,
+    inboundText: ctx.text, outgoingSummary: formatDispatchReply(result),
+    safetyResult: decision.requiresClarification ? "clarify" : "accept",
+  }).catch(() => {});
+  return result;
+}
+
+async function runManagerDecision(decision: BrainDecision, ctx: DispatchCtx): Promise<DispatchResult> {
   const db = getServiceSupabase();
   const title = ceoTitle(ctx.text);
   const priority = ceoPriority(ctx.text);

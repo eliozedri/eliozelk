@@ -52,6 +52,8 @@ async function main() {
 
   check("4. operations: 'מה יכול לתקוע אותנו השבוע?' → multi-step routine",
     (() => { const p = planDeterministic("מה יכול לתקוע אותנו השבוע?"); return !!p && p.steps.length >= 4 && p.steps.every((s) => s.safety === "read_only"); })());
+  check("4b. warehouse: 'מה עומד להיגמר במחסן?' → inventory_low_stock",
+    deterministicDomainIntent("מה עומד להיגמר במחסן?") === "inventory_low_stock");
 
   check("5. fleet: 'איזה כלים לא שמישים?' → fleet_equipment_status → fleet command",
     deterministicDomainIntent("איזה כלים לא שמישים?") === "fleet_equipment_status" && intentToCommandId("fleet_equipment_status") === "fleet_unusable_equipment" && departmentFor("fleet_equipment_status").domain === "fleet");
@@ -104,6 +106,35 @@ async function main() {
     check("16. budget cap → checkBudget not ok", checkBudget(cfg).ok === false);
     __resetBudget();
   }
+
+  // ── Provider priority + NO-OVERRIDE (dispatcher fallback must not override an accepted LLM decision) ──
+  {
+    // Gemini returns a valid stock decision → it resolves to its OWN command, never re-mapped to price.
+    const r = await routeViaProviders([fake("gemini", async () => ({ ok: true, result: result({ intent: "inventory_stock_lookup", confidence: 0.9 }) }))], req("כמה קונוסים נשארו"), { minConfidence: MIN });
+    const cmd = r.result ? intentToCommandId(r.result.intent) : null;
+    check("17. Gemini stock decision honored → command stays inventory_stock_lookup (NOT price)",
+      r.ok && r.provider === "gemini" && cmd === "inventory_stock_lookup" && cmd !== intentToCommandId("catalog_missing_price"));
+  }
+  {
+    // Gemini fails → Groq returns the stock decision → honored (not overridden).
+    const r = await routeViaProviders(
+      [fake("gemini", async () => ({ ok: false, error: { code: "http", message: "429" } })), fake("groq", async () => ({ ok: true, result: result({ intent: "inventory_stock_lookup", confidence: 0.85 }) }))],
+      req("כמה קונוסים נשארו"), { minConfidence: MIN },
+    );
+    check("18. Gemini fails → Groq stock decision honored (provider=groq, command=stock)",
+      r.ok && r.provider === "groq" && intentToCommandId(r.result!.intent) === "inventory_stock_lookup");
+  }
+  {
+    // Both providers fail → only THEN may the deterministic dispatcher fallback run.
+    const r = await routeViaProviders(
+      [fake("gemini", async () => ({ ok: false, error: { code: "timeout", message: "t" } })), fake("groq", async () => ({ ok: false, error: { code: "http", message: "500" } }))],
+      req("כמה קונוסים נשארו"), { minConfidence: MIN },
+    );
+    check("19. Both providers fail → router !ok → deterministic fallback allowed (then matchCommandId→stock)",
+      r.ok === false && matchCommandId("כמה קונוסים נשארו") === "inventory_stock_lookup");
+  }
+  check("20. invariant: an accepted stock intent can NEVER resolve to the missing-price command",
+    intentToCommandId("inventory_stock_lookup") === "inventory_stock_lookup" && intentToCommandId("inventory_stock_lookup") !== "items_missing_price");
 
   console.log(`\n${passed}/${passed + failed} checks passed`);
   if (failed > 0) process.exit(1);

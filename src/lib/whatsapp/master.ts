@@ -17,6 +17,7 @@ import { ocrDocumentSkill } from "@/lib/jarvis/skills/ocrDocument/skill";
 import { personalAreaSkill } from "@/lib/jarvis/skills/personalArea/skill";
 import { decideBrain } from "@/lib/jarvis/brain";
 import { executeManagerDecision, formatDispatchReply } from "@/lib/jarvis/skills/ceoManager/dispatcher";
+import { recordBrainAudit } from "@/lib/jarvis/audit";
 
 /**
  * Jarvis Master Mode — owner-only stateful WhatsApp wizard.
@@ -273,31 +274,43 @@ async function freeTextRouter(inbound: InboundMessage, text: string): Promise<vo
   // Reasoning-first Brain: ONE structured decision (LLM if enabled+safe, else deterministic),
   // then route by the chosen business department/capability — never a guessed command.
   const decision = await decideBrain({ text, role: "master", channel: "whatsapp" });
+
+  // The CEO/manager path (operations/inventory/catalog/orders/finance/fleet/management) runs the
+  // resolved read-only action/routine, asks clarification, or files a department request. The
+  // executor records its own audit row (covers free-text + ceo_wait), so we don't double-log here.
+  if (decision.coarseIntent === "ceo_manager") {
+    const result = await executeManagerDecision(decision, { text, sourcePhone: phone, channel: "whatsapp", msgId: inbound.waMessageId });
+    await sendWhatsAppText(phone, formatDispatchReply(result));
+    return toMain(phone);
+  }
+
+  // Non-CEO owner branches: route to the matching skill, then record the audit trail centrally.
+  let outgoing = "";
   switch (decision.coarseIntent) {
-    case "ceo_manager": {
-      // Operations / inventory / catalog / orders / finance / fleet / management — the executor
-      // runs the resolved read-only action/routine, asks clarification, or files a department request.
-      const result = await executeManagerDecision(decision, {
-        text, sourcePhone: phone, channel: "whatsapp", msgId: inbound.waMessageId,
-      });
-      await sendWhatsAppText(phone, formatDispatchReply(result));
-      return toMain(phone);
-    }
     case "personal":
     case "status":
       await runSkill(inbound, personalAreaSkill);
-      return toMain(phone);
+      outgoing = "(טופל ע״י אזור אישי)";
+      break;
     case "order_intake":
       await createOwnerDraft(inbound, text);
-      return confirmToMain(phone, DRAFT_CREATED);
+      outgoing = DRAFT_CREATED;
+      break;
     case "ocr_document":
       await saveMasterFlow(phone, "ocr_wait");
+      outgoing = "(הופנה לסריקת מסמך)";
+      await recordBrainAudit({ decision, senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, inboundText: text, outgoingSummary: outgoing });
       return sendOcrPrompt(phone);
     case "greeting":
+      outgoing = "(תפריט ראשי)";
+      await recordBrainAudit({ decision, senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, inboundText: text, outgoingSummary: outgoing });
       return runAction(phone, "main");
     default:
       // Uncertain → ask, never run an unrelated command.
-      await sendWhatsAppText(phone, decision.clarificationQuestion ?? "לא בטוח שהבנתי 🙂 הנה התפריט:");
-      return toMain(phone);
+      outgoing = decision.clarificationQuestion ?? "לא בטוח שהבנתי 🙂 הנה התפריט:";
+      await sendWhatsAppText(phone, outgoing);
+      break;
   }
+  await recordBrainAudit({ decision, senderRole: "master", channel: "whatsapp", msgId: inbound.waMessageId, inboundText: text, outgoingSummary: outgoing, safetyResult: decision.requiresClarification ? "clarify" : "accept" });
+  return toMain(phone);
 }
