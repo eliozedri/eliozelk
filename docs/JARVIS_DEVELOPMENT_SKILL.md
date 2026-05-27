@@ -59,6 +59,14 @@ Every request → `jarvis_dev_tasks` (requested_by, channel, project_id, origina
 interpreted_intent, risk_level, selected_action, approval_required, status, recommended_next_step,
 claude_prompt, result_summary, linked_commit) + a `jarvis_brain_audit` row.
 
+## Stage 2 — GitHub integration layer (built, disabled until creds)
+
+The gated GitHub layer (`github.ts`) + Claude Code Action workflow (`.github/workflows/claude-code.yml`)
+now exist. When `GITHUB_INTEGRATION_ENABLED=true` + a token are set, Jarvis can create a structured
+issue; commenting `@claude` on it runs the Claude Code Action on a branch/PR (never main, no
+auto-merge/deploy). Until then Jarvis prepares the issue body + prompt for manual use. Full setup,
+ENV, permissions, secrets, and exact owner steps: **`docs/JARVIS_GITHUB_CLAUDE_CODE_INTEGRATION.md`**.
+
 ## Next step to enable real execution (future, with approval)
 
 1. **GitHub App/token** (repo scope) → list repos, create repos, open issues/PRs.

@@ -18,11 +18,13 @@ export interface DevProject {
   defaultBranch: string;
   projectType: ProjectType;
   sensitivityLevel: "low" | "medium" | "high" | "production";
-  allowedModes: string[]; // read_only | task_only | new_project_proposal | safe_edit
+  allowedModes: string[]; // READ_ONLY | TASK_ONLY | NEW_PROJECT_PROPOSAL | SAFE_EDIT_WITH_APPROVAL
   requiresApprovalForCommit: boolean | "task-dependent";
   requiresApprovalForPush: boolean;
   requiresApprovalForMain: boolean;
   requiresApprovalForDeploy: boolean;
+  requiresApprovalForMigration: boolean;
+  requiresApprovalForSecrets: boolean;
   notes: string;
 }
 
@@ -37,12 +39,14 @@ export const DEV_PROJECTS: DevProject[] = [
     defaultBranch: "main",
     projectType: "sensitive_production_project",
     sensitivityLevel: "production",
-    allowedModes: ["read_only", "task_only"],
+    allowedModes: ["READ_ONLY", "TASK_ONLY", "SAFE_EDIT_WITH_APPROVAL"],
     requiresApprovalForCommit: "task-dependent",
     requiresApprovalForPush: true,
     requiresApprovalForMain: true,
     requiresApprovalForDeploy: true,
-    notes: "Production ERP + Jarvis. Read-only checks + task/prompt generation only in Stage 1. Push to main / deploy / migrations / auth / secrets / Meta callback ALWAYS require explicit owner approval.",
+    requiresApprovalForMigration: true,
+    requiresApprovalForSecrets: true,
+    notes: "Production ERP + Jarvis. Read-only checks + task/prompt generation + branch/PR via Claude Code Action only. Push to main / deploy / migrations / auth / secrets / Meta callback ALWAYS require explicit owner approval.",
   },
 ];
 
@@ -62,10 +66,4 @@ export function knownProjectsList(): string[] {
   return DEV_PROJECTS.map((p) => `• ${p.displayName}${p.sensitivityLevel === "production" ? " (פרודקשן — רגיש)" : ""}`);
 }
 
-/** GitHub API capability — presence-only env check (no secret values). */
-export function githubAccess(): { available: boolean; reason: string } {
-  const has = !!(process.env.GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_PAT || process.env.GITHUB_APP_ID);
-  return has
-    ? { available: true, reason: "GitHub credentials present" }
-    : { available: false, reason: "אין כרגע אינטגרציית GitHub (לא הוגדר GitHub App/טוקן) — Jarvis אינו יכול לרשום/ליצור repos או לפתוח PR." };
-}
+// GitHub capability detection lives in ./github.ts (githubStatus / githubAvailable).

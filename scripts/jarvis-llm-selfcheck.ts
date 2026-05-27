@@ -16,6 +16,7 @@ import { deterministicDomainIntent, matchCommandId, intentToCommandId, extractIt
 import { departmentFor } from "../src/lib/jarvis/departments";
 import { isCeoRequest } from "../src/lib/jarvis/skills/ceoManager/intent";
 import { classifyDevIntent, classifyDevRisk, isAmbiguousDevRequest } from "../src/lib/jarvis/skills/development/classify";
+import { DEV_PROJECTS } from "../src/lib/jarvis/skills/development/registry";
 import type { LLMProvider } from "../src/lib/jarvis/llm/providers/types";
 import type { LLMRequest, LLMIntentResult, LLMProviderResult, SenderRole } from "../src/lib/jarvis/llm/types";
 
@@ -161,6 +162,14 @@ async function main() {
   check("29. EXTERNAL dev/general → clamped to customer intake (no internal access)",
     validateRoute(result({ intent: "development_request" }), { role: "external", minConfidence: MIN }).action === "clamp" &&
     validateRoute(result({ intent: "general_assistant" }), { role: "external", minConfidence: MIN }).action === "clamp");
+
+  // ── Elkayam production protection (registry policy) ──
+  {
+    const elk = DEV_PROJECTS.find((p) => p.projectId === "elkayam");
+    check("30. Elkayam = sensitive production with full approval gates",
+      !!elk && elk.projectType === "sensitive_production_project" && elk.requiresApprovalForMain === true &&
+      elk.requiresApprovalForDeploy === true && elk.requiresApprovalForMigration === true && elk.requiresApprovalForSecrets === true);
+  }
 
   console.log(`\n${passed}/${passed + failed} checks passed`);
   if (failed > 0) process.exit(1);

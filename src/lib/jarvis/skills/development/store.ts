@@ -19,6 +19,9 @@ export interface DevTaskInput {
   status: string; // prepared | blocked_needs_approval | pending
   recommendedNextStep: string;
   claudePrompt: string;
+  repo?: string | null;
+  githubActionAttempted?: boolean;
+  issueUrl?: string | null;
 }
 
 export async function createDevTask(input: DevTaskInput): Promise<string | null> {
@@ -36,6 +39,9 @@ export async function createDevTask(input: DevTaskInput): Promise<string | null>
       status: input.status,
       recommended_next_step: input.recommendedNextStep,
       claude_prompt: (input.claudePrompt ?? "").slice(0, 4000),
+      repo: input.repo ?? null,
+      github_action_attempted: input.githubActionAttempted ?? false,
+      issue_url: input.issueUrl ?? null,
     })
     .select("id")
     .single();
