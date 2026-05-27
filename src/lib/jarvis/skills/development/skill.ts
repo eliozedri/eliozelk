@@ -5,7 +5,7 @@ import { findProject, knownProjectsList, type DevProject } from "./registry";
 import { classifyDevIntent, classifyDevRisk, isAmbiguousDevRequest } from "./classify";
 import { buildClaudePrompt, buildNewProjectProposal } from "./prompt";
 import { createDevTask } from "./store";
-import { githubStatus, githubAvailable, createIssue } from "./github";
+import { githubStatus, githubAvailable, createIssue, listRepos } from "./github";
 import { evaluateGate, gateMessage } from "./approvalGate";
 import { claudeStatusNote } from "./claudeCode";
 
@@ -40,6 +40,19 @@ export const developmentSkill: Skill = {
     const body = (ctx.input.text ?? "").trim();
     if (!body) {
       return { handled: true, messages: [text("מה לבדוק/לבנות? למשל: 'בדוק למה הבילד נפל', 'תתקן את בעיית ההתראות באלקיים', 'תכין פרומפט לקלוד', או 'תבנה לי אפליקציה חדשה'.")] };
+    }
+
+    // "List my projects/repos" — registry + live GitHub repos (if the token can list them).
+    if (/אילו\s+(פרויקט|ריפו|repos)|רשימת\s+(פרויקט|ריפו)|list\s+(repos|projects)|איזה\s+פרויקטים/i.test(body)) {
+      const lines = ["הפרויקטים המוכרים:", ...knownProjectsList(), "• פרויקט חדש (אפרט הצעה)"];
+      if (githubAvailable()) {
+        const r = await listRepos();
+        if (r.ok && r.repos?.length) lines.push("", `ריפוזיטוריז ב-GitHub (${r.repos.length}):`, ...r.repos.slice(0, 15).map((x) => `• ${x}`));
+        else lines.push("", `(רשימת GitHub: ${r.reason ?? "לא זמינה"})`);
+      } else {
+        lines.push("", "(GitHub לא מחובר — רישום פנימי בלבד)");
+      }
+      return { handled: true, messages: [text(lines.join("\n"))] };
     }
 
     if (isAmbiguousDevRequest(body)) {
