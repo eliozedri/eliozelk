@@ -115,6 +115,7 @@ export function llmIntentToCoarse(intent: LlmIntent): Intent {
     case "capability_request":
       return "ceo_manager";
     case "development_request":
+    case "tool_connection_request":
       return "development";
     case "general_assistant":
       return "general";

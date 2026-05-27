@@ -111,6 +111,10 @@ calls `runJarvis()`, and renders the returned messages. The **Order Intake skill
   key) so behavior is unchanged. The owner CEO/Manager path also gains **Agent Reasoning**: a directive
   resolves to a single read-only command → a multi-step read-only plan → or a queued human task.
   See `docs/JARVIS_LLM_ROUTER.md` + `docs/JARVIS_AGENT_REASONING.md`.
+- **Autonomous Capability Resolution:** a capability request (e.g. "תיצור תמונה / תחבר כלי") is
+  understood by the Brain, then Jarvis checks existing providers/keys (`capabilityResolver.ts`):
+  reachable → use; paid/not-wired (e.g. Gemini image gen / Nano Banana) → capability request + offer
+  a Development connection task on approval; missing → ask. Never fakes; never auto-enables paid.
 - **Owner/Master Brain-First Invariant:** after owner identification, NO free-text/media message
   skips the Brain. Non-Brain paths are only explicit UI (buttons / exact nav words / numeric menu /
   capture states the owner tapped into), audited with `brain_called=false`. See the reverse-audit

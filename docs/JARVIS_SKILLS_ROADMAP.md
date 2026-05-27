@@ -18,6 +18,13 @@ Skills live under `src/lib/jarvis/skills/` and return channel-agnostic messages.
 | **Inventory / Availability** | ⬜ | Extension point only (`orderIntake/catalog.ts`) — never invents stock. | Connect catalog/stock source; availability checks; alternatives. |
 | **Finance / Operations** | ⬜ | — | Future skills. |
 
+## Autonomous Capability Resolution
+On a capability request Jarvis investigates existing providers/keys/skills first
+(`capabilityResolver.ts`): available → use; needs_approval (paid/secret/not-wired, e.g. Gemini image
+generation / "Nano Banana") → capability request + ask to connect via Development; missing → ask to
+build. Owner approval → Development connection task. Never fakes execution; paid/secret/manual → stop
++ guide. See `docs/JARVIS_AGENT_ARCHITECTURE.md`.
+
 ## Owner/Master Brain-First Invariant
 After owner identification, no free-text/media message skips the Brain; media is context not intent;
 handlers are executors; fallback never overrides an accepted LLM decision; missing capability →

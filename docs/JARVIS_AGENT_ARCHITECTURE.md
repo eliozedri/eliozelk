@@ -94,6 +94,34 @@ The ⚪ paths are **executors of an explicit owner choice**, audited with `brain
 message has `brain_called=true` with `provider_used` (gemini/groq/deterministic) in `jarvis_brain_audit`.
 External senders never reach this path (gateway → Order Intake only; role-gated; media = order attachment).
 
+## Autonomous Capability Resolution
+
+When the owner asks for a capability ("תיצור לי תמונה עם נאנו בננה", "תחבר לי כלי X", "תוסיף יכולת
+לקרוא מסמכים"), Jarvis does NOT just say "אין לי סקיל כזה" and stop, and does NOT immediately ask
+which skill to build. It **investigates first** (`src/lib/jarvis/capabilityResolver.ts`):
+
+```
+understand intent (Gemini/Groq)
+→ resolveCapability(name): is it reachable via an existing provider/key/skill?
+   • available     → use it (confirm first if cost/risk)
+   • needs_approval → exists-but-paid/secret/not-wired → capability request + ASK to connect (Development)
+   • missing       → capability request + ASK to build
+→ on owner approval ("תחבר…") → Development skill creates a connection/dev task (Claude Code prompt);
+   if GitHub/Claude-Code is configured → issue/PR per approval gates; else → precise task/prompt (honest)
+→ never fakes execution; paid/secret/manual-setup → stop + guide the owner
+```
+
+**Nano Banana / image generation example (current honest status):** "Nano Banana" is Google
+**Gemini's image model** — reachable via the **same `GEMINI_API_KEY`** (a Gemini image model with
+`responseModalities: ["IMAGE"]`). But it is **not wired** into Jarvis and image generation **incurs
+API cost**, so the resolver returns `needs_approval` (paid): Jarvis explains this, files a Capability
+Request, and offers a Development connection task — it never auto-calls a paid image API. Enabling it
+later: owner approves cost → Development wires the Gemini image model behind `JARVIS_IMAGE_GEN_ENABLED`
++ Storage upload for WhatsApp delivery.
+
+**Autonomy limits:** safe analysis/planning/docs/non-destructive code may proceed; **stop + ask** for
+paid API, missing secret, manual dashboard setup, risky prod/Meta/auth/DB/schema, or direct main/deploy.
+
 ## Reasoning-first Brain + department routing (Stage 2 + 3)
 
 **Jarvis is REASONING-FIRST, commands-second.** It does not map a message to the closest command.

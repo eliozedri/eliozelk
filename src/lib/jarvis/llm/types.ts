@@ -34,6 +34,7 @@ export type LlmIntent =
   | "fleet_equipment_status"
   | "capability_request"
   | "development_request"
+  | "tool_connection_request"
   | "general_assistant"
   | "image_creation"
   | "image_editing"

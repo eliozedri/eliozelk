@@ -42,7 +42,8 @@ const OWNER_RULES: Rule[] = [
   { re: /סרוק|מסמך|קרא\s+את/i, intent: "ocr_document", skill: "ocrDocument", safety: "pending" },
   { re: /תערוך\s+(לי\s+)?(את\s+)?התמונה|לערוך\s+(את\s+)?התמונה|עריכת\s+תמונה/i, intent: "image_editing", skill: "imageCreative", safety: "read_only" },
   { re: /תיצור\s+(לי\s+)?תמונה|תעשה\s+(לי\s+)?תמונה|תייצר\s+תמונה|צור\s+תמונה|נאנו\s*בננה|nano\s*banana|בסגנון\s+הזה|תמונה\s+בסגנון/i, intent: "image_creation", skill: "imageCreative", safety: "read_only" },
-  { re: /קוד|בילד|build|לוג(ים)?|logs|git|דיפלוי|deploy|פרומפט\s+לקלוד|claude|מודול\b|תקלה\s+בקוד|למה\s+ה?בילד|תבנה\s+לי\s+(אפליקצי|אתר|מערכת|פרויקט|רפו)|פרויקט\s+חדש|new\s+(project|app|repo)|תחבר\s+(לי\s+)?(כלי|יכולת)/i, intent: "development_request", skill: "development", safety: "read_only" },
+  { re: /תחבר\s+(לי\s+)?(את\s+)?(כלי|שירות|ספק|נאנו\s*בננה|nano\s*banana)|לחבר\s+(כלי|שירות|יכולת)|connect|integrate|אינטגרציה/i, intent: "tool_connection_request", skill: "development", safety: "read_only" },
+  { re: /קוד|בילד|build|לוג(ים)?|logs|git|דיפלוי|deploy|פרומפט\s+לקלוד|claude|מודול\b|תקלה\s+בקוד|למה\s+ה?בילד|תבנה\s+לי\s+(אפליקצי|אתר|מערכת|פרויקט|רפו)|פרויקט\s+חדש|new\s+(project|app|repo)|תחבר\s+(לי\s+)?יכולת/i, intent: "development_request", skill: "development", safety: "read_only" },
   { re: /תעזור\s+לי\s+לחשוב|המלצה|תסביר\s+לי|מה\s+עדיף|בוא\s+נבנה\s+תוכנית|תוכנית\s+פעולה|רעיון/i, intent: "general_assistant", skill: "generalAssistant", safety: "read_only" },
   { re: /הזמנה|טיוטה|הוסף|הסר/i, intent: "order_intake", skill: "orderIntake", safety: "pending" },
 ];

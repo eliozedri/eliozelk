@@ -2,6 +2,7 @@ import "server-only";
 import type { Skill, SkillContext, SkillResult } from "../../types";
 import { text } from "../../types";
 import { createCapabilityRequest } from "../../capabilities";
+import { resolveCapability } from "../../capabilityResolver";
 
 /**
  * Image / Creative Media skill — OWNER-ONLY. Handles requests to GENERATE or EDIT images
@@ -41,26 +42,35 @@ export const imageCreativeSkill: Skill = {
     const hasImage = !!ctx.input.media;
     const kind = isEdit ? "image_editing" : "image_generation";
 
+    // Investigate FIRST: is image generation already reachable via existing providers/keys?
+    const cap = resolveCapability(kind);
+    const promptText = buildImagePrompt(body, hasImage);
+
+    // "available" would mean a wired, owner-approved generation pipeline — not built yet, so we never
+    // fake it. Today the resolver returns needs_approval (Gemini key present, paid, not wired) or missing.
     const id = await createCapabilityRequest({
       requestedBy: ctx.input.senderId,
       channel: ctx.input.channel,
       originalMessage: body,
       interpretedIntent: kind,
       kind: "tool",
-      missingSkillOrDataSource: `image generation/editing tool${tool ? ` (${tool})` : " (לא צויין כלי)"}`,
+      missingSkillOrDataSource: `image ${isEdit ? "editing" : "generation"} tool${tool ? ` (${tool})` : ""} — ${cap.status}`,
       targetAgent: "ceo",
-      recommendedNextStep: "לחבר ספק יצירת תמונות (API) דרך ה-Development skill, או להשתמש בפרומפט שהוכן.",
+      recommendedNextStep: cap.enablement ?? "לחבר ספק יצירת תמונות דרך ה-Development skill.",
+      priority: "normal",
     });
     const ref = id ? ` (#${id.slice(0, 8)})` : "";
-    const promptText = buildImagePrompt(body, hasImage);
 
     return {
       handled: true,
       messages: [text(
         `הבנתי שאתה רוצה ${isEdit ? "לערוך" : "ליצור"} תמונה${tool ? ` עם ${tool}` : ""}${hasImage ? " (לפי התמונה ששלחת כרפרנס)" : ""}.\n` +
-        `כרגע אין לי חיבור פעיל לכלי יצירת תמונות — לא אזייף יצירה. פתחתי בקשת יכולת${ref} לחיבור הכלי (דרך מנהל המערכת / פיתוח).\n\n` +
+        `בדקתי מה אפשרי: ${cap.detail}\n` +
+        `לא אזייף יצירת תמונה. פתחתי בקשת יכולת${ref}.\n\n` +
         `${promptText}\n\n` +
-        "רוצה שאעביר את זה ל-Development כדי לחבר את הכלי בפועל? כתוב 'תחבר כלי יצירת תמונות'.",
+        (cap.paid
+          ? "החיבור כרוך כנראה בעלות API — צריך אישור מפורש ממך. תרצה שאפתח משימת חיבור (Development)? כתוב 'תחבר כלי יצירת תמונות'."
+          : "תרצה שאפתח משימת חיבור דרך Development? כתוב 'תחבר כלי יצירת תמונות'."),
       )],
     };
   },

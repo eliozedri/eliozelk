@@ -59,6 +59,17 @@ Every request → `jarvis_dev_tasks` (requested_by, channel, project_id, origina
 interpreted_intent, risk_level, selected_action, approval_required, status, recommended_next_step,
 claude_prompt, result_summary, linked_commit) + a `jarvis_brain_audit` row.
 
+## Autonomous Capability Resolution (Stage 2.5)
+
+`capabilityResolver.ts` checks whether a requested capability is already reachable (provider/key/
+skill) and whether enabling it is free/safe or `needs_approval` (paid/secret/manual). The Image/
+Creative skill uses it: e.g. image generation → "Gemini key exists; Nano Banana is Gemini's image
+model, connectable via the same key but **paid** + not wired" → capability request + offer a
+**Development connection task** (`tool_connection_request` → `SAFE_EDIT`, approval-gated). On owner
+approval, the Development skill prepares the Claude Code connection task (behind an env flag, no
+secrets in code, billing approved). Jarvis never fakes generation and never auto-enables a paid tool.
+See `docs/JARVIS_AGENT_ARCHITECTURE.md` → "Autonomous Capability Resolution".
+
 ## Stage 2 — GitHub integration layer (built, disabled until creds)
 
 The gated GitHub layer (`github.ts`) + Claude Code Action workflow (`.github/workflows/claude-code.yml`)

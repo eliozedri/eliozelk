@@ -21,6 +21,13 @@ confidence / clarification / safety / verifiedAnswerPossible / dataSourceNeeded 
 nothing is collapsed into a command id at the door. Departments + capabilities are documented in
 `docs/JARVIS_AGENT_ARCHITECTURE.md`.
 
+## Autonomous Capability Resolution
+
+A capability request is understood by the Brain, then `capabilityResolver.ts` checks if it's already
+reachable (provider/key/skill): `available` → use · `needs_approval` (paid/secret/not-wired) →
+capability request + ask to connect via Development · `missing` → ask to build. Never fakes execution;
+never auto-enables paid. See `docs/JARVIS_AGENT_ARCHITECTURE.md`.
+
 ## Owner/Master Brain-First Invariant
 
 After the owner is identified, **no free-text or media message skips the Brain**. Media is context,

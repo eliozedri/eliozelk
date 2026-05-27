@@ -15,6 +15,7 @@ export type DevSubIntent =
   | "deploy_status_check"
   | "project_architecture_question"
   | "new_project_request"
+  | "tool_connection_request"
   | "risky_change_request";
 
 export type DevRiskLevel = "READ_ONLY" | "TASK_ONLY" | "NEW_PROJECT_PROPOSAL" | "SAFE_EDIT" | "DANGEROUS";
@@ -26,6 +27,7 @@ const NEW_PROJECT_RE = /תבנה\s+לי\s+(אפליקצי|אתר|מערכת|פר
 const AMBIGUOUS_RE = /^(תתקן|תקן|תבדוק|תשנה|תעדכן)\s+(את\s+)?(זה|זאת|אותו|אותה|את\s+האפליקציה|את\s+המערכת)\s*\??$/;
 
 const SUB_PATTERNS: Array<{ id: DevSubIntent; re: RegExp }> = [
+  { id: "tool_connection_request", re: /תחבר|לחבר|חיבור\s+(כלי|שירות|ספק)|connect|integrate|אינטגרציה|נאנו\s*בננה|nano\s*banana/i },
   { id: "build_error_analysis", re: /בילד|build|קומפילציה|נפל\s+ה?build|למה\s+ה?בילד|deploy\s+fail/i },
   { id: "git_status_check", re: /git|גיט|מה\s+השתנה|אילו\s+קבצים|status|branch|קומיט|commit/i },
   { id: "terminal_summary", re: /לוג(ים)?|logs|טרמינל|terminal|פלט|שגיאה\s+בלוג/i },
@@ -51,7 +53,8 @@ export function classifyDevIntent(text: string): DevSubIntent {
 export function classifyDevRisk(text: string, sub: DevSubIntent): DevRiskLevel {
   if (sub === "new_project_request") return "NEW_PROJECT_PROPOSAL";
   if (DANGEROUS_RE.test(text ?? "") || sub === "risky_change_request") return "DANGEROUS";
-  if (sub === "safe_code_edit_request") return "SAFE_EDIT";
+  // Connecting a provider/tool is a code change that may involve billing → approval-gated edit.
+  if (sub === "tool_connection_request" || sub === "safe_code_edit_request") return "SAFE_EDIT";
   if (sub === "prepare_claude_prompt" || sub === "create_development_task") return "TASK_ONLY";
   return "READ_ONLY";
 }

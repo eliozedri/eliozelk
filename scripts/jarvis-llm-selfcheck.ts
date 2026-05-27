@@ -193,6 +193,18 @@ async function main() {
     validateRoute(result({ intent: "image_editing" }), { role: "external", minConfidence: MIN }).action === "clamp");
   check("35. creative coarse mapping", llmIntentToCoarse("image_creation") === "creative" && llmIntentToCoarse("image_editing") === "creative");
 
+  // ── Autonomous capability resolution: tool-connection routing ──
+  {
+    const r = await localProvider.classifyIntent(req("תחבר לי כלי יצירת תמונות"));
+    check("36. 'תחבר לי כלי יצירת תמונות' → tool_connection_request → development",
+      r.result?.intent === "tool_connection_request" && llmIntentToCoarse("tool_connection_request") === "development");
+  }
+  check("37. dev sub 'תחבר את נאנו בננה' → tool_connection_request / SAFE_EDIT (approval)",
+    classifyDevIntent("תחבר את נאנו בננה 2 ליצירת תמונות") === "tool_connection_request" &&
+    classifyDevRisk("תחבר את נאנו בננה 2", "tool_connection_request") === "SAFE_EDIT");
+  check("38. 'תכין לי פרומפט לנאנו בננה לפי התמונה' → image_creation (creative, not OCR)",
+    (await localProvider.classifyIntent(req("תכין לי פרומפט לנאנו בננה לפי התמונה"))).result?.intent === "image_creation");
+
   console.log(`\n${passed}/${passed + failed} checks passed`);
   if (failed > 0) process.exit(1);
 }

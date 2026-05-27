@@ -60,6 +60,7 @@ const ROUTES: Partial<Record<LlmIntent, DepartmentRoute>> = {
   },
   ocr_document: { domain: "documents", agents: [], label: "מסמכים", hasCapability: true },
   development_request: { domain: "development", agents: ["ceo"], label: "מנהל הפיתוח", hasCapability: true },
+  tool_connection_request: { domain: "development", agents: ["ceo"], label: "מנהל הפיתוח", hasCapability: true },
   general_assistant: { domain: "personal", agents: [], label: "עוזר אישי", hasCapability: true },
   image_creation: { domain: "creative", agents: ["ceo"], label: "מדיה/יצירת תמונות", hasCapability: false, dataSourceNeeded: "חיבור כלי יצירת תמונות (ספק image-gen) — לא מחובר" },
   image_editing: { domain: "creative", agents: ["ceo"], label: "מדיה/עריכת תמונות", hasCapability: false, dataSourceNeeded: "חיבור כלי עריכת תמונות — לא מחובר" },

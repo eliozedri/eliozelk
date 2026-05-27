@@ -17,6 +17,7 @@ const SUB_GUIDANCE: Record<DevSubIntent, string> = {
   deploy_status_check: "Check deployment status (read-only); do not change deploy config.",
   project_architecture_question: "Explain the relevant module/architecture (read-only).",
   new_project_request: "Propose a new project (name/repo/stack/MVP/plan). Do NOT create a repo without explicit approval + GitHub access.",
+  tool_connection_request: "Connect a provider/tool behind an env flag. No secrets in code. If it incurs paid usage, require explicit owner approval before enabling. Add tests + docs.",
   risky_change_request: "DO NOT execute. Requires explicit owner approval; outline a safe plan only.",
 };
 
