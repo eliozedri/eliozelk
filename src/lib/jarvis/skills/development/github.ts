@@ -117,3 +117,45 @@ export async function createRepo(name: string, isPrivate = true): Promise<GhResu
   const data = r.json as { html_url?: string };
   return { ok: true, url: data?.html_url };
 }
+
+export async function createIssueComment(owner: string, repo: string, issueNumber: number, body: string): Promise<GhResult> {
+  if (!githubAvailable()) return { ok: false, reason: "github_unavailable" };
+  const r = await ghFetch(`/repos/${owner}/${repo}/issues/${issueNumber}/comments`, "POST", { body });
+  if (!r.ok) return { ok: false, reason: r.reason ?? "error" };
+  return { ok: true, url: (r.json as { html_url?: string })?.html_url };
+}
+
+export async function getPRStatus(owner: string, repo: string, num: number): Promise<GhResult> {
+  if (!githubAvailable()) return { ok: false, reason: "github_unavailable" };
+  const r = await ghFetch(`/repos/${owner}/${repo}/pulls/${num}`, "GET");
+  if (!r.ok) return { ok: false, reason: r.reason ?? "error" };
+  const d = r.json as { html_url?: string; state?: string; merged?: boolean };
+  return { ok: true, url: d?.html_url, reason: d?.merged ? "merged" : d?.state };
+}
+
+export async function getWorkflowStatus(owner: string, repo: string, runId: number): Promise<GhResult> {
+  if (!githubAvailable()) return { ok: false, reason: "github_unavailable" };
+  const r = await ghFetch(`/repos/${owner}/${repo}/actions/runs/${runId}`, "GET");
+  if (!r.ok) return { ok: false, reason: r.reason ?? "error" };
+  const d = r.json as { html_url?: string; status?: string; conclusion?: string };
+  return { ok: true, url: d?.html_url, reason: d?.conclusion ?? d?.status };
+}
+
+/** Branch/PR/workflow execution — RESERVED + gated. Branch/PR work happens via the Claude Code
+ * GitHub Action (issue @claude), never by a direct serverless push to main. */
+export async function triggerWorkflow(): Promise<GhResult> {
+  if (!githubAvailable()) return { ok: false, reason: "github_unavailable" };
+  return { ok: false, reason: "use_issue_comment_at_claude" }; // prefer the @claude comment path
+}
+
+/** Rich config detector for status reporting (no secret values). */
+export function detectGitHubConfig(): { status: "configured" | "disabled" | "missing_token" | "partial"; authMode: string; canCreateRepo: boolean; owner: string | null; repo: string | null } {
+  const cfg = loadGithubConfig();
+  const hasToken = !!(process.env.GITHUB_TOKEN || process.env.GITHUB_PAT);
+  let status: "configured" | "disabled" | "missing_token" | "partial";
+  if (cfg.enabled) status = "configured";
+  else if (process.env.GITHUB_INTEGRATION_ENABLED === "true" && !hasToken) status = "missing_token";
+  else if (hasToken || cfg.owner || cfg.repo) status = "partial";
+  else status = "disabled";
+  return { status, authMode: cfg.authMode, canCreateRepo: cfg.allowRepoCreate, owner: cfg.owner, repo: cfg.repo };
+}

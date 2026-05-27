@@ -6,6 +6,8 @@ import { classifyDevIntent, classifyDevRisk, isAmbiguousDevRequest } from "./cla
 import { buildClaudePrompt, buildNewProjectProposal } from "./prompt";
 import { createDevTask } from "./store";
 import { githubStatus, githubAvailable, createIssue } from "./github";
+import { evaluateGate, gateMessage } from "./approvalGate";
+import { claudeStatusNote } from "./claudeCode";
 
 /**
  * Development / Claude Code skill — OWNER-ONLY. Stage 2 adds a GATED GitHub integration:
@@ -51,6 +53,10 @@ export const developmentSkill: Skill = {
     const sub = classifyDevIntent(body);
     const risk = classifyDevRisk(body, sub);
     const gh = githubStatus();
+    const gate = evaluateGate({
+      role: ctx.input.senderRole, risk, githubConfigured: gh.available,
+      claudeConfigured: false, needsRepoCreate: sub === "new_project_request",
+    });
 
     // New project → proposal only. Repo creation needs GitHub + JARVIS_DEV_ALLOW_REPO_CREATE + approval.
     if (sub === "new_project_request") {
@@ -121,7 +127,7 @@ export const developmentSkill: Skill = {
     const approvalNote = risk === "SAFE_EDIT" ? `\n⚠️ עריכה ב-${project.displayName}: push ל-main/דיפלוי דורשים אישור מפורש לפי מדיניות הפרויקט.` : "";
     return { handled: true, messages: [text(
       `🛠️ בקשת פיתוח${ref} — ${project.displayName} · ${sub} (${risk}).\n` +
-      `${gh.reason}${approvalNote}\n\nגוף issue + פרומפט מוכן ל-Claude Code 👇\n\n${fullIssueBody}`,
+      `שער אישור: ${gateMessage(gate)}\n${claudeStatusNote()}${approvalNote}\n\nגוף issue + פרומפט מוכן ל-Claude Code 👇\n\n${fullIssueBody}`,
     )] };
   },
 };

@@ -17,6 +17,8 @@ import { departmentFor } from "../src/lib/jarvis/departments";
 import { isCeoRequest } from "../src/lib/jarvis/skills/ceoManager/intent";
 import { classifyDevIntent, classifyDevRisk, isAmbiguousDevRequest } from "../src/lib/jarvis/skills/development/classify";
 import { DEV_PROJECTS } from "../src/lib/jarvis/skills/development/registry";
+import { evaluateGate } from "../src/lib/jarvis/skills/development/approvalGate";
+import { makeMockGithubClient } from "../src/lib/jarvis/skills/development/githubClient";
 import type { LLMProvider } from "../src/lib/jarvis/llm/providers/types";
 import type { LLMRequest, LLMIntentResult, LLMProviderResult, SenderRole } from "../src/lib/jarvis/llm/types";
 
@@ -204,6 +206,26 @@ async function main() {
     classifyDevRisk("תחבר את נאנו בננה 2", "tool_connection_request") === "SAFE_EDIT");
   check("38. 'תכין לי פרומפט לנאנו בננה לפי התמונה' → image_creation (creative, not OCR)",
     (await localProvider.classifyIntent(req("תכין לי פרומפט לנאנו בננה לפי התמונה"))).result?.intent === "image_creation");
+
+  // ── Development approval gates (structured) ──
+  check("39. gate: external → blocked_external_user", evaluateGate({ role: "external", risk: "READ_ONLY", githubConfigured: false, claudeConfigured: false }) === "blocked_external_user");
+  check("40. gate: DANGEROUS → blocked_dangerous", evaluateGate({ role: "master", risk: "DANGEROUS", githubConfigured: true, claudeConfigured: true }) === "blocked_dangerous");
+  check("41. gate: paid → requires_paid_api_approval", evaluateGate({ role: "master", risk: "SAFE_EDIT", githubConfigured: true, claudeConfigured: true, paid: true }) === "requires_paid_api_approval");
+  check("42. gate: READ_ONLY → allowed_read_only", evaluateGate({ role: "master", risk: "READ_ONLY", githubConfigured: false, claudeConfigured: false }) === "allowed_read_only");
+  check("43. gate: TASK_ONLY → allowed_now", evaluateGate({ role: "master", risk: "TASK_ONLY", githubConfigured: false, claudeConfigured: false }) === "allowed_now");
+  check("44. gate: new repo, no github → requires_github_config", evaluateGate({ role: "master", risk: "NEW_PROJECT_PROPOSAL", githubConfigured: false, claudeConfigured: false, needsRepoCreate: true }) === "requires_github_config");
+  check("45. gate: SAFE_EDIT, github but no claude → requires_claude_setup", evaluateGate({ role: "master", risk: "SAFE_EDIT", githubConfigured: true, claudeConfigured: false }) === "requires_claude_setup");
+  check("46. gate: SAFE_EDIT, no github → requires_github_config", evaluateGate({ role: "master", risk: "SAFE_EDIT", githubConfigured: false, claudeConfigured: false }) === "requires_github_config");
+
+  // ── Mock GitHub client (issue/repo flow without live creds) ──
+  {
+    const { client, calls } = makeMockGithubClient();
+    const issue = await client.createIssue("eliozedri", "eliozelk", "[Jarvis] test", "body", ["jarvis"]);
+    const repo = await client.createRepo("fitness-app", true);
+    check("47. mock github: createIssue returns url + records call",
+      issue.ok && !!issue.url && issue.number! > 0 && calls.some((c) => c.method === "createIssue"));
+    check("48. mock github: createRepo returns url", repo.ok && !!repo.url);
+  }
 
   console.log(`\n${passed}/${passed + failed} checks passed`);
   if (failed > 0) process.exit(1);

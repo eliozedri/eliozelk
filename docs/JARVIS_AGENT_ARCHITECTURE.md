@@ -122,6 +122,10 @@ later: owner approves cost → Development wires the Gemini image model behind `
 **Autonomy limits:** safe analysis/planning/docs/non-destructive code may proceed; **stop + ask** for
 paid API, missing secret, manual dashboard setup, risky prod/Meta/auth/DB/schema, or direct main/deploy.
 
+**Code-agent readiness (three states):** Reasoning Ready ✅, Task Ready ✅, Execution Ready ❌ (no
+GitHub token / Claude Code Action secret yet). Structured approval gate in
+`skills/development/approvalGate.ts`. Full vision/logic/conclusions/setup: **`docs/JARVIS_CODE_AGENT.md`**.
+
 ## Reasoning-first Brain + department routing (Stage 2 + 3)
 
 **Jarvis is REASONING-FIRST, commands-second.** It does not map a message to the closest command.

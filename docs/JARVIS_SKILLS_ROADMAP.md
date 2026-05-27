@@ -49,7 +49,7 @@ pending request and states the missing data source. See `docs/JARVIS_AGENT_ARCHI
 | Management (CEO) | free-text delegation → tracked task | ✅ |
 | Personal Assistant | tasks/notes/reminders/daily + list (reminders pending, not scheduled) | ✅ |
 | General Assistant | open reasoning/advice/planning via LLM (owner-only; read-only; honest safe-mode when LLM off) | ✅ |
-| Development / Claude Code | classify + risk-gate + Claude Code prompt/task + new-project proposal; gated GitHub layer + Claude Code Action workflow (disabled until creds); DANGEROUS blocked | 🟡 Stage 2 |
+| Development / Claude Code | classify + 8-value approval gate + GitHub ops (gated) + pure mock client + Claude execution-mode + new-project proposal + Elkayam protection; Reasoning+Task Ready, Execution NOT live (no creds). See `docs/JARVIS_CODE_AGENT.md` | 🟡 Stage 2.5 |
 | Image / Creative Media | detect image generate/edit (owner); no provider connected → honest capability request + ready image prompt (never fakes generation); media = context not intent | 🟡 Stage 1 |
 
 ## Cross-cutting upgrades
