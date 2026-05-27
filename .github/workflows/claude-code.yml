@@ -36,9 +36,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+      # Auth: use the subscription OAuth token (no extra API billing). Pass ONLY the token that is
+      # set — passing an empty anthropic_api_key alongside it breaks auth. To use the paid API
+      # instead, replace the line below with: anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
       - name: Run Claude Code
         uses: anthropics/claude-code-action@v1
         with:
-          # Prefer the subscription OAuth token (no extra API billing); fall back to the paid API key.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
