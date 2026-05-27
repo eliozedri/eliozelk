@@ -156,12 +156,30 @@ export async function listWorkflowRuns(owner: string, repo: string, perPage = 5)
   return { ok: true, runs: (d?.workflow_runs ?? []).map((w) => ({ name: w.name ?? "", status: w.status ?? "", conclusion: w.conclusion ?? null, url: w.html_url ?? "", created_at: w.created_at ?? "" })) };
 }
 
-export async function getRunJobs(owner: string, repo: string, runId: number): Promise<{ ok: boolean; jobs?: { name: string; conclusion: string | null; steps: { name: string; conclusion: string | null }[] }[]; reason?: string }> {
+export async function getRunJobs(owner: string, repo: string, runId: number): Promise<{ ok: boolean; jobs?: { id: number; name: string; conclusion: string | null; steps: { name: string; conclusion: string | null }[] }[]; reason?: string }> {
   if (!githubAvailable()) return { ok: false, reason: "github_unavailable" };
   const r = await ghFetch(`/repos/${owner}/${repo}/actions/runs/${runId}/jobs`, "GET");
   if (!r.ok) return { ok: false, reason: r.reason ?? "error" };
-  const d = r.json as { jobs?: { name?: string; conclusion?: string | null; steps?: { name?: string; conclusion?: string | null }[] }[] };
-  return { ok: true, jobs: (d?.jobs ?? []).map((j) => ({ name: j.name ?? "", conclusion: j.conclusion ?? null, steps: (j.steps ?? []).map((s) => ({ name: s.name ?? "", conclusion: s.conclusion ?? null })) })) };
+  const d = r.json as { jobs?: { id?: number; name?: string; conclusion?: string | null; steps?: { name?: string; conclusion?: string | null }[] }[] };
+  return { ok: true, jobs: (d?.jobs ?? []).map((j) => ({ id: j.id ?? 0, name: j.name ?? "", conclusion: j.conclusion ?? null, steps: (j.steps ?? []).map((s) => ({ name: s.name ?? "", conclusion: s.conclusion ?? null })) })) };
+}
+
+/** Job logs tail — GitHub masks registered secrets as *** in logs, so the token never leaks. */
+export async function getJobLogsTail(owner: string, repo: string, jobId: number, tail = 2000): Promise<{ ok: boolean; logTail?: string; reason?: string }> {
+  if (!githubAvailable()) return { ok: false, reason: "github_unavailable" };
+  const t = process.env.GITHUB_TOKEN || process.env.GITHUB_PAT;
+  if (!t) return { ok: false, reason: "no_token" };
+  try {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/jobs/${jobId}/logs`, {
+      headers: { authorization: `Bearer ${t}`, accept: "application/vnd.github+json", "user-agent": "jarvis-dev" },
+      redirect: "follow",
+    });
+    if (!res.ok) return { ok: false, reason: `http_${res.status}` };
+    const text = await res.text();
+    return { ok: true, logTail: text.slice(-tail) };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : "error" };
+  }
 }
 
 /** Rich config detector for status reporting (no secret values). */

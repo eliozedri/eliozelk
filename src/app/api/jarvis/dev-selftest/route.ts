@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   detectGitHubConfig, githubStatus, loadGithubConfig,
-  createIssue, createIssueComment, listWorkflowRuns, getRunJobs,
+  createIssue, createIssueComment, listWorkflowRuns, getRunJobs, getJobLogsTail,
 } from "@/lib/jarvis/skills/development/github";
 import { claudeExecutionMode, claudeStatusNote } from "@/lib/jarvis/skills/development/claudeCode";
 
@@ -27,6 +27,11 @@ export async function GET(req: NextRequest) {
   if (runJobsId) {
     const jobs = await getRunJobs(cfg.owner ?? "", cfg.repo ?? "", Number(runJobsId));
     return NextResponse.json({ runJobs: jobs.ok ? jobs.jobs : { error: jobs.reason } });
+  }
+  const jobLogsId = req.nextUrl.searchParams.get("jobLogs");
+  if (jobLogsId) {
+    const logs = await getJobLogsTail(cfg.owner ?? "", cfg.repo ?? "", Number(jobLogsId), 2500);
+    return NextResponse.json({ jobLogs: logs.ok ? logs.logTail : { error: logs.reason } });
   }
   const runs = await listWorkflowRuns(cfg.owner ?? "", cfg.repo ?? "", 5);
   return NextResponse.json({
