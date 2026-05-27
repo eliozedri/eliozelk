@@ -156,6 +156,14 @@ export async function listWorkflowRuns(owner: string, repo: string, perPage = 5)
   return { ok: true, runs: (d?.workflow_runs ?? []).map((w) => ({ name: w.name ?? "", status: w.status ?? "", conclusion: w.conclusion ?? null, url: w.html_url ?? "", created_at: w.created_at ?? "" })) };
 }
 
+export async function getRunJobs(owner: string, repo: string, runId: number): Promise<{ ok: boolean; jobs?: { name: string; conclusion: string | null; steps: { name: string; conclusion: string | null }[] }[]; reason?: string }> {
+  if (!githubAvailable()) return { ok: false, reason: "github_unavailable" };
+  const r = await ghFetch(`/repos/${owner}/${repo}/actions/runs/${runId}/jobs`, "GET");
+  if (!r.ok) return { ok: false, reason: r.reason ?? "error" };
+  const d = r.json as { jobs?: { name?: string; conclusion?: string | null; steps?: { name?: string; conclusion?: string | null }[] }[] };
+  return { ok: true, jobs: (d?.jobs ?? []).map((j) => ({ name: j.name ?? "", conclusion: j.conclusion ?? null, steps: (j.steps ?? []).map((s) => ({ name: s.name ?? "", conclusion: s.conclusion ?? null })) })) };
+}
+
 /** Rich config detector for status reporting (no secret values). */
 export function detectGitHubConfig(): { status: "configured" | "disabled" | "missing_token" | "partial"; authMode: string; canCreateRepo: boolean; owner: string | null; repo: string | null } {
   const cfg = loadGithubConfig();

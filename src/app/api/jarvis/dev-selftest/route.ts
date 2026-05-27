@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   detectGitHubConfig, githubStatus, loadGithubConfig,
-  createIssue, createIssueComment, listWorkflowRuns,
+  createIssue, createIssueComment, listWorkflowRuns, getRunJobs,
 } from "@/lib/jarvis/skills/development/github";
 import { claudeExecutionMode, claudeStatusNote } from "@/lib/jarvis/skills/development/claudeCode";
 
@@ -23,6 +23,11 @@ export async function GET(req: NextRequest) {
   const a = authed(req);
   if (!a.ok) return NextResponse.json({ error: a.error }, { status: a.status });
   const cfg = loadGithubConfig();
+  const runJobsId = req.nextUrl.searchParams.get("runJobs");
+  if (runJobsId) {
+    const jobs = await getRunJobs(cfg.owner ?? "", cfg.repo ?? "", Number(runJobsId));
+    return NextResponse.json({ runJobs: jobs.ok ? jobs.jobs : { error: jobs.reason } });
+  }
   const runs = await listWorkflowRuns(cfg.owner ?? "", cfg.repo ?? "", 5);
   return NextResponse.json({
     githubConfig: detectGitHubConfig(),
