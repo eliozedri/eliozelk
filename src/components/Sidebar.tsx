@@ -62,7 +62,7 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "ניהול",
+    label: "יצירת הזמנה ויומן",
     items: [
       { tabId: "orders", href: "/new-order", label: "הזמנה חדשה", icon: <FileText className={ICON_CLS} />, matchFn: (p) => p === "/new-order", noBadge: true },
       { tabId: "work-diary", href: "/work-diary", label: "יומן עבודה חדש", icon: <BookOpen className={ICON_CLS} />, matchFn: (p) => p.startsWith("/work-diary") },
@@ -84,7 +84,7 @@ const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: "בנוסף",
+    label: "בסיס מוצרים מכונות ורכב",
     items: [
       { tabId: "catalog", href: "/catalog", label: "קטלוג מוצרים ופריטים", icon: <Database className={ICON_CLS} />, matchFn: (p) => p === "/catalog" || (p.startsWith("/catalog") && !p.startsWith("/catalog-showcase")) },
       { tabId: "catalog", href: "/catalog-showcase", label: "קטלוג חזותי", icon: <LayoutGrid className={ICON_CLS} />, matchFn: (p) => p.startsWith("/catalog-showcase"), noBadge: true },
