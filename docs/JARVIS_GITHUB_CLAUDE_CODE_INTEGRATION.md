@@ -45,14 +45,26 @@ JARVIS_DEV_DEFAULT_PROJECT=elkayam
 Without `GITHUB_INTEGRATION_ENABLED=true` + a token, all GitHub ops return unavailable and Jarvis
 falls back to manual issue body + prompt.
 
-## Required GitHub permissions (fine-grained PAT — minimal)
+## Required GitHub permissions (fine-grained PAT — real dev flow)
 
-- **Issues:** Read and write (create issues/comments)
-- **Contents:** Read and write (only if branch/PR edits are later enabled)
-- **Pull requests:** Read and write (only for PR flow)
-- **Metadata:** Read (mandatory)
-- Do **not** grant admin / workflow / secrets scopes. Repo creation needs `Administration` on a
-  user/org — keep `JARVIS_DEV_ALLOW_REPO_CREATE=false` unless explicitly creating a repo.
+Grant write access so Jarvis can run a real development flow (the system still enforces no-main /
+no-deploy / approval via the gates — the token is *capability*, the gate is *policy*):
+- **Metadata:** Read-only (mandatory)
+- **Issues:** Read and write (create issues/comments → triggers `@claude`)
+- **Contents:** Read and write (create branches / commit file changes on a branch)
+- **Pull requests:** Read and write (open/update PRs for owner review)
+
+Do **NOT** grant: **Administration** (repo settings/creation/delete), **Secrets**, **Workflows**,
+billing. **Workflows is NOT needed** — the Claude Code Action is triggered by a `@claude` comment
+(Issues RW) and runs under the Actions `GITHUB_TOKEN`, not the PAT; the PAT would need Workflows
+permission only to EDIT files under `.github/workflows/`, which is an approval-gated change we avoid
+by default. Repo creation needs **Administration** → grant only if/when you set
+`JARVIS_DEV_ALLOW_REPO_CREATE=true` for a specific repo.
+
+**System guardrails on top of the token (enforced by `approvalGate.ts`/registry, regardless of PAT
+scope):** Elkayam = sensitive production → no direct push to main, no production deploy, no
+destructive/DB/auth/secrets/Meta changes without explicit owner approval; work flows through
+branch/Issue/PR/Claude Code; every action is audited; DANGEROUS → blocked.
 
 ## Required GitHub Actions secrets (Claude Code Action — repo side)
 

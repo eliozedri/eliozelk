@@ -83,9 +83,12 @@ GITHUB_TOKEN=<fine-grained PAT>
 JARVIS_DEV_ALLOW_REPO_CREATE=false   # true only when you want repo creation
 JARVIS_DEV_DEFAULT_PROJECT=elkayam
 ```
-**GitHub fine-grained PAT permissions (minimal):** Issues RW, Metadata R (+ Contents/PRs RW only for
-branch/PR edits). No admin/workflow/secrets scopes. Repo creation needs Administration — keep
-`JARVIS_DEV_ALLOW_REPO_CREATE=false` unless creating a repo.
+**GitHub fine-grained PAT permissions (real dev flow):** Metadata Read, Issues RW, **Contents RW**,
+**Pull requests RW** — enables branch/commit/PR/file-change. The token is *capability*; `approvalGate.ts`
++ registry are *policy* (no main push / no deploy / no destructive without approval). Do NOT grant
+Admin / Secrets / **Workflows** (Workflows is NOT needed — `@claude` triggers the Action under the
+Actions `GITHUB_TOKEN`; the PAT would need Workflows only to edit `.github/workflows/`, which is
+approval-gated and avoided). Repo creation needs Administration → only with `JARVIS_DEV_ALLOW_REPO_CREATE=true`.
 
 **GitHub Actions secret (Claude Code engine — repo Settings → Secrets → Actions):**
 - `CLAUDE_CODE_OAUTH_TOKEN` (recommended — Claude subscription, no extra API billing; `claude setup-token`)
