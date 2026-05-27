@@ -15,6 +15,7 @@ import { planDeterministic } from "../src/lib/jarvis/agent/planner";
 import { deterministicDomainIntent, matchCommandId, intentToCommandId, extractItemName } from "../src/lib/jarvis/skills/ceoManager/match";
 import { departmentFor } from "../src/lib/jarvis/departments";
 import { isCeoRequest } from "../src/lib/jarvis/skills/ceoManager/intent";
+import { classifyDevIntent, classifyDevRisk, isAmbiguousDevRequest } from "../src/lib/jarvis/skills/development/classify";
 import type { LLMProvider } from "../src/lib/jarvis/llm/providers/types";
 import type { LLMRequest, LLMIntentResult, LLMProviderResult, SenderRole } from "../src/lib/jarvis/llm/types";
 
@@ -137,6 +138,29 @@ async function main() {
   }
   check("20. invariant: an accepted stock intent can NEVER resolve to the missing-price command",
     intentToCommandId("inventory_stock_lookup") === "inventory_stock_lookup" && intentToCommandId("inventory_stock_lookup") !== "items_missing_price");
+
+  // ── Personal + General assistant (owner conversational) ──
+  {
+    const r1 = await localProvider.classifyIntent(req("תזכיר לי להתקשר לדניאל מחר"));
+    check("21. personal: 'תזכיר לי להתקשר לדניאל מחר' → reminder_request (personal)", r1.result?.intent === "reminder_request" && llmIntentToCoarse("reminder_request") === "personal");
+    const r2 = await localProvider.classifyIntent(req("תעזור לי לחשוב איך להתקדם עם המחסן"));
+    check("22. general: 'תעזור לי לחשוב…' → general_assistant (open reasoning)", r2.result?.intent === "general_assistant" && llmIntentToCoarse("general_assistant") === "general");
+  }
+
+  // ── Development / Claude Code skill ──
+  check("23. dev: 'בדוק למה הבילד נפל' → build_error_analysis / READ_ONLY",
+    classifyDevIntent("בדוק למה הבילד נפל") === "build_error_analysis" && classifyDevRisk("בדוק למה הבילד נפל", "build_error_analysis") === "READ_ONLY");
+  check("24. dev: 'תכין פרומפט לקלוד לתקן את ההתראות' → prepare_claude_prompt / TASK_ONLY",
+    classifyDevIntent("תכין פרומפט לקלוד לתקן את ההתראות") === "prepare_claude_prompt" && classifyDevRisk("x", "prepare_claude_prompt") === "TASK_ONLY");
+  check("25. dev DANGEROUS: 'תמחק את כל הטבלאות הישנות' → DANGEROUS (blocked)",
+    classifyDevRisk("תמחק את כל הטבלאות הישנות", classifyDevIntent("תמחק את כל הטבלאות הישנות")) === "DANGEROUS");
+  check("26. new project: 'תבנה לי אפליקציית ווב לאימון כושר' → new_project_request / NEW_PROJECT_PROPOSAL",
+    classifyDevIntent("תבנה לי אפליקציית ווב לאימון כושר") === "new_project_request" && classifyDevRisk("x", "new_project_request") === "NEW_PROJECT_PROPOSAL");
+  check("27. ambiguous: 'תתקן את זה' → ask clarification (not guess)", isAmbiguousDevRequest("תתקן את זה"));
+  check("28. dev coarse mapping owner-only", llmIntentToCoarse("development_request") === "development" && llmIntentToCoarse("general_assistant") === "general");
+  check("29. EXTERNAL dev/general → clamped to customer intake (no internal access)",
+    validateRoute(result({ intent: "development_request" }), { role: "external", minConfidence: MIN }).action === "clamp" &&
+    validateRoute(result({ intent: "general_assistant" }), { role: "external", minConfidence: MIN }).action === "clamp");
 
   console.log(`\n${passed}/${passed + failed} checks passed`);
   if (failed > 0) process.exit(1);

@@ -14,6 +14,8 @@ export interface LLMProvider {
   classifyIntent(req: LLMRequest): Promise<LLMProviderResult>;
   /** Optional: produce an agent-reasoning plan. */
   planSteps?(req: LLMRequest): Promise<LLMProviderResult>;
+  /** Optional: generate a free-text reply (for the General Assistant). Returns plain text. */
+  generateText?(req: LLMRequest): Promise<{ ok: boolean; text?: string; usage?: import("../types").LLMUsage; error?: import("../types").LLMError }>;
   /** Lightweight reachability/config check (no business call). */
   health(): Promise<LLMProviderStatus>;
 }

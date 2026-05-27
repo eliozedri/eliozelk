@@ -12,6 +12,7 @@ import { looksLikeOrder } from "@/lib/whatsapp/classify";
  * registry's job. External callers are funneled to order intake regardless.
  */
 
+const DEV = /בילד|\bbuild\b|\bgit\b|גיט|דיפלוי|deploy|וורסל|vercel|פרומפט\s+לקלוד|claude\s*code|למה\s+ה?בילד|תבדוק\s+(את\s+)?(הקוד|מודול)|דבאג|debug|משימת\s+פיתוח|קוד\b|תבנה\s+לי\s+(אפליקצי|אתר|מערכת|פרויקט|רפו)|פרויקט\s+חדש|new\s+(project|app|repo)/;
 const ORDER = /(צור|פתח|הוסף|תפתח|תוסיף|תיצור|לפתוח)\s+(לי\s+)?(טיוטת\s+|בקשת\s+)?הזמנה|טיוטת\s+הזמנה|הזמנה\s+חדשה|בקשת\s+הזמנה/;
 const PERSONAL = /תזכיר\s+לי|תזכורת|תרשום\s+(לי\s+)?משימה|משימה\s+חדשה|פתק\s+אישי|שמור\s+(לי\s+)?פתק|דוח\s+יומי|הוסף\s+(לי\s+)?משימה/;
 const OCR = /קרא\s+(את\s+)?המסמך|תקרא|סרוק|סריקה|תסרוק|מסמך/;
@@ -24,6 +25,8 @@ export function classifyIntent(text: string, _role: SenderRole): IntentResult {
 
   // CEO first — explicit "ל-CEO / מנהל המערכת" mention is unambiguous.
   if (isCeoRequest(t) || isCeoStatusQuery(t)) return { intent: "ceo_manager", confidence: 0.9 };
+  // Development / code requests (owner-only; clamped for external by sanitizeIntentForRole).
+  if (DEV.test(t)) return { intent: "development", confidence: 0.8 };
   // Personal before order so "תזכיר לי לבדוק את ההזמנות" stays personal.
   if (PERSONAL.test(t)) return { intent: "personal", confidence: 0.85 };
   if (ORDER.test(t) || looksLikeOrder(t)) return { intent: "order_intake", confidence: 0.85 };

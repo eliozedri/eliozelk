@@ -58,11 +58,29 @@ async function call(req: LLMRequest, kind: "intent" | "plan"): Promise<LLMProvid
   return result ? { ok: true, result, usage, raw } : { ok: false, error: { code: "invalid_json", message: "intent parse failed", provider: "groq" }, raw };
 }
 
+async function generate(req: LLMRequest): Promise<{ ok: boolean; text?: string; usage?: { totalTokens?: number }; error?: { code: string; message: string; provider: string } }> {
+  const k = key();
+  if (!k) return { ok: false, error: { code: "no_key", message: "GROQ_API_KEY missing", provider: "groq" } };
+  const model = resolveModel("groq", DEFAULT_MODEL);
+  const system = String(req.context?.systemPrompt ?? "You are Jarvis, the owner's helpful Hebrew personal assistant.");
+  const res = await postJson(
+    "https://api.groq.com/openai/v1/chat/completions",
+    { authorization: `Bearer ${k}` },
+    { model, temperature: 0.4, max_tokens: req.maxTokens, messages: [{ role: "system", content: system }, { role: "user", content: req.text }] },
+    req.timeoutMs,
+  );
+  if (!res.ok) return { ok: false, error: { code: res.error ?? "http", message: res.error ?? "error", provider: "groq" } };
+  const data = res.json as { choices?: { message?: { content?: string } }[]; usage?: { total_tokens?: number } };
+  const out = (data?.choices?.[0]?.message?.content ?? "").trim();
+  return out ? { ok: true, text: out, usage: { totalTokens: data?.usage?.total_tokens } } : { ok: false, error: { code: "empty", message: "empty completion", provider: "groq" } };
+}
+
 export const groqProvider: LLMProvider = {
   name: "groq",
   available: () => !!key(),
   classifyIntent: (req) => call(req, "intent"),
   planSteps: (req) => call(req, "plan"),
+  generateText: (req) => generate(req),
   async health() {
     return key()
       ? { name: "groq", health: "available" as const }

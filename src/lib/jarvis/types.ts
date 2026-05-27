@@ -21,6 +21,8 @@ export type Intent =
   | "ceo_manager"
   | "personal"
   | "status"
+  | "general"
+  | "development"
   | "help"
   | "greeting"
   | "unclear";

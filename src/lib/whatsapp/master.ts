@@ -15,6 +15,8 @@ import type { JarvisInput, Skill } from "@/lib/jarvis/types";
 import { ceoManagerSkill } from "@/lib/jarvis/skills/ceoManager/skill";
 import { ocrDocumentSkill } from "@/lib/jarvis/skills/ocrDocument/skill";
 import { personalAreaSkill } from "@/lib/jarvis/skills/personalArea/skill";
+import { generalAssistantSkill } from "@/lib/jarvis/skills/generalAssistant/skill";
+import { developmentSkill } from "@/lib/jarvis/skills/development/skill";
 import { decideBrain } from "@/lib/jarvis/brain";
 import { executeManagerDecision, formatDispatchReply } from "@/lib/jarvis/skills/ceoManager/dispatcher";
 import { recordBrainAudit } from "@/lib/jarvis/audit";
@@ -49,12 +51,14 @@ function toJarvisInput(inbound: InboundMessage): JarvisInput {
     messageId: inbound.waMessageId,
   };
 }
-async function runSkill(inbound: InboundMessage, skill: Skill): Promise<void> {
+async function runSkill(inbound: InboundMessage, skill: Skill): Promise<string> {
   const { messages } = await skill.handle({ input: toJarvisInput(inbound) });
+  const texts: string[] = [];
   for (const m of messages) {
-    if (m.kind === "text") await sendWhatsAppText(inbound.senderId, m.text);
+    if (m.kind === "text") { await sendWhatsAppText(inbound.senderId, m.text); texts.push(m.text); }
     else await sendWhatsAppImage(inbound.senderId, m.imageUrl, m.caption);
   }
+  return texts.join("\n");
 }
 
 const MENU_FLOWS: MasterFlow[] = ["main_menu", "orders_menu", "personal_menu", "settings_menu"];
@@ -289,8 +293,13 @@ async function freeTextRouter(inbound: InboundMessage, text: string): Promise<vo
   switch (decision.coarseIntent) {
     case "personal":
     case "status":
-      await runSkill(inbound, personalAreaSkill);
-      outgoing = "(טופל ע״י אזור אישי)";
+      outgoing = await runSkill(inbound, personalAreaSkill);
+      break;
+    case "general":
+      outgoing = await runSkill(inbound, generalAssistantSkill);
+      break;
+    case "development":
+      outgoing = await runSkill(inbound, developmentSkill);
       break;
     case "order_intake":
       await createOwnerDraft(inbound, text);

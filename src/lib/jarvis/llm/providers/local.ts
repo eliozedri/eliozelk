@@ -40,6 +40,8 @@ const OWNER_RULES: Rule[] = [
   { re: /פתק/i, intent: "personal_note", skill: "personalArea", safety: "pending" },
   { re: /דוח\s+יומי/i, intent: "daily_report", skill: "personalArea", safety: "read_only" },
   { re: /סרוק|מסמך|קרא\s+את/i, intent: "ocr_document", skill: "ocrDocument", safety: "pending" },
+  { re: /קוד|בילד|build|לוג(ים)?|logs|git|דיפלוי|deploy|פרומפט\s+לקלוד|claude|מודול\b|תקלה\s+בקוד|למה\s+ה?בילד|תבנה\s+לי\s+(אפליקצי|אתר|מערכת|פרויקט|רפו)|פרויקט\s+חדש|new\s+(project|app|repo)/i, intent: "development_request", skill: "development", safety: "read_only" },
+  { re: /תעזור\s+לי\s+לחשוב|המלצה|תסביר\s+לי|מה\s+עדיף|בוא\s+נבנה\s+תוכנית|תוכנית\s+פעולה|רעיון/i, intent: "general_assistant", skill: "generalAssistant", safety: "read_only" },
   { re: /הזמנה|טיוטה|הוסף|הסר/i, intent: "order_intake", skill: "orderIntake", safety: "pending" },
 ];
 

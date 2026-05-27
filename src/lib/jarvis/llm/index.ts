@@ -31,6 +31,7 @@ const OWNER_INTENTS: LlmIntent[] = [
   "catalog_missing_price", "catalog_missing_supplier", "purchase_recommendation_readonly",
   "orders_status", "stuck_orders", "pending_order_drafts",
   "operations_risk_report", "finance_open_balance", "fleet_equipment_status", "capability_request",
+  "development_request", "general_assistant",
   "clarification_needed", "unknown",
 ];
 const EXTERNAL_INTENTS: LlmIntent[] = [
@@ -114,6 +115,42 @@ export async function routePlan(input: RouteMessageInput & { actionsCatalog: str
   if (!routed.ok || !routed.plan) return null;
   recordUsage(routed.usage);
   return { plan: routed.plan, provider: routed.provider };
+}
+
+/**
+ * General Assistant free-text generation (owner-only). Read-only advice: the model produces a
+ * Hebrew reply but performs NO actions. Returns null when the LLM is off / over budget / no
+ * provider — the caller then gives an honest safe-mode message. Failover gemini→groq.
+ */
+export async function generateReply(input: RouteMessageInput & { systemPrompt: string }): Promise<{ text: string; provider?: string } | null> {
+  const cfg = loadLlmConfig();
+  if (!cfg.enabled || isExternalRole(input.role)) return null;
+  const budget = checkBudget(cfg);
+  if (!budget.ok) return null;
+  const providers = buildProviders(cfg).filter((p) => typeof p.generateText === "function");
+  if (providers.length === 0) return null;
+  const req: LLMRequest = {
+    text: input.text ?? "",
+    role: input.role,
+    channel: input.channel,
+    allowedIntents: [],
+    context: { ...(input.context ?? {}), systemPrompt: input.systemPrompt },
+    maxTokens: Math.max(cfg.maxTokens, 400),
+    timeoutMs: cfg.timeoutMs,
+  };
+  for (const p of providers) {
+    try {
+      const res = await p.generateText!(req);
+      if (res.ok && res.text) {
+        recordUsage(res.usage);
+        audit(input.role, "general_reply", p.name);
+        return { text: res.text, provider: p.name };
+      }
+    } catch {
+      // try next provider
+    }
+  }
+  return null;
 }
 
 /** Diagnostics for an owner status view (no secrets — presence + health only). */

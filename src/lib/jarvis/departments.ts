@@ -13,7 +13,7 @@ import type { LlmIntent } from "./llm/types";
 
 export type BusinessDomain =
   | "management" | "operations" | "finance" | "warehouse" | "orders"
-  | "catalog" | "fleet" | "documents" | "personal" | "customer" | "unknown";
+  | "catalog" | "fleet" | "documents" | "personal" | "development" | "customer" | "unknown";
 
 export interface DepartmentRoute {
   domain: BusinessDomain;
@@ -59,6 +59,8 @@ const ROUTES: Partial<Record<LlmIntent, DepartmentRoute>> = {
     dataSourceNeeded: "מקור נתונים מאומת ליתרות/תקבולים פתוחים של לקוחות (אין טבלת AR/תשלומי לקוח כיום; קיימים רק billed_amount/invoiced_at על הזמנות)",
   },
   ocr_document: { domain: "documents", agents: [], label: "מסמכים", hasCapability: true },
+  development_request: { domain: "development", agents: ["ceo"], label: "מנהל הפיתוח", hasCapability: true },
+  general_assistant: { domain: "personal", agents: [], label: "עוזר אישי", hasCapability: true },
   personal_task: PERSONAL,
   personal_note: PERSONAL,
   reminder_request: PERSONAL,
