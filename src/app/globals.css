@@ -379,11 +379,11 @@ td, th {
   align-items: center;
   gap: 0.5rem;
   padding: 0.95rem 0.75rem 0.4rem;
-  font-size: 9px;
+  font-size: 11.5px;
   font-weight: 800;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(148, 197, 255, 0.42);
+  color: rgba(148, 197, 255, 0.6);
 }
 .ek-nav-label::after {
   content: "";
