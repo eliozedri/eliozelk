@@ -1,3 +1,11 @@
+<!-- BEGIN:source-of-truth -->
+## Current system state — read first
+Before relying on any dated spec/plan under `docs/superpowers/`, read
+**`docs/SYSTEM_STATE.md`** — the canonical, current description of OCR, security,
+public-vs-internal routes, approval queues, fleet docs, and deployment status. When
+an older doc disagrees with `SYSTEM_STATE.md`, the latter wins.
+<!-- END:source-of-truth -->
+
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 

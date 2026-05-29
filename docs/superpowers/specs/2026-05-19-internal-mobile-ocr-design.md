@@ -1,6 +1,9 @@
 # Internal Mobile OCR — Supplier Document Intake
 **Date:** 2026-05-19
-**Status:** Approved — ready for implementation planning
+**Status:** ⚠️ SUPERSEDED (historical). Describes the original tesseract.js-only
+design. Current OCR is a pluggable provider chain (httpOcrProvider → crash-safe
+tesseract.js → raw-text) with a native-Tesseract/PaddleOCR sidecar. For current
+behavior see **`docs/SYSTEM_STATE.md`** and **`ocr-service/README.md`**.
 **Connects to:** Supplier Document Intake Engine (Phase 5.0, commit 28ece2c)
 
 ---
