@@ -22,6 +22,13 @@ import type { UserDocumentCard } from "@/types/supplierDocument";
 import { runDuplicateCheck } from "@/lib/supplierDocuments/duplicateCheck";
 import { suggestExpenseType } from "@/types/financial";
 
+// OCR runs synchronously inside this request (tesseract.js cold start downloads a
+// WASM core + Hebrew LSTM models). Raise the budget so the function is not killed
+// mid-OCR — a kill would strand the row in the "extracting" state forever.
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 const BUCKET = "supplier-documents";
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 const ALLOWED_TYPES = new Set([

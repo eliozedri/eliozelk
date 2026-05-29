@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processQueuedDocuments } from "@/lib/jarvis/skills/ocrDocument/worker";
+import { recoverStuckExtractingDocuments } from "@/lib/supplierDocuments/recoverStuck";
 
 // Async OCR worker endpoint — invoked by Vercel Cron (GET) or manually (POST) with the
 // CRON_SECRET bearer. Dormant (503) until CRON_SECRET is set; never public (401 without the
@@ -17,7 +18,10 @@ async function run(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const result = await processQueuedDocuments();
-  return NextResponse.json({ ok: true, result });
+  // Also rescue supplier documents stranded in "extracting" by a killed OCR request,
+  // so they surface in the finance review queue with a clear reason instead of silently.
+  const recovery = await recoverStuckExtractingDocuments();
+  return NextResponse.json({ ok: true, result, recovery });
 }
 
 export async function GET(req: NextRequest) {

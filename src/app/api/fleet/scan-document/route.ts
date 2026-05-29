@@ -13,6 +13,13 @@ import { requireAction } from "@/lib/auth/apiAuth";
 import { extractDocument } from "@/lib/supplierDocuments/ocrAdapter";
 import { detectDocumentClass } from "@/lib/supplierDocuments/documentClass";
 
+// OCR (tesseract.js) must download its WASM core + Hebrew LSTM models on a cold
+// instance before it can run — well beyond the default function budget. Without
+// this the analyze request is killed mid-OCR and the UI hangs on "מנתח מסמך…".
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const ALLOWED_TYPES = new Set([
   "application/pdf",

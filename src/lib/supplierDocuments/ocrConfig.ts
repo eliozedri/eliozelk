@@ -36,6 +36,57 @@ interface RunOptions {
   psm?: PSM;
 }
 
+// Hard ceiling for a single page recognition. tesseract.js on a cold serverless
+// instance must download the WASM core + Hebrew LSTM models before it can run;
+// without a ceiling a stalled download or a runaway recognition hangs the whole
+// request until the platform kills the function (leaving documents orphaned in
+// the "extracting" state with no explanation). When we hit this we reject with a
+// clear, catchable error so the caller can fall back to manual entry.
+const RECOGNIZE_TIMEOUT_MS = 90_000;
+
+// tesseract.js compiles/loads a WASM core. When that core aborts mid-recognition
+// (e.g. a SIMD/`DotProductSSE` build mismatch, or OOM) the library rethrows the
+// abort via `process.nextTick(() => { throw err })` on the MAIN thread — which a
+// normal try/catch around `worker.recognize()` CANNOT catch, so the entire
+// function process dies and the request hangs. This guard scopes a temporary
+// `uncaughtException` listener to the OCR call: a tesseract/WASM abort becomes a
+// catchable rejection (caller degrades to manual entry), while any UNRELATED
+// uncaught error is re-thrown so default crash behavior is preserved.
+function isTesseractAbort(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /Aborted|missing function|RuntimeError|tesseract|wasm/i.test(msg);
+}
+
+function runWithCrashGuard<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const finish = (fn2: () => void) => {
+      if (settled) return;
+      settled = true;
+      process.removeListener("uncaughtException", onCrash);
+      clearTimeout(timer);
+      fn2();
+    };
+    const onCrash = (err: Error) => {
+      if (isTesseractAbort(err)) {
+        finish(() => reject(new Error(`${label}: OCR engine crashed (${err.message})`)));
+      } else {
+        // Not ours — restore default behavior so we never mask real bugs.
+        process.removeListener("uncaughtException", onCrash);
+        process.nextTick(() => { throw err; });
+      }
+    };
+    const timer = setTimeout(
+      () => finish(() => reject(new Error(`${label}: OCR timed out after ${RECOGNIZE_TIMEOUT_MS / 1000}s`))),
+      RECOGNIZE_TIMEOUT_MS,
+    );
+    process.on("uncaughtException", onCrash);
+    fn()
+      .then((v) => finish(() => resolve(v)))
+      .catch((e) => finish(() => reject(e)));
+  });
+}
+
 // ── Worker lifecycle ────────────────────────────────────────────────────────
 
 async function createBestWorker(): Promise<{ worker: Worker; best: boolean }> {
@@ -94,6 +145,7 @@ export async function runTesseract(
 ): Promise<OcrPageResult> {
   const { worker, best } = await createBestWorker();
   try {
+    return await runWithCrashGuard("runTesseract", async () => {
     await worker.setParameters({
       tessedit_pageseg_mode: opts.psm ?? PSM.AUTO,
       preserve_interword_spaces: "1",
@@ -118,7 +170,9 @@ export async function runTesseract(
       lowConfidenceTerms,
       usedBestModel: best,
     };
+    });
   } finally {
-    await worker.terminate();
+    // Best-effort: a crashed worker may already be dead — never let terminate throw.
+    try { await worker.terminate(); } catch { /* worker already gone */ }
   }
 }
