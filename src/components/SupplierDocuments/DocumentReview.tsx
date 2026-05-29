@@ -333,9 +333,10 @@ export function DocumentReview({
         </div>
       )}
 
-      <div className="flex gap-0 h-full overflow-hidden" style={{ maxHeight: "calc(90dvh - 80px)" }}>
+      {/* Stacks vertically on mobile (preview on top, fields below); side-by-side ≥lg. */}
+      <div className="flex flex-col lg:flex-row gap-0 lg:h-full overflow-y-auto lg:overflow-hidden" style={{ maxHeight: "calc(90dvh - 80px)" }}>
         {/* Left: file preview */}
-        <div className="w-72 shrink-0 border-l border-gray-100 bg-gray-50 p-4 overflow-y-auto">
+        <div className="w-full lg:w-72 lg:shrink-0 border-b lg:border-b-0 lg:border-l border-gray-100 bg-gray-50 p-4 lg:overflow-y-auto">
           {doc.fileUrl ? (
             <div className="space-y-2">
               <p className="text-xs font-medium text-gray-500">מסמך מקורי</p>
@@ -433,7 +434,7 @@ export function DocumentReview({
         </div>
 
         {/* Right: fields + lines */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        <div className="flex-1 lg:overflow-y-auto p-5 space-y-5">
           {/* Document header fields */}
           <Section title="פרטי מסמך">
             {/* User pre-selection + business effect */}
