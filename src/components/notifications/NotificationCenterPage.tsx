@@ -329,14 +329,9 @@ export function NotificationCenterPage() {
   const isMaster = profile?.role === "master";
   const [tab, setTab] = useState<Tab>("mine");
 
-  // Mark unseen as seen when the page opens.
-  useEffect(() => {
-    const unseen = views
-      .filter(v => v.status === "pending" || v.status === "delivered")
-      .map(v => v.recipientId);
-    if (unseen.length > 0) void markSeen(unseen);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Note: we intentionally do NOT auto-mark-as-read on open — that hid the real
+  // unread count. The user clears via the explicit "mark all as read" button so the
+  // badge reflects genuinely-unread items. Nothing is deleted (audit preserved).
 
   const onOpen = (v: NotificationView) => {
     const href = relatedEntityHref(v.relatedEntityType, v.relatedEntityId, v.metadata);
@@ -351,12 +346,11 @@ export function NotificationCenterPage() {
   };
 
   const pending = views.filter(v => v.requiresAck && v.status !== "acknowledged");
-  const fresh = views.filter(
-    v =>
-      !(v.requiresAck && v.status !== "acknowledged") &&
-      (v.status === "pending" || v.status === "delivered" || v.status === "seen"),
-  );
+  const notAck = (v: NotificationView) => !(v.requiresAck && v.status !== "acknowledged");
+  const fresh = views.filter(v => notAck(v) && (v.status === "pending" || v.status === "delivered")); // unread
+  const read = views.filter(v => notAck(v) && v.status === "seen");                                   // read, kept
   const history = views.filter(v => v.status === "acknowledged" || v.status === "expired");
+  const markAllRead = () => { const ids = fresh.map(v => v.recipientId); if (ids.length) void markSeen(ids); };
 
   return (
     <div className="min-h-screen bg-surface" dir="rtl">
@@ -392,8 +386,19 @@ export function NotificationCenterPage() {
             {views.length === 0 && (
               <p className="text-sm text-gray-400 text-center mt-10">אין התראות</p>
             )}
+            {fresh.length > 0 && (
+              <div className="flex justify-end">
+                <button
+                  onClick={markAllRead}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 px-3 py-1.5 rounded-lg hover:bg-blue-50"
+                >
+                  סמן הכל כנקרא ({fresh.length})
+                </button>
+              </div>
+            )}
             <Section title="קריטי וממתין לאישור" items={pending} onOpen={onOpen} onAcknowledge={(v) => void acknowledge(v.recipientId)} onReportProblem={onReportProblem} />
-            <Section title="חדש" items={fresh} onOpen={onOpen} onAcknowledge={(v) => void acknowledge(v.recipientId)} onReportProblem={onReportProblem} />
+            <Section title={`חדש (${fresh.length})`} items={fresh} onOpen={onOpen} onAcknowledge={(v) => void acknowledge(v.recipientId)} onReportProblem={onReportProblem} />
+            <Section title="נקראו" items={read} onOpen={onOpen} onAcknowledge={(v) => void acknowledge(v.recipientId)} onReportProblem={onReportProblem} />
             <Section title="היסטוריה" items={history} onOpen={onOpen} onAcknowledge={(v) => void acknowledge(v.recipientId)} onReportProblem={onReportProblem} />
           </div>
         ) : (
