@@ -215,16 +215,39 @@ async function seed() {
   await summary();
 }
 
+/**
+ * Cleanup — removes ONLY simulation/test records. Safety rules (each delete is
+ * scoped to a simulation marker; real business data is never matched):
+ *   • work_orders            WHERE source = 'simulation'
+ *   • team_bot_order_drafts  WHERE external_ref LIKE 'simulation:%'
+ *   • notifications          WHERE related_entity_id ∈ (sim work_order ids)   [order.created]
+ *   • notification_recipients for those notification ids
+ *   • order_activities       WHERE order_id ∈ (sim work_order ids)
+ * Notifications are resolved by sim order id BEFORE the orders are deleted, so the
+ * marker chain is never broken. No table-wide deletes, no real rows targeted.
+ */
 async function cleanup() {
-  console.log("Cleaning up SIM-* simulation data…");
+  console.log("Cleaning up simulation/test data (markers only)…");
   const { data: wo } = await db.from("work_orders").select("id").eq("source", SIM_SOURCE);
-  const ids = (wo ?? []).map(r => r.id as string);
+  const ids = (wo ?? []).map(r => String(r.id));
+  let notifs = 0, recips = 0;
   if (ids.length) {
+    // notifications created by the order.created trigger reference the work_order id
+    const { data: nrows } = await db.from("notifications").select("id").in("related_entity_id", ids);
+    const nids = (nrows ?? []).map(r => String(r.id));
+    if (nids.length) {
+      const { count: rc } = await db.from("notification_recipients").delete({ count: "exact" }).in("notification_id", nids);
+      recips = rc ?? 0;
+      const { count: nc } = await db.from("notifications").delete({ count: "exact" }).in("id", nids);
+      notifs = nc ?? 0;
+    }
     await db.from("order_activities").delete().in("order_id", ids).then(() => {}, () => {});
     await db.from("work_orders").delete().eq("source", SIM_SOURCE);
   }
+  const { data: dr } = await db.from("team_bot_order_drafts").select("id").like("external_ref", `${SIM_SOURCE}:%`);
   await db.from("team_bot_order_drafts").delete().like("external_ref", `${SIM_SOURCE}:%`);
-  console.log(`Removed ${ids.length} work_orders + intake drafts. (Inspect notifications/agent_exceptions manually if needed.)`);
+  console.log(`Removed: ${ids.length} work_orders · ${(dr ?? []).length} intake drafts · ${notifs} notifications · ${recips} recipients.`);
+  console.log(`Scoped strictly to source='${SIM_SOURCE}' / external_ref 'simulation:%' / sim order ids — real business data untouched.`);
 }
 
 async function summary() {
