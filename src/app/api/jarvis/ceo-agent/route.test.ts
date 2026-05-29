@@ -157,4 +157,25 @@ describe("CEO-Agent intake (Tier-A)", () => {
     expect(h.store[0]!.status).toBe("rejected");
     expect(h.store[0]!.rejection_reason).toBe("לא עכשיו");
   });
+
+  it("clarification_answer re-opens a needs_info command to pending_review + stores the answer", async () => {
+    await POST(reqFor(validPkg, TOKEN)); // creates the command
+    h.store[0]!.status = "needs_info"; // CEO-Agent had asked for clarification
+    const res = await POST(reqFor(
+      { kind: "clarification_answer", correlation_id: validPkg.correlation_id, answer: "כן, רק מוצרים פעילים" },
+      TOKEN,
+    ));
+    const body = await res.json();
+    expect(body.status).toBe("pending_review");
+    expect(h.store[0]!.status).toBe("pending_review");
+    const diag = h.store[0]!.diagnostics as { clarification_answers?: { answer: string }[] };
+    expect(diag.clarification_answers?.[0]?.answer).toBe("כן, רק מוצרים פעילים");
+    // still only the JARVIS command table — no business mutation
+    expect(h.touched.every((t) => t === ONLY_TABLE)).toBe(true);
+  });
+
+  it("clarification_answer requires auth", async () => {
+    const res = await POST(reqFor({ kind: "clarification_answer", correlation_id: "x", answer: "y" }, "bad"));
+    expect(res.status).toBe(401);
+  });
 });

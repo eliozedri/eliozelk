@@ -4,6 +4,28 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { getHandler } from "@/lib/jarvis/actionHandlers";
 import { type CatalogRow, type CommandLike, type ExecDb } from "@/lib/jarvis/priceExecution";
+import { notifyJarvis, type CeoEventStatus } from "@/lib/jarvis/notifyJarvis";
+
+/** Fire a CEO-Agent → JARVIS callback (best-effort) so JARVIS DMs the owner in Telegram. */
+async function notify(id: string, status: CeoEventStatus, message: string, needsAnswer: boolean): Promise<void> {
+  try {
+    const { data } = await getServiceSupabase()
+      .from("jarvis_ceo_agent_commands")
+      .select("correlation_id, title")
+      .eq("id", id)
+      .maybeSingle();
+    if (!data?.correlation_id) return;
+    await notifyJarvis({
+      correlation_id: data.correlation_id as string,
+      status,
+      title: (data.title as string) ?? undefined,
+      message,
+      needs_answer: needsAnswer,
+    });
+  } catch {
+    /* best-effort */
+  }
+}
 
 /**
  * Owner decisions on JARVIS CEO-Agent requests. STATUS-ONLY — these never
@@ -46,7 +68,11 @@ export async function rejectRequest(id: string, reason: string): Promise<Decisio
 }
 
 export async function needsInfoRequest(id: string, note: string): Promise<DecisionResult> {
-  return setStatus(id, { status: "needs_info", rejection_reason: note?.slice(0, 500) || null });
+  const r = await setStatus(id, { status: "needs_info", rejection_reason: note?.slice(0, 500) || null });
+  // CEO-Agent asks the owner for clarification → JARVIS DMs me in Telegram and
+  // waits for my reply (needs_answer:true closes the loop back to pending_review).
+  if (r.ok) await notify(id, "needs_info", note?.trim() || "ה-CEO Agent צריך מידע נוסף כדי להמשיך.", true);
+  return r;
 }
 
 export async function archiveRequest(id: string): Promise<DecisionResult> {
@@ -123,12 +149,24 @@ export async function executeRequest(id: string): Promise<DecisionResult> {
     const res = await handler.execute(execDb(supabase), command);
     if (!res.ok) return { ok: false, error: res.error };
     const allFailed = res.result.updated_count === 0 && res.result.failed_count > 0;
-    return setStatus(id, {
+    const r = await setStatus(id, {
       status: allFailed ? "failed" : "executed",
       execution_result: res.result,
       executed_at: res.result.executed_at,
       executed_by: "owner",
     });
+    // CEO-Agent reports the result back to JARVIS → JARVIS DMs me (no answer needed).
+    if (r.ok) {
+      await notify(
+        id,
+        allFailed ? "failed" : "executed",
+        allFailed
+          ? `הביצוע נכשל (${res.result.failed_count} נכשלו).`
+          : `בוצע: ${res.result.updated_count} פריטים עודכנו.`,
+        false,
+      );
+    }
+    return r;
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

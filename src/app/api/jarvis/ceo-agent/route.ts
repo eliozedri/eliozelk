@@ -53,6 +53,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return json(400, { status: "rejected", intake_id: null, correlation_id: null, detail: "invalid_json" });
   }
 
+  // Clarification answer (JARVIS → CEO-Agent), closing the needs_info loop:
+  // the owner's Telegram reply comes back here and re-opens the command for review.
+  if (body.kind === "clarification_answer") {
+    const cid = str(body.correlation_id);
+    const answer = str(body.answer);
+    if (!cid || !answer) return json(400, { status: "needs_info", intake_id: null, correlation_id: cid || null, detail: "missing correlation_id / answer" });
+    const supabaseA = getServiceSupabase();
+    const existingA = await supabaseA
+      .from("jarvis_ceo_agent_commands")
+      .select("id, status, diagnostics")
+      .eq("correlation_id", cid)
+      .maybeSingle();
+    if (!existingA.data) return json(404, { status: "rejected", intake_id: null, correlation_id: cid, detail: "not_found" });
+    const diagA = (existingA.data.diagnostics as Record<string, unknown> | null) ?? {};
+    const answers = Array.isArray(diagA.clarification_answers) ? diagA.clarification_answers : [];
+    await supabaseA
+      .from("jarvis_ceo_agent_commands")
+      .update({
+        status: "pending_review", // owner answered → back to the CEO-Agent's review queue
+        diagnostics: { ...diagA, clarification_answers: [...answers, { answer, at: new Date().toISOString() }] },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existingA.data.id as string);
+    return json(200, { status: "pending_review", intake_id: existingA.data.id as string, correlation_id: cid, detail: "answer_recorded" });
+  }
+
   const correlationId = str(body.correlation_id);
   const actionType = str(body.action_type);
   const ownerRequest = str(body.owner_request);
