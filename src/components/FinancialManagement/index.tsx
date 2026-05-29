@@ -102,7 +102,7 @@ export default function FinancialManagement() {
       <div className="flex items-center gap-2.5">
         <span className="scene-icon-tile w-10 h-10"><Wallet className="w-5 h-5" /></span>
         <div>
-          <h1 className="text-xl font-black scene-title leading-tight">הנהלת כספים</h1>
+          <h1 className="text-xl font-black scene-title leading-tight">הנהלת חשבונות</h1>
           <p className="text-xs scene-subtitle">מרכז כל המסמכים הכספיים — חשבוניות, קבלות, תעודות משלוח ומסמכי ספקים</p>
         </div>
       </div>

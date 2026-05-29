@@ -57,8 +57,8 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: "חשבונות",
     items: [
-      { tabId: "accounting", href: "/accounting", label: "הנהלת חשבונות", icon: <DollarSign className={ICON_CLS} />, matchFn: (p) => p.startsWith("/accounting") },
-      { tabId: "financial-management", href: "/financial-management", label: "הנהלת כספים", icon: <Wallet className={ICON_CLS} />, matchFn: (p) => p.startsWith("/financial-management"), noBadge: true },
+      { tabId: "accounting", href: "/accounting", label: "הנהלת כספים", icon: <DollarSign className={ICON_CLS} />, matchFn: (p) => p.startsWith("/accounting") },
+      { tabId: "financial-management", href: "/financial-management", label: "הנהלת חשבונות", icon: <Wallet className={ICON_CLS} />, matchFn: (p) => p.startsWith("/financial-management"), noBadge: true },
       { tabId: "customers", href: "/customers", label: "לקוחות", icon: <Users className={ICON_CLS} />, matchFn: (p) => p.startsWith("/customers") },
     ],
   },

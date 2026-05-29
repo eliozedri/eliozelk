@@ -885,7 +885,7 @@ export function AccountingPage() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-2 mb-2">
-          <h1 className="text-2xl font-bold scene-title">הנהלת חשבונות</h1>
+          <h1 className="text-2xl font-bold scene-title">הנהלת כספים</h1>
           <AccountingIcon />
         </div>
         <p className="text-sm scene-subtitle mb-4">סיכום עבודות, כמויות ודוחות לפי לקוחות</p>
