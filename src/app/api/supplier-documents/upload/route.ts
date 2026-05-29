@@ -362,7 +362,7 @@ export async function POST(req: NextRequest) {
           .eq("id", docId);
         needsClassification = false;
       }
-      // else: requires_classification stays true → surfaces in הנהלת כספים "דורש סיווג"
+      // else: requires_classification stays true → surfaces in הנהלת חשבונות "דורש סיווג"
     }
 
     // ── Cross-system duplicate detection (against ALL financial documents) ──

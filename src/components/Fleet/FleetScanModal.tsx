@@ -251,7 +251,7 @@ export function FleetScanModal({
 
                 <p className="text-[11px] text-gray-400">
                   {route === "financial"
-                    ? "המסמך יישמר כטיוטה לאימות בהנהלת כספים. שום נתון כספי לא נרשם סופית ללא אישור."
+                    ? "המסמך יישמר כטיוטה לאימות בהנהלת חשבונות. שום נתון כספי לא נרשם סופית ללא אישור."
                     : "המסמך יצורף לכרטיס הכלי תחת מסמכים, כולל תאריך תוקף אם זוהה."}
                 </p>
 
@@ -280,10 +280,10 @@ export function FleetScanModal({
                 <p className="text-sm font-semibold text-gray-800">המסמך נשמר בהצלחה</p>
                 {route === "financial" ? (
                   <>
-                    <p className="text-xs text-gray-500">המסמך ממתין לאימות בהנהלת כספים{equipmentId ? " ומשויך לכלי" : ""}.</p>
+                    <p className="text-xs text-gray-500">המסמך ממתין לאימות בהנהלת חשבונות{equipmentId ? " ומשויך לכלי" : ""}.</p>
                     <div className="flex gap-2 mt-2">
                       {resultDocId && (
-                        <button onClick={() => router.push(`/financial-management?doc=${encodeURIComponent(resultDocId)}`)} className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white">פתח בהנהלת כספים</button>
+                        <button onClick={() => router.push(`/financial-management?doc=${encodeURIComponent(resultDocId)}`)} className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white">פתח בהנהלת חשבונות</button>
                       )}
                       <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600">סגור</button>
                     </div>

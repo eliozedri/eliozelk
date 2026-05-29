@@ -481,7 +481,7 @@ export async function POST(req: NextRequest) {
             title: `מסמך ספק חשוד ככפילות — ${name}`,
             description: `מס׳ מסמך: ${d.document_number || "—"} | סכום: ${d.total_after_vat ?? "—"} | דורש הכרעה לפני רישום`,
             detectedFromData: { docId: id, supplier: name, documentNumber: d.document_number, total: d.total_after_vat },
-            recommendedResolution: "פתח בהנהלת כספים והכרע את הכפילות (אשר/דחה)",
+            recommendedResolution: "פתח בהנהלת חשבונות והכרע את הכפילות (אשר/דחה)",
           }, dedupeMap, result);
           continue;
         }
@@ -504,7 +504,7 @@ export async function POST(req: NextRequest) {
             title: `מסמך ספק — זיהוי OCR נכשל — ${name}`,
             description: "ה-OCR לא חילץ נתונים — נדרשת הזנה ידנית של מספר מסמך, תאריך וסכום",
             detectedFromData: { docId: id, fileName: d.file_name },
-            recommendedResolution: "פתח בהנהלת כספים והזן את שדות המסמך ידנית",
+            recommendedResolution: "פתח בהנהלת חשבונות והזן את שדות המסמך ידנית",
           }, dedupeMap, result);
         } else if (conf !== null && conf < 0.5) {
           const k = dedupeKey("supplier_doc_low_confidence", "supplier_document", id); activeDedupeKeys.add(k);
@@ -513,7 +513,7 @@ export async function POST(req: NextRequest) {
             title: `מסמך ספק — ביטחון OCR נמוך (${Math.round(conf * 100)}%) — ${name}`,
             description: "תוצאות ה-OCR בלתי ודאיות — יש לאמת את השדות מול המקור",
             detectedFromData: { docId: id, confidence: conf, documentNumber: d.document_number },
-            recommendedResolution: "אמת את השדות שזוהו בהנהלת כספים לפני רישום",
+            recommendedResolution: "אמת את השדות שזוהו בהנהלת חשבונות לפני רישום",
           }, dedupeMap, result);
         }
         if (d.requires_classification === true) {
@@ -523,7 +523,7 @@ export async function POST(req: NextRequest) {
             title: `מסמך ספק דורש סיווג הוצאה — ${name}`,
             description: "לא זוהה סוג הוצאה אוטומטית — נדרש סיווג ידני לפני רישום",
             detectedFromData: { docId: id, supplier: name },
-            recommendedResolution: "סווג את סוג ההוצאה בהנהלת כספים",
+            recommendedResolution: "סווג את סוג ההוצאה בהנהלת חשבונות",
           }, dedupeMap, result);
         }
         if (ageDays >= 3) {
@@ -533,7 +533,7 @@ export async function POST(req: NextRequest) {
             title: `מסמך ספק ממתין לאימות ${Math.round(ageDays)} ימים — ${name}`,
             description: `סטטוס: ${d.status} | מסמך כספי שטרם נסקר/נרשם`,
             detectedFromData: { docId: id, status: d.status, ageDays: Math.round(ageDays) },
-            recommendedResolution: "סקור ורשום/דחה את המסמך בהנהלת כספים",
+            recommendedResolution: "סקור ורשום/דחה את המסמך בהנהלת חשבונות",
           }, dedupeMap, result);
         }
       }

@@ -8,7 +8,7 @@ import type { SupplierDocumentType } from "@/types/supplierDocument";
 export type UploadSource =
   | "general_scan"   // לשונית "סריקת מסמך" הכללית
   | "fleet"          // מתוך "צי רכב ומכונות"
-  | "finance"        // הועלה ישירות בהנהלת כספים
+  | "finance"        // הועלה ישירות בהנהלת חשבונות
   | "maintenance"    // צורף לטיפול
   | "parts"          // צורף לחלקים
   | "manual"         // הוזן ידנית
@@ -17,7 +17,7 @@ export type UploadSource =
 export const UPLOAD_SOURCE_LABELS: Record<UploadSource, string> = {
   general_scan: "סריקת מסמך",
   fleet:        "צי רכב ומכונות",
-  finance:      "הנהלת כספים",
+  finance:      "הנהלת חשבונות",
   maintenance:  "טיפול",
   parts:        "חלקים",
   manual:       "הזנה ידנית",

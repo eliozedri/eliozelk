@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
               hoursUnbilled: Math.round(hrs),
               accountingStatus: acctStatus,
             },
-            recommendedResolution: `פתח את הזמנה ${order.order_number} בהנהלת חשבונות ← ממתין לחיוב, ולחץ "בדוק מוכנות לחיוב"`,
+            recommendedResolution: `פתח את הזמנה ${order.order_number} בהנהלת כספים ← ממתין לחיוב, ולחץ "בדוק מוכנות לחיוב"`,
           }, dedupeMap, result);
 
           await upsertTask(db, AGENT_ID, {

@@ -297,7 +297,7 @@ export function WorkDiaryForm() {
     setDiary(submitted);
     setIsDirty(false);
     setSavedToDB(true);
-    setSuccessMessage(`יומן עבודה ${toSubmit.diaryNumber} נשלח בהצלחה ותויק בהנהלת חשבונות.`);
+    setSuccessMessage(`יומן עבודה ${toSubmit.diaryNumber} נשלח בהצלחה ותויק בהנהלת כספים.`);
   }
 
   function handleNew() {

@@ -760,7 +760,7 @@ function CompleteOrderModal({ order, onConfirm, onCancel }: {
         {/* Explanation */}
         <div className="bg-blue-50 rounded-xl px-4 py-3 mb-4">
           <p className="text-xs text-blue-700 leading-relaxed">
-            לאחר האישור, ההזמנה תסומן כ<strong>הושלמה תפעולית</strong> ותופיע בהנהלת חשבונות לאימות מוכנות לחיוב.
+            לאחר האישור, ההזמנה תסומן כ<strong>הושלמה תפעולית</strong> ותופיע בהנהלת כספים לאימות מוכנות לחיוב.
             לא תישלח חשבונית אוטומטית.
           </p>
         </div>

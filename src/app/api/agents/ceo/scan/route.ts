@@ -182,7 +182,7 @@ export async function POST(req: NextRequest) {
             title: `הזמנה ${order.order_number} הושלמה תפעולית — נדרש אימות מוכנות לחיוב (${Math.round(hrs / 24)} ימים)`,
             description: `לקוח: ${order.customer} | הושלמה לפני ${Math.round(hrs)} שעות ועדיין בסטטוס "ממתין לאימות"`,
             detectedFromData: { orderNumber: order.order_number, hoursCompleted: Math.round(hrs), accountingStatus: order.accounting_status ?? "pending" },
-            recommendedResolution: "בצע אימות מוכנות לחיוב בהנהלת חשבונות — בדוק חסמים ואשר",
+            recommendedResolution: "בצע אימות מוכנות לחיוב בהנהלת כספים — בדוק חסמים ואשר",
           }, dedupeMap, result);
         }
       }
