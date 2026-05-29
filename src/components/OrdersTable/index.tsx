@@ -1098,6 +1098,31 @@ function OrderDetailPanel({
             )}
           </div>
 
+          {/* Attachments — open/download (stored as data URLs on the order) */}
+          {(order.attachments ?? []).length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 mb-1">קבצים מצורפים ({(order.attachments ?? []).length})</p>
+              <div className="space-y-1">
+                {(order.attachments ?? []).map((att) => (
+                  <a
+                    key={att.id}
+                    href={att.dataUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download={att.name}
+                    className="flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 bg-gray-50 hover:bg-blue-50 rounded-lg p-2.5 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                    </svg>
+                    <span className="flex-1 truncate">{att.name}</span>
+                    <span className="text-[10px] text-gray-400 shrink-0">{att.size ? `${Math.round(att.size / 1024)}KB · ` : ""}פתח/הורד</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Open problems */}
           {openProblemsCount(order) > 0 && (
             <div>
