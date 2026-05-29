@@ -131,14 +131,15 @@ export function FleetScanModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div dir="rtl" className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center gap-3 p-5 border-b border-gray-100">
+        {/* Panel: fixed header (close button always visible) + scrolling body. */}
+        <div dir="rtl" className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90dvh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex shrink-0 items-center gap-3 p-5 border-b border-gray-100">
             <span className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center"><ScanLine className="w-5 h-5" /></span>
             <p className="text-base font-bold text-gray-900 flex-1">סרוק מסמך — צי רכב ומכונות</p>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X className="w-5 h-5" /></button>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-700" aria-label="סגור"><X className="w-5 h-5" /></button>
           </div>
 
-          <div className="p-5">
+          <div className="p-5 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
             {/* ── Pick ── */}
             {step === "pick" && (
               <div>
