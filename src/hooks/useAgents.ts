@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabase } from "@/lib/supabase/client";
+import { authedFetch } from "@/lib/clientApi";
 import type {
   Agent,
   AgentTask,
@@ -197,35 +198,42 @@ export function useAgents(): AgentsHookValue {
 
   const agentStats = buildAgentStats(tasks, exceptions, approvals, agents.map(a => a.id));
 
+  // Control-table writes go through the server (role-gated + audited) so these
+  // tables can be locked to service-role only. See /api/agents/control.
   const updateApproval = useCallback(async (id: string, status: ApprovalStatus, reason?: string) => {
-    const db = getSupabase();
-    if (!db) return;
-    await db.from("agent_approvals").update({
-      approval_status: status,
-      approved_at: status === "approved" ? new Date().toISOString() : undefined,
-      rejected_reason: reason,
-    }).eq("id", id);
+    await authedFetch("/api/agents/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "approval", id, status, reason }),
+    });
     await load();
   }, [load]);
 
   const dismissException = useCallback(async (id: string) => {
-    const db = getSupabase();
-    if (!db) return;
-    await db.from("agent_exceptions").update({ status: "dismissed" }).eq("id", id);
-    setExceptions(prev => prev.filter(e => e.id !== id));
+    const res = await authedFetch("/api/agents/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "exception_dismiss", id }),
+    });
+    if (res.ok) setExceptions(prev => prev.filter(e => e.id !== id));
   }, []);
 
   const acknowledgeException = useCallback(async (id: string) => {
-    const db = getSupabase();
-    if (!db) return;
-    await db.from("agent_exceptions").update({ status: "acknowledged" }).eq("id", id);
-    setExceptions(prev => prev.map(e => e.id === id ? { ...e, status: "acknowledged" as ExceptionStatus } : e));
+    const res = await authedFetch("/api/agents/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "exception_ack", id }),
+    });
+    if (res.ok) setExceptions(prev => prev.map(e => e.id === id ? { ...e, status: "acknowledged" as ExceptionStatus } : e));
   }, []);
 
   const updateTaskStatus = useCallback(async (id: string, status: TaskStatus) => {
-    const db = getSupabase();
-    if (!db) return;
-    await db.from("agent_tasks").update({ status }).eq("id", id);
+    const res = await authedFetch("/api/agents/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "task_status", id, status }),
+    });
+    if (!res.ok) return;
     if (status === "completed" || status === "dismissed") {
       setTasks(prev => prev.filter(t => t.id !== id));
     } else {
