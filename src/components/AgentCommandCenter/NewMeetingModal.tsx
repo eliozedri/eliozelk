@@ -52,12 +52,12 @@ export function NewMeetingModal({ agents, creating, error, onCreate, onClose }: 
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4" dir="rtl">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="relative w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-md rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]"
         style={{ backgroundColor: NAVY, border: "1px solid rgba(255,255,255,0.1)" }}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between px-5 py-4"
+          className="flex shrink-0 items-center justify-between px-5 py-4"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
         >
           <button onClick={onClose} className="text-white/40 hover:text-white/80 transition-colors p-1 rounded">
@@ -70,7 +70,7 @@ export function NewMeetingModal({ agents, creating, error, onCreate, onClose }: 
         </div>
 
         {/* Body */}
-        <div className="px-5 py-4 space-y-4">
+        <div className="px-5 py-4 space-y-4 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
           {/* Title */}
           <div>
             <label className="block text-xs font-semibold text-white/50 mb-1.5">כותרת הפגישה *</label>
@@ -146,7 +146,7 @@ export function NewMeetingModal({ agents, creating, error, onCreate, onClose }: 
 
         {/* Footer */}
         <div
-          className="flex items-center justify-between gap-3 px-5 py-4"
+          className="flex shrink-0 items-center justify-between gap-3 px-5 py-4"
           style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
         >
           <button
