@@ -33,6 +33,8 @@ export interface AnalyzeInput {
   params?: Record<string, unknown>;
   /** Read-only business context snapshot (from agentContext.getAgentContext). */
   agentContext?: string;
+  /** Prior conversation turns, so the CEO continues a dialogue instead of restarting. */
+  conversationHistory?: { source_agent: string; message_type: string; message_text: string }[];
 }
 
 export interface AnalysisResult {
@@ -81,6 +83,7 @@ export async function analyzeRequest(
     agentId: "ceo",
     userRequest: input.owner_request,
     businessContext,
+    conversationHistory: input.conversationHistory,
     allowedActions: ceo?.allowedActions ?? [],
     canRouteInternally: true,
   });

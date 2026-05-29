@@ -36,7 +36,78 @@ type CeoIntakeResponse = {
   /** The CEO-Agent's conversational reply (next dialogue turn) so JARVIS can relay it. */
   message_type?: string;
   message_text?: string;
+  /** Reasoning provenance so JARVIS can show the owner how it was handled. */
+  routed_to_agent?: string | null;
+  llm_used?: boolean;
+  provider?: string | null;
+  reasoning_summary?: string;
 };
+
+interface ReasonResult {
+  conversation: ConversationTurn[];
+  finalMessageType: string;
+  finalMessageText: string;
+  status: string;
+  reasoningSummary: string;
+  routedToAgent: string | null;
+  llmUsed: boolean;
+  provider: string | null;
+}
+
+/**
+ * One reasoning cycle: CEO-Agent reads context + reasons (continuing the prior
+ * conversation, not restarting), and if it routes internally the internal agent
+ * reasons too — appending their turns. Reused by the initial intake AND by the
+ * clarification re-run (multi-turn). No mutation; reasoning only.
+ */
+async function reasonAndRoute(
+  supabase: ReturnType<typeof getServiceSupabase>,
+  opts: { ownerRequest: string; actionType?: string; targetDepartment?: string | null; params?: Record<string, unknown>; priorConversation: ConversationTurn[] },
+): Promise<ReasonResult> {
+  const ceoContext = await getAgentContext(supabase, "ceo");
+  const history = opts.priorConversation.map((t) => ({ source_agent: t.source_agent, message_type: t.message_type, message_text: t.message_text }));
+  const analysis = await analyzeRequest({
+    action_type: opts.actionType, owner_request: opts.ownerRequest, target_department: opts.targetDepartment ?? null,
+    params: opts.params, agentContext: ceoContext.summary, conversationHistory: history,
+  });
+
+  let conversation = appendTurn(opts.priorConversation, {
+    source_agent: "elkayam_ceo_agent", target_agent: "jarvis",
+    message_type: analysis.message_type, message_text: analysis.message_text,
+    structured_payload: { ...analysis.structured_payload, reasoning_summary: analysis.reasoning_summary, routed_to_agent: analysis.routed_to_agent, llm_used: analysis.llm_used, provider: analysis.llm_provider, risk_level: analysis.risk_level, context_used: ceoContext.summary, next_action: analysis.message_type },
+  });
+
+  let finalMessageType = analysis.message_type;
+  let finalMessageText = analysis.message_text;
+  let status = analysis.recommended_status;
+
+  if (analysis.routed_to_agent && INTERNAL_AGENT_IDS.includes(analysis.routed_to_agent)) {
+    const ictx = await getAgentContext(supabase, analysis.routed_to_agent);
+    const internal = await reasonAsAgent({
+      agentId: analysis.routed_to_agent,
+      userRequest: opts.ownerRequest,
+      businessContext: [ictx.summary, opts.targetDepartment ? `מחלקה/קטגוריה: ${opts.targetDepartment}` : ""].filter(Boolean).join(" · "),
+      conversationHistory: conversation.map((t) => ({ source_agent: t.source_agent, message_type: t.message_type, message_text: t.message_text })),
+    });
+    if (internal) {
+      conversation = appendTurn(conversation, {
+        source_agent: analysis.routed_to_agent, target_agent: "elkayam_ceo_agent",
+        message_type: internal.message_type, message_text: internal.message_text,
+        structured_payload: { reasoning_summary: internal.reasoning_summary, llm_used: internal.llm_used, provider: internal.provider, risk_level: internal.risk_level, context_used: ictx.summary, next_action: internal.message_type, needs_info: internal.needs_info, approval_required: internal.approval_required },
+      });
+      finalMessageType = internal.message_type;
+      finalMessageText = `(${analysis.routed_to_agent}) ${internal.message_text}`;
+      if (internal.message_type === "needs_info") status = "needs_info";
+      else if (internal.message_type === "capability_gap") status = "capability_gap";
+    }
+  }
+
+  return {
+    conversation, finalMessageType, finalMessageText, status,
+    reasoningSummary: analysis.reasoning_summary, routedToAgent: analysis.routed_to_agent,
+    llmUsed: analysis.llm_used, provider: analysis.llm_provider,
+  };
+}
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   if (req.nextUrl.searchParams.get("v") !== "1") {
@@ -60,8 +131,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return json(400, { status: "rejected", intake_id: null, correlation_id: null, detail: "invalid_json" });
   }
 
-  // Clarification answer (JARVIS → CEO-Agent), closing the needs_info loop:
-  // the owner's Telegram reply comes back here and re-opens the command for review.
+  // Clarification answer (JARVIS → CEO-Agent) — TRUE multi-turn continuation:
+  // append the owner's answer to the SAME conversation and re-run reasoning from
+  // where it left off (the CEO/internal agent continues; it does NOT restart).
   if (body.kind === "clarification_answer") {
     const cid = str(body.correlation_id);
     const answer = str(body.answer);
@@ -69,21 +141,54 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const supabaseA = getServiceSupabase();
     const existingA = await supabaseA
       .from("jarvis_ceo_agent_commands")
-      .select("id, status, diagnostics")
+      .select("id, status, diagnostics, conversation, action_type, target_department, payload_json, full_request")
       .eq("correlation_id", cid)
       .maybeSingle();
     if (!existingA.data) return json(404, { status: "rejected", intake_id: null, correlation_id: cid, detail: "not_found" });
-    const diagA = (existingA.data.diagnostics as Record<string, unknown> | null) ?? {};
+
+    const row = existingA.data as Record<string, unknown>;
+    const diagA = (row.diagnostics as Record<string, unknown> | null) ?? {};
     const answers = Array.isArray(diagA.clarification_answers) ? diagA.clarification_answers : [];
+    const priorConv = Array.isArray(row.conversation) ? (row.conversation as ConversationTurn[]) : [];
+    const payloadJson = (row.payload_json as Record<string, unknown> | null) ?? {};
+    const plan = (payloadJson.proposed_execution_plan ?? {}) as Record<string, unknown>;
+    const params = (payloadJson.params ?? plan.params ?? {}) as Record<string, unknown>;
+
+    // Record the owner's answer as a turn, then continue reasoning on the thread.
+    const withAnswer = appendTurn(priorConv, {
+      source_agent: "owner", target_agent: "elkayam_ceo_agent",
+      message_type: "request", message_text: answer, structured_payload: { kind: "clarification_answer" },
+    });
+    const reasoned = await reasonAndRoute(supabaseA, {
+      ownerRequest: answer,
+      actionType: str(row.action_type),
+      targetDepartment: (row.target_department as string | null) ?? null,
+      params,
+      priorConversation: withAnswer,
+    });
+
     await supabaseA
       .from("jarvis_ceo_agent_commands")
       .update({
-        status: "pending_review", // owner answered → back to the CEO-Agent's review queue
+        status: reasoned.status,
+        last_message_type: reasoned.finalMessageType,
+        conversation: reasoned.conversation,
+        reasoning_summary: reasoned.reasoningSummary,
+        routed_to_agent: reasoned.routedToAgent,
+        llm_used: reasoned.llmUsed,
+        llm_provider: reasoned.provider,
         diagnostics: { ...diagA, clarification_answers: [...answers, { answer, at: new Date().toISOString() }] },
         updated_at: new Date().toISOString(),
       })
-      .eq("id", existingA.data.id as string);
-    return json(200, { status: "pending_review", intake_id: existingA.data.id as string, correlation_id: cid, detail: "answer_recorded" });
+      .eq("id", row.id as string);
+
+    const intakeStatusA: CeoIntakeResponse["status"] =
+      reasoned.finalMessageType === "needs_info" ? "needs_info" : reasoned.finalMessageType === "capability_gap" ? "received" : "pending_review";
+    return json(200, {
+      status: intakeStatusA, intake_id: row.id as string, correlation_id: cid, detail: "answer_continued",
+      message_type: reasoned.finalMessageType, message_text: reasoned.finalMessageText,
+      routed_to_agent: reasoned.routedToAgent, llm_used: reasoned.llmUsed, provider: reasoned.provider, reasoning_summary: reasoned.reasoningSummary,
+    });
   }
 
   // Generic conversational request. action_type is a HINT, not a gate — the
@@ -111,45 +216,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const canonicalAction = resolveActionType(actionType);
   const targetDepartment = str(body.affected_department) || null;
 
-  // CEO-Agent reads its read-only business context, then THINKS (LLM-first;
-  // rule-based fallback) and picks the next dialogue turn.
-  const ceoContext = await getAgentContext(supabase, "ceo");
-  const analysis = await analyzeRequest({ action_type: actionType, owner_request: ownerRequest, target_department: targetDepartment, params, agentContext: ceoContext.summary });
-
   const title = str(body.title) || (canonicalAction ? actionLabel(canonicalAction) : "בקשה לסקירת CEO-Agent");
-  let conversation: ConversationTurn[] = [];
-  conversation = appendTurn(conversation, {
+  // Turn 1 — the inbound request. Then one reasoning cycle (CEO + internal hop).
+  const requestTurn = appendTurn([], {
     source_agent: str(body.source_agent) || "jarvis", target_agent: "elkayam_ceo_agent",
     message_type: "request", message_text: ownerRequest, structured_payload: { action_type: actionType, params, target_department: targetDepartment },
   });
-  conversation = appendTurn(conversation, {
-    source_agent: "elkayam_ceo_agent", target_agent: "jarvis",
-    message_type: analysis.message_type, message_text: analysis.message_text,
-    structured_payload: { ...analysis.structured_payload, reasoning_summary: analysis.reasoning_summary, routed_to_agent: analysis.routed_to_agent, llm_used: analysis.llm_used, provider: analysis.llm_provider, risk_level: analysis.risk_level },
-  });
-
-  // Internal routing: if the CEO routed to an internal agent, that agent reasons
-  // too and appends its turn (CEO-Agent ↔ internal agent dialogue).
-  let finalMessageType = analysis.message_type;
-  let finalMessageText = analysis.message_text;
-  if (analysis.routed_to_agent && INTERNAL_AGENT_IDS.includes(analysis.routed_to_agent)) {
-    const internalContext = await getAgentContext(supabase, analysis.routed_to_agent);
-    const internal = await reasonAsAgent({
-      agentId: analysis.routed_to_agent,
-      userRequest: ownerRequest,
-      businessContext: [internalContext.summary, targetDepartment ? `מחלקה/קטגוריה: ${targetDepartment}` : ""].filter(Boolean).join(" · "),
-      conversationHistory: conversation.map((t) => ({ source_agent: t.source_agent, message_type: t.message_type, message_text: t.message_text })),
-    });
-    if (internal) {
-      conversation = appendTurn(conversation, {
-        source_agent: analysis.routed_to_agent, target_agent: "elkayam_ceo_agent",
-        message_type: internal.message_type, message_text: internal.message_text,
-        structured_payload: { reasoning_summary: internal.reasoning_summary, llm_used: internal.llm_used, provider: internal.provider, risk_level: internal.risk_level },
-      });
-      finalMessageType = internal.message_type;
-      finalMessageText = `(${analysis.routed_to_agent}) ${internal.message_text}`;
-    }
-  }
+  const reasoned = await reasonAndRoute(supabase, { ownerRequest, actionType, targetDepartment, params, priorConversation: requestTurn });
+  const conversation = reasoned.conversation;
+  const finalMessageType = reasoned.finalMessageType;
+  const finalMessageText = reasoned.finalMessageText;
 
   const ins = await supabase
     .from("jarvis_ceo_agent_commands")
@@ -165,18 +241,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       target_department: targetDepartment,
       target_role: str(plan.owning_role) || null,
       risk_level: str(body.risk_level) || null,
-      status: analysis.recommended_status,
+      status: reasoned.status,
       last_message_type: finalMessageType,
       conversation,
-      reasoning_summary: analysis.reasoning_summary,
-      routed_to_agent: analysis.routed_to_agent,
-      llm_used: analysis.llm_used,
-      llm_provider: analysis.llm_provider,
+      reasoning_summary: reasoned.reasoningSummary,
+      routed_to_agent: reasoned.routedToAgent,
+      llm_used: reasoned.llmUsed,
+      llm_provider: reasoned.provider,
       approval_required: true,
       payload_json: body,
       dry_run_summary: str(body.dry_run_summary) || null,
       rollback_plan: str(body.rollback_plan) || null,
-      diagnostics: { received_at: new Date().toISOString(), execution_mode: str(body.execution_mode) || "tier_a_staging", llm_used: analysis.llm_used, provider: analysis.llm_provider },
+      diagnostics: { received_at: new Date().toISOString(), execution_mode: str(body.execution_mode) || "tier_a_staging", llm_used: reasoned.llmUsed, provider: reasoned.provider },
     })
     .select("id")
     .single();
@@ -184,13 +260,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (ins.error || !ins.data) {
     return json(500, { status: "rejected", intake_id: null, correlation_id: correlationId, detail: "insert_failed" });
   }
-  // Conversational reply (incl. the routed internal agent's response). NOTHING
-  // in catalog/prices/business was touched.
+  // Conversational reply (incl. the routed internal agent's response) + reasoning
+  // provenance so JARVIS can explain it in Telegram. NOTHING business was touched.
   const intakeStatus: CeoIntakeResponse["status"] =
-    analysis.message_type === "needs_info" ? "needs_info" : analysis.message_type === "capability_gap" ? "received" : "pending_review";
+    finalMessageType === "needs_info" ? "needs_info" : finalMessageType === "capability_gap" ? "received" : "pending_review";
   return json(200, {
     status: intakeStatus, intake_id: ins.data.id as string, correlation_id: correlationId,
     message_type: finalMessageType, message_text: finalMessageText,
+    routed_to_agent: reasoned.routedToAgent, llm_used: reasoned.llmUsed, provider: reasoned.provider, reasoning_summary: reasoned.reasoningSummary,
   });
 }
 

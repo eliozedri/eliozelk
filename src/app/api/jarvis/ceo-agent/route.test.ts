@@ -190,4 +190,17 @@ describe("CEO-Agent intake (Tier-A)", () => {
     const res = await POST(reqFor({ kind: "clarification_answer", correlation_id: "x", answer: "y" }, "bad"));
     expect(res.status).toBe(401);
   });
+
+  it("multi-turn: the answer CONTINUES the same thread (appends turns, re-reasons, same row)", async () => {
+    await POST(reqFor(validPkg, TOKEN));
+    const turnsBefore = (h.store[0]!.conversation as unknown[]).length; // request + ceo turn
+    const idBefore = h.store[0]!.id;
+    await POST(reqFor({ kind: "clarification_answer", correlation_id: validPkg.correlation_id, answer: "כן, רק פעילים" }, TOKEN));
+    expect(h.store.length).toBe(1); // SAME row — not a new conversation
+    expect(h.store[0]!.id).toBe(idBefore);
+    const conv = h.store[0]!.conversation as { source_agent: string; message_type: string }[];
+    expect(conv.length).toBeGreaterThan(turnsBefore); // thread grew (owner answer + new reasoning)
+    expect(conv.some((t) => t.source_agent === "owner")).toBe(true); // owner answer recorded as a turn
+    expect(h.mutated.every((t) => t === ONLY_TABLE)).toBe(true); // no business-table WRITE
+  });
 });

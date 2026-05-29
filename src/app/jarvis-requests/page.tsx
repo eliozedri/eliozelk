@@ -42,6 +42,7 @@ export default async function JarvisRequestsPage() {
           allowedActions: a.allowedActions,
           contextSummary: ctx.summary,
           contextAvailable: ctx.available,
+          warning: ctx.warning ?? null,
         };
       }),
     );

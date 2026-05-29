@@ -73,6 +73,8 @@ export interface AgentCard {
   allowedActions: string[];
   contextSummary: string;
   contextAvailable: boolean;
+  /** Owner-facing data/readiness warning (e.g. price execution would affect 0 rows). */
+  warning?: string | null;
 }
 
 interface PreviewJson {
@@ -184,6 +186,11 @@ export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]
                 <div className="text-xs text-white/60 mb-1">
                   קונטקסט: {a.contextAvailable ? a.contextSummary : "context unavailable"}
                 </div>
+                {a.warning && (
+                  <div className="text-xs text-amber-300/90 bg-amber-500/10 border border-amber-400/20 rounded px-2 py-1 mb-1">
+                    {a.warning}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-1 mt-2">
                   {a.allowedActions.length > 0
                     ? a.allowedActions.map((x) => <span key={x} className="badge badge-teal">⚙ {x}</span>)
