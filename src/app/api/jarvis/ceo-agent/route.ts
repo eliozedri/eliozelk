@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { actionLabel, resolveActionType } from "@/lib/jarvis/actionCatalog";
 import { analyzeRequest, appendTurn, type ConversationTurn } from "@/lib/jarvis/ceoAnalyze";
+import { reasonAsAgent } from "@/lib/jarvis/agentReasoning";
+import { INTERNAL_AGENT_IDS } from "@/lib/jarvis/agentRoles";
 
 /**
  * POST /api/jarvis/ceo-agent?v=1
@@ -108,8 +110,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const canonicalAction = resolveActionType(actionType);
   const targetDepartment = str(body.affected_department) || null;
 
-  // CEO-Agent reasons about the request and picks the next dialogue turn.
-  const analysis = analyzeRequest({ action_type: actionType, owner_request: ownerRequest, target_department: targetDepartment, params });
+  // CEO-Agent THINKS about the request (LLM-first; rule-based fallback) and picks
+  // the next dialogue turn — analyze / route / needs_info / proposal / capability_gap.
+  const analysis = await analyzeRequest({ action_type: actionType, owner_request: ownerRequest, target_department: targetDepartment, params });
 
   const title = str(body.title) || (canonicalAction ? actionLabel(canonicalAction) : "בקשה לסקירת CEO-Agent");
   let conversation: ConversationTurn[] = [];
@@ -119,8 +122,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
   conversation = appendTurn(conversation, {
     source_agent: "elkayam_ceo_agent", target_agent: "jarvis",
-    message_type: analysis.message_type, message_text: analysis.message_text, structured_payload: analysis.structured_payload,
+    message_type: analysis.message_type, message_text: analysis.message_text,
+    structured_payload: { ...analysis.structured_payload, reasoning_summary: analysis.reasoning_summary, routed_to_agent: analysis.routed_to_agent, llm_used: analysis.llm_used, provider: analysis.llm_provider, risk_level: analysis.risk_level },
   });
+
+  // Internal routing: if the CEO routed to an internal agent, that agent reasons
+  // too and appends its turn (CEO-Agent ↔ internal agent dialogue).
+  let finalMessageType = analysis.message_type;
+  let finalMessageText = analysis.message_text;
+  if (analysis.routed_to_agent && INTERNAL_AGENT_IDS.includes(analysis.routed_to_agent)) {
+    const internal = await reasonAsAgent({
+      agentId: analysis.routed_to_agent,
+      userRequest: ownerRequest,
+      businessContext: targetDepartment ? `מחלקה/קטגוריה: ${targetDepartment}` : undefined,
+      conversationHistory: conversation.map((t) => ({ source_agent: t.source_agent, message_type: t.message_type, message_text: t.message_text })),
+    });
+    if (internal) {
+      conversation = appendTurn(conversation, {
+        source_agent: analysis.routed_to_agent, target_agent: "elkayam_ceo_agent",
+        message_type: internal.message_type, message_text: internal.message_text,
+        structured_payload: { reasoning_summary: internal.reasoning_summary, llm_used: internal.llm_used, provider: internal.provider, risk_level: internal.risk_level },
+      });
+      finalMessageType = internal.message_type;
+      finalMessageText = `(${analysis.routed_to_agent}) ${internal.message_text}`;
+    }
+  }
 
   const ins = await supabase
     .from("jarvis_ceo_agent_commands")
@@ -137,13 +163,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       target_role: str(plan.owning_role) || null,
       risk_level: str(body.risk_level) || null,
       status: analysis.recommended_status,
-      last_message_type: analysis.message_type,
+      last_message_type: finalMessageType,
       conversation,
+      reasoning_summary: analysis.reasoning_summary,
+      routed_to_agent: analysis.routed_to_agent,
+      llm_used: analysis.llm_used,
+      llm_provider: analysis.llm_provider,
       approval_required: true,
       payload_json: body,
       dry_run_summary: str(body.dry_run_summary) || null,
       rollback_plan: str(body.rollback_plan) || null,
-      diagnostics: { received_at: new Date().toISOString(), execution_mode: str(body.execution_mode) || "tier_a_staging" },
+      diagnostics: { received_at: new Date().toISOString(), execution_mode: str(body.execution_mode) || "tier_a_staging", llm_used: analysis.llm_used, provider: analysis.llm_provider },
     })
     .select("id")
     .single();
@@ -151,12 +181,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (ins.error || !ins.data) {
     return json(500, { status: "rejected", intake_id: null, correlation_id: correlationId, detail: "insert_failed" });
   }
-  // Conversational reply. NOTHING in catalog/prices/business was touched.
+  // Conversational reply (incl. the routed internal agent's response). NOTHING
+  // in catalog/prices/business was touched.
   const intakeStatus: CeoIntakeResponse["status"] =
     analysis.message_type === "needs_info" ? "needs_info" : analysis.message_type === "capability_gap" ? "received" : "pending_review";
   return json(200, {
     status: intakeStatus, intake_id: ins.data.id as string, correlation_id: correlationId,
-    message_type: analysis.message_type, message_text: analysis.message_text,
+    message_type: finalMessageType, message_text: finalMessageText,
   });
 }
 

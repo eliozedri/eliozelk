@@ -46,6 +46,10 @@ export interface JarvisRequestRow {
   executed_at: string | null;
   conversation: ConversationTurn[] | null;
   last_message_type: string | null;
+  reasoning_summary: string | null;
+  routed_to_agent: string | null;
+  llm_used: boolean | null;
+  llm_provider: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -224,7 +228,14 @@ export function JarvisRequests({ rows }: { rows: JarvisRequestRow[] }) {
             {/* Agent-to-agent conversation thread (JARVIS ↔ CEO-Agent ↔ owner) */}
             {selected.conversation && selected.conversation.length > 0 && (
               <div className="glass-inner mt-3 p-3 rounded">
-                <div className="text-white/50 text-xs mb-2">שיחת הסוכנים</div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-white/50 text-xs">שיחת הסוכנים</span>
+                  <span className={`badge ${selected.llm_used ? "badge-violet" : "badge-gray"}`}>
+                    {selected.llm_used ? `LLM reasoning${selected.llm_provider ? ` · ${selected.llm_provider}` : ""}` : "rule-based"}
+                  </span>
+                  {selected.routed_to_agent ? <span className="badge badge-blue">נותב ל-{selected.routed_to_agent}</span> : null}
+                </div>
+                {selected.reasoning_summary ? <div className="text-white/50 text-xs mb-2">סיכום חשיבה: {selected.reasoning_summary}</div> : null}
                 <div className="space-y-2">
                   {selected.conversation.map((t) => (
                     <div key={t.seq} className="text-sm">
