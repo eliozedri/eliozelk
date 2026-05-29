@@ -105,7 +105,8 @@ describe("CEO-Agent intake (Tier-A)", () => {
     expect(body.intake_id).toBeTruthy();
     expect(h.store.length).toBe(1);
     expect(h.store[0]!.status).toBe("pending_review");
-    expect(h.store[0]!.action_type).toBe("price_update_request");
+    // The inbound alias 'price_update_request' is stored as the CANONICAL type.
+    expect(h.store[0]!.action_type).toBe("price_update_percentage");
     expect(h.store[0]!.target_department).toBe("אביזרי בטיחות");
     // No business table mutation — only the JARVIS command table is touched.
     expect(h.touched.every((t) => t === ONLY_TABLE)).toBe(true);
@@ -124,6 +125,17 @@ describe("CEO-Agent intake (Tier-A)", () => {
     const body = await res.json();
     expect(body.status).toBe("unsupported_action");
     expect(h.store.length).toBe(0);
+  });
+
+  it("accepts a NON-PRICE allowlisted action (ops_note) — generic, not price-only", async () => {
+    const res = await POST(reqFor({
+      ...validPkg, action_type: "ops_note", correlation_id: "note-1",
+      owner_request: "תעדכן את מנהל התפעול שצריך להזמין עוד חרוטים",
+    }, TOKEN));
+    const body = await res.json();
+    expect(body.status).toBe("pending_review");
+    expect(h.store.length).toBe(1);
+    expect(h.store[0]!.action_type).toBe("ops_note");
   });
 
   it("approve changes status only — no business mutation", async () => {

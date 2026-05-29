@@ -12,12 +12,14 @@ import {
   rejectRequest,
   revertRequest,
 } from "@/app/jarvis-requests/actions";
+import { actionCapabilities } from "@/lib/jarvis/actionCatalog";
 
 /**
- * Owner-facing review screen for JARVIS → CEO-Agent requests. List + status/risk
- * badges + details modal + decisions. Decisions are STATUS-ONLY — approving marks
- * a request approved for manual/future execution; automatic execution stays OFF
- * (Tier-B not built). No catalog/pricing/business mutation happens here.
+ * Owner-facing review screen for JARVIS → CEO-Agent requests (generic, any
+ * action type). List + status/risk badges + details modal + decisions, and a
+ * capability-gated Tier-B execution workflow (preview → 2nd approval → execute
+ * → revert) shown only for actions whose handler supports it. Review-only
+ * actions (e.g. ops_note) stop at "approved" with no mutation.
  */
 
 export interface JarvisRequestRow {
@@ -241,9 +243,15 @@ export function JarvisRequests({ rows }: { rows: JarvisRequestRow[] }) {
                   </div>
                 </>
               )}
-              {selected.status === "approved" && (
+              {selected.status === "approved" && actionCapabilities(selected.action_type).preview && (
                 <div className="flex flex-wrap gap-2">
                   <button className="btn-glow" disabled={pending} onClick={() => act(() => generatePreview(selected.id))}>🔍 צור תצוגה מקדימה (dry-run)</button>
+                  <button className="btn-glass" disabled={pending} onClick={() => act(() => archiveRequest(selected.id))}>📦 ארכב</button>
+                </div>
+              )}
+              {selected.status === "approved" && !actionCapabilities(selected.action_type).preview && (
+                <div className="flex flex-wrap gap-2">
+                  <span className="text-white/50 text-sm self-center">פעולה זו אינה דורשת ביצוע — לאחר אישור היא נחשבת מטופלת.</span>
                   <button className="btn-glass" disabled={pending} onClick={() => act(() => archiveRequest(selected.id))}>📦 ארכב</button>
                 </div>
               )}

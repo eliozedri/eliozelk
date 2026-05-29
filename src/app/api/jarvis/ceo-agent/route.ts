@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { actionLabel, resolveActionType } from "@/lib/jarvis/actionCatalog";
 
 /**
  * POST /api/jarvis/ceo-agent?v=1
@@ -22,8 +23,6 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const ALLOWED_ACTIONS = new Set(["price_update_request"]);
 
 type CeoIntakeResponse = {
   status: "received" | "pending_review" | "rejected" | "needs_info" | "unsupported_action";
@@ -68,8 +67,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (body.target_agent !== "elkayam_ceo_agent") {
     return json(400, { status: "rejected", intake_id: null, correlation_id: correlationId, detail: "wrong_target_agent" });
   }
-  if (!ALLOWED_ACTIONS.has(actionType)) {
-    return json(200, { status: "unsupported_action", intake_id: null, correlation_id: correlationId, detail: `action ${actionType} not allowed` });
+  const canonicalAction = resolveActionType(actionType);
+  if (!canonicalAction) {
+    return json(200, { status: "unsupported_action", intake_id: null, correlation_id: correlationId, detail: `action ${actionType} not allowlisted` });
   }
 
   const supabase = getServiceSupabase();
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const plan = (body.proposed_execution_plan ?? {}) as Record<string, unknown>;
-  const title = str(body.title) || buildTitle(actionType, str(body.affected_department));
+  const title = str(body.title) || actionLabel(canonicalAction);
 
   const ins = await supabase
     .from("jarvis_ceo_agent_commands")
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       title,
       summary: ownerRequest.slice(0, 500),
       full_request: ownerRequest,
-      action_type: actionType,
+      action_type: canonicalAction,
       target_department: str(body.affected_department) || null,
       target_role: str(plan.owning_role) || null,
       risk_level: str(body.risk_level) || null,
@@ -125,10 +125,6 @@ export const PUT = GET;
 export const DELETE = GET;
 export const PATCH = GET;
 
-function buildTitle(action: string, dept: string): string {
-  if (action === "price_update_request") return `עדכון מחירים${dept ? ` — ${dept}` : ""}`;
-  return action;
-}
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
 }

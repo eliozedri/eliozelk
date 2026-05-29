@@ -2,14 +2,8 @@
 
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import {
-  buildPreview,
-  executeApproved,
-  revertExecution,
-  type CatalogRow,
-  type CommandLike,
-  type ExecDb,
-} from "@/lib/jarvis/priceExecution";
+import { getHandler } from "@/lib/jarvis/actionHandlers";
+import { type CatalogRow, type CommandLike, type ExecDb } from "@/lib/jarvis/priceExecution";
 
 /**
  * Owner decisions on JARVIS CEO-Agent requests. STATUS-ONLY — these never
@@ -99,7 +93,9 @@ export async function generatePreview(id: string): Promise<DecisionResult> {
     const command = await loadCommand(supabase, id);
     if (!command) return { ok: false, error: "not_found" };
     if (command.status !== "approved") return { ok: false, error: "not_in_approved_state" };
-    const res = await buildPreview(execDb(supabase), command);
+    const handler = getHandler(command.action_type);
+    if (!handler?.buildPreview) return { ok: false, error: "action_has_no_preview" };
+    const res = await handler.buildPreview(execDb(supabase), command);
     if (!res.ok) return { ok: false, error: res.error };
     return setStatus(id, { status: "preview_ready", preview_json: res.preview, rollback_json: res.rollback });
   } catch (e) {
@@ -122,7 +118,9 @@ export async function executeRequest(id: string): Promise<DecisionResult> {
     const supabase = getServiceSupabase();
     const command = await loadCommand(supabase, id);
     if (!command) return { ok: false, error: "not_found" };
-    const res = await executeApproved(execDb(supabase), command);
+    const handler = getHandler(command.action_type);
+    if (!handler?.execute) return { ok: false, error: "action_not_executable" };
+    const res = await handler.execute(execDb(supabase), command);
     if (!res.ok) return { ok: false, error: res.error };
     const allFailed = res.result.updated_count === 0 && res.result.failed_count > 0;
     return setStatus(id, {
@@ -142,7 +140,9 @@ export async function revertRequest(id: string): Promise<DecisionResult> {
     const supabase = getServiceSupabase();
     const command = await loadCommand(supabase, id);
     if (!command) return { ok: false, error: "not_found" };
-    const res = await revertExecution(execDb(supabase), command);
+    const handler = getHandler(command.action_type);
+    if (!handler?.revert) return { ok: false, error: "action_not_revertible" };
+    const res = await handler.revert(execDb(supabase), command);
     if (!res.ok) return { ok: false, error: res.error };
     return setStatus(id, { status: "reverted", reverted_at: new Date().toISOString() });
   } catch (e) {

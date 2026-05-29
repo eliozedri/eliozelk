@@ -1,4 +1,7 @@
 import { DEPARTMENTS, categoryToDepartment, type DepartmentSlug } from "@/lib/catalog/departments";
+import { resolveActionType } from "./actionCatalog";
+
+export const CANONICAL_ACTION = "price_update_percentage";
 
 /**
  * Tier-B controlled execution for the ONLY allowlisted action:
@@ -101,10 +104,12 @@ interface ValidParams {
 /** Strictly validate the command into executable params, or a typed failure. */
 export function validateCommand(command: CommandLike): { ok: true; params: ValidParams } | Fail {
   const actionType = String(command.action_type ?? "");
-  if (!ALLOWED_ACTIONS.has(actionType)) return { ok: false, error: "unsupported_action" };
+  if (resolveActionType(actionType) !== CANONICAL_ACTION) return { ok: false, error: "unsupported_action" };
 
-  const plan = (command.payload_json?.proposed_execution_plan ?? {}) as { params?: { pct?: unknown } };
-  const pct = Number(plan.params?.pct);
+  // Read params from the generic `params` bag, falling back to the legacy
+  // proposed_execution_plan.params shape for back-compat.
+  const payload = (command.payload_json ?? {}) as { params?: { pct?: unknown }; proposed_execution_plan?: { params?: { pct?: unknown } } };
+  const pct = Number(payload.params?.pct ?? payload.proposed_execution_plan?.params?.pct);
   if (!Number.isFinite(pct) || pct === 0 || pct < MIN_PCT || pct > MAX_PCT) {
     return { ok: false, error: "invalid_percentage" };
   }
