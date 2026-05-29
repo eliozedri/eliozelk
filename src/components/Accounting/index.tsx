@@ -47,7 +47,7 @@ export function CancelOrderModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" onClick={saveState === "saving" ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" dir="rtl">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[90dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]" dir="rtl">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
               <svg className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -144,7 +144,7 @@ function AccountingOrderEditPanel({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" dir="rtl">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={saveState === "saving" ? undefined : onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 z-10 space-y-4">
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 z-10 space-y-4 max-h-[90dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -429,7 +429,7 @@ function ApproveToBillingModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" onClick={saving ? undefined : onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" dir="rtl">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]" dir="rtl">
           <div className="flex items-center gap-3 mb-4">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${hasBlockers ? "bg-amber-100" : "bg-teal-100"}`}>
               {hasBlockers ? (
@@ -2047,7 +2047,7 @@ export function AccountingPage() {
         <>
           <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" onClick={() => setPermanentDeleteTarget(null)} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" dir="rtl">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[90dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]" dir="rtl">
               {permanentDeleteStep === 1 ? (
                 <>
                   <div className="flex items-center gap-3 mb-4">
@@ -2142,7 +2142,7 @@ export function AccountingPage() {
           <>
             <div className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm" onClick={() => setCancelingDiaryId(null)} />
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" dir="rtl">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 max-h-[90dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]" dir="rtl">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
                     <svg className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

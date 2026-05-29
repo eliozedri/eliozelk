@@ -207,7 +207,7 @@ function AdjustModal({ item, onClose, onSave }: AdjustModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 flex flex-col gap-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 flex flex-col gap-4 max-h-[90dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-black text-gray-900">עדכון מלאי — {item.name}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">

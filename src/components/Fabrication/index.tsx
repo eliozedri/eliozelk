@@ -111,7 +111,7 @@ function OpenProblems({ order }: { order: WorkOrder }) {
 function ConfirmModal({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 flex flex-col gap-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 flex flex-col gap-4 max-h-[90dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
         <p className="text-sm font-medium text-gray-800 text-center leading-relaxed">{message}</p>
         <div className="flex gap-3">
           <button type="button" onClick={onConfirm} className="flex-1 py-2.5 rounded-lg text-sm font-bold text-white bg-teal-600 hover:bg-teal-700 transition-colors">כן, מוכן</button>
