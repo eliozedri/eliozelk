@@ -7,6 +7,13 @@
 > and may not reflect current behavior. When this file and an older spec disagree,
 > **this file wins.** Last updated: 2026-05-29.
 
+## Companion docs
+- **`docs/AGENTS_STATE.md`** — current agent hierarchy (JARVIS vs CEO vs department
+  agents), lifecycle, approval rules, agent security, sub-agent staged plan.
+- **`docs/SECURITY_RLS_PROPOSAL.md`** — role-aware RLS proposal for operational tables
+  (NOT applied; needs approval).
+- **`ocr-service/README.md`** — the OCR sidecar (prepared, not deployed).
+
 ## What this system is
 Internal operational platform for **Elkayam Road Marking Ltd** (road signs, marking,
 traffic arrangements, fleet). Next.js 16 (App Router, React 19) on **Vercel**,
