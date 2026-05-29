@@ -22,6 +22,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { requireAction } from "@/lib/auth/apiAuth";
+import { validateUploadSignature } from "@/lib/upload/fileValidation";
 
 const BUCKET = "catalog-product-images";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -95,6 +96,8 @@ export async function POST(req: NextRequest) {
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = new Uint8Array(arrayBuffer);
+  const sig = validateUploadSignature(Buffer.from(buffer));
+  if (!sig.ok) return NextResponse.json({ error: sig.reason }, { status: 400 });
   const { error: upErr } = await db.storage.from(BUCKET).upload(storagePath, buffer, {
     contentType: file.type,
     upsert: false,

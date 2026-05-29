@@ -21,6 +21,7 @@ import {
 import type { UserDocumentCard } from "@/types/supplierDocument";
 import { runDuplicateCheck } from "@/lib/supplierDocuments/duplicateCheck";
 import { suggestExpenseType } from "@/types/financial";
+import { validateUploadSignature } from "@/lib/upload/fileValidation";
 
 // OCR runs synchronously inside this request (tesseract.js cold start downloads a
 // WASM core + Hebrew LSTM models). Raise the budget so the function is not killed
@@ -129,6 +130,13 @@ export async function POST(req: NextRequest) {
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
+
+  // Content-signature check (defense-in-depth vs MIME spoofing) — reject
+  // executables/archives/HTML/script disguised as a document.
+  const sig = validateUploadSignature(buffer);
+  if (!sig.ok) {
+    return NextResponse.json({ error: sig.reason }, { status: 400 });
+  }
 
   // Compute SHA-256 for duplicate detection
   const fileHash = createHash("sha256").update(buffer).digest("hex");

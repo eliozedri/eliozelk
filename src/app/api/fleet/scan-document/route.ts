@@ -12,6 +12,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import { requireAction } from "@/lib/auth/apiAuth";
 import { extractDocument } from "@/lib/supplierDocuments/ocrAdapter";
 import { detectDocumentClass } from "@/lib/supplierDocuments/documentClass";
+import { validateUploadSignature } from "@/lib/upload/fileValidation";
 
 // OCR (tesseract.js) must download its WASM core + Hebrew LSTM models on a cold
 // instance before it can run — well beyond the default function budget. Without
@@ -93,6 +94,12 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+
+  // Content-signature check (defense-in-depth vs MIME spoofing).
+  const sig = validateUploadSignature(buffer);
+  if (!sig.ok) {
+    return NextResponse.json({ error: sig.reason }, { status: 400 });
+  }
 
   // ── Central OCR ──
   const extraction = await extractDocument({

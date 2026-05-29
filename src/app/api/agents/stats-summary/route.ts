@@ -1,14 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { requireAuth } from "@/lib/auth/apiAuth";
 import type { AgentStats } from "@/types/agent";
 
-// ⚠️ SECURITY NOTE (audit 2026-05-29): this GET is intentionally UNAUTHENTICATED and
-// returns aggregate per-agent counts (open tasks/exceptions/critical/approvals +
-// "speaking"). CORS limits browser cross-origin reads but does NOT prevent direct
-// curl/server access — treat the response as PUBLIC. It exposes no PII, order, or
-// financial data. There are currently NO in-repo callers (likely an external
-// "Neural Core" showcase feed). DECISION NEEDED: if no external consumer relies on
-// it, gate with requireAuth; otherwise keep it but never add sensitive fields here.
+// Audit 2026-05-29: this endpoint exposes aggregate per-agent operational counts.
+// It had no in-repo callers and was anonymously reachable (CORS is not auth). Gated
+// to authenticated users — internal operational metadata should not be public. If a
+// future external "Neural Core" showcase needs it, expose a separate, explicitly
+// public, minimal endpoint rather than re-opening this one.
 
 // Active Neural Core agents — engineering-plan-agent intentionally excluded (future/out-of-core).
 const ACTIVE_AGENT_IDS = [
@@ -56,6 +55,8 @@ export async function OPTIONS(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const cors = corsHeaders(request.headers.get("origin"));
+  const auth = await requireAuth(request);
+  if (!auth.ok) return auth.response;
   try {
     const db = getServiceSupabase();
     const since = new Date(Date.now() - SPEAKING_WINDOW_MS).toISOString();
