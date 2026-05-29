@@ -161,28 +161,6 @@ function TableIcon() {
 }
 
 // Status-specific icons for badges
-function StatusIcon({ status }: { status: WorkOrderStatus }) {
-  const cls = "w-3 h-3 shrink-0";
-  switch (status) {
-    case "graphics_pending":
-      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>;
-    case "graphics_active":
-      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z" /><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" /><path d="M2 2l7.586 7.586" /><circle cx="11" cy="11" r="2" /></svg>;
-    case "graphics_done":
-      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>;
-    case "production":
-      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z" /></svg>;
-    case "ready_installation":
-      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="3" /></svg>;
-    case "completed":
-      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>;
-    case "cancelled":
-      return <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>;
-    default:
-      return null;
-  }
-}
-
 // KPI card icons
 function KpiIcon({ type }: { type: "total" | "completed" | "fabrication" | "active" | "problems" }) {
   const cls = "w-5 h-5";
@@ -234,15 +212,6 @@ function KpiCard({ icon, iconBg, value, label, onFilter }: KpiCardProps) {
         </button>
       )}
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: WorkOrderStatus }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_COLORS[status]}`}>
-      <StatusIcon status={status} />
-      {STATUS_LABELS[status]}
-    </span>
   );
 }
 
@@ -403,6 +372,11 @@ function ProgressTracker({ order }: { order: WorkOrder }) {
           )}
         </div>
       )}
+      {/* Status label under the timeline (single source — the separate Status-column
+          badge was removed to avoid showing the same status twice per row). */}
+      <span className="text-[10px] font-semibold text-gray-600 mt-0.5 text-center leading-tight max-w-[110px]">
+        {STATUS_LABELS[status]}
+      </span>
     </div>
   );
 }
@@ -557,10 +531,9 @@ function OrderRow({ order, index, phoneMap, riskScore, onSelect, onStartComplete
         <ProgressTracker order={order} />
       </td>
 
-      {/* Status */}
+      {/* Alerts / SLA (the main status now shows under the timeline — not repeated here) */}
       <td className="px-3 py-3.5">
         <div className="flex flex-col gap-1">
-          <StatusBadge status={order.status} />
           {order.orderType === "field_work" && order.customerApprovalStatus === "pending" && (
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 w-fit">
               ממתין לאישור לקוח
