@@ -75,8 +75,11 @@ purpose · input · output · allowed actions · approval requirement · tables/
   Assistant, Follow-up Reminder, Approval Assistant.
 - **Operations:** Order-Intake Reviewer (exists as the drafts queue), Scheduling
   Assistant, Work-Readiness QA, Field Tracker.
-- **Fleet:** Vehicle-Document Reviewer (exists via fleet scan), License/Test-Expiry
-  Agent, Maintenance Reminder, Issue Triage.
+- **Fleet:** Vehicle-Document Reviewer (exists via fleet scan). License/Test-Expiry
+  detection **already exists** in `equipment-fleet-agent` (missing-license-number,
+  inspection/test expiry, insurance expiry) and was **extended 2026-05-29 to also flag
+  vehicle `license_expiry_date`** (expired / due-soon). Remaining: per-document
+  `expiry_date` (operational docs JSONB) checks; Maintenance Reminder; Issue Triage.
 - **Finance:** Invoice Classifier (exists in upload classification), Expense Linker,
   Supplier-Doc Reviewer, Collections Follow-up.
 - **Warehouse:** Stock-Movement Validator, Low-Stock Alert, Catalog-Consistency,

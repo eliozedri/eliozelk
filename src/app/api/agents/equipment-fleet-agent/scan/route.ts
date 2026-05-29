@@ -23,6 +23,10 @@ const INSPECTION_ERROR_DAYS = 14;
 const INSURANCE_WARN_DAYS  = 30;
 const INSURANCE_ERROR_DAYS = 14;
 
+// Vehicle license (רישיון רכב) expiry thresholds.
+const LICENSE_WARN_DAYS  = 30;
+const LICENSE_ERROR_DAYS = 14;
+
 const MAINTENANCE_WARN_DAYS = 14;
 
 // Thresholds for equipment stuck in 'in_repair' status.
@@ -46,6 +50,7 @@ interface DbEquipmentRow {
   next_maintenance_date: string | null;
   next_inspection_date: string | null;
   next_insurance_date: string | null;
+  license_expiry_date: string | null;
   updated_at: string;
 }
 
@@ -73,7 +78,7 @@ export async function POST(req: NextRequest) {
 
     const equipmentRes = await db
       .from("equipment")
-      .select("id,display_name,category_key,status,identification_confidence,license_number,last_maintenance_date,next_maintenance_date,next_inspection_date,next_insurance_date,updated_at")
+      .select("id,display_name,category_key,status,identification_confidence,license_number,last_maintenance_date,next_maintenance_date,next_inspection_date,next_insurance_date,license_expiry_date,updated_at")
       .eq("is_active", true);
 
     if (equipmentRes.error) throw new Error(equipmentRes.error.message);
@@ -208,6 +213,64 @@ export async function POST(req: NextRequest) {
             },
             recommendedResolution: "תאם טסט לפני תאריך הפקיעה",
           }, dedupeMap, result);
+        }
+      }
+
+      // ── Vehicle license (רישיון רכב) expiry ──────────────────────────────
+      // Licensed assets must hold a valid vehicle licence; OCR-scanned licence docs
+      // populate license_expiry_date. Surface expired / near-expiry as exceptions.
+      if (LICENSED_CATEGORIES.has(item.category_key)) {
+        const licDays = daysDiff(item.license_expiry_date, nowMs);
+        if (licDays !== null) {
+          if (licDays <= 0) {
+            const k = dedupeKey("license_expired", "equipment", item.id);
+            activeDedupeKeys.add(k);
+            await upsertException(db, AGENT_ID, {
+              category: "license_expired",
+              entityType: "equipment",
+              entityId: item.id,
+              severity: "critical",
+              title: `רכב: ${name} — רישיון רכב פג תוקף`,
+              description: `תוקף רישיון: ${item.license_expiry_date} | פג לפני ${Math.abs(Math.round(licDays))} ימים | אסור לשיגור`,
+              detectedFromData: {
+                equipmentId: item.id, displayName: name,
+                licenseExpiryDate: item.license_expiry_date, daysExpired: Math.abs(Math.round(licDays)),
+              },
+              recommendedResolution: "הסר את הרכב משיגור וחדש את רישיון הרכב מיידית",
+            }, dedupeMap, result);
+          } else if (licDays <= LICENSE_ERROR_DAYS) {
+            const k = dedupeKey("license_due_soon", "equipment", item.id);
+            activeDedupeKeys.add(k);
+            await upsertException(db, AGENT_ID, {
+              category: "license_due_soon",
+              entityType: "equipment",
+              entityId: item.id,
+              severity: "error",
+              title: `רכב: ${name} — רישיון רכב פג בעוד ${Math.round(licDays)} ימים`,
+              description: `תוקף רישיון: ${item.license_expiry_date} | נדרש חידוש דחוף`,
+              detectedFromData: {
+                equipmentId: item.id, displayName: name,
+                licenseExpiryDate: item.license_expiry_date, daysRemaining: Math.round(licDays),
+              },
+              recommendedResolution: "חדש את רישיון הרכב בדחיפות לפני תאריך הפקיעה",
+            }, dedupeMap, result);
+          } else if (licDays <= LICENSE_WARN_DAYS) {
+            const k = dedupeKey("license_due_soon", "equipment", item.id);
+            activeDedupeKeys.add(k);
+            await upsertException(db, AGENT_ID, {
+              category: "license_due_soon",
+              entityType: "equipment",
+              entityId: item.id,
+              severity: "warn",
+              title: `רכב: ${name} — רישיון רכב עומד לפוג בעוד ${Math.round(licDays)} ימים`,
+              description: `תוקף רישיון: ${item.license_expiry_date} | תזמן חידוש בקרוב`,
+              detectedFromData: {
+                equipmentId: item.id, displayName: name,
+                licenseExpiryDate: item.license_expiry_date, daysRemaining: Math.round(licDays),
+              },
+              recommendedResolution: "חדש את רישיון הרכב לפני תאריך הפקיעה",
+            }, dedupeMap, result);
+          }
         }
       }
 
