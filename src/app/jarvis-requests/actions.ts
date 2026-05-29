@@ -2,6 +2,14 @@
 
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import {
+  buildPreview,
+  executeApproved,
+  revertExecution,
+  type CatalogRow,
+  type CommandLike,
+  type ExecDb,
+} from "@/lib/jarvis/priceExecution";
 
 /**
  * Owner decisions on JARVIS CEO-Agent requests. STATUS-ONLY — these never
@@ -49,4 +57,95 @@ export async function needsInfoRequest(id: string, note: string): Promise<Decisi
 
 export async function archiveRequest(id: string): Promise<DecisionResult> {
   return setStatus(id, { status: "archived" });
+}
+
+// ---------------------------------------------------------------------------
+// Tier-B controlled execution. The ONLY mutation surface is catalog_items.default_price
+// (via execDb.updatePrice). Gates: preview only from 'approved'; execute only from
+// 'execution_approved' (the SECOND approval) with a stored preview; revert from 'executed'.
+// ---------------------------------------------------------------------------
+
+/** The single, reviewable mutation seam for Tier-B. Touches only catalog_items.default_price. */
+function execDb(supabase: ReturnType<typeof getServiceSupabase>): ExecDb {
+  return {
+    async selectActiveCatalog() {
+      const { data, error } = await supabase
+        .from("catalog_items")
+        .select("id,name,category,default_price")
+        .eq("is_active", true);
+      return { data: (data as CatalogRow[] | null) ?? null, error };
+    },
+    async updatePrice(id: string, price: number) {
+      // STRICT: only the sell-price column is ever written.
+      const { error } = await supabase.from("catalog_items").update({ default_price: price }).eq("id", id);
+      return { error };
+    },
+  };
+}
+
+async function loadCommand(supabase: ReturnType<typeof getServiceSupabase>, id: string): Promise<CommandLike | null> {
+  const { data } = await supabase
+    .from("jarvis_ceo_agent_commands")
+    .select("status, action_type, target_department, payload_json, preview_json, rollback_json")
+    .eq("id", id)
+    .maybeSingle();
+  return (data as CommandLike | null) ?? null;
+}
+
+/** Step 1 of execution: dry-run preview (affected rows + rollback snapshot). No mutation. */
+export async function generatePreview(id: string): Promise<DecisionResult> {
+  try {
+    const supabase = getServiceSupabase();
+    const command = await loadCommand(supabase, id);
+    if (!command) return { ok: false, error: "not_found" };
+    if (command.status !== "approved") return { ok: false, error: "not_in_approved_state" };
+    const res = await buildPreview(execDb(supabase), command);
+    if (!res.ok) return { ok: false, error: res.error };
+    return setStatus(id, { status: "preview_ready", preview_json: res.preview, rollback_json: res.rollback });
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Step 2: the SECOND approval — explicitly authorize execution of the previewed change. */
+export async function approveExecution(id: string): Promise<DecisionResult> {
+  const supabase = getServiceSupabase();
+  const command = await loadCommand(supabase, id);
+  if (!command) return { ok: false, error: "not_found" };
+  if (command.status !== "preview_ready") return { ok: false, error: "no_preview_to_approve" };
+  return setStatus(id, { status: "execution_approved", execution_approved_at: new Date().toISOString() });
+}
+
+/** Step 3: execute — only after preview + second approval. Mutates default_price only. */
+export async function executeRequest(id: string): Promise<DecisionResult> {
+  try {
+    const supabase = getServiceSupabase();
+    const command = await loadCommand(supabase, id);
+    if (!command) return { ok: false, error: "not_found" };
+    const res = await executeApproved(execDb(supabase), command);
+    if (!res.ok) return { ok: false, error: res.error };
+    const allFailed = res.result.updated_count === 0 && res.result.failed_count > 0;
+    return setStatus(id, {
+      status: allFailed ? "failed" : "executed",
+      execution_result: res.result,
+      executed_at: res.result.executed_at,
+      executed_by: "owner",
+    });
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Revert an executed change using the stored rollback snapshot. */
+export async function revertRequest(id: string): Promise<DecisionResult> {
+  try {
+    const supabase = getServiceSupabase();
+    const command = await loadCommand(supabase, id);
+    if (!command) return { ok: false, error: "not_found" };
+    const res = await revertExecution(execDb(supabase), command);
+    if (!res.ok) return { ok: false, error: res.error };
+    return setStatus(id, { status: "reverted", reverted_at: new Date().toISOString() });
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
 }

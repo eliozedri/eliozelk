@@ -2,7 +2,16 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { approveRequest, archiveRequest, needsInfoRequest, rejectRequest } from "@/app/jarvis-requests/actions";
+import {
+  approveExecution,
+  approveRequest,
+  archiveRequest,
+  executeRequest,
+  generatePreview,
+  needsInfoRequest,
+  rejectRequest,
+  revertRequest,
+} from "@/app/jarvis-requests/actions";
 
 /**
  * Owner-facing review screen for JARVIS → CEO-Agent requests. List + status/risk
@@ -30,13 +39,34 @@ export interface JarvisRequestRow {
   dry_run_summary: string | null;
   rollback_plan: string | null;
   payload_json: Record<string, unknown> | null;
+  preview_json: PreviewJson | null;
+  execution_result: ExecutionResultJson | null;
+  executed_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
+interface PreviewJson {
+  affected_count: number;
+  pct: number;
+  department: string;
+  price_column: string;
+  items: { id: string; name: string; old_price: number; new_price: number }[];
+}
+interface ExecutionResultJson {
+  updated_count: number;
+  failed_count: number;
+  failures?: { id: string; error: string }[];
+}
+
 const STATUS: Record<string, { label: string; badge: string }> = {
   pending_review: { label: "ממתין לאישור", badge: "badge-amber" },
-  approved: { label: "אושר (לביצוע ידני/עתידי)", badge: "badge-green" },
+  approved: { label: "אושר — מוכן לתצוגה מקדימה", badge: "badge-green" },
+  preview_ready: { label: "תצוגה מקדימה מוכנה", badge: "badge-teal" },
+  execution_approved: { label: "אושר לביצוע (אישור 2)", badge: "badge-violet" },
+  executed: { label: "בוצע", badge: "badge-green" },
+  failed: { label: "נכשל", badge: "badge-red" },
+  reverted: { label: "שוחזר", badge: "badge-gray" },
   rejected: { label: "נדחה", badge: "badge-red" },
   needs_info: { label: "דרוש מידע", badge: "badge-blue" },
   archived: { label: "אורכב", badge: "badge-gray" },
@@ -164,31 +194,84 @@ export function JarvisRequests({ rows }: { rows: JarvisRequestRow[] }) {
             </dl>
 
             <p className="text-xs text-amber-300/80 mt-3">
-              אישור = ״אושר לביצוע ידני/עתידי״. ביצוע אוטומטי עדיין כבוי.
+              כל ביצוע דורש שני שלבים: תצוגה מקדימה (dry-run, ללא שינוי) ואז אישור ביצוע (אישור שני). השינוי הפיך — נשמר snapshot לשחזור.
             </p>
 
-            {(selected.status === "pending_review" || selected.status === "needs_info") && (
-              <>
-                <textarea
-                  className="glass-inner w-full mt-3 p-2 text-sm text-white/90 bg-transparent rounded"
-                  placeholder="סיבת דחייה / הערה (לדחייה או 'דרוש מידע')"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  rows={2}
-                />
-                <div className="flex flex-wrap gap-2 mt-3">
-                  <button className="btn-glow" disabled={pending} onClick={() => act(() => approveRequest(selected.id))}>✅ אשר (לביצוע ידני/עתידי)</button>
-                  <button className="btn-glass" disabled={pending} onClick={() => act(() => rejectRequest(selected.id, reason))}>🗑️ דחה</button>
-                  <button className="btn-glass" disabled={pending} onClick={() => act(() => needsInfoRequest(selected.id, reason))}>❓ דרוש מידע</button>
-                  <button className="btn-glass" disabled={pending} onClick={() => act(() => archiveRequest(selected.id))}>📦 ארכב</button>
+            {/* Dry-run preview panel */}
+            {selected.preview_json && (
+              <div className="glass-inner mt-3 p-3 rounded text-sm">
+                <div className="text-white/70 mb-1">
+                  תצוגה מקדימה (dry-run) — {selected.preview_json.affected_count} פריטים · {selected.preview_json.pct > 0 ? "+" : ""}{selected.preview_json.pct}% · עמודה: {selected.preview_json.price_column}
                 </div>
-              </>
-            )}
-            {selected.status !== "pending_review" && selected.status !== "needs_info" && (
-              <div className="flex gap-2 mt-3">
-                <button className="btn-glass" disabled={pending} onClick={() => act(() => archiveRequest(selected.id))}>📦 ארכב</button>
+                {selected.preview_json.items.slice(0, 6).map((it) => (
+                  <div key={it.id} className="text-white/80">• {it.name}: ₪{it.old_price} → ₪{it.new_price}</div>
+                ))}
+                {selected.preview_json.affected_count > 6 && (
+                  <div className="text-white/40">…ועוד {selected.preview_json.affected_count - 6}</div>
+                )}
               </div>
             )}
+
+            {/* Execution result */}
+            {selected.execution_result && (
+              <div className="glass-inner mt-3 p-3 rounded text-sm">
+                <div className="text-green-300/90">
+                  בוצע: {selected.execution_result.updated_count} עודכנו
+                  {selected.execution_result.failed_count ? ` · ${selected.execution_result.failed_count} נכשלו` : ""}.
+                </div>
+                {selected.executed_at && <div className="text-white/40">{fmt(selected.executed_at)}</div>}
+              </div>
+            )}
+
+            <div className="mt-4">
+              {(selected.status === "pending_review" || selected.status === "needs_info") && (
+                <>
+                  <textarea
+                    className="glass-inner w-full p-2 text-sm text-white/90 bg-transparent rounded"
+                    placeholder="סיבת דחייה / הערה (לדחייה או 'דרוש מידע')"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    rows={2}
+                  />
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <button className="btn-glow" disabled={pending} onClick={() => act(() => approveRequest(selected.id))}>✅ אשר בקשה</button>
+                    <button className="btn-glass" disabled={pending} onClick={() => act(() => rejectRequest(selected.id, reason))}>🗑️ דחה</button>
+                    <button className="btn-glass" disabled={pending} onClick={() => act(() => needsInfoRequest(selected.id, reason))}>❓ דרוש מידע</button>
+                    <button className="btn-glass" disabled={pending} onClick={() => act(() => archiveRequest(selected.id))}>📦 ארכב</button>
+                  </div>
+                </>
+              )}
+              {selected.status === "approved" && (
+                <div className="flex flex-wrap gap-2">
+                  <button className="btn-glow" disabled={pending} onClick={() => act(() => generatePreview(selected.id))}>🔍 צור תצוגה מקדימה (dry-run)</button>
+                  <button className="btn-glass" disabled={pending} onClick={() => act(() => archiveRequest(selected.id))}>📦 ארכב</button>
+                </div>
+              )}
+              {selected.status === "preview_ready" && (
+                <div className="flex flex-wrap gap-2">
+                  <button className="btn-glow" disabled={pending} onClick={() => act(() => approveExecution(selected.id))}>✅ אשר ביצוע (אישור 2)</button>
+                  <button className="btn-glass" disabled={pending} onClick={() => act(() => rejectRequest(selected.id, reason))}>🗑️ דחה</button>
+                  <button className="btn-glass" disabled={pending} onClick={() => act(() => archiveRequest(selected.id))}>📦 ארכב</button>
+                </div>
+              )}
+              {selected.status === "execution_approved" && (
+                <div className="flex flex-wrap gap-2">
+                  <button className="btn-glow" disabled={pending} onClick={() => act(() => executeRequest(selected.id))}>🚀 בצע עכשיו (עדכון מחירים)</button>
+                  <button className="btn-glass" disabled={pending} onClick={() => act(() => archiveRequest(selected.id))}>📦 ארכב</button>
+                </div>
+              )}
+              {selected.status === "executed" && (
+                <div className="flex flex-wrap gap-2">
+                  <button className="btn-glass" disabled={pending} onClick={() => act(() => revertRequest(selected.id))}>↩️ שחזר מחירים (revert)</button>
+                  <button className="btn-glass" disabled={pending} onClick={() => act(() => archiveRequest(selected.id))}>📦 ארכב</button>
+                </div>
+              )}
+              {(selected.status === "failed" || selected.status === "reverted" || selected.status === "rejected") && (
+                <div className="flex gap-2">
+                  <button className="btn-glass" disabled={pending} onClick={() => act(() => archiveRequest(selected.id))}>📦 ארכב</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
