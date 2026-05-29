@@ -50,6 +50,7 @@ const NAV_SECTIONS: NavSection[] = [
       { tabId: "dashboard", href: "/", label: "מרכז שליטה", icon: <LayoutDashboard className={ICON_CLS} />, matchFn: (p) => p === "/", title: "בעיות פתוחות בהזמנות" },
       { tabId: "orders", href: "/orders", label: "טבלת הזמנות", icon: <Table2 className={ICON_CLS} />, matchFn: (p) => p.startsWith("/orders") },
       { tabId: "team-bot-orders", href: "/team-bot-orders", label: "הזמנות מהבוט", icon: <Send className={ICON_CLS} />, matchFn: (p) => p.startsWith("/team-bot-orders"), noBadge: true, title: "טיוטות הזמנה שהתקבלו דרך בוט הטלגרם" },
+      { tabId: "agents", href: "/jarvis-requests", label: "בקשות מ-JARVIS", icon: <Bot className={ICON_CLS} />, matchFn: (p) => p.startsWith("/jarvis-requests"), noBadge: true, title: "משימות שגראוויס שלח ל-CEO Agent של אלקיים — לאישור" },
       { tabId: "schedule", href: "/schedule", label: "סידור שבועי", icon: <Calendar className={ICON_CLS} />, matchFn: (p) => p.startsWith("/schedule") },
     ],
   },
