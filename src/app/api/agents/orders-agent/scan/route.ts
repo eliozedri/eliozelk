@@ -35,6 +35,18 @@ const GRAPHICS_NOT_SENT_ERROR_H = 24;
 const STANDBY_WARN_H  = 720;  // 30 days
 const STANDBY_ERROR_H = 2160; // 90 days
 
+// External / bot / Jarvis order submissions land as pending_review drafts in
+// team_bot_order_drafts and must be reviewed by staff before becoming real orders.
+// Flag drafts left unreviewed so customer-facing intake never silently disappears.
+const EXTERNAL_DRAFT_WARN_H  = 24;
+const EXTERNAL_DRAFT_ERROR_H = 72;
+
+const EXTERNAL_SOURCE_LABEL: Record<string, string> = {
+  external_web_form: "טופס חיצוני",
+  telegram_orders_bot: "בוט הזמנות",
+  jarvis: "הזמנת מנהל",
+};
+
 export async function POST(req: NextRequest) {
   const db = getServiceSupabase();
   const start = Date.now();
@@ -223,9 +235,42 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── External / bot / Jarvis order drafts awaiting review ─────────────────
+    // These never auto-become work_orders; staff must promote them. Flag aged
+    // pending_review drafts so external intake is not forgotten / does not bypass
+    // the approval queue by sitting unseen.
+    const draftsRes = await db
+      .from("team_bot_order_drafts")
+      .select("id,status,source,customer,city,cart,created_at")
+      .eq("status", "pending_review");
+    if (!draftsRes.error) {
+      const drafts = draftsRes.data ?? [];
+      result.entitiesScanned += drafts.length;
+      for (const d of drafts) {
+        const hrs = hoursSince(d.created_at as string, nowMs);
+        if (hrs < EXTERNAL_DRAFT_WARN_H) continue;
+        const severity = hrs >= EXTERNAL_DRAFT_ERROR_H ? "error" : "warn";
+        const id = String(d.id);
+        const k = dedupeKey("external_order_review_aged", "team_bot_order_draft", id);
+        activeDedupeKeys.add(k);
+        const srcLabel = EXTERNAL_SOURCE_LABEL[String(d.source)] ?? String(d.source ?? "מקור לא ידוע");
+        const itemCount = Array.isArray(d.cart) ? d.cart.length : 0;
+        await upsertException(db, AGENT_ID, {
+          category: "external_order_review_aged",
+          entityType: "team_bot_order_draft",
+          entityId: id,
+          severity,
+          title: `בקשת הזמנה (${srcLabel}) ממתינה לאישור ${Math.round(hrs)} שעות`,
+          description: `לקוח: ${d.customer || "(ללא שם)"} | עיר: ${d.city || "—"} | פריטים: ${itemCount} | טרם נסקרה ע״י צוות`,
+          detectedFromData: { draftId: id, source: d.source, customer: d.customer, city: d.city, itemCount, hoursWaiting: Math.round(hrs) },
+          recommendedResolution: "פתח את 'הזמנות מהבוט' וקדם/דחה את הבקשה",
+        }, dedupeMap, result);
+      }
+    }
+
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 
-    const summary = `סריקה הושלמה: ${result.entitiesScanned} הזמנות פעילות | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו`;
+    const summary = `סריקה הושלמה: ${result.entitiesScanned} ישויות | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו`;
     await writeAgentActivity(db, AGENT_ID, "detection", summary, {
       entitiesScanned: result.entitiesScanned,
       exceptionsCreated: result.exceptionsCreated,

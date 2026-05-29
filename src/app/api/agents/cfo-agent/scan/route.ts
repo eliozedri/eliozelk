@@ -455,6 +455,90 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Supplier documents (OCR finance pipeline) awaiting review ────────────
+    // Connect OCR document intake to financial oversight: surface documents that
+    // are stuck, low-confidence, unclassified, duplicate-suspected, or aging
+    // unreviewed. Read-only — nothing is posted; all resolution is human-gated.
+    const docsRes = await db
+      .from("supplier_documents")
+      .select("id,status,document_number,total_after_vat,extraction_confidence,requires_classification,supplier_name_raw,file_name,created_at")
+      .in("status", ["draft_ready", "needs_review", "duplicate_suspected", "extracting"]);
+    if (!docsRes.error) {
+      const docs = docsRes.data ?? [];
+      result.entitiesScanned += docs.length;
+      const docNowMs = Date.now();
+      const DAY = 86_400_000;
+      for (const d of docs) {
+        const id = String(d.id);
+        const name = (d.supplier_name_raw as string) || (d.file_name as string) || id;
+        const conf = typeof d.extraction_confidence === "number" ? d.extraction_confidence : null;
+        const ageDays = (docNowMs - new Date(d.created_at as string).getTime()) / DAY;
+
+        if (d.status === "duplicate_suspected") {
+          const k = dedupeKey("supplier_doc_duplicate_suspected", "supplier_document", id); activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "supplier_doc_duplicate_suspected", entityType: "supplier_document", entityId: id, severity: "error",
+            title: `מסמך ספק חשוד ככפילות — ${name}`,
+            description: `מס׳ מסמך: ${d.document_number || "—"} | סכום: ${d.total_after_vat ?? "—"} | דורש הכרעה לפני רישום`,
+            detectedFromData: { docId: id, supplier: name, documentNumber: d.document_number, total: d.total_after_vat },
+            recommendedResolution: "פתח בהנהלת כספים והכרע את הכפילות (אשר/דחה)",
+          }, dedupeMap, result);
+          continue;
+        }
+        if (d.status === "extracting" && ageDays * 1440 > 5) {
+          const k = dedupeKey("supplier_doc_stuck_extracting", "supplier_document", id); activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "supplier_doc_stuck_extracting", entityType: "supplier_document", entityId: id, severity: "error",
+            title: `מסמך ספק תקוע בעיבוד OCR — ${name}`,
+            description: "המסמך נתקע בשלב 'extracting' — ייתכן ש-OCR נכשל; נדרשת הזנה/אימות ידני",
+            detectedFromData: { docId: id, fileName: d.file_name },
+            recommendedResolution: "פתח את המסמך והזן/אמת ידנית; הסריקה האוטומטית לא הושלמה",
+          }, dedupeMap, result);
+          continue;
+        }
+        // draft_ready / needs_review
+        if (conf !== null && conf === 0) {
+          const k = dedupeKey("supplier_doc_ocr_failed", "supplier_document", id); activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "supplier_doc_ocr_failed", entityType: "supplier_document", entityId: id, severity: "error",
+            title: `מסמך ספק — זיהוי OCR נכשל — ${name}`,
+            description: "ה-OCR לא חילץ נתונים — נדרשת הזנה ידנית של מספר מסמך, תאריך וסכום",
+            detectedFromData: { docId: id, fileName: d.file_name },
+            recommendedResolution: "פתח בהנהלת כספים והזן את שדות המסמך ידנית",
+          }, dedupeMap, result);
+        } else if (conf !== null && conf < 0.5) {
+          const k = dedupeKey("supplier_doc_low_confidence", "supplier_document", id); activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "supplier_doc_low_confidence", entityType: "supplier_document", entityId: id, severity: "warn",
+            title: `מסמך ספק — ביטחון OCR נמוך (${Math.round(conf * 100)}%) — ${name}`,
+            description: "תוצאות ה-OCR בלתי ודאיות — יש לאמת את השדות מול המקור",
+            detectedFromData: { docId: id, confidence: conf, documentNumber: d.document_number },
+            recommendedResolution: "אמת את השדות שזוהו בהנהלת כספים לפני רישום",
+          }, dedupeMap, result);
+        }
+        if (d.requires_classification === true) {
+          const k = dedupeKey("supplier_doc_needs_classification", "supplier_document", id); activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "supplier_doc_needs_classification", entityType: "supplier_document", entityId: id, severity: "warn",
+            title: `מסמך ספק דורש סיווג הוצאה — ${name}`,
+            description: "לא זוהה סוג הוצאה אוטומטית — נדרש סיווג ידני לפני רישום",
+            detectedFromData: { docId: id, supplier: name },
+            recommendedResolution: "סווג את סוג ההוצאה בהנהלת כספים",
+          }, dedupeMap, result);
+        }
+        if (ageDays >= 3) {
+          const k = dedupeKey("supplier_doc_review_aged", "supplier_document", id); activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "supplier_doc_review_aged", entityType: "supplier_document", entityId: id, severity: ageDays >= 7 ? "error" : "warn",
+            title: `מסמך ספק ממתין לאימות ${Math.round(ageDays)} ימים — ${name}`,
+            description: `סטטוס: ${d.status} | מסמך כספי שטרם נסקר/נרשם`,
+            detectedFromData: { docId: id, status: d.status, ageDays: Math.round(ageDays) },
+            recommendedResolution: "סקור ורשום/דחה את המסמך בהנהלת כספים",
+          }, dedupeMap, result);
+        }
+      }
+    }
+
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 
     const summary = `סריקה כספית: ${result.entitiesScanned} יומנים | ${totalLoss} הפסד | ${totalMarginal} שולי | ${totalMissingData} חסר נתונים | ${missingCostPriceCount} חסרי עלות | ${missingSnapshotCount} snapshot חסר | ${lowConfidenceCount} ביטחון נמוך | ${negativeMarginCount} הפסד בהזמנה | ${belowTargetCount} מתחת לסף | ${nearTargetCount} קרוב ליעד | ${repeatedNegativeCustomers} לקוחות הפסדיים | ${repeatedBelowTargetCustomers} לקוחות מרווח נמוך | ${result.exceptionsCreated} חריגות חדשות`;

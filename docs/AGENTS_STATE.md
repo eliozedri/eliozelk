@@ -94,7 +94,20 @@ an exception/notification; no new mutation surface.
 ## What's implemented vs planned
 - **Implemented:** 9 department scanners, Jarvis intake/readback/OCR-worker, CEO
   command queue (in progress), AgentCommandCenter/DigitalHQ UI, audit + approvals tables.
-- **Planned only:** the sub-agents above; tightening agent-table RLS.
+- **Capability upgrades 2026-05-29 (code):**
+  - `equipment-fleet-agent` — added vehicle `license_expiry_date` expiry detection.
+  - `cfo-agent` — now scans `supplier_documents` (the OCR finance pipeline) and raises
+    exceptions for duplicate-suspected, stuck-in-`extracting` (OCR failed), OCR-failed
+    (confidence 0), low-confidence (<50%), needs-classification, and aged-unreviewed
+    (≥3d warn / ≥7d error). Read-only; nothing posted. → surfaces in AgentCommandCenter/DigitalHQ.
+  - `orders-agent` — now scans `team_bot_order_drafts` and flags aged `pending_review`
+    external/bot/Jarvis submissions (≥24h warn / ≥72h error) so intake never silently
+    disappears or bypasses the approval queue.
+  - `/api/agents/control` — server-gated (verifyMasterAuth) + audited writes for
+    agent_approvals/exceptions/tasks (replaces direct browser writes).
+- **Planned only:** the remaining sub-agents above; tightening agent-table RLS
+  (migration prepared, not applied); per-document expiry checks; warehouse Low-Stock
+  notify sub-agent; finance Collections follow-up.
 
 ## Do not touch without explicit approval
 The active CEO-agent parallel files (top of this doc); the approval-gate logic;
