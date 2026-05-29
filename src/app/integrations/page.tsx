@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { authedFetch } from "@/lib/clientApi";
 
 type HealthResult = {
   mode: string;
@@ -82,7 +83,7 @@ export default function IntegrationsPage() {
     setHealthLoading(true);
     setHealthError(null);
     try {
-      const res = await fetch("/api/sap/health");
+      const res = await authedFetch("/api/sap/health");
       const data: HealthResult = await res.json();
       setHealth(data);
     } catch (err) {
@@ -96,7 +97,7 @@ export default function IntegrationsPage() {
     setDryRunLoading((p) => ({ ...p, [entity]: true }));
     setDryRunErrors((p) => { const n = { ...p }; delete n[entity]; return n; });
     try {
-      const res = await fetch(`/api/sap/dry-run?entity=${entity}`);
+      const res = await authedFetch(`/api/sap/dry-run?entity=${entity}`);
       const data = await res.json() as DryRunResult & { error?: string };
       if (data.error) throw new Error(data.error);
       setDryRuns((p) => ({ ...p, [entity]: data }));

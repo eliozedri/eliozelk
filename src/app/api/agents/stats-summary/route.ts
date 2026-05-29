@@ -2,6 +2,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import type { AgentStats } from "@/types/agent";
 
+// ⚠️ SECURITY NOTE (audit 2026-05-29): this GET is intentionally UNAUTHENTICATED and
+// returns aggregate per-agent counts (open tasks/exceptions/critical/approvals +
+// "speaking"). CORS limits browser cross-origin reads but does NOT prevent direct
+// curl/server access — treat the response as PUBLIC. It exposes no PII, order, or
+// financial data. There are currently NO in-repo callers (likely an external
+// "Neural Core" showcase feed). DECISION NEEDED: if no external consumer relies on
+// it, gate with requireAuth; otherwise keep it but never add sensitive fields here.
+
 // Active Neural Core agents — engineering-plan-agent intentionally excluded (future/out-of-core).
 const ACTIVE_AGENT_IDS = [
   "ceo",

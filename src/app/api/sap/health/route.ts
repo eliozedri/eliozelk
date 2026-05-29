@@ -1,9 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSapEnvStatus, loadSapConfig, SapAuthError } from "@/lib/sap/config";
 import { login, logout, safeGet } from "@/lib/sap/client";
 import type { SapODataResponse, SapBusinessPartner } from "@/lib/sap/types";
+import { requireAuth } from "@/lib/auth/apiAuth";
 
-export async function GET(): Promise<NextResponse> {
+// Internal integration diagnostics — must be authenticated. When SAP is enabled
+// this can reach the SAP service, so it must never be anonymously callable.
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+
   const env = getSapEnvStatus();
   const now = new Date().toISOString();
 

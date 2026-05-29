@@ -23,6 +23,7 @@ import {
   SAP_SYNC_PLAN,
   type SapSyncMetadata,
 } from "@/lib/sap/mapping";
+import { requireAuth } from "@/lib/auth/apiAuth";
 
 const SAMPLE_SIZE = 3;
 const DRY_RUN_TOP = 10;
@@ -103,6 +104,11 @@ function detectUnmappedFields(
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
+  // Internal integration diagnostics — authenticated only. With SAP enabled this
+  // triggers reads against the SAP service and returns sample records.
+  const auth = await requireAuth(req);
+  if (!auth.ok) return auth.response;
+
   const entity = req.nextUrl.searchParams.get("entity") as EntityKey | null;
 
   if (!entity) {
