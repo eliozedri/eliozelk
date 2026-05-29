@@ -214,6 +214,52 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── System risk roll-up (executive monitor across all department agents) ──
+    // Read-only aggregation of currently-open agent exceptions so the CEO / DigitalHQ
+    // view surfaces real cross-department risk instead of per-agent silos. Excludes
+    // its own summary category to avoid a self-referential feedback loop.
+    const SYSTEM_RISK_CATEGORY = "system_risk_elevated";
+    const openExcRes = await db
+      .from("agent_exceptions")
+      .select("agent_id,severity,category")
+      .eq("status", "open")
+      .neq("category", SYSTEM_RISK_CATEGORY);
+    if (!openExcRes.error) {
+      const rows = openExcRes.data ?? [];
+      const bySeverity: Record<string, number> = { critical: 0, error: 0, warn: 0, info: 0 };
+      const byAgent: Record<string, number> = {};
+      for (const r of rows) {
+        const sev = String(r.severity ?? "info");
+        bySeverity[sev] = (bySeverity[sev] ?? 0) + 1;
+        const a = String(r.agent_id ?? "unknown");
+        byAgent[a] = (byAgent[a] ?? 0) + 1;
+      }
+      const critical = bySeverity.critical ?? 0;
+      const errors = bySeverity.error ?? 0;
+      await writeAgentActivity(
+        db, AGENT_ID, "detection",
+        `סקירת סיכון מערכתית: ${rows.length} חריגות פתוחות (${critical} קריטיות, ${errors} שגיאות) על פני ${Object.keys(byAgent).length} סוכנים`,
+        { totalOpen: rows.length, bySeverity, byAgent },
+      );
+
+      const ELEVATED_CRITICAL = 3;
+      if (critical >= ELEVATED_CRITICAL) {
+        const k = dedupeKey(SYSTEM_RISK_CATEGORY, "system", "global");
+        activeDedupeKeys.add(k);
+        const topAgents = Object.entries(byAgent).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([a, n]) => `${a}:${n}`).join(", ");
+        await upsertException(db, AGENT_ID, {
+          category: SYSTEM_RISK_CATEGORY,
+          entityType: "system",
+          entityId: "global",
+          severity: "critical",
+          title: `סיכון מערכתי מוגבר — ${critical} חריגות קריטיות פתוחות`,
+          description: `סה״כ ${rows.length} חריגות פתוחות | קריטיות: ${critical} | שגיאות: ${errors} | מובילים: ${topAgents}`,
+          detectedFromData: { bySeverity, byAgent },
+          recommendedResolution: "פתח את מרכז הסוכנים (DigitalHQ) וטפל בחריגות הקריטיות לפי מחלקה",
+        }, dedupeMap, result);
+      }
+    }
+
     // ── Auto-resolve stale exceptions ─────────────────────────────────────
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 

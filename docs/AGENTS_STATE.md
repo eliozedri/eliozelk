@@ -105,6 +105,14 @@ an exception/notification; no new mutation surface.
     disappears or bypasses the approval queue.
   - `/api/agents/control` — server-gated (verifyMasterAuth) + audited writes for
     agent_approvals/exceptions/tasks (replaces direct browser writes).
+  - `ceo` scanner — added a **cross-agent System Risk roll-up**: aggregates all open
+    agent_exceptions (by severity + by agent) into a CEO/DigitalHQ activity pulse and
+    escalates a `system_risk_elevated` critical exception when ≥3 criticals are open.
+    This is the System-Risk-Monitor (read-only). NOTE: the `ceo` *scanner* agent is
+    distinct from the parallel-owned `/api/jarvis/ceo-agent` Tier-A/B command layer.
+  - `equipment-fleet-agent` — added **per-document expiry** from the asset
+    `documents[]` JSONB (OCR-populated licence/insurance/test attachments):
+    `document_expired` / `document_due_soon`.
 - **Planned only:** the remaining sub-agents above; tightening agent-table RLS
   (migration prepared, not applied); per-document expiry checks; warehouse Low-Stock
   notify sub-agent; finance Collections follow-up.

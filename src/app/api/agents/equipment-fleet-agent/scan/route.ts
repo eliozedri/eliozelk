@@ -51,8 +51,14 @@ interface DbEquipmentRow {
   next_inspection_date: string | null;
   next_insurance_date: string | null;
   license_expiry_date: string | null;
+  documents: { type?: string; label?: string; expiry_date?: string }[] | null;
   updated_at: string;
 }
+
+// Per-document expiry warning window (days), for documents[].expiry_date set by the
+// fleet document scan (OCR) — licence/insurance/test PDFs attached to the asset.
+const DOC_WARN_DAYS  = 30;
+const DOC_ERROR_DAYS = 14;
 
 function daysDiff(dateStr: string | null, nowMs: number): number | null {
   if (!dateStr) return null;
@@ -78,7 +84,7 @@ export async function POST(req: NextRequest) {
 
     const equipmentRes = await db
       .from("equipment")
-      .select("id,display_name,category_key,status,identification_confidence,license_number,last_maintenance_date,next_maintenance_date,next_inspection_date,next_insurance_date,license_expiry_date,updated_at")
+      .select("id,display_name,category_key,status,identification_confidence,license_number,last_maintenance_date,next_maintenance_date,next_inspection_date,next_insurance_date,license_expiry_date,documents,updated_at")
       .eq("is_active", true);
 
     if (equipmentRes.error) throw new Error(equipmentRes.error.message);
@@ -269,6 +275,48 @@ export async function POST(req: NextRequest) {
                 licenseExpiryDate: item.license_expiry_date, daysRemaining: Math.round(licDays),
               },
               recommendedResolution: "חדש את רישיון הרכב לפני תאריך הפקיעה",
+            }, dedupeMap, result);
+          }
+        }
+      }
+
+      // ── Attached operational documents: per-document expiry ──────────────
+      // documents[].expiry_date is populated by the fleet document scan (OCR) for
+      // licence/insurance/test PDFs. Surface expired / soon-expiring attachments so
+      // an asset is never silently running on a lapsed document.
+      if (Array.isArray(item.documents)) {
+        for (let di = 0; di < item.documents.length; di++) {
+          const doc = item.documents[di];
+          const exp = doc?.expiry_date;
+          if (!exp) continue;
+          const dDays = daysDiff(exp, nowMs);
+          if (dDays === null) continue;
+          const docLabel = doc.label || doc.type || "מסמך";
+          if (dDays <= 0) {
+            const k = dedupeKey(`document_expired:${di}`, "equipment", item.id);
+            activeDedupeKeys.add(k);
+            await upsertException(db, AGENT_ID, {
+              category: "document_expired",
+              entityType: "equipment",
+              entityId: item.id,
+              severity: "error",
+              title: `ציוד: ${name} — מסמך "${docLabel}" פג תוקף`,
+              description: `סוג: ${doc.type || "—"} | תוקף: ${exp} | פג לפני ${Math.abs(Math.round(dDays))} ימים`,
+              detectedFromData: { equipmentId: item.id, displayName: name, docType: doc.type, docLabel, expiryDate: exp, daysExpired: Math.abs(Math.round(dDays)) },
+              recommendedResolution: "חדש את המסמך וצרף עותק מעודכן לכרטיס הכלי",
+            }, dedupeMap, result);
+          } else if (dDays <= DOC_WARN_DAYS) {
+            const k = dedupeKey(`document_due_soon:${di}`, "equipment", item.id);
+            activeDedupeKeys.add(k);
+            await upsertException(db, AGENT_ID, {
+              category: "document_due_soon",
+              entityType: "equipment",
+              entityId: item.id,
+              severity: dDays <= DOC_ERROR_DAYS ? "error" : "warn",
+              title: `ציוד: ${name} — מסמך "${docLabel}" פג בעוד ${Math.round(dDays)} ימים`,
+              description: `סוג: ${doc.type || "—"} | תוקף: ${exp}`,
+              detectedFromData: { equipmentId: item.id, displayName: name, docType: doc.type, docLabel, expiryDate: exp, daysRemaining: Math.round(dDays) },
+              recommendedResolution: "תזמן חידוש מסמך לפני תאריך הפקיעה",
             }, dedupeMap, result);
           }
         }
