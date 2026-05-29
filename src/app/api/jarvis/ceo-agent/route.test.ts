@@ -108,6 +108,9 @@ describe("CEO-Agent intake (Tier-A)", () => {
     // The inbound alias 'price_update_request' is stored as the CANONICAL type.
     expect(h.store[0]!.action_type).toBe("price_update_percentage");
     expect(h.store[0]!.target_department).toBe("אביזרי בטיחות");
+    // CEO-Agent analyzed it and recorded a 2-turn conversation (request + analysis).
+    expect(body.message_type).toBe("analysis");
+    expect((h.store[0]!.conversation as unknown[]).length).toBe(2);
     // No business table mutation — only the JARVIS command table is touched.
     expect(h.touched.every((t) => t === ONLY_TABLE)).toBe(true);
   });
@@ -120,11 +123,17 @@ describe("CEO-Agent intake (Tier-A)", () => {
     expect(h.store.length).toBe(1);
   });
 
-  it("refuses unsupported action types without storing them", async () => {
-    const res = await POST(reqFor({ ...validPkg, action_type: "delete_all_customers", correlation_id: "x-2" }, TOKEN));
+  it("accepts an unknown capability as a capability_gap conversation (does NOT reject/force a fixed action)", async () => {
+    const res = await POST(reqFor(
+      { ...validPkg, action_type: "make_me_coffee", correlation_id: "x-2", owner_request: "תכין לי קפה", affected_department: null },
+      TOKEN,
+    ));
     const body = await res.json();
-    expect(body.status).toBe("unsupported_action");
-    expect(h.store.length).toBe(0);
+    expect(body.message_type).toBe("capability_gap"); // honest gap, not a fake action
+    expect(h.store.length).toBe(1);
+    expect(h.store[0]!.status).toBe("capability_gap");
+    // execution still impossible — no handler for this action.
+    expect(h.touched.every((t) => t === ONLY_TABLE)).toBe(true);
   });
 
   it("accepts a NON-PRICE allowlisted action (ops_note) — generic, not price-only", async () => {

@@ -44,8 +44,19 @@ export interface JarvisRequestRow {
   preview_json: PreviewJson | null;
   execution_result: ExecutionResultJson | null;
   executed_at: string | null;
+  conversation: ConversationTurn[] | null;
+  last_message_type: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ConversationTurn {
+  seq: number;
+  source_agent: string;
+  target_agent: string;
+  message_type: string;
+  message_text: string;
+  created_at?: string;
 }
 
 interface PreviewJson {
@@ -94,6 +105,21 @@ function fmt(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+function agentLabel(a: string): string {
+  if (a === "jarvis") return "JARVIS";
+  if (a === "elkayam_ceo_agent") return "CEO Agent";
+  if (a === "owner") return "אתה";
+  return a;
+}
+const MSG_TYPE_HE: Record<string, string> = {
+  request: "בקשה", analysis: "ניתוח", needs_info: "דרוש מידע", approval_request: "בקשת אישור",
+  proposal: "הצעה", execution_preview: "תצוגת ביצוע", capability_gap: "פער יכולת",
+  status_update: "עדכון סטטוס", final_result: "תוצאה סופית",
+};
+function msgTypeLabel(t: string): string {
+  return MSG_TYPE_HE[t] ?? t;
 }
 
 export function JarvisRequests({ rows }: { rows: JarvisRequestRow[] }) {
@@ -194,6 +220,21 @@ export function JarvisRequests({ rows }: { rows: JarvisRequestRow[] }) {
               {selected.rejection_reason ? <Row k="הערה / סיבה" v={selected.rejection_reason} /> : null}
               {selected.approved_at ? <Row k="אושר" v={`${selected.approved_by ?? ""} · ${fmt(selected.approved_at)}`} /> : null}
             </dl>
+
+            {/* Agent-to-agent conversation thread (JARVIS ↔ CEO-Agent ↔ owner) */}
+            {selected.conversation && selected.conversation.length > 0 && (
+              <div className="glass-inner mt-3 p-3 rounded">
+                <div className="text-white/50 text-xs mb-2">שיחת הסוכנים</div>
+                <div className="space-y-2">
+                  {selected.conversation.map((t) => (
+                    <div key={t.seq} className="text-sm">
+                      <span className="text-white/40 text-xs">{agentLabel(t.source_agent)} · {msgTypeLabel(t.message_type)}</span>
+                      <div className="text-white/85">{t.message_text}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <p className="text-xs text-amber-300/80 mt-3">
               כל ביצוע דורש שני שלבים: תצוגה מקדימה (dry-run, ללא שינוי) ואז אישור ביצוע (אישור שני). השינוי הפיך — נשמר snapshot לשחזור.

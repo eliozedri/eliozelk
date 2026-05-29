@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { actionLabel, resolveActionType } from "@/lib/jarvis/actionCatalog";
+import { analyzeRequest, appendTurn, type ConversationTurn } from "@/lib/jarvis/ceoAnalyze";
 
 /**
  * POST /api/jarvis/ceo-agent?v=1
@@ -29,6 +30,9 @@ type CeoIntakeResponse = {
   intake_id: string | null;
   correlation_id: string | null;
   detail?: string;
+  /** The CEO-Agent's conversational reply (next dialogue turn) so JARVIS can relay it. */
+  message_type?: string;
+  message_text?: string;
 };
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -79,39 +83,44 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return json(200, { status: "pending_review", intake_id: existingA.data.id as string, correlation_id: cid, detail: "answer_recorded" });
   }
 
+  // Generic conversational request. action_type is a HINT, not a gate — the
+  // CEO-Agent accepts any Elkayam request and analyzes it; unknown capabilities
+  // become a capability_gap turn, never a rejection. Execution stays gated to
+  // allowlisted handlers + approvals downstream.
   const correlationId = str(body.correlation_id);
   const actionType = str(body.action_type);
   const ownerRequest = str(body.owner_request);
-  if (!correlationId || !actionType || !ownerRequest) {
-    return json(400, {
-      status: "needs_info",
-      intake_id: null,
-      correlation_id: correlationId || null,
-      detail: "missing correlation_id / action_type / owner_request",
-    });
+  if (!correlationId || !ownerRequest) {
+    return json(400, { status: "needs_info", intake_id: null, correlation_id: correlationId || null, detail: "missing correlation_id / owner_request" });
   }
   if (body.target_agent !== "elkayam_ceo_agent") {
     return json(400, { status: "rejected", intake_id: null, correlation_id: correlationId, detail: "wrong_target_agent" });
   }
-  const canonicalAction = resolveActionType(actionType);
-  if (!canonicalAction) {
-    return json(200, { status: "unsupported_action", intake_id: null, correlation_id: correlationId, detail: `action ${actionType} not allowlisted` });
-  }
 
   const supabase = getServiceSupabase();
-
-  // Idempotent on correlation_id — a replay returns the existing row, never a 2nd insert.
-  const existing = await supabase
-    .from("jarvis_ceo_agent_commands")
-    .select("id")
-    .eq("correlation_id", correlationId)
-    .maybeSingle();
+  const existing = await supabase.from("jarvis_ceo_agent_commands").select("id").eq("correlation_id", correlationId).maybeSingle();
   if (existing.data) {
     return json(200, { status: "pending_review", intake_id: existing.data.id as string, correlation_id: correlationId, detail: "idempotent_replay" });
   }
 
   const plan = (body.proposed_execution_plan ?? {}) as Record<string, unknown>;
-  const title = str(body.title) || actionLabel(canonicalAction);
+  const params = (body.params ?? plan.params ?? {}) as Record<string, unknown>;
+  const canonicalAction = resolveActionType(actionType);
+  const targetDepartment = str(body.affected_department) || null;
+
+  // CEO-Agent reasons about the request and picks the next dialogue turn.
+  const analysis = analyzeRequest({ action_type: actionType, owner_request: ownerRequest, target_department: targetDepartment, params });
+
+  const title = str(body.title) || (canonicalAction ? actionLabel(canonicalAction) : "בקשה לסקירת CEO-Agent");
+  let conversation: ConversationTurn[] = [];
+  conversation = appendTurn(conversation, {
+    source_agent: str(body.source_agent) || "jarvis", target_agent: "elkayam_ceo_agent",
+    message_type: "request", message_text: ownerRequest, structured_payload: { action_type: actionType, params, target_department: targetDepartment },
+  });
+  conversation = appendTurn(conversation, {
+    source_agent: "elkayam_ceo_agent", target_agent: "jarvis",
+    message_type: analysis.message_type, message_text: analysis.message_text, structured_payload: analysis.structured_payload,
+  });
 
   const ins = await supabase
     .from("jarvis_ceo_agent_commands")
@@ -123,11 +132,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       title,
       summary: ownerRequest.slice(0, 500),
       full_request: ownerRequest,
-      action_type: canonicalAction,
-      target_department: str(body.affected_department) || null,
+      action_type: canonicalAction ?? (actionType || "general_request"),
+      target_department: targetDepartment,
       target_role: str(plan.owning_role) || null,
       risk_level: str(body.risk_level) || null,
-      status: "pending_review",
+      status: analysis.recommended_status,
+      last_message_type: analysis.message_type,
+      conversation,
       approval_required: true,
       payload_json: body,
       dry_run_summary: str(body.dry_run_summary) || null,
@@ -140,8 +151,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (ins.error || !ins.data) {
     return json(500, { status: "rejected", intake_id: null, correlation_id: correlationId, detail: "insert_failed" });
   }
-  // Tier-A: staged for CEO-Agent review. NOTHING in catalog/prices/business was touched.
-  return json(200, { status: "pending_review", intake_id: ins.data.id as string, correlation_id: correlationId });
+  // Conversational reply. NOTHING in catalog/prices/business was touched.
+  const intakeStatus: CeoIntakeResponse["status"] =
+    analysis.message_type === "needs_info" ? "needs_info" : analysis.message_type === "capability_gap" ? "received" : "pending_review";
+  return json(200, {
+    status: intakeStatus, intake_id: ins.data.id as string, correlation_id: correlationId,
+    message_type: analysis.message_type, message_text: analysis.message_text,
+  });
 }
 
 export async function GET(): Promise<NextResponse> {

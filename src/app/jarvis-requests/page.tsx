@@ -16,7 +16,7 @@ export default async function JarvisRequestsPage() {
     const { data } = await supabase
       .from("jarvis_ceo_agent_commands")
       .select(
-        "id, correlation_id, requested_by, title, summary, full_request, action_type, target_department, target_role, risk_level, status, approval_required, approved_by, approved_at, rejection_reason, dry_run_summary, rollback_plan, payload_json, preview_json, execution_result, executed_at, created_at, updated_at",
+        "id, correlation_id, requested_by, title, summary, full_request, action_type, target_department, target_role, risk_level, status, approval_required, approved_by, approved_at, rejection_reason, dry_run_summary, rollback_plan, payload_json, preview_json, execution_result, executed_at, conversation, last_message_type, created_at, updated_at",
       )
       .order("created_at", { ascending: false })
       .limit(200);
