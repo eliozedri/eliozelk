@@ -102,7 +102,12 @@ export async function POST(req: NextRequest) {
   });
 
   if (!extraction.available) {
-    return NextResponse.json({ error: extraction.error ?? "OCR נכשל" }, { status: 422 });
+    return NextResponse.json({ error: extraction.userError ?? extraction.error ?? "OCR נכשל" }, { status: 422 });
+  }
+
+  // Technical failure detail (sidecar unreachable, WASM abort, …) → logs only.
+  if (extraction.rawError) {
+    console.warn(`[fleet/scan-document] OCR provider=${extraction.provider} fallback=${extraction.fallbackUsed ?? false} rawError=${extraction.rawError}`);
   }
 
   const rawText = extraction.rawText ?? "";
@@ -149,6 +154,10 @@ export async function POST(req: NextRequest) {
     pageConfidence: extraction.pageConfidence ?? null,
     scanned: extraction.scanned ?? false,
     engine: extraction.engine ?? null,
+    provider: extraction.provider ?? null,
+    fallbackUsed: extraction.fallbackUsed ?? false,
+    userError: extraction.userError ?? null,
+    manualReviewReason: extraction.manualReviewReason ?? null,
     rawText,
     documentClass: cls.documentClass,
     operationalType: cls.operationalType ?? null,

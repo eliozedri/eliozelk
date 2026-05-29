@@ -1,0 +1,8 @@
+# OPTIONAL PaddleOCR extras — heavy (~hundreds of MB). Installed only when the
+# image is built with --build-arg INSTALL_PADDLE=true. PaddleOCR has NO official
+# Hebrew model; it is used for detection / non-Hebrew / harder images. Hebrew
+# recognition stays on native Tesseract. CPU-only inference is supported but slow.
+paddleocr==2.9.1
+paddlepaddle==2.6.2
+opencv-python-headless==4.11.0.86
+numpy==1.26.4

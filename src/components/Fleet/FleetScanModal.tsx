@@ -21,6 +21,10 @@ interface ScanAnalysis {
   pageConfidence: number | null;
   scanned: boolean;
   engine: string | null;
+  provider?: string | null;
+  fallbackUsed?: boolean;
+  userError?: string | null;
+  manualReviewReason?: string | null;
   documentClass: string;
   operationalType: OperationalDocType | null;
   classConfidence: number;
@@ -171,6 +175,9 @@ export function FleetScanModal({
                   <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{a.classReason}</span>
                   {confPct != null && <span className={`px-2 py-0.5 rounded-full ${confPct < 50 ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>ביטחון OCR: {confPct}%</span>}
                   {a.scanned && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">PDF סרוק (OCR)</span>}
+                  {a.engine && <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{a.engine}</span>}
+                  {a.fallbackUsed && <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">גיבוי OCR</span>}
+                  {a.manualReviewReason && <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{a.manualReviewReason}</span>}
                 </div>
 
                 {a.contradictions.length > 0 && (

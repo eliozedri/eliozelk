@@ -235,6 +235,11 @@ export async function POST(req: NextRequest) {
       documentTypeHint: hintType,
     });
 
+    // Technical failure detail goes to logs only — never raw to the user.
+    if (extraction.rawError) {
+      console.warn(`[supplier-documents/upload] doc ${docId} OCR provider=${extraction.provider} fallback=${extraction.fallbackUsed ?? false} rawError=${extraction.rawError}`);
+    }
+
     const ocrUpdate: Record<string, unknown> = {
       status: "draft_ready",
       updated_at: new Date().toISOString(),
@@ -278,13 +283,26 @@ export async function POST(req: NextRequest) {
         ...(extraction.pageConfidence != null ? { ocrPageConfidence: extraction.pageConfidence } : {}),
         ...(extraction.scanned != null ? { scannedPdf: extraction.scanned } : {}),
         ...(extraction.engine ? { ocrEngine: extraction.engine } : {}),
+        // ── Provider transparency (which engine, fallback, failure reason) ──
+        ...(extraction.provider ? { ocrProvider: extraction.provider } : {}),
+        ...(extraction.fallbackUsed ? { ocrFallbackUsed: true } : {}),
+        ...(extraction.userError ? { ocrUserError: extraction.userError } : {}),
+        ...(extraction.manualReviewReason ? { ocrManualReviewReason: extraction.manualReviewReason } : {}),
       };
+      // Surface the manual-review reason in the human-readable notes too.
+      if (extraction.manualReviewReason) {
+        ocrUpdate.extraction_notes = `${ocrUpdate.extraction_notes} · ${extraction.manualReviewReason}`;
+      }
     } else {
       ocrUpdate.extraction_confidence = 0;
-      ocrUpdate.extraction_notes      = extraction.error ?? "OCR נכשל — יש להזין נתונים ידנית";
-      if (selectedDocumentType) {
-        ocrUpdate.parsed_json = { selectedDocumentType, detectedDocumentType: "unknown" };
-      }
+      ocrUpdate.extraction_notes      = extraction.userError ?? extraction.error ?? "OCR נכשל — יש להזין נתונים ידנית";
+      ocrUpdate.parsed_json = {
+        ...(selectedDocumentType ? { selectedDocumentType } : {}),
+        detectedDocumentType: "unknown",
+        ...(extraction.provider ? { ocrProvider: extraction.provider } : {}),
+        ...(extraction.fallbackUsed ? { ocrFallbackUsed: true } : {}),
+        ...(extraction.manualReviewReason ? { ocrManualReviewReason: extraction.manualReviewReason } : {}),
+      };
     }
 
     if (extraction.rawText) ocrUpdate.raw_text = extraction.rawText;

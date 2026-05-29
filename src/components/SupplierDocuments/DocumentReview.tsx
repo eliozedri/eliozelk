@@ -229,6 +229,10 @@ export function DocumentReview({
   const vehicleFields = doc.parsedJson?.vehicle as
     | { plateNumber?: string; chassisNumber?: string; licenseValidUntil?: string; insuranceValidUntil?: string; mileage?: number }
     | undefined;
+  const ocrProvider = doc.parsedJson?.ocrProvider as string | undefined;
+  const ocrEngine = doc.parsedJson?.ocrEngine as string | undefined;
+  const ocrFallbackUsed = doc.parsedJson?.ocrFallbackUsed as boolean | undefined;
+  const ocrManualReviewReason = doc.parsedJson?.ocrManualReviewReason as string | undefined;
 
   return (
     <Overlay onClose={onClose}>
@@ -260,6 +264,21 @@ export function DocumentReview({
           </svg>
         </button>
       </div>
+
+      {/* OCR engine / provider transparency */}
+      {(ocrProvider || ocrEngine) && (
+        <div className="mx-5 mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+            מנוע OCR: {ocrEngine || ocrProvider}
+          </span>
+          {ocrFallbackUsed && (
+            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">גיבוי הופעל (שירות ראשי לא זמין)</span>
+          )}
+          {ocrManualReviewReason && (
+            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{ocrManualReviewReason}</span>
+          )}
+        </div>
+      )}
 
       {/* OCR low-confidence warning */}
       {doc.extractionConfidence != null && doc.extractionConfidence < 0.5 && (
