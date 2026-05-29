@@ -31,6 +31,8 @@ export interface AnalyzeInput {
   owner_request: string;
   target_department?: string | null;
   params?: Record<string, unknown>;
+  /** Read-only business context snapshot (from agentContext.getAgentContext). */
+  agentContext?: string;
 }
 
 export interface AnalysisResult {
@@ -69,6 +71,7 @@ export async function analyzeRequest(
 ): Promise<AnalysisResult> {
   const ceo = getAgentRole("ceo");
   const businessContext = [
+    input.agentContext ? `מצב המערכת: ${input.agentContext}` : "",
     input.target_department ? `מחלקה/קטגוריה: ${input.target_department}` : "",
     input.action_type ? `רמז סוג פעולה: ${input.action_type}` : "",
     input.params && Object.keys(input.params).length ? `פרמטרים: ${JSON.stringify(input.params)}` : "",

@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
  * pricing / finance / order business mutation).
  */
 
-const h = vi.hoisted(() => ({ store: [] as Record<string, unknown>[], touched: [] as string[] }));
+const h = vi.hoisted(() => ({ store: [] as Record<string, unknown>[], touched: [] as string[], mutated: [] as string[] }));
 
 function makeFake() {
   return {
@@ -18,16 +18,16 @@ function makeFake() {
       let inserted: { id: string } | null = null;
       const qb: Record<string, unknown> = {
         select: () => qb,
-        eq: (c: string, v: unknown) => {
-          filters[c] = v;
-          return qb;
-        },
+        eq: (c: string, v: unknown) => { filters[c] = v; return qb; },
+        // read-only filter chain used by the context providers (count queries):
+        in: () => qb, not: () => qb, gte: () => qb, lt: () => qb,
         maybeSingle: async () => ({
           data: h.store.find((r) => Object.entries(filters).every(([k, val]) => r[k] === val)) ?? null,
           error: null,
         }),
         single: async () => ({ data: inserted, error: inserted ? null : { message: "no_insert" } }),
         insert: (row: Record<string, unknown>) => {
+          h.mutated.push(table); // a WRITE
           const r = { id: `row-${h.store.length + 1}`, ...row };
           h.store.push(r);
           inserted = { id: r.id as string };
@@ -35,6 +35,7 @@ function makeFake() {
         },
         update: (patch: Record<string, unknown>) => ({
           eq: async (c: string, v: unknown) => {
+            h.mutated.push(table); // a WRITE
             const r = h.store.find((x) => x[c] === v);
             if (r) Object.assign(r, patch);
             return { error: null };
@@ -88,6 +89,7 @@ describe("CEO-Agent intake (Tier-A)", () => {
   beforeEach(() => {
     h.store.length = 0;
     h.touched.length = 0;
+    h.mutated.length = 0;
     process.env.JARVIS_CEO_AGENT_TOKEN = TOKEN;
   });
 
@@ -112,7 +114,7 @@ describe("CEO-Agent intake (Tier-A)", () => {
     expect(body.message_type).toBe("analysis");
     expect((h.store[0]!.conversation as unknown[]).length).toBe(2);
     // No business table mutation — only the JARVIS command table is touched.
-    expect(h.touched.every((t) => t === ONLY_TABLE)).toBe(true);
+    expect(h.mutated.every((t) => t === ONLY_TABLE)).toBe(true); // no business-table WRITE
   });
 
   it("is idempotent on correlation_id (replay → same row, no 2nd insert)", async () => {
@@ -133,7 +135,7 @@ describe("CEO-Agent intake (Tier-A)", () => {
     expect(h.store.length).toBe(1);
     expect(h.store[0]!.status).toBe("capability_gap");
     // execution still impossible — no handler for this action.
-    expect(h.touched.every((t) => t === ONLY_TABLE)).toBe(true);
+    expect(h.mutated.every((t) => t === ONLY_TABLE)).toBe(true); // no business-table WRITE
   });
 
   it("accepts a NON-PRICE allowlisted action (ops_note) — generic, not price-only", async () => {
@@ -151,11 +153,12 @@ describe("CEO-Agent intake (Tier-A)", () => {
     await POST(reqFor(validPkg, TOKEN));
     const id = h.store[0]!.id as string;
     h.touched.length = 0;
+    h.mutated.length = 0;
     const r = await approveRequest(id);
     expect(r.ok).toBe(true);
     expect(h.store[0]!.status).toBe("approved");
     expect(h.store[0]!.approved_at).toBeTruthy();
-    expect(h.touched.every((t) => t === ONLY_TABLE)).toBe(true);
+    expect(h.mutated.every((t) => t === ONLY_TABLE)).toBe(true); // no business-table WRITE
   });
 
   it("reject changes status only", async () => {
@@ -180,7 +183,7 @@ describe("CEO-Agent intake (Tier-A)", () => {
     const diag = h.store[0]!.diagnostics as { clarification_answers?: { answer: string }[] };
     expect(diag.clarification_answers?.[0]?.answer).toBe("כן, רק מוצרים פעילים");
     // still only the JARVIS command table — no business mutation
-    expect(h.touched.every((t) => t === ONLY_TABLE)).toBe(true);
+    expect(h.mutated.every((t) => t === ONLY_TABLE)).toBe(true); // no business-table WRITE
   });
 
   it("clarification_answer requires auth", async () => {

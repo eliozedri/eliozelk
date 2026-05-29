@@ -63,6 +63,18 @@ export interface ConversationTurn {
   created_at?: string;
 }
 
+export interface AgentCard {
+  id: string;
+  name: string;
+  domain: string;
+  responsibilityScope: string;
+  readableContextSources: string[];
+  availableTools: string[];
+  allowedActions: string[];
+  contextSummary: string;
+  contextAvailable: boolean;
+}
+
 interface PreviewJson {
   affected_count: number;
   pct: number;
@@ -126,7 +138,7 @@ function msgTypeLabel(t: string): string {
   return MSG_TYPE_HE[t] ?? t;
 }
 
-export function JarvisRequests({ rows }: { rows: JarvisRequestRow[] }) {
+export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]; agents?: AgentCard[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<JarvisRequestRow | null>(null);
   const [reason, setReason] = useState("");
@@ -155,6 +167,34 @@ export function JarvisRequests({ rows }: { rows: JarvisRequestRow[] }) {
           ⚠️ אישור מסמן את הבקשה כ״מאושרת לביצוע ידני/עתידי״. ביצוע אוטומטי עדיין כבוי — שום שינוי במחירים/קטלוג/כספים/צי אינו מתבצע מכאן.
         </p>
       </div>
+
+      {/* Agent Capability Dashboard — registry capabilities + live read-only context */}
+      {agents.length > 0 && (
+        <div className="mb-5">
+          <div className="text-white/60 text-sm mb-2">מצב סוכני אלקיים (יכולות + קונטקסט חי)</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {agents.map((a) => (
+              <div key={a.id} className="glass-card p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-white/90 font-medium">{a.name}</div>
+                  <span className="badge badge-violet">reasoning: Gemini/Groq</span>
+                </div>
+                <div className="text-white/50 text-xs mb-2">{a.domain}</div>
+                <div className="text-white/80 text-sm mb-2">{a.responsibilityScope}</div>
+                <div className="text-xs text-white/60 mb-1">
+                  קונטקסט: {a.contextAvailable ? a.contextSummary : "context unavailable"}
+                </div>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {a.allowedActions.length > 0
+                    ? a.allowedActions.map((x) => <span key={x} className="badge badge-teal">⚙ {x}</span>)
+                    : <span className="badge badge-gray">ללא כלי ביצוע (ניתוח/הצעה בלבד)</span>}
+                  {a.readableContextSources.slice(0, 3).map((s) => <span key={s} className="badge badge-blue">📖 {s}</span>)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="glass-panel p-8 text-center text-white/50">אין בקשות מ-JARVIS עדיין.</div>

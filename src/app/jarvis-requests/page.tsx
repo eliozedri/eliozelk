@@ -1,5 +1,7 @@
 import { getServiceSupabase } from "@/lib/supabase/server";
-import { JarvisRequests, type JarvisRequestRow } from "@/components/JarvisRequests";
+import { JarvisRequests, type JarvisRequestRow, type AgentCard } from "@/components/JarvisRequests";
+import { capabilityRegistry } from "@/lib/jarvis/agentRoles";
+import { getAgentContext } from "@/lib/jarvis/agentContext";
 
 export const dynamic = "force-dynamic";
 
@@ -24,5 +26,28 @@ export default async function JarvisRequestsPage() {
   } catch {
     rows = [];
   }
-  return <JarvisRequests rows={rows} />;
+
+  // Agent Capability Dashboard: each agent's registry capabilities + live read-only context.
+  let agents: AgentCard[] = [];
+  try {
+    const supabase = getServiceSupabase();
+    agents = await Promise.all(
+      capabilityRegistry().map(async (a) => {
+        const ctx = await getAgentContext(supabase, a.id);
+        return {
+          id: a.id, name: a.name, domain: a.domain,
+          responsibilityScope: a.responsibilityScope,
+          readableContextSources: a.readableContextSources,
+          availableTools: a.availableTools,
+          allowedActions: a.allowedActions,
+          contextSummary: ctx.summary,
+          contextAvailable: ctx.available,
+        };
+      }),
+    );
+  } catch {
+    agents = [];
+  }
+
+  return <JarvisRequests rows={rows} agents={agents} />;
 }

@@ -4,6 +4,7 @@ import { actionLabel, resolveActionType } from "@/lib/jarvis/actionCatalog";
 import { analyzeRequest, appendTurn, type ConversationTurn } from "@/lib/jarvis/ceoAnalyze";
 import { reasonAsAgent } from "@/lib/jarvis/agentReasoning";
 import { INTERNAL_AGENT_IDS } from "@/lib/jarvis/agentRoles";
+import { getAgentContext } from "@/lib/jarvis/agentContext";
 
 /**
  * POST /api/jarvis/ceo-agent?v=1
@@ -110,9 +111,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const canonicalAction = resolveActionType(actionType);
   const targetDepartment = str(body.affected_department) || null;
 
-  // CEO-Agent THINKS about the request (LLM-first; rule-based fallback) and picks
-  // the next dialogue turn — analyze / route / needs_info / proposal / capability_gap.
-  const analysis = await analyzeRequest({ action_type: actionType, owner_request: ownerRequest, target_department: targetDepartment, params });
+  // CEO-Agent reads its read-only business context, then THINKS (LLM-first;
+  // rule-based fallback) and picks the next dialogue turn.
+  const ceoContext = await getAgentContext(supabase, "ceo");
+  const analysis = await analyzeRequest({ action_type: actionType, owner_request: ownerRequest, target_department: targetDepartment, params, agentContext: ceoContext.summary });
 
   const title = str(body.title) || (canonicalAction ? actionLabel(canonicalAction) : "בקשה לסקירת CEO-Agent");
   let conversation: ConversationTurn[] = [];
@@ -131,10 +133,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let finalMessageType = analysis.message_type;
   let finalMessageText = analysis.message_text;
   if (analysis.routed_to_agent && INTERNAL_AGENT_IDS.includes(analysis.routed_to_agent)) {
+    const internalContext = await getAgentContext(supabase, analysis.routed_to_agent);
     const internal = await reasonAsAgent({
       agentId: analysis.routed_to_agent,
       userRequest: ownerRequest,
-      businessContext: targetDepartment ? `מחלקה/קטגוריה: ${targetDepartment}` : undefined,
+      businessContext: [internalContext.summary, targetDepartment ? `מחלקה/קטגוריה: ${targetDepartment}` : ""].filter(Boolean).join(" · "),
       conversationHistory: conversation.map((t) => ({ source_agent: t.source_agent, message_type: t.message_type, message_text: t.message_text })),
     });
     if (internal) {
