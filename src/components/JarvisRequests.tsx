@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  answerClarification,
   approveExecution,
   approveRequest,
   archiveRequest,
@@ -160,6 +161,7 @@ export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]
   const [selected, setSelected] = useState<JarvisRequestRow | null>(null);
   const [reason, setReason] = useState("");
   const [routeTo, setRouteTo] = useState("");
+  const [answerText, setAnswerText] = useState("");
   const [pending, startTransition] = useTransition();
 
   const TERMINAL_STATUSES = ["rejected", "executed", "reverted", "failed", "archived", "execution_disabled", "executed_later"];
@@ -173,6 +175,7 @@ export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]
       setSelected(null);
       setReason("");
       setRouteTo("");
+      setAnswerText("");
       router.refresh();
     });
   };
@@ -266,7 +269,7 @@ export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]
                   </td>
                   <td className="p-3 text-white/50 whitespace-nowrap">{fmt(r.created_at)}</td>
                   <td className="p-3">
-                    <button className="btn-glass" onClick={() => { setSelected(r); setReason(""); setRouteTo(""); }}>פרטים</button>
+                    <button className="btn-glass" onClick={() => { setSelected(r); setReason(""); setRouteTo(""); setAnswerText(""); }}>פרטים</button>
                   </td>
                 </tr>
               ))}
@@ -394,6 +397,25 @@ export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]
             )}
 
             <div className="mt-4">
+              {selected.status === "needs_info" && (
+                <div className="glass-inner p-3 rounded mb-3">
+                  <div className="text-white/60 text-xs mb-2">מענה להבהרה (מתוך המערכת — ללא תלות בטלגרם)</div>
+                  <textarea
+                    className="glass-inner w-full p-2 text-sm text-white/90 bg-transparent rounded"
+                    placeholder="כתוב תשובה/הבהרה — הבקשה תחזור לבדיקה (pending_review)"
+                    value={answerText}
+                    onChange={(e) => setAnswerText(e.target.value)}
+                    rows={2}
+                  />
+                  <button
+                    className="btn-glow mt-2"
+                    disabled={pending || !answerText.trim()}
+                    onClick={() => act(() => answerClarification(selected.id, answerText))}
+                  >
+                    ✅ שלח תשובה והחזר לבדיקה
+                  </button>
+                </div>
+              )}
               {(selected.status === "pending_review" || selected.status === "needs_info") && (
                 <>
                   <textarea

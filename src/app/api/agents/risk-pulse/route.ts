@@ -225,5 +225,64 @@ export async function GET(request: NextRequest) {
     ];
   });
 
-  return NextResponse.json({ groups, generatedAt: new Date().toISOString() }, { headers: { ...cors, "Cache-Control": "no-store" } });
+  // ── CEO / System-Manager aggregation (READ-ONLY) ──────────────────────────
+  // Turns the live signals into a prioritised, owner-assigned recommendation list
+  // WITHOUT writing any task rows (avoids duplicate-on-every-scan). Each active
+  // signal is mapped to a responsible department/agent + a recommended next
+  // action. This is an actionable recommendation surface, not autonomous action.
+  const OWNERS: Record<string, { department: string; owner: string }> = {
+    documents: { department: "מסמכים / כספים", owner: "cfo-agent" },
+    fleet: { department: "צי רכב ומכונות", owner: "equipment-fleet-agent" },
+    inventory: { department: "מחסן", owner: "inventory-agent" },
+    finance: { department: "כספים", owner: "cfo-agent" },
+    intake: { department: "תפעול / הזמנות", owner: "orders-agent" },
+    workflow: { department: "הנהלה (CEO)", owner: "ceo" },
+  };
+  const ACTIONS: Record<string, string> = {
+    stuck: "בדוק מסמכים תקועים בעיבוד OCR",
+    review: "בצע בדיקת מסמכים ממתינים",
+    low_conf: "אמת מסמכים בביטחון OCR נמוך",
+    expired: "חדש מסמכי צי שפגו תוקף",
+    soon: "תזמן חידוש מסמכי צי לפני פקיעה",
+    pending: "אשר פריטי צי ממתינים",
+    zero: "השלם מלאי אפס לפריטים במעקב",
+    low: "פתח רכש לפריטים מתחת למינימום",
+    missing: "השלם ערכי מלאי חסרים",
+    missing_fields: "השלם שדות חסרים במסמכי ספק",
+    not_billing_ready: "הכן הזמנות שהושלמו לחיוב",
+    stuck_drafts: "טפל בטיוטות בוט תקועות",
+    pending_intake: "מיין קליטת JARVIS ממתינה",
+    incomplete_orders: "השלם פרטי לקוח/עיר בהזמנות",
+    open_requests: "מיין בקשות JARVIS פתוחות",
+    clarification: "ספק הבהרה לבקשות ממתינות",
+    routed_open: "ודא טיפול בבקשות שנותבו",
+    open_exceptions: "הקצה בעלות מחלקתית לחריגות פתוחות",
+    open_tasks: "טפל במשימות סוכנים פתוחות",
+  };
+  const sevRank: Record<PulseSeverity, number> = { critical: 0, warning: 1, info: 2 };
+  const ceoAggregation = groups
+    .filter(g => g.available)
+    .flatMap(g =>
+      g.signals
+        .filter(s => s.count > 0)
+        .map(s => ({
+          domain: g.group,
+          domainTitle: g.title,
+          key: s.key,
+          label: s.label,
+          count: s.count,
+          severity: s.severity,
+          href: s.href,
+          department: OWNERS[g.group]?.department ?? "—",
+          owner: OWNERS[g.group]?.owner ?? "ceo",
+          recommendedAction: ACTIONS[s.key] ?? "סקירה ידנית",
+          readOnly: true,
+        })),
+    )
+    .sort((a, b) => sevRank[a.severity] - sevRank[b.severity] || b.count - a.count);
+
+  return NextResponse.json(
+    { groups, ceoAggregation, generatedAt: new Date().toISOString() },
+    { headers: { ...cors, "Cache-Control": "no-store" } },
+  );
 }

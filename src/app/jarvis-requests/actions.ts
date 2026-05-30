@@ -102,6 +102,36 @@ export async function archiveRequest(id: string): Promise<DecisionResult> {
 }
 
 /**
+ * Owner answers a clarification (needs_info) from inside the UI — no Telegram
+ * dependency. Appends the answer as a thread turn and returns the request to
+ * pending_review for re-triage. Status-only; no business mutation.
+ */
+export async function answerClarification(id: string, answer: string): Promise<DecisionResult> {
+  if (!answer?.trim()) return { ok: false, error: "empty_answer" };
+  const supabase = getServiceSupabase();
+  const { data: cur } = await supabase
+    .from("jarvis_ceo_agent_commands")
+    .select("conversation")
+    .eq("id", id)
+    .maybeSingle();
+  const conversation = Array.isArray(cur?.conversation) ? [...(cur!.conversation as unknown[])] : [];
+  conversation.push({
+    seq: conversation.length + 1,
+    source_agent: "owner",
+    target_agent: "elkayam_ceo_agent",
+    message_type: "status_update",
+    message_text: `תשובת הבהרה: ${answer.trim().slice(0, 500)}`,
+    created_at: new Date().toISOString(),
+  });
+  return setStatus(id, {
+    status: "pending_review",
+    conversation,
+    last_message_type: "status_update",
+    rejection_reason: null,
+  });
+}
+
+/**
  * Route a request to a department/agent. Persists routing on existing columns
  * (routed_to_agent / target_department / target_role), appends a traceable turn
  * to the conversation thread, and writes a best-effort agent_activity_feed entry

@@ -982,6 +982,54 @@ function RiskPulse({ groups, loading, onNavigate }: { groups: PulseGroup[]; load
   );
 }
 
+// ── CEO aggregation (read-only recommendations derived from live signals) ───────
+
+interface CeoAggItem {
+  domain: string; domainTitle: string; key: string; label: string; count: number;
+  severity: "critical" | "warning" | "info"; href: string;
+  department: string; owner: string; recommendedAction: string; readOnly: boolean;
+}
+
+function CeoAggregation({ items, loading, onNavigate }: { items: CeoAggItem[]; loading: boolean; onNavigate: (href: string) => void }) {
+  return (
+    <div className="rounded-2xl border border-white/10 p-4 mb-6" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <div className="text-xs font-bold text-white/50 uppercase tracking-widest">אגרגציית מנהל מערכת (CEO) — המלצות תפעוליות</div>
+        <span className="text-[10px] text-white/30">קריאה בלבד · ללא ביצוע אוטומטי</span>
+      </div>
+      {loading ? (
+        <div className="text-white/30 text-sm py-3 text-center">מסכם אותות…</div>
+      ) : items.length === 0 ? (
+        <div className="text-white/40 text-sm py-3 text-center">אין סיכוני תפעול פתוחים כרגע ✅</div>
+      ) : (
+        <div className="space-y-2">
+          {items.map(it => (
+            <button
+              key={`${it.domain}:${it.key}`}
+              onClick={() => onNavigate(it.href)}
+              className="w-full flex items-center gap-3 rounded-xl border border-white/8 p-3 text-right transition-all hover:border-white/25"
+              style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
+            >
+              <span className="shrink-0 w-2.5 h-2.5 rounded-full" style={{ backgroundColor: pulseColor(it.severity, true) }} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-white/85 font-medium truncate">{it.label} <span className="text-white/40">· {it.count}</span></div>
+                <div className="text-[11px] text-white/45 truncate">{it.recommendedAction}</div>
+              </div>
+              <div className="shrink-0 text-left">
+                <div className="text-[10px] text-white/40 mb-0.5">{it.department}</div>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.6)" }}>בעלים: {it.owner}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-white/25 mt-3 leading-relaxed">
+        הסיכום נגזר מאותות אמת קריאה-בלבד. כל פריט מוקצה לאחריות מחלקה/סוכן עם פעולה מומלצת — אין ביצוע אוטומטי; ההקצאה והטיפול נעשים ידנית בדפים הרלוונטיים.
+      </p>
+    </div>
+  );
+}
+
 // ── Main Command Center ───────────────────────────────────────────────────────
 
 type MainTab = "overview" | "tasks" | "exceptions" | "approvals" | "activity" | "hq";
@@ -998,6 +1046,7 @@ export function AgentCommandCenter() {
   const [mainTab, setMainTab] = useState<MainTab>("hq");
   const [jarvisSummary, setJarvisSummary] = useState<{ open: number; awaitingOwner: number; awaitingClarification: number } | null>(null);
   const [pulse, setPulse] = useState<PulseGroup[]>([]);
+  const [ceoAgg, setCeoAgg] = useState<CeoAggItem[]>([]);
   const [pulseLoading, setPulseLoading] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showNewMeeting, setShowNewMeeting] = useState(false);
@@ -1035,7 +1084,10 @@ export function AgentCommandCenter() {
         const res = await fetch("/api/agents/risk-pulse", { headers, cache: "no-store" });
         if (res.ok) {
           const j = await res.json();
-          if (!cancelled) setPulse((j.groups ?? []) as PulseGroup[]);
+          if (!cancelled) {
+            setPulse((j.groups ?? []) as PulseGroup[]);
+            setCeoAgg((j.ceoAggregation ?? []) as CeoAggItem[]);
+          }
         }
       } catch { /* non-fatal */ }
       finally { if (!cancelled) setPulseLoading(false); }
@@ -1371,6 +1423,7 @@ export function AgentCommandCenter() {
         {/* Overview: risk pulse + org chart + agent cards */}
         {mainTab === "overview" && (
           <>
+          <CeoAggregation items={ceoAgg} loading={pulseLoading} onNavigate={(href) => router.push(href)} />
           <RiskPulse groups={pulse} loading={pulseLoading} onNavigate={(href) => router.push(href)} />
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
