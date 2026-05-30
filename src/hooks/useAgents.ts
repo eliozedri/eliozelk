@@ -121,6 +121,7 @@ export interface AgentsHookValue {
   dismissException: (id: string) => Promise<void>;
   acknowledgeException: (id: string) => Promise<void>;
   updateTaskStatus: (id: string, status: TaskStatus) => Promise<void>;
+  assignTask: (id: string, assignedTo: string | null) => Promise<void>;
 }
 
 // ── Helper: compute per-agent stats ──────────────────────────────────────────
@@ -241,9 +242,21 @@ export function useAgents(): AgentsHookValue {
     }
   }, []);
 
+  // Persistent task assignment (server-gated + audited). Pass null to unassign.
+  const assignTask = useCallback(async (id: string, assignedTo: string | null) => {
+    const res = await authedFetch("/api/agents/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "task_assign", id, assignedTo }),
+    });
+    if (res.ok) {
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, assigned_to: assignedTo ?? undefined } : t));
+    }
+  }, []);
+
   return {
     agents, tasks, exceptions, approvals, activityFeed,
     agentStats, loading, refresh: load,
-    updateApproval, dismissException, acknowledgeException, updateTaskStatus,
+    updateApproval, dismissException, acknowledgeException, updateTaskStatus, assignTask,
   };
 }

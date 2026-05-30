@@ -697,7 +697,7 @@ function RoomEmptyState({ agent, type }: { agent: Agent; type: string }) {
 
 // ── Tasks full-page list ──────────────────────────────────────────────────────
 
-function TasksPanel({ tasks, agents, onUpdate }: { tasks: AgentTask[]; agents: Agent[]; onUpdate: (id: string, s: AgentTask["status"]) => void }) {
+function TasksPanel({ tasks, agents, onUpdate, onAssign }: { tasks: AgentTask[]; agents: Agent[]; onUpdate: (id: string, s: AgentTask["status"]) => void; onAssign: (id: string, assignedTo: string | null) => void }) {
   const byId = useMemo(() => new Map(agents.map(a => [a.id, a])), [agents]);
   if (tasks.length === 0) {
     return (
@@ -739,7 +739,23 @@ function TasksPanel({ tasks, agents, onUpdate }: { tasks: AgentTask[]; agents: A
                     {TASK_PRIORITY_LABELS[task.priority]}
                   </span>
                   {task.requires_approval && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">דרוש אישור</span>}
+                  {task.assigned_to && (
+                    <span className="text-[10px] text-white/50">בעלים: {byId.get(task.assigned_to)?.name ?? task.assigned_to}</span>
+                  )}
                   <span className="text-[10px] text-white/30">{relativeTime(task.created_at)}</span>
+                </div>
+                {/* Persistent assignment — routes the task to a responsible agent/department */}
+                <div className="flex items-center justify-end gap-1 mt-1.5">
+                  <span className="text-[9px] text-white/30">הקצה ל:</span>
+                  <select
+                    value={task.assigned_to ?? ""}
+                    onChange={(e) => onAssign(task.id, e.target.value || null)}
+                    className="text-[10px] bg-transparent border border-white/15 rounded px-1 py-0.5 text-white/70"
+                    title="הקצה משימה לסוכן/מחלקה (נשמר)"
+                  >
+                    <option value="" className="bg-slate-800">ללא הקצאה</option>
+                    {agents.map(a => <option key={a.id} value={a.id} className="bg-slate-800">{a.name}</option>)}
+                  </select>
                 </div>
               </div>
             </div>
@@ -1038,7 +1054,7 @@ export function AgentCommandCenter() {
   const {
     agents, tasks, exceptions, approvals, activityFeed,
     agentStats, loading, refresh,
-    updateApproval, dismissException, acknowledgeException, updateTaskStatus,
+    updateApproval, dismissException, acknowledgeException, updateTaskStatus, assignTask,
   } = useAgentContext();
 
   const { openChat } = useGlobalChat();
@@ -1474,7 +1490,7 @@ export function AgentCommandCenter() {
         )}
 
         {mainTab === "tasks" && (
-          <TasksPanel tasks={tasks} agents={agents} onUpdate={updateTaskStatus} />
+          <TasksPanel tasks={tasks} agents={agents} onUpdate={updateTaskStatus} onAssign={assignTask} />
         )}
 
         {mainTab === "exceptions" && (

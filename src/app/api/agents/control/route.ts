@@ -18,7 +18,8 @@ type Body =
   | { kind: "approval"; id: string; status: "approved" | "rejected"; reason?: string }
   | { kind: "exception_dismiss"; id: string }
   | { kind: "exception_ack"; id: string }
-  | { kind: "task_status"; id: string; status: string };
+  | { kind: "task_status"; id: string; status: string }
+  | { kind: "task_assign"; id: string; assignedTo: string | null };
 
 function bearer(req: NextRequest): string | undefined {
   const raw = req.headers.get("authorization") ?? "";
@@ -64,6 +65,13 @@ export async function POST(req: NextRequest) {
   } else if (body.kind === "task_status") {
     if (!body.status) return NextResponse.json({ error: "Missing status" }, { status: 400 });
     const res = await db.from("agent_tasks").update({ status: body.status }).eq("id", body.id);
+    error = res.error?.message ?? null;
+  } else if (body.kind === "task_assign") {
+    // Persistent assignment — sets agent_tasks.assigned_to (idempotent). Pass null to clear.
+    const res = await db
+      .from("agent_tasks")
+      .update({ assigned_to: body.assignedTo ?? null })
+      .eq("id", body.id);
     error = res.error?.message ?? null;
   } else {
     return NextResponse.json({ error: "Unknown kind" }, { status: 400 });
