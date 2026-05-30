@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   loadAgentExceptionDedupeMap,
+  loadAgentTaskDedupeMap,
   upsertException,
+  upsertTask,
   autoResolveStaleExceptions,
   writeAgentActivity,
   updateAgentRunStatus,
@@ -64,12 +66,16 @@ export async function POST(req: NextRequest) {
     result.entitiesScanned = orders.length;
 
     const dedupeMap = await loadAgentExceptionDedupeMap(db, AGENT_ID);
+    const taskDedupeMap = await loadAgentTaskDedupeMap(db, AGENT_ID);
     const nowMs = Date.now();
     const activeDedupeKeys = new Set<string>();
 
     for (const order of orders) {
       const urgent = order.priority === "urgent";
       const hoursFactor = urgent ? 0.5 : 1;
+      // Collected actionable reason → one consolidated graphics task per order
+      // (stable title, no spam). Only set for genuine blockers.
+      let graphicsTaskReason: string | null = null;
 
       // ── SLA breach in graphics stage ─────────────────────────────────────
       if (GRAPHICS_STATUSES.has(order.status)) {
@@ -101,6 +107,7 @@ export async function POST(req: NextRequest) {
               },
               recommendedResolution: `טפל בהזמנה ${order.order_number} בשלב הגרפיקה ועדכן את הסטטוס`,
             }, dedupeMap, result);
+            if (severity === "critical") graphicsTaskReason = "תקוע בשלב הגרפיקה מעבר ל-SLA";
           }
         }
       }
@@ -141,18 +148,39 @@ export async function POST(req: NextRequest) {
             },
             recommendedResolution: "קבל אישור לקוח לטיוטת הגרפיקה, או הגדר design_approval_status = bypassed_by_manager לאישור מנהלי",
           }, dedupeMap, result);
+          graphicsTaskReason = "טיוטת גרפיקה ממתינה לאישור לקוח";
         }
+      }
+
+      // ── Consolidated graphics human-review task (safe metadata; no business mutation) ──
+      // One stable task per order that has a genuine graphics blocker (SLA-critical
+      // or pending design approval) → re-scans UPDATE the same task (no spam).
+      // Auto-assigned to graphics-production-agent. Design-spec completeness checks
+      // (missing dimensions/material/quantity/file) need the order line-item model
+      // and are a documented follow-up — not inferred here.
+      if (graphicsTaskReason) {
+        await upsertTask(db, AGENT_ID, {
+          category: "graphics_followup",
+          entityType: "work_order",
+          entityId: order.id,
+          title: `הזמנה ${order.order_number} — טיפול גרפיקה/עיצוב נדרש`,
+          description: `${graphicsTaskReason} | לקוח: ${order.customer || "(לא זוהה)"} | שלב: ${order.status}`,
+          priority: "high",
+          recommendedAction: "טפל בשלב הגרפיקה: השלם/שלח עיצוב או קבל אישור לקוח, ועדכן את הסטטוס",
+        }, taskDedupeMap, result);
       }
     }
 
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 
-    const summary = `סריקה הושלמה: ${result.entitiesScanned} הזמנות גרפיקה | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו`;
+    const summary = `סריקה הושלמה: ${result.entitiesScanned} הזמנות גרפיקה | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו | ${result.tasksCreated} משימות נוצרו`;
     await writeAgentActivity(db, AGENT_ID, "detection", summary, {
       entitiesScanned: result.entitiesScanned,
       exceptionsCreated: result.exceptionsCreated,
       exceptionsUpdated: result.exceptionsUpdated,
       exceptionsResolved: result.exceptionsResolved,
+      tasksCreated: result.tasksCreated,
+      tasksUpdated: result.tasksUpdated,
     });
 
     result.durationMs = Date.now() - start;
