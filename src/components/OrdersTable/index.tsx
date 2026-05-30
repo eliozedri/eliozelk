@@ -19,6 +19,7 @@ import {
 } from "@/types/workOrder";
 import type { WorkOrder, WorkOrderStatus } from "@/types/workOrder";
 import { getStageSlaColor, hoursInCurrentStage, canMarkReadyForInstallation, canMarkOperationallyComplete } from "@/lib/workflowEngine";
+import { getDepartmentProgress, getOrderReadiness, DEPT_STATE_LABELS, type DeptState, type DeptProgress, type OrderReadiness } from "@/lib/orderDepartments";
 import { useOrderRiskScores } from "@/hooks/useOrderRiskScores";
 import type { OrderRiskScore } from "@/hooks/useOrderRiskScores";
 import { openWorkOrderPDF, exportWorkOrderCSV } from "@/lib/pdfExport";
@@ -261,6 +262,57 @@ function StageIcon({ stageKey, active, done }: { stageKey: string; active: boole
   }
 }
 
+// ─── Department-level progress (chips) ────────────────────────────────────────
+// Distinct, honest per-department state derived from stored order data. Irrelevant
+// departments render muted ("לא נדרש"); blocked/completed are visually obvious.
+
+const DEPT_CHIP_STYLE: Record<DeptState, string> = {
+  completed:    "bg-green-100 text-green-700 border-green-200",
+  in_progress:  "bg-blue-100 text-blue-700 border-blue-200",
+  pending:      "bg-amber-100 text-amber-700 border-amber-200",
+  blocked:      "bg-red-100 text-red-700 border-red-300 font-semibold",
+  needs_review: "bg-orange-100 text-orange-700 border-orange-200",
+  not_required: "bg-gray-50 text-gray-400 border-gray-100",
+};
+const DEPT_CHIP_SYMBOL: Record<DeptState, string> = {
+  completed: "✓", in_progress: "●", pending: "○", blocked: "⚠", needs_review: "?", not_required: "–",
+};
+
+function DepartmentStrip({ departments }: { departments: DeptProgress[] }) {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-1 mt-1 max-w-[200px]" dir="rtl">
+      {departments.map((d) => (
+        <span
+          key={d.key}
+          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[10px] leading-none whitespace-nowrap ${DEPT_CHIP_STYLE[d.state]}`}
+          title={`${d.label}: ${DEPT_STATE_LABELS[d.state]}${d.reason ? ` — ${d.reason}` : ""}`}
+        >
+          <span>{d.label}</span>
+          <span aria-hidden>{DEPT_CHIP_SYMBOL[d.state]}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const READINESS_STYLE: Record<OrderReadiness["tone"], string> = {
+  done:     "text-gray-600",
+  ready:    "text-teal-700 font-semibold",
+  blocked:  "text-red-600 font-semibold",
+  progress: "text-amber-700",
+};
+
+function ReadinessBadge({ readiness }: { readiness: OrderReadiness }) {
+  return (
+    <span
+      className={`text-[10px] mt-0.5 text-center leading-tight max-w-[140px] ${READINESS_STYLE[readiness.tone]}`}
+      title={readiness.reason ?? readiness.label}
+    >
+      {readiness.label}
+    </span>
+  );
+}
+
 function ProgressTracker({ order }: { order: WorkOrder }) {
   const { status } = order;
   const { completedSteps, activeStep, isPending } = getProgressState(status);
@@ -272,11 +324,6 @@ function ProgressTracker({ order }: { order: WorkOrder }) {
       <span className="text-xs text-red-400 font-medium">בוטל</span>
     );
   }
-
-  const warehouseStatus = order.warehouseStatus;
-  const fabStatus = order.fabricationStatus;
-  const showWarehouse = order.warehouseRequired;
-  const showFab = order.fabricationRequired;
 
   return (
     <div
@@ -326,57 +373,12 @@ function ProgressTracker({ order }: { order: WorkOrder }) {
           );
         })}
       </div>
-      {/* Department sub-indicators — icon + color, tooltip for detail */}
-      {(showWarehouse || showFab) && (
-        <div className="flex items-center gap-1 mt-0.5">
-          {showWarehouse && (
-            <span
-              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${
-                warehouseStatus === "ready"      ? "bg-green-100 text-green-700" :
-                warehouseStatus === "processing" ? "bg-blue-100 text-blue-700" :
-                                                   "bg-gray-100 text-gray-500"
-              }`}
-              title={`מחסן: ${warehouseStatus === "ready" ? "מוכן" : warehouseStatus === "processing" ? "בהכנה" : "ממתין"}`}
-            >
-              {/* box / warehouse icon */}
-              <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M1 4L5 2l4 2v4.5H1V4z"/>
-                <path d="M1 4l4 2 4-2"/>
-                <line x1="5" y1="6" x2="5" y2="8.5"/>
-              </svg>
-            </span>
-          )}
-          {showFab && (
-            <span
-              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full ${
-                fabStatus === "completed"    ? "bg-green-100 text-green-700" :
-                fabStatus === "ready"        ? "bg-teal-100 text-teal-700" :
-                fabStatus === "in_progress"  ? "bg-purple-100 text-purple-700" :
-                fabStatus === "acknowledged" ? "bg-blue-100 text-blue-700" :
-                fabStatus === "issue"        ? "bg-red-100 text-red-700" :
-                                               "bg-gray-100 text-gray-500"
-              }`}
-              title={`מסגרייה: ${
-                fabStatus === "completed"    ? "הושלם" :
-                fabStatus === "ready"        ? "מוכן (ממתין לסגירה)" :
-                fabStatus === "in_progress"  ? "בביצוע" :
-                fabStatus === "acknowledged" ? "התקבל" :
-                fabStatus === "issue"        ? "בעיה" : "ממתין"
-              }`}
-            >
-              {/* wrench / fabrication icon */}
-              <svg className="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 10 10" fill="currentColor">
-                <path d="M8 1.3a2.2 2.2 0 0 0-2.8 2.8L2 7.2a.8.8 0 1 0 1.1 1.1L6.3 5a2.2 2.2 0 0 0 2.8-2.8L7.5 3.7 6.5 2.8 8 1.3z"/>
-              </svg>
-            </span>
-          )}
-        </div>
-      )}
-      {/* Status label under the timeline (single source — the separate Status-column
-          badge was removed to avoid showing the same status twice per row). */}
-      <span className="text-[10px] font-semibold text-gray-600 mt-0.5 text-center leading-tight max-w-[110px]">
-        {STATUS_LABELS[status]}
-      </span>
+      {/* Department-level progress — distinct, honest per-department state. */}
+      <DepartmentStrip departments={getDepartmentProgress(order)} />
+      {/* Readiness summary — reads "ready"/"complete" ONLY when every relevant
+          department is done; surfaces a blocking department first. The raw
+          lifecycle status remains in the hover tooltip above. */}
+      <ReadinessBadge readiness={getOrderReadiness(order)} />
     </div>
   );
 }
