@@ -1,10 +1,16 @@
 // Phase 2.6 — Agent chat response engine
-// Queries real Supabase data and formats structured Hebrew responses.
-// No LLM required — answers are grounded in live DB state.
-// Future: add an LLM layer on top to interpret free-form answers if desired.
+// Structured Hebrew answers are grounded in live Supabase DB state; free-form /
+// general questions are answered by the shared LLM reasoning mechanism
+// (reasonAsAgent → Gemini→Groq) per agent, with the DB answers as the source of
+// truth for known queries.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SourceRef } from "@/types/agentChat";
+import { reasonAsAgent } from "@/lib/jarvis/agentReasoning";
+import { getAgentContext } from "@/lib/jarvis/agentContext";
+
+// Agents that have a reasoning role in the shared LLM mechanism (Gemini→Groq).
+const REASONING_ROLE_IDS = new Set(["ceo", "operations_manager", "catalog_manager", "system_admin"]);
 
 // ── Intent classification ────────────────────────────────────────────────────
 
@@ -116,6 +122,57 @@ const PRI_HE: Record<string, string> = { critical: "קריטי", high: "גבוה
 export interface ChatEngineResult {
   content: string;
   sourceRefs: SourceRef[];
+}
+
+// ── LLM reasoning layer (shared Gemini→Groq mechanism) ───────────────────────
+
+/**
+ * For free-form questions the agent actually REASONS via the shared reasonAsAgent
+ * service, grounded in its read-only context. Returns null when no LLM provider
+ * is available so the caller falls back to the structured reply (never faked).
+ */
+export interface LlmReasonDeps {
+  reason?: (input: Parameters<typeof reasonAsAgent>[0]) => Promise<{ message_text: string } | null>;
+  getCtx?: typeof getAgentContext;
+}
+
+export async function llmReason(
+  db: SupabaseClient,
+  agentId: string | null,
+  message: string,
+  history?: HistoryTurn[] | null,
+  pageContext?: PageContext | null,
+  deps: LlmReasonDeps = {},
+): Promise<string | null> {
+  const reason = deps.reason ?? ((i) => reasonAsAgent(i));
+  const getCtx = deps.getCtx ?? getAgentContext;
+  const roleId = agentId && REASONING_ROLE_IDS.has(agentId) ? agentId : "ceo";
+  let ctxSummary = "";
+  try {
+    const ac = await getCtx(db, roleId);
+    if (ac.available) ctxSummary = ac.summary;
+  } catch { /* context is optional */ }
+  const businessContext = [
+    pageContext?.pathname ? `מסך נוכחי: ${pageContext.pathname}` : "",
+    ctxSummary ? `מצב המערכת: ${ctxSummary}` : "",
+  ].filter(Boolean).join(" · ");
+  const conversationHistory = (history ?? []).slice(-6).map((h) => ({
+    source_agent: h.role === "user" ? "owner" : roleId,
+    message_type: "message",
+    message_text: h.content,
+  }));
+  try {
+    const r = await reason({
+      agentId: roleId,
+      userRequest: message,
+      businessContext,
+      conversationHistory,
+      canRouteInternally: roleId === "ceo",
+    });
+    return r?.message_text ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Main engine ───────────────────────────────────────────────────────────────
@@ -1581,6 +1638,12 @@ export async function runChatEngine(
     }
 
     case "general": {
+      // Free-form / unrecognized → the agent REASONS via the shared LLM mechanism
+      // (Gemini→Groq), grounded in its read-only context. Falls back to the
+      // structured help below only when no LLM provider answered.
+      const reasoned = await llmReason(db, agentFilter, message, options?.history, pageContext);
+      if (reasoned) return { content: reasoned, sourceRefs: [] };
+
       const isCC = !agentFilter;
       const genLines = [
         "לא זיהיתי את נושא השאלה שלך.\n",

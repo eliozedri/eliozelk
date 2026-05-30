@@ -66,6 +66,26 @@ const CHAT_CHANNELS: ChatChannel[] = [
     requiredPermission: "chat_ops_manager",
     ButtonIcon: TargetIcon,
   },
+  {
+    id: "catalog-manager",
+    labelHe: "מנהל הקטלוג",
+    tooltipHe: "פנה למנהל הקטלוג",
+    agentId: "catalog_manager",
+    agentName: "מנהל הקטלוג",
+    agentIcon: "📦",
+    requiredPermission: null,
+    ButtonIcon: BotIcon,
+  },
+  {
+    id: "system-admin",
+    labelHe: "מנהל המערכת",
+    tooltipHe: "פנה למנהל המערכת",
+    agentId: "system_admin",
+    agentName: "מנהל המערכת",
+    agentIcon: "🛡️",
+    requiredPermission: null,
+    ButtonIcon: BotIcon,
+  },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
