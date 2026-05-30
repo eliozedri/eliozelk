@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     const ordersRes = await db
       .from("work_orders")
-      .select("id,order_number,status,priority,customer,city,created_at,updated_at,graphics_sent_at,graphics_acknowledged_at,graphics_completed_at,order_type,customer_approval_status,design_approval_status,design_sent_at,design_approved_at")
+      .select("id,order_number,status,priority,customer,city,created_at,updated_at,graphics_sent_at,graphics_acknowledged_at,graphics_completed_at,order_type,customer_approval_status,design_approval_status,design_sent_at,design_approved_at,data")
       .in("status", ["graphics_pending", "graphics_active", "graphics_done"]);
 
     if (ordersRes.error) throw new Error(ordersRes.error.message);
@@ -152,12 +152,53 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // ── Design-spec / production-readiness completeness (existing line-item data) ──
+      // Uses the order's stored signRows/miscRows. Flags only genuinely-missing
+      // fields (never invents values): signs without a quantity, signs not matched
+      // in the catalog, signs without a design image, custom ("לפי מידה") items
+      // without dimensions, and items without a quantity. Incomplete specs mean
+      // production cannot proceed reliably → exception + human-review task.
+      const data = (order as unknown as { data?: Record<string, unknown> | null }).data ?? {};
+      const signRows = Array.isArray((data as Record<string, unknown>).signRows) ? ((data as Record<string, unknown>).signRows as Array<Record<string, unknown>>) : [];
+      const miscRows = Array.isArray((data as Record<string, unknown>).miscRows) ? ((data as Record<string, unknown>).miscRows as Array<Record<string, unknown>>) : [];
+      const qty = (v: unknown) => parseFloat(String(v ?? "")) || 0;
+      const specIssues: string[] = [];
+      const signMissingQty = signRows.filter(r => r.signNumber && qty(r.quantity) <= 0).length;
+      const signNotFound   = signRows.filter(r => r.lookupStatus === "not_found").length;
+      const signNoImage    = signRows.filter(r => r.signNumber && !r.imageUrl).length;
+      const customMissingDims = miscRows.filter(r =>
+        (r.customWidth !== undefined || r.customHeight !== undefined || /מידה/.test(String(r.description ?? ""))) &&
+        !(String(r.customWidth ?? "").trim() && String(r.customHeight ?? "").trim()),
+      ).length;
+      const miscMissingQty = miscRows.filter(r => r.description && qty(r.quantity) <= 0).length;
+      if (signMissingQty) specIssues.push(`${signMissingQty} שלטים ללא כמות`);
+      if (signNotFound)   specIssues.push(`${signNotFound} שלטים לא נמצאו בקטלוג`);
+      if (signNoImage)    specIssues.push(`${signNoImage} שלטים ללא תמונת עיצוב`);
+      if (customMissingDims) specIssues.push(`${customMissingDims} שלטים לפי מידה ללא מידות`);
+      if (miscMissingQty) specIssues.push(`${miscMissingQty} פריטים ללא כמות`);
+      if (specIssues.length > 0) {
+        const k = dedupeKey("design_spec_incomplete", "work_order", order.id);
+        activeDedupeKeys.add(k);
+        await upsertException(db, AGENT_ID, {
+          category: "design_spec_incomplete",
+          entityType: "work_order",
+          entityId: order.id,
+          severity: "warn",
+          title: `הזמנה ${order.order_number} — מפרט עיצוב/ייצור חסר`,
+          description: `${specIssues.join(" · ")} | לקוח: ${order.customer}`,
+          detectedFromData: { orderNumber: order.order_number, specIssues },
+          recommendedResolution: "השלם כמויות / מידות / קוד שלט / תמונת עיצוב לפני העברה לייצור",
+        }, dedupeMap, result);
+        if (!graphicsTaskReason) graphicsTaskReason = `מפרט עיצוב/ייצור חסר: ${specIssues.join(" · ")}`;
+      }
+
       // ── Consolidated graphics human-review task (safe metadata; no business mutation) ──
-      // One stable task per order that has a genuine graphics blocker (SLA-critical
-      // or pending design approval) → re-scans UPDATE the same task (no spam).
-      // Auto-assigned to graphics-production-agent. Design-spec completeness checks
-      // (missing dimensions/material/quantity/file) need the order line-item model
-      // and are a documented follow-up — not inferred here.
+      // One stable task per order with a genuine graphics blocker — SLA-critical,
+      // pending design approval, or incomplete design/production spec (above) →
+      // re-scans UPDATE the same task (no spam). Auto-assigned to
+      // graphics-production-agent. Reflective-type / installation-notes / explicit
+      // production_status are not first-class fields yet (see report — minimal
+      // schema proposal); not inferred/faked here.
       if (graphicsTaskReason) {
         await upsertTask(db, AGENT_ID, {
           category: "graphics_followup",
