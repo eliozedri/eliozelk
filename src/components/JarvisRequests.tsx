@@ -142,6 +142,19 @@ function msgTypeLabel(t: string): string {
   return MSG_TYPE_HE[t] ?? t;
 }
 
+/** The single clearest "what happens next" for the owner, by status. */
+function nextActionLabel(r: JarvisRequestRow): string | null {
+  switch (r.status) {
+    case "pending_review": return "🕒 הפעולה הבאה: החלטת בעלים (אישור / דחייה / דרוש מידע / ניתוב)";
+    case "needs_info": return "⏳ הפעולה הבאה: ממתין להבהרה (מהבעלים / JARVIS)";
+    case "approved": return "🔍 הפעולה הבאה: יצירת תצוגה מקדימה (dry-run)";
+    case "preview_ready": return "✅ הפעולה הבאה: אישור ביצוע (אישור שני)";
+    case "execution_approved": return "🚀 הפעולה הבאה: ביצוע";
+    case "executed": return "↩️ אפשרי: שחזור (revert)";
+    default: return null;
+  }
+}
+
 export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]; agents?: AgentCard[] }) {
   const router = useRouter();
   const [selected, setSelected] = useState<JarvisRequestRow | null>(null);
@@ -270,10 +283,16 @@ export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]
               <button className="text-white/40 hover:text-white/80" onClick={() => setSelected(null)} aria-label="סגור">✕</button>
             </div>
 
-            <div className="flex gap-2 mb-3">
+            <div className="flex flex-wrap gap-2 mb-2">
               <span className={`badge ${STATUS[selected.status]?.badge ?? "badge-gray"}`}>{STATUS[selected.status]?.label ?? selected.status}</span>
               <span className={`badge ${RISK[selected.risk_level ?? ""]?.badge ?? "badge-gray"}`}>סיכון: {RISK[selected.risk_level ?? ""]?.label ?? selected.risk_level ?? "—"}</span>
+              {selected.routed_to_agent && <span className="badge badge-blue">נותב → {ROLE_HE[selected.routed_to_agent] ?? selected.routed_to_agent}</span>}
             </div>
+            {nextActionLabel(selected) && (
+              <div className="text-xs text-amber-200/85 bg-amber-500/10 border border-amber-400/20 rounded px-2 py-1 mb-3">
+                {nextActionLabel(selected)}
+              </div>
+            )}
 
             <dl className="space-y-2 text-sm text-white/80">
               <Row k="הבקשה המקורית" v={selected.full_request ?? selected.summary} />

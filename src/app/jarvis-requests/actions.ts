@@ -68,7 +68,29 @@ export async function rejectRequest(id: string, reason: string): Promise<Decisio
 }
 
 export async function needsInfoRequest(id: string, note: string): Promise<DecisionResult> {
-  const r = await setStatus(id, { status: "needs_info", rejection_reason: note?.slice(0, 500) || null });
+  const supabase = getServiceSupabase();
+  // Append the clarification question to the conversation thread so it is visible
+  // in-UI as a traceable turn (not only a flat rejection_reason field).
+  const { data: cur } = await supabase
+    .from("jarvis_ceo_agent_commands")
+    .select("conversation")
+    .eq("id", id)
+    .maybeSingle();
+  const conversation = Array.isArray(cur?.conversation) ? [...(cur!.conversation as unknown[])] : [];
+  conversation.push({
+    seq: conversation.length + 1,
+    source_agent: "owner",
+    target_agent: "jarvis",
+    message_type: "needs_info",
+    message_text: note?.trim() || "ה-CEO Agent צריך מידע נוסף כדי להמשיך.",
+    created_at: new Date().toISOString(),
+  });
+  const r = await setStatus(id, {
+    status: "needs_info",
+    rejection_reason: note?.slice(0, 500) || null,
+    conversation,
+    last_message_type: "needs_info",
+  });
   // CEO-Agent asks the owner for clarification → JARVIS DMs me in Telegram and
   // waits for my reply (needs_answer:true closes the loop back to pending_review).
   if (r.ok) await notify(id, "needs_info", note?.trim() || "ה-CEO Agent צריך מידע נוסף כדי להמשיך.", true);
