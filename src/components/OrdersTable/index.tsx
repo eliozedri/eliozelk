@@ -313,6 +313,56 @@ function ReadinessBadge({ readiness }: { readiness: OrderReadiness }) {
   );
 }
 
+// Responsible department/team per key (for the detailed breakdown).
+const DEPT_OWNER: Record<DeptProgress["key"], string> = {
+  graphics: "מחלקת גרפיקה",
+  fabrication: "מחלקת מסגרייה",
+  warehouse: "מחלקת מחסן",
+  operations: "תפעול / תיאום",
+  finance: "הנהלת חשבונות",
+};
+
+// Detailed, vertical department breakdown for the order detail panel — clearer
+// than the compact row chips: owner, state, reason, and whether the department
+// blocks coordination/scheduling. All states come from getDepartmentProgress
+// (derived from stored order data — never invented).
+function DepartmentBreakdown({ order }: { order: WorkOrder }) {
+  const depts = getDepartmentProgress(order);
+  const readiness = getOrderReadiness(order);
+  const isCore = (k: DeptProgress["key"]) => k === "graphics" || k === "fabrication" || k === "warehouse";
+  return (
+    <div className="rounded-xl border border-gray-200 p-3" dir="rtl">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-gray-800">התקדמות מחלקות</h3>
+        <span className={`text-xs ${READINESS_STYLE[readiness.tone]}`} title={readiness.reason ?? readiness.label}>
+          {readiness.label}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {depts.map((d) => (
+          <div key={d.key} className="flex items-start justify-between gap-2 text-xs">
+            <div className="min-w-0">
+              <div className="font-medium text-gray-800">
+                {d.label} <span className="text-gray-400 font-normal">· {DEPT_OWNER[d.key]}</span>
+              </div>
+              {d.reason && <div className="text-gray-500 leading-tight">{d.reason}</div>}
+              {isCore(d.key) && d.state !== "completed" && d.state !== "not_required" && (
+                <div className="text-[10px] text-amber-600">חוסם מעבר לתיאום/שיבוץ</div>
+              )}
+            </div>
+            <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] leading-none ${DEPT_CHIP_STYLE[d.state]}`}>
+              {DEPT_STATE_LABELS[d.state]}
+            </span>
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-gray-400 mt-2">
+        מצב המחלקות נגזר מנתוני ההזמנה. מחלקה ללא נתון ודאי מסומנת &quot;דורש בדיקה&quot;.
+      </p>
+    </div>
+  );
+}
+
 function ProgressTracker({ order }: { order: WorkOrder }) {
   const { status } = order;
   const { completedSteps, activeStep, isPending } = getProgressState(status);
@@ -911,6 +961,9 @@ function OrderDetailPanel({
               </span>
             )}
           </div>
+
+          {/* Department-level progress breakdown */}
+          <DepartmentBreakdown order={order} />
 
           {/* Key details grid */}
           <div className="grid grid-cols-2 gap-3">

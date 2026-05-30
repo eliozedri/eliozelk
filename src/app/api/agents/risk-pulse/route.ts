@@ -214,14 +214,33 @@ export async function GET(request: NextRequest) {
     const clarify = all.filter(r => r.status === "needs_info").length;
     const routedOpen = all.filter(r => !terminal.has(r.status as string) && !isBlank(r.routed_to_agent)).length;
 
-    const { data: exc } = await db.from("agent_exceptions").select("status").in("status", ["open", "acknowledged"]);
-    const { data: tasks } = await db.from("agent_tasks").select("status").in("status", ["open", "in_progress"]);
+    const { data: excRows } = await db.from("agent_exceptions").select("status").in("status", ["open", "acknowledged"]);
+    const exc = excRows ?? [];
+    const openExc = exc.filter(e => e.status === "open").length;
+    const ackExc = exc.filter(e => e.status === "acknowledged").length;
+
+    // Task lifecycle states (read-only, from stored fields): created/unassigned
+    // vs assigned vs stale. Distinguishes "risk has a task but no owner" from
+    // "owned & in flight" from "owned but going stale".
+    const { data: taskRows } = await db.from("agent_tasks").select("status, assigned_to, updated_at").in("status", ["open", "in_progress"]);
+    const tasks = taskRows ?? [];
+    const STALE_DAYS = 7;
+    const unassignedTasks = tasks.filter(t => isBlank(t.assigned_to)).length;
+    const assignedTasks = tasks.filter(t => !isBlank(t.assigned_to)).length;
+    const staleTasks = tasks.filter(t => {
+      const n = daysUntil(t.updated_at as string | null);
+      return n !== null && n < -STALE_DAYS; // updated_at older than STALE_DAYS ago
+    }).length;
+
     return [
       { key: "open_requests", label: "בקשות JARVIS פתוחות", count: openReq, severity: "warning", href: "/jarvis-requests" },
       { key: "clarification", label: "ממתינות להבהרה", count: clarify, severity: "warning", href: "/jarvis-requests" },
       { key: "routed_open", label: "נותבו וממתינות לטיפול", count: routedOpen, severity: "info", href: "/jarvis-requests" },
-      { key: "open_exceptions", label: "חריגות סוכנים פתוחות", count: (exc ?? []).length, severity: "warning", href: "/agents" },
-      { key: "open_tasks", label: "משימות סוכנים פתוחות", count: (tasks ?? []).length, severity: "info", href: "/agents" },
+      { key: "open_exceptions", label: "חריגות פתוחות (טרם טופלו)", count: openExc, severity: "warning", href: "/agents" },
+      { key: "ack_exceptions", label: "חריגות בטיפול (אושרו)", count: ackExc, severity: "info", href: "/agents" },
+      { key: "unassigned_tasks", label: "משימות ללא הקצאה", count: unassignedTasks, severity: "warning", href: "/agents" },
+      { key: "assigned_tasks", label: "משימות מוקצות", count: assignedTasks, severity: "info", href: "/agents" },
+      { key: "stale_tasks", label: `משימות תקועות (${STALE_DAYS} ימים+)`, count: staleTasks, severity: "critical", href: "/agents" },
     ];
   });
 
@@ -257,7 +276,10 @@ export async function GET(request: NextRequest) {
     clarification: "ספק הבהרה לבקשות ממתינות",
     routed_open: "ודא טיפול בבקשות שנותבו",
     open_exceptions: "הקצה בעלות מחלקתית לחריגות פתוחות",
-    open_tasks: "טפל במשימות סוכנים פתוחות",
+    ack_exceptions: "המשך טיפול בחריגות שאושרו",
+    unassigned_tasks: "הקצה בעלים למשימות ללא הקצאה",
+    assigned_tasks: "עקוב אחר משימות מוקצות פתוחות",
+    stale_tasks: "טפל במשימות תקועות / עבר זמנן",
   };
   const sevRank: Record<PulseSeverity, number> = { critical: 0, warning: 1, info: 2 };
   const ceoAggregation = groups
