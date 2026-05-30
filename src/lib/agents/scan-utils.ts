@@ -215,13 +215,19 @@ export async function writeAgentActivity(
   agentId: string,
   messageType: string,
   content: string,
-  payload?: Record<string, unknown>
+  payload?: Record<string, unknown>,
+  // Optional cross-agent link → turns a flat activity entry into a traceable
+  // source→target handoff visible in the Command Center communication view.
+  opts?: { relatedAgentId?: string; relatedEntityType?: string; relatedEntityId?: string },
 ): Promise<void> {
   await db.from("agent_activity_feed").insert({
     agent_id: agentId,
     message_type: messageType,
     content,
     structured_payload: payload ?? null,
+    related_agent_id: opts?.relatedAgentId ?? null,
+    related_entity_type: opts?.relatedEntityType ?? null,
+    related_entity_id: opts?.relatedEntityId ?? null,
   });
 }
 

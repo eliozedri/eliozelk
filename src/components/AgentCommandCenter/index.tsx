@@ -893,6 +893,14 @@ function ApprovalsPanel({ approvals, agents, onApprove, onReject }: {
 
 function ActivityPanel({ feed, agents }: { feed: AgentActivityFeedItem[]; agents: Agent[] }) {
   const byId = useMemo(() => new Map(agents.map(a => [a.id, a])), [agents]);
+  const [view, setView] = useState<"all" | "inter_agent">("all");
+  // Inter-agent communication = entries that target another agent OR are
+  // handoff/report/directive/status types (deterministic traceability layer —
+  // not autonomous agent dialogue, which is the LLM reasoning engine's job).
+  const INTER = new Set(["collaboration", "directive", "report", "status_change"]);
+  const shown = view === "inter_agent"
+    ? feed.filter(i => i.related_agent_id || INTER.has(i.message_type))
+    : feed;
   if (feed.length === 0) {
     return (
       <div className="text-center py-20 text-white/30">
@@ -904,8 +912,16 @@ function ActivityPanel({ feed, agents }: { feed: AgentActivityFeedItem[]; agents
   }
   return (
     <div className="space-y-2">
-      {feed.map(item => {
+      <div className="flex items-center justify-end gap-1 mb-1">
+        <button onClick={() => setView("all")} className={`text-[10px] px-2 py-0.5 rounded-full ${view === "all" ? "bg-white/15 text-white" : "text-white/40"}`}>הכל</button>
+        <button onClick={() => setView("inter_agent")} className={`text-[10px] px-2 py-0.5 rounded-full ${view === "inter_agent" ? "bg-white/15 text-white" : "text-white/40"}`}>תקשורת בין סוכנים</button>
+      </div>
+      {shown.length === 0 && (
+        <div className="text-white/30 text-xs text-center py-6">אין רשומות תקשורת בין-סוכנים עדיין — ניתוב/הסלמה/הקצאה ייצרו כאן רשומות מקור→יעד</div>
+      )}
+      {shown.map(item => {
         const agent = byId.get(item.agent_id);
+        const related = item.related_agent_id ? byId.get(item.related_agent_id) : undefined;
         return (
           <div key={item.id} className="flex items-start gap-3 text-right py-2"
             style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
@@ -915,7 +931,10 @@ function ActivityPanel({ feed, agents }: { feed: AgentActivityFeedItem[]; agents
             <div className="flex-1">
               {agent && (
                 <span className="text-[10px] font-semibold ml-1" style={{ color: agent.color ?? "#aaa" }}>
-                  {agent.icon} {agent.name}:
+                  {agent.icon} {agent.name}
+                  {item.related_agent_id && (
+                    <span className="text-white/40"> → {related ? `${related.icon} ${related.name}` : item.related_agent_id}</span>
+                  )}:
                 </span>
               )}
               <span className="text-xs text-white/70">{item.content}</span>

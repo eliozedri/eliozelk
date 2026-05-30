@@ -290,6 +290,18 @@ export async function POST(req: NextRequest) {
           priority: critical >= ELEVATED_CRITICAL ? "critical" : "high",
           recommendedAction: "פתח את מרכז הסוכנים (DigitalHQ): טפל בחריגות הקריטיות, הקצה בעלים למשימות ללא הקצאה, וקדם משימות תקועות",
         }, taskDedupeMap, result);
+
+        // Traceable CEO → department-agent handoff (source→target communication
+        // entry, visible in the Command Center "תקשורת בין סוכנים" view).
+        const topAgent = Object.entries(byAgent).sort((a, b) => b[1] - a[1])[0];
+        if (topAgent) {
+          await writeAgentActivity(
+            db, AGENT_ID, "collaboration",
+            `CEO → ${topAgent[0]}: ${topAgent[1]} חריגות פתוחות במחלקה — נדרש טיפול`,
+            { critical, errors, unassignedCount, staleCount, targetAgent: topAgent[0], count: topAgent[1] },
+            { relatedAgentId: topAgent[0], relatedEntityType: "agent", relatedEntityId: topAgent[0] },
+          );
+        }
       }
     }
 
