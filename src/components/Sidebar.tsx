@@ -42,6 +42,9 @@ interface NavSection { label: string; items: NavItem[]; }
 const ICON_CLS = "w-[18px] h-[18px] shrink-0";
 
 const AGENTS_NAV_ITEM: NavItem = { tabId: "agents", href: "/agents", label: "מרכז הפיקוד הדיגיטלי", icon: <Bot className={ICON_CLS} />, matchFn: (p) => p.startsWith("/agents"), noBadge: true };
+// Nested directly under the Command Center entry point (same "agents" tab gate) so
+// the JARVIS → CEO-Agent review queue reads as part of the command-center group.
+const JARVIS_REQUESTS_NAV_ITEM: NavItem = { tabId: "agents", href: "/jarvis-requests", label: "בקשות מ-JARVIS", icon: <Send className={ICON_CLS} />, matchFn: (p) => p.startsWith("/jarvis-requests"), noBadge: true, title: "משימות שגראוויס שלח ל-CEO Agent של אלקיים — לאישור" };
 
 const NAV_SECTIONS: NavSection[] = [
   {
@@ -50,7 +53,6 @@ const NAV_SECTIONS: NavSection[] = [
       { tabId: "dashboard", href: "/", label: "מרכז שליטה", icon: <LayoutDashboard className={ICON_CLS} />, matchFn: (p) => p === "/", title: "בעיות פתוחות בהזמנות" },
       { tabId: "orders", href: "/orders", label: "טבלת הזמנות", icon: <Table2 className={ICON_CLS} />, matchFn: (p) => p.startsWith("/orders") },
       { tabId: "team-bot-orders", href: "/team-bot-orders", label: "הזמנות מהבוט", icon: <Send className={ICON_CLS} />, matchFn: (p) => p.startsWith("/team-bot-orders"), noBadge: true, title: "טיוטות הזמנה שהתקבלו דרך בוט הטלגרם" },
-      { tabId: "agents", href: "/jarvis-requests", label: "בקשות מ-JARVIS", icon: <Bot className={ICON_CLS} />, matchFn: (p) => p.startsWith("/jarvis-requests"), noBadge: true, title: "משימות שגראוויס שלח ל-CEO Agent של אלקיים — לאישור" },
       { tabId: "schedule", href: "/schedule", label: "סידור שבועי", icon: <Calendar className={ICON_CLS} />, matchFn: (p) => p.startsWith("/schedule") },
     ],
   },
@@ -214,6 +216,15 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
               label={AGENTS_NAV_ITEM.label}
               active={AGENTS_NAV_ITEM.matchFn(pathname)}
               icon={AGENTS_NAV_ITEM.icon}
+              onClick={handleNavClick}
+              onGuardedNavigate={isDirtyGuard ? guardedNavigate : undefined}
+            />
+            <SidebarLink
+              href={JARVIS_REQUESTS_NAV_ITEM.href}
+              label={JARVIS_REQUESTS_NAV_ITEM.label}
+              active={JARVIS_REQUESTS_NAV_ITEM.matchFn(pathname)}
+              icon={JARVIS_REQUESTS_NAV_ITEM.icon}
+              title={JARVIS_REQUESTS_NAV_ITEM.title}
               onClick={handleNavClick}
               onGuardedNavigate={isDirtyGuard ? guardedNavigate : undefined}
             />

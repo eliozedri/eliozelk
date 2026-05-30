@@ -2,6 +2,7 @@
 // @refresh reset
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useAgentContext } from "@/context/AgentContext";
 import { getSupabase } from "@/lib/supabase/client";
 import type { ScanResult } from "@/lib/agents/types";
@@ -1110,6 +1111,14 @@ export function AgentCommandCenter() {
           >
             📋 פנייה למנהל התפעול
           </button>
+          {/* Entry point into the JARVIS → CEO-Agent review queue (its own page/table) */}
+          <Link
+            href="/jarvis-requests"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
+            style={{ backgroundColor: `${EK_GOLD}1f`, color: EK_GOLD, border: `1px solid ${EK_GOLD}40` }}
+          >
+            📥 בקשות מ-JARVIS
+          </Link>
         </div>
 
         {/* System scan progress strip */}
