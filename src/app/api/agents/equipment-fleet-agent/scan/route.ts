@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   loadAgentExceptionDedupeMap,
+  loadAgentTaskDedupeMap,
   upsertException,
+  upsertTask,
   autoResolveStaleExceptions,
   writeAgentActivity,
   updateAgentRunStatus,
@@ -92,6 +94,7 @@ export async function POST(req: NextRequest) {
     result.entitiesScanned = items.length;
 
     const dedupeMap = await loadAgentExceptionDedupeMap(db, AGENT_ID);
+    const taskDedupeMap = await loadAgentTaskDedupeMap(db, AGENT_ID);
     const nowMs = Date.now();
     const activeDedupeKeys = new Set<string>();
 
@@ -467,16 +470,48 @@ export async function POST(req: NextRequest) {
           }, dedupeMap, result);
         }
       }
+
+      // ── Consolidated compliance follow-up TASK (human-review; no business mutation) ──
+      // One stable task per asset that has a BLOCKING compliance issue (expired
+      // test/licence/insurance, missing insurance, or unidentified → cannot be
+      // safely assigned). Stable title → re-scans update the same task (no spam).
+      // Auto-assigned to equipment-fleet-agent by upsertTask's default owner.
+      const blockers: string[] = [];
+      const inspExp = daysDiff(item.next_inspection_date, nowMs);
+      if (inspExp !== null && inspExp <= 0) blockers.push("טסט פג תוקף");
+      if (LICENSED_CATEGORIES.has(item.category_key)) {
+        const licExp = daysDiff(item.license_expiry_date, nowMs);
+        if (licExp !== null && licExp <= 0) blockers.push("רישיון רכב פג תוקף");
+      }
+      if (INSURED_CATEGORIES.has(item.category_key)) {
+        const insExp = daysDiff(item.next_insurance_date, nowMs);
+        if (insExp !== null && insExp <= 0) blockers.push("ביטוח פג תוקף");
+        else if (item.next_insurance_date === null && item.status === "active") blockers.push("תאריך ביטוח חסר");
+      }
+      if (item.identification_confidence === "unidentified") blockers.push("זיהוי חסר — לא ניתן לשבץ בוודאות");
+      if (blockers.length > 0) {
+        await upsertTask(db, AGENT_ID, {
+          category: "fleet_compliance_blocker",
+          entityType: "equipment",
+          entityId: item.id,
+          title: `ציוד: ${name} — טיפול תאימות נדרש`,
+          description: `חסמים: ${blockers.join(" · ")} | קטגוריה: ${item.category_key}`,
+          priority: "critical",
+          recommendedAction: "הסר משיגור אם רלוונטי, חדש/השלם את המסמכים הפגים/החסרים, ועדכן את התאריכים בכרטיס הכלי",
+        }, taskDedupeMap, result);
+      }
     }
 
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 
-    const summary = `סריקה הושלמה: ${result.entitiesScanned} פריטי ציוד | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו`;
+    const summary = `סריקה הושלמה: ${result.entitiesScanned} פריטי ציוד | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו | ${result.tasksCreated} משימות נוצרו`;
     await writeAgentActivity(db, AGENT_ID, "detection", summary, {
       entitiesScanned: result.entitiesScanned,
       exceptionsCreated: result.exceptionsCreated,
       exceptionsUpdated: result.exceptionsUpdated,
       exceptionsResolved: result.exceptionsResolved,
+      tasksCreated: result.tasksCreated,
+      tasksUpdated: result.tasksUpdated,
     });
 
     result.durationMs = Date.now() - start;
