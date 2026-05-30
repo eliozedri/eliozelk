@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAgentContext } from "@/context/AgentContext";
 import { getSupabase } from "@/lib/supabase/client";
 import type { ScanResult } from "@/lib/agents/types";
@@ -918,6 +919,41 @@ function ActivityPanel({ feed, agents }: { feed: AgentActivityFeedItem[]; agents
   );
 }
 
+// ── Risk Pulse ─────────────────────────────────────────────────────────────────
+// Aggregates live operational signals already available in the command-center
+// context (+ the JARVIS open-requests count). Honest about signals not yet
+// aggregated here (documented in the footnote) rather than faking them.
+
+interface PulseItem { label: string; value: number | string; accent: string; onClick: () => void; hint?: string }
+
+function RiskPulse({ items }: { items: PulseItem[] }) {
+  return (
+    <div className="rounded-2xl border border-white/10 p-4 mb-6" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs font-bold text-white/50 uppercase tracking-widest">דופק סיכון מערכתי</div>
+        <span className="text-[10px] text-white/30">אותות חיים מהמערכת</span>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+        {items.map((it) => (
+          <button
+            key={it.label}
+            onClick={it.onClick}
+            className="rounded-xl border border-white/8 p-3 text-right transition-all hover:border-white/25"
+            style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
+          >
+            <div className="text-2xl font-black leading-none mb-1" style={{ color: it.accent }}>{it.value}</div>
+            <div className="text-[11px] text-white/60 leading-tight">{it.label}</div>
+            {it.hint && <div className="text-[9px] text-white/30 mt-0.5">{it.hint}</div>}
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] text-white/30 mt-3 leading-relaxed">
+        אותות נוספים — מסמכים תקועים, תוקף מסמכי צי, מלאי נמוך/אפס, חסמי חיוב, טיוטות תקועות — מזוהים כיום דרך סריקות הסוכנים ומופיעים כחריגות/משימות. איגום ייעודי שלהם בלוח זה יתווסף בהמשך (דורש endpoints נוספים).
+      </p>
+    </div>
+  );
+}
+
 // ── Main Command Center ───────────────────────────────────────────────────────
 
 type MainTab = "overview" | "tasks" | "exceptions" | "approvals" | "activity" | "hq";
@@ -930,13 +966,45 @@ export function AgentCommandCenter() {
   } = useAgentContext();
 
   const { openChat } = useGlobalChat();
+  const router = useRouter();
   const [mainTab, setMainTab] = useState<MainTab>("hq");
+  const [jarvisSummary, setJarvisSummary] = useState<{ open: number; awaitingOwner: number; awaitingClarification: number } | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showNewMeeting, setShowNewMeeting] = useState(false);
 
   const { meetings, creating: meetingCreating, error: meetingError, loadMeetings, createMeeting } = useAgentMeetings();
 
   useEffect(() => { void loadMeetings(); }, [loadMeetings]);
+
+  // Live open-JARVIS-requests count (read-only) for the KPI + risk pulse.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = getSupabase();
+      if (!supabase) return;
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return;
+      try {
+        const res = await fetch("/api/jarvis/requests-summary", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const j = await res.json();
+        if (!cancelled) {
+          setJarvisSummary({
+            open: j.open ?? 0,
+            awaitingOwner: j.awaitingOwner ?? 0,
+            awaitingClarification: j.awaitingClarification ?? 0,
+          });
+        }
+      } catch {
+        /* non-fatal — KPI shows — */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   function openAgentChat(id: string) {
     const agent = agents.find(a => a.id === id);
@@ -1189,6 +1257,17 @@ export function AgentCommandCenter() {
             accent="rgba(255,255,255,0.4)"
             onClick={() => setMainTab("activity")}
           />
+          <KpiCard
+            value={jarvisSummary?.open ?? "—"}
+            label="בקשות JARVIS פתוחות"
+            sub={
+              jarvisSummary && (jarvisSummary.awaitingOwner + jarvisSummary.awaitingClarification) > 0
+                ? `${jarvisSummary.awaitingOwner + jarvisSummary.awaitingClarification} ממתינות להחלטה`
+                : "פתח את התור"
+            }
+            accent={(jarvisSummary?.open ?? 0) > 0 ? EK_BLUE : "rgba(255,255,255,0.4)"}
+            onClick={() => router.push("/jarvis-requests")}
+          />
         </div>
       </div>
 
@@ -1252,8 +1331,18 @@ export function AgentCommandCenter() {
           />
         )}
 
-        {/* Overview: org chart + agent cards */}
+        {/* Overview: risk pulse + org chart + agent cards */}
         {mainTab === "overview" && (
+          <>
+          <RiskPulse
+            items={[
+              { label: "בקשות JARVIS פתוחות", value: jarvisSummary?.open ?? "—", accent: (jarvisSummary?.open ?? 0) > 0 ? EK_BLUE : "rgba(255,255,255,0.4)", onClick: () => router.push("/jarvis-requests"), hint: jarvisSummary && (jarvisSummary.awaitingOwner + jarvisSummary.awaitingClarification) > 0 ? `${jarvisSummary.awaitingOwner + jarvisSummary.awaitingClarification} ממתינות` : undefined },
+              { label: "חריגות קריטיות", value: totalCriticalExc, accent: totalCriticalExc > 0 ? "#ef4444" : "rgba(255,255,255,0.4)", onClick: () => setMainTab("exceptions") },
+              { label: "חריגות פתוחות", value: totalOpenExc, accent: totalOpenExc > 0 ? "#f97316" : "rgba(255,255,255,0.4)", onClick: () => setMainTab("exceptions") },
+              { label: "ממתינים לאישור", value: totalPendingApprovals, accent: totalPendingApprovals > 0 ? "#f59e0b" : "rgba(255,255,255,0.4)", onClick: () => setMainTab("approvals") },
+              { label: "משימות פתוחות", value: totalOpenTasks, accent: totalOpenTasks > 0 ? EK_GOLD : "rgba(255,255,255,0.4)", onClick: () => setMainTab("tasks") },
+            ]}
+          />
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
             {/* Org Chart */}
@@ -1299,6 +1388,7 @@ export function AgentCommandCenter() {
               }
             </div>
           </div>
+          </>
         )}
 
         {mainTab === "tasks" && (

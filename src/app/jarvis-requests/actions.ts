@@ -79,6 +79,74 @@ export async function archiveRequest(id: string): Promise<DecisionResult> {
   return setStatus(id, { status: "archived" });
 }
 
+/**
+ * Route a request to a department/agent. Persists routing on existing columns
+ * (routed_to_agent / target_department / target_role), appends a traceable turn
+ * to the conversation thread, and writes a best-effort agent_activity_feed entry
+ * so the routing is visible in the Command Center activity log. STATUS-ONLY in
+ * spirit — it never performs a business mutation and does not change the
+ * approval/execution status of the request.
+ */
+export async function routeRequest(
+  id: string,
+  routedToAgent: string,
+  opts?: { department?: string | null; role?: string | null; note?: string | null },
+): Promise<DecisionResult> {
+  try {
+    if (!routedToAgent) return { ok: false, error: "missing_agent" };
+    const supabase = getServiceSupabase();
+
+    // Append a traceable turn to the existing conversation thread.
+    const { data: cur } = await supabase
+      .from("jarvis_ceo_agent_commands")
+      .select("conversation")
+      .eq("id", id)
+      .maybeSingle();
+    const conversation = Array.isArray(cur?.conversation) ? [...(cur!.conversation as unknown[])] : [];
+    const seq = conversation.length + 1;
+    conversation.push({
+      seq,
+      source_agent: "owner",
+      target_agent: routedToAgent,
+      message_type: "status_update",
+      message_text: opts?.note?.trim()
+        ? `נותב ל-${routedToAgent}: ${opts.note.trim().slice(0, 400)}`
+        : `נותב ל-${routedToAgent}`,
+      created_at: new Date().toISOString(),
+    });
+
+    const patch: Record<string, unknown> = {
+      routed_to_agent: routedToAgent,
+      conversation,
+      last_message_type: "status_update",
+    };
+    if (opts?.department !== undefined) patch.target_department = opts.department;
+    if (opts?.role !== undefined) patch.target_role = opts.role;
+
+    const r = await setStatus(id, patch);
+    if (!r.ok) return r;
+
+    // Best-effort cross-agent activity log (non-fatal if the table is locked down).
+    try {
+      await supabase.from("agent_activity_feed").insert({
+        agent_id: "ceo",
+        related_agent_id: routedToAgent,
+        related_entity_type: "jarvis_command",
+        related_entity_id: id,
+        message_type: "collaboration",
+        content: opts?.note?.trim()
+          ? `בקשה נותבה ל-${routedToAgent}: ${opts.note.trim().slice(0, 200)}`
+          : `בקשה נותבה ל-${routedToAgent}`,
+      });
+    } catch {
+      /* best-effort */
+    }
+    return r;
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tier-B controlled execution. The ONLY mutation surface is catalog_items.default_price
 // (via execDb.updatePrice). Gates: preview only from 'approved'; execute only from

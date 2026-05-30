@@ -11,6 +11,7 @@ import {
   needsInfoRequest,
   rejectRequest,
   revertRequest,
+  routeRequest,
 } from "@/app/jarvis-requests/actions";
 import { actionCapabilities } from "@/lib/jarvis/actionCatalog";
 
@@ -145,7 +146,10 @@ export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]
   const router = useRouter();
   const [selected, setSelected] = useState<JarvisRequestRow | null>(null);
   const [reason, setReason] = useState("");
+  const [routeTo, setRouteTo] = useState("");
   const [pending, startTransition] = useTransition();
+
+  const TERMINAL_STATUSES = ["rejected", "executed", "reverted", "failed", "archived", "execution_disabled", "executed_later"];
 
   const pendingCount = rows.filter((r) => r.status === "pending_review").length;
 
@@ -155,6 +159,7 @@ export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]
       if (!res.ok) alert(`הפעולה נכשלה: ${res.error ?? "שגיאה"}`);
       setSelected(null);
       setReason("");
+      setRouteTo("");
       router.refresh();
     });
   };
@@ -248,7 +253,7 @@ export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]
                   </td>
                   <td className="p-3 text-white/50 whitespace-nowrap">{fmt(r.created_at)}</td>
                   <td className="p-3">
-                    <button className="btn-glass" onClick={() => { setSelected(r); setReason(""); }}>פרטים</button>
+                    <button className="btn-glass" onClick={() => { setSelected(r); setReason(""); setRouteTo(""); }}>פרטים</button>
                   </td>
                 </tr>
               ))}
@@ -281,7 +286,41 @@ export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]
               <Row k="Correlation ID" v={selected.correlation_id} mono />
               {selected.rejection_reason ? <Row k="הערה / סיבה" v={selected.rejection_reason} /> : null}
               {selected.approved_at ? <Row k="אושר" v={`${selected.approved_by ?? ""} · ${fmt(selected.approved_at)}`} /> : null}
+              {selected.updated_at ? <Row k="עודכן" v={fmt(selected.updated_at)} /> : null}
             </dl>
+
+            {/* Routing — assign the request to a department/agent. Persists routed_to_agent,
+                appends a thread turn, and logs to the agent activity feed. No business mutation. */}
+            {!TERMINAL_STATUSES.includes(selected.status) && agents.length > 0 && (
+              <div className="glass-inner mt-3 p-3 rounded">
+                <div className="text-white/60 text-xs mb-2">ניתוב לסוכן / מחלקה</div>
+                {selected.routed_to_agent && (
+                  <div className="text-xs text-white/50 mb-2">
+                    נותב כעת ל: <span className="text-white/85">{ROLE_HE[selected.routed_to_agent] ?? selected.routed_to_agent}</span>
+                  </div>
+                )}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <select
+                    className="glass-inner bg-transparent text-sm text-white/90 rounded px-2 py-1 flex-1"
+                    value={routeTo}
+                    onChange={(e) => setRouteTo(e.target.value)}
+                  >
+                    <option value="" className="bg-slate-800">בחר סוכן…</option>
+                    {agents.map((a) => (
+                      <option key={a.id} value={a.id} className="bg-slate-800">{a.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn-glass"
+                    disabled={pending || !routeTo}
+                    onClick={() => act(() => routeRequest(selected.id, routeTo, { note: reason || null }))}
+                  >
+                    ↪️ נתב
+                  </button>
+                </div>
+                <p className="text-[11px] text-white/35 mt-1">הניתוב נרשם ביומן הסוכנים ובשרשור הבקשה. אינו מאשר ביצוע.</p>
+              </div>
+            )}
 
             {/* Agent-to-agent conversation thread (JARVIS ↔ CEO-Agent ↔ owner) */}
             {selected.conversation && selected.conversation.length > 0 && (
