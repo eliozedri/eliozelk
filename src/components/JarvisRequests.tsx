@@ -112,6 +112,7 @@ const RISK: Record<string, { label: string; badge: string }> = {
 const ROLE_HE: Record<string, string> = {
   catalog_manager: "מנהל קטלוג",
   system_manager: "מנהל מערכת",
+  system_admin: "מנהל מערכת",
   operations_manager: "מנהל תפעול",
   coo: "סמנכ״ל תפעול",
   ceo: "מנכ״ל",
@@ -224,6 +225,16 @@ export function JarvisRequests({ rows, agents = [] }: { rows: JarvisRequestRow[]
                   <td className="p-3 text-white/90">
                     <div className="font-medium">{r.title ?? r.action_type}</div>
                     <div className="text-white/40 text-xs truncate max-w-[28ch]">{r.summary}</div>
+                    {/* at-a-glance health: how it was reasoned, where it routed, if it's waiting */}
+                    <div className="flex flex-wrap gap-1 mt-1 text-[10px]">
+                      <span className={`badge ${r.llm_used ? "badge-violet" : "badge-gray"}`}>
+                        {r.llm_used ? `🧠 LLM${r.llm_provider ? ` · ${r.llm_provider}` : ""}` : "⚙ rule-based"}
+                      </span>
+                      {r.routed_to_agent ? <span className="badge badge-blue">→ {ROLE_HE[r.routed_to_agent] ?? r.routed_to_agent}</span> : null}
+                      {r.last_message_type === "needs_info" || r.status === "needs_info"
+                        ? <span className="badge badge-amber">⏳ ממתין למידע</span> : null}
+                      {r.status === "capability_gap" ? <span className="badge badge-gray">פער יכולת</span> : null}
+                    </div>
                   </td>
                   <td className="p-3 text-white/70">
                     {r.target_department ?? "—"}
