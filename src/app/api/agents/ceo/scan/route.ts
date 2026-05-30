@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   loadAgentExceptionDedupeMap,
+  loadAgentTaskDedupeMap,
   upsertException,
+  upsertTask,
   autoResolveStaleExceptions,
   writeAgentActivity,
   updateAgentRunStatus,
@@ -82,6 +84,7 @@ export async function POST(req: NextRequest) {
 
     // ── Load existing exceptions ──────────────────────────────────────────
     const dedupeMap = await loadAgentExceptionDedupeMap(db, AGENT_ID);
+    const taskDedupeMap = await loadAgentTaskDedupeMap(db, AGENT_ID);
     const nowMs = Date.now();
     const activeDedupeKeys = new Set<string>();
 
@@ -258,18 +261,50 @@ export async function POST(req: NextRequest) {
           recommendedResolution: "פתח את מרכז הסוכנים (DigitalHQ) וטפל בחריגות הקריטיות לפי מחלקה",
         }, dedupeMap, result);
       }
+
+      // ── CEO escalation TASK (system manager: assigned, actionable, deduped) ──
+      // Beyond the read-only roll-up: when criticals are elevated, or agent tasks
+      // are unowned / going stale, raise ONE assigned escalation task (stable
+      // global key → re-scans update, no spam). Safe metadata only — no business
+      // mutation; the owner acts in DigitalHQ.
+      const { data: openTaskRows } = await db
+        .from("agent_tasks")
+        .select("assigned_to, updated_at")
+        .in("status", ["open", "in_progress"]);
+      const openTasks = openTaskRows ?? [];
+      const unassignedCount = openTasks.filter(t => !t.assigned_to || String(t.assigned_to).trim() === "").length;
+      const STALE_MS = 7 * 86_400_000;
+      const staleCount = openTasks.filter(t => {
+        const ts = t.updated_at ? new Date(t.updated_at as string).getTime() : NaN;
+        return !Number.isNaN(ts) && nowMs - ts > STALE_MS;
+      }).length;
+
+      if (critical >= ELEVATED_CRITICAL || unassignedCount > 0 || staleCount > 0) {
+        const topAgentsList = Object.entries(byAgent).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([a, n]) => `${a}:${n}`).join(", ");
+        await upsertTask(db, AGENT_ID, {
+          category: "ceo_escalation",
+          entityType: "system",
+          entityId: "global",
+          title: "הסלמת CEO — סיכון/משימות מערכתיות",
+          description: `חריגות קריטיות פתוחות: ${critical} · שגיאות: ${errors} · משימות ללא הקצאה: ${unassignedCount} · תקועות (7 ימים+): ${staleCount} | מובילים: ${topAgentsList || "—"}`,
+          priority: critical >= ELEVATED_CRITICAL ? "critical" : "high",
+          recommendedAction: "פתח את מרכז הסוכנים (DigitalHQ): טפל בחריגות הקריטיות, הקצה בעלים למשימות ללא הקצאה, וקדם משימות תקועות",
+        }, taskDedupeMap, result);
+      }
     }
 
     // ── Auto-resolve stale exceptions ─────────────────────────────────────
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 
     // ── Activity summary ──────────────────────────────────────────────────
-    const summary = `סריקה הושלמה: ${result.entitiesScanned} הזמנות | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו`;
+    const summary = `סריקה הושלמה: ${result.entitiesScanned} הזמנות | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו | ${result.tasksCreated} משימות נוצרו`;
     await writeAgentActivity(db, AGENT_ID, "detection", summary, {
       entitiesScanned: result.entitiesScanned,
       exceptionsCreated: result.exceptionsCreated,
       exceptionsUpdated: result.exceptionsUpdated,
       exceptionsResolved: result.exceptionsResolved,
+      tasksCreated: result.tasksCreated,
+      tasksUpdated: result.tasksUpdated,
     });
 
     result.durationMs = Date.now() - start;

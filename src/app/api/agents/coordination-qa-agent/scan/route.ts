@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   loadAgentExceptionDedupeMap,
+  loadAgentTaskDedupeMap,
   upsertException,
+  upsertTask,
   autoResolveStaleExceptions,
   writeAgentActivity,
   updateAgentRunStatus,
@@ -62,6 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     const dedupeMap = await loadAgentExceptionDedupeMap(db, AGENT_ID);
+    const taskDedupeMap = await loadAgentTaskDedupeMap(db, AGENT_ID);
     const nowMs = Date.now();
     const todayStr = new Date().toISOString().slice(0, 10);
     const activeDedupeKeys = new Set<string>();
@@ -69,6 +72,9 @@ export async function POST(req: NextRequest) {
     for (const order of orders) {
       const urgent = order.priority === "urgent";
       const hoursFactor = urgent ? 0.5 : 1;
+      // Consolidated coordination/QA task per ready_installation order with blockers.
+      const coordReasons: string[] = [];
+      let coordCritical = false;
 
       // ── Unscheduled: no scheduled_date set ───────────────────────────────
       // An order in ready_installation without a scheduled date is a
@@ -96,6 +102,8 @@ export async function POST(req: NextRequest) {
             },
             recommendedResolution: "שבץ תאריך ביצוע בסידור השבועי",
           }, dedupeMap, result);
+          coordReasons.push("מוכנה להתקנה — דרוש שיבוץ תאריך");
+          if (severity === "critical") coordCritical = true;
         }
       }
 
@@ -122,6 +130,8 @@ export async function POST(req: NextRequest) {
           },
           recommendedResolution: "בדוק את שלב הייצור — עדכן fabrication_status ל-completed או החזר את ההזמנה לשלב production",
         }, dedupeMap, result);
+        coordReasons.push("שער ייצור פתוח בשלב מוכן (אי-תקינות)");
+        coordCritical = true;
       }
 
       // ── Gate open: warehouse not ready ───────────────────────────────────
@@ -145,6 +155,8 @@ export async function POST(req: NextRequest) {
           },
           recommendedResolution: "בדוק את שלב המחסן — עדכן warehouse_status ל-ready או החזר את ההזמנה לשלב production",
         }, dedupeMap, result);
+        coordReasons.push("שער מחסן פתוח בשלב מוכן (אי-תקינות)");
+        coordCritical = true;
       }
 
       // ── Missing diary after scheduled date ───────────────────────────────
@@ -171,6 +183,7 @@ export async function POST(req: NextRequest) {
           },
           recommendedResolution: "דרוש מהצוות הגשת יומן שטח — נדרש לפני אישור לחיוב",
         }, dedupeMap, result);
+        coordReasons.push("יומן שטח חסר לאחר תאריך ביצוע");
       }
 
       // ── Customer approval pending on field_work ──────────────────────────
@@ -198,6 +211,7 @@ export async function POST(req: NextRequest) {
           },
           recommendedResolution: "קבל אישור לקוח לפני שיגור הצוות לשטח",
         }, dedupeMap, result);
+        coordReasons.push("אישור לקוח חסר — שיגור חסום");
       }
 
       // ── Open problems blocking dispatch ──────────────────────────────────
@@ -221,17 +235,38 @@ export async function POST(req: NextRequest) {
           },
           recommendedResolution: "פתור את הבעיות הפתוחות לפני שיגור הצוות לשטח",
         }, dedupeMap, result);
+        coordReasons.push(`${probCount} בעיות פתוחות חוסמות שיגור`);
+        if (probCount >= 3) coordCritical = true;
+      }
+
+      // ── Consolidated coordination/QA human-review task (safe metadata; no business mutation) ──
+      // One stable task per ready_installation order with a coordination blocker →
+      // re-scans UPDATE the same task (no spam). Auto-assigned to coordination-qa-agent.
+      // Honours the readiness rule: an order with open gates/problems is NOT treated
+      // as schedulable — it is surfaced for human coordination.
+      if (coordReasons.length > 0) {
+        await upsertTask(db, AGENT_ID, {
+          category: "coordination_followup",
+          entityType: "work_order",
+          entityId: order.id,
+          title: `הזמנה ${order.order_number} — תיאום/QA נדרש`,
+          description: `${coordReasons.join(" · ")} | לקוח: ${order.customer || "(לא זוהה)"} | עיר: ${order.city || "—"}`,
+          priority: coordCritical ? "critical" : "high",
+          recommendedAction: "שבץ/תאם תאריך, סגור שערי מחלקות פתוחים, ופתור בעיות/אישורים לפני שיגור לשטח",
+        }, taskDedupeMap, result);
       }
     }
 
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 
-    const summary = `סריקה הושלמה: ${result.entitiesScanned} הזמנות לשיגור | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו`;
+    const summary = `סריקה הושלמה: ${result.entitiesScanned} הזמנות לשיגור | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו | ${result.tasksCreated} משימות נוצרו`;
     await writeAgentActivity(db, AGENT_ID, "detection", summary, {
       entitiesScanned: result.entitiesScanned,
       exceptionsCreated: result.exceptionsCreated,
       exceptionsUpdated: result.exceptionsUpdated,
       exceptionsResolved: result.exceptionsResolved,
+      tasksCreated: result.tasksCreated,
+      tasksUpdated: result.tasksUpdated,
     });
 
     result.durationMs = Date.now() - start;

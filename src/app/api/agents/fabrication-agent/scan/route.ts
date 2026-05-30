@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   loadAgentExceptionDedupeMap,
+  loadAgentTaskDedupeMap,
   upsertException,
+  upsertTask,
   autoResolveStaleExceptions,
   writeAgentActivity,
   updateAgentRunStatus,
@@ -56,12 +58,16 @@ export async function POST(req: NextRequest) {
     result.entitiesScanned = orders.length;
 
     const dedupeMap = await loadAgentExceptionDedupeMap(db, AGENT_ID);
+    const taskDedupeMap = await loadAgentTaskDedupeMap(db, AGENT_ID);
     const nowMs = Date.now();
     const activeDedupeKeys = new Set<string>();
 
     for (const order of orders) {
       const urgent = order.priority === "urgent";
       const hoursFactor = urgent ? 0.5 : 1;
+      // One consolidated fabrication task per order with a genuine blocker.
+      let fabReason: string | null = null;
+      let fabCritical = false;
 
       // ── Active production issue ──────────────────────────────────────────
       // fabrication_status = "issue" means the fabrication team has flagged
@@ -84,6 +90,8 @@ export async function POST(req: NextRequest) {
           },
           recommendedResolution: "צור קשר עם מחלקת מסגרייה לבירור הבעיה ועדכון הסטטוס",
         }, dedupeMap, result);
+        fabReason = "בעיה בייצור — דרוש בירור מול המסגרייה";
+        fabCritical = true;
       }
 
       // ── Stuck in_progress ────────────────────────────────────────────────
@@ -112,6 +120,7 @@ export async function POST(req: NextRequest) {
             },
             recommendedResolution: "בדוק עם המסגרייה את סטטוס ההתקדמות ועדכן את הסטטוס לאחד מ: ready / completed / issue",
           }, dedupeMap, result);
+          fabReason = "ייצור תקוע מעבר לזמן הצפוי ללא עדכון";
         }
       }
 
@@ -140,6 +149,7 @@ export async function POST(req: NextRequest) {
             },
             recommendedResolution: "בדוק עם המסגרייה מתי תתחיל הייצור — עדכן ל-in_progress או תזמן תאריך התחלה",
           }, dedupeMap, result);
+          fabReason = "אושר קבלה אך ייצור טרם החל";
         }
       }
 
@@ -167,17 +177,35 @@ export async function POST(req: NextRequest) {
           },
           recommendedResolution: "עדכן fabrication_status ל-completed כדי לאפשר מעבר לשלב ready_installation",
         }, dedupeMap, result);
+        fabReason = "מוכן בייצור — שער טרם נסגר (עדכן ל-completed)";
+      }
+
+      // ── Consolidated fabrication human-review task (safe metadata; no business mutation) ──
+      // One stable task per order with a genuine fabrication blocker → re-scans
+      // UPDATE the same task (no spam). Auto-assigned to fabrication-agent.
+      if (fabReason) {
+        await upsertTask(db, AGENT_ID, {
+          category: "fabrication_followup",
+          entityType: "work_order",
+          entityId: order.id,
+          title: `הזמנה ${order.order_number} — טיפול ייצור נדרש`,
+          description: `${fabReason} | לקוח: ${order.customer || "(לא זוהה)"} | מסגרייה: ${order.fabrication_status ?? "—"}`,
+          priority: fabCritical ? "critical" : "high",
+          recommendedAction: "עדכן מול המסגרייה את הסטטוס (in_progress / ready / completed) או טפל בבעיה שדווחה",
+        }, taskDedupeMap, result);
       }
     }
 
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 
-    const summary = `סריקה הושלמה: ${result.entitiesScanned} הזמנות ייצור | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו`;
+    const summary = `סריקה הושלמה: ${result.entitiesScanned} הזמנות ייצור | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו | ${result.tasksCreated} משימות נוצרו`;
     await writeAgentActivity(db, AGENT_ID, "detection", summary, {
       entitiesScanned: result.entitiesScanned,
       exceptionsCreated: result.exceptionsCreated,
       exceptionsUpdated: result.exceptionsUpdated,
       exceptionsResolved: result.exceptionsResolved,
+      tasksCreated: result.tasksCreated,
+      tasksUpdated: result.tasksUpdated,
     });
 
     result.durationMs = Date.now() - start;
