@@ -132,14 +132,22 @@ export function CustomerTable({ customers, onAdd, onDelete, onSelect }: Props) {
                 className="border-b border-gray-100 hover:bg-blue-50/40 transition-colors cursor-pointer"
               >
                 <td className="px-3 py-2.5 font-medium text-gray-900">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {m && (
                       <span
                         className={`w-2 h-2 rounded-full shrink-0 ${RISK_DOT[m.riskLevel]}`}
                         title={RISK_TITLE[m.riskLevel]}
                       />
                     )}
-                    {customer.name}
+                    <span className="truncate">{customer.name}</span>
+                    {!customer.phone?.trim() && (
+                      <span
+                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 shrink-0"
+                        title="חסר מספר טלפון ללקוח"
+                      >
+                        ⚠ פרטים חסרים
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-3 py-2.5 text-gray-600">{customer.location || "—"}</td>
