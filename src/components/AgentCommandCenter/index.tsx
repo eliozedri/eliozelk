@@ -924,31 +924,59 @@ function ActivityPanel({ feed, agents }: { feed: AgentActivityFeedItem[]; agents
 // context (+ the JARVIS open-requests count). Honest about signals not yet
 // aggregated here (documented in the footnote) rather than faking them.
 
-interface PulseItem { label: string; value: number | string; accent: string; onClick: () => void; hint?: string }
+interface PulseSignal { key: string; label: string; count: number; severity: "critical" | "warning" | "info"; href: string }
+interface PulseGroup { group: string; title: string; available: boolean; note?: string; signals: PulseSignal[] }
 
-function RiskPulse({ items }: { items: PulseItem[] }) {
+function pulseColor(sev: string, active: boolean): string {
+  if (!active) return "rgba(255,255,255,0.35)";
+  if (sev === "critical") return "#ef4444";
+  if (sev === "warning") return "#f59e0b";
+  return "#5eead4";
+}
+
+function RiskPulse({ groups, loading, onNavigate }: { groups: PulseGroup[]; loading: boolean; onNavigate: (href: string) => void }) {
+  const activeAlerts = groups.reduce(
+    (n, g) => n + g.signals.filter(s => s.count > 0 && s.severity !== "info").length,
+    0,
+  );
   return (
     <div className="rounded-2xl border border-white/10 p-4 mb-6" style={{ backgroundColor: "rgba(255,255,255,0.03)" }}>
       <div className="flex items-center justify-between mb-3">
         <div className="text-xs font-bold text-white/50 uppercase tracking-widest">דופק סיכון מערכתי</div>
-        <span className="text-[10px] text-white/30">אותות חיים מהמערכת</span>
+        <span className="text-[10px] text-white/30">{loading ? "טוען…" : `${activeAlerts} התראות פעילות · נתוני אמת`}</span>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-        {items.map((it) => (
-          <button
-            key={it.label}
-            onClick={it.onClick}
-            className="rounded-xl border border-white/8 p-3 text-right transition-all hover:border-white/25"
-            style={{ backgroundColor: "rgba(255,255,255,0.04)" }}
-          >
-            <div className="text-2xl font-black leading-none mb-1" style={{ color: it.accent }}>{it.value}</div>
-            <div className="text-[11px] text-white/60 leading-tight">{it.label}</div>
-            {it.hint && <div className="text-[9px] text-white/30 mt-0.5">{it.hint}</div>}
-          </button>
-        ))}
-      </div>
-      <p className="text-[10px] text-white/30 mt-3 leading-relaxed">
-        אותות נוספים — מסמכים תקועים, תוקף מסמכי צי, מלאי נמוך/אפס, חסמי חיוב, טיוטות תקועות — מזוהים כיום דרך סריקות הסוכנים ומופיעים כחריגות/משימות. איגום ייעודי שלהם בלוח זה יתווסף בהמשך (דורש endpoints נוספים).
+      {loading && groups.length === 0 ? (
+        <div className="text-white/30 text-sm py-4 text-center">טוען אותות מערכת…</div>
+      ) : (
+        <div className="space-y-4">
+          {groups.map(g => (
+            <div key={g.group}>
+              <div className="text-[11px] text-white/40 mb-1.5">
+                {g.title}
+                {g.available && g.note && <span className="text-white/25"> · {g.note}</span>}
+                {!g.available && <span className="text-amber-300/70"> · לא זמין (מקור נתונים חסר)</span>}
+              </div>
+              {g.available && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {g.signals.map(s => (
+                    <button
+                      key={s.key}
+                      onClick={() => onNavigate(s.href)}
+                      className="rounded-xl border border-white/8 p-2.5 text-right transition-all hover:border-white/25"
+                      style={{ backgroundColor: s.count > 0 ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.02)" }}
+                    >
+                      <div className="text-xl font-black leading-none mb-1" style={{ color: pulseColor(s.severity, s.count > 0) }}>{s.count}</div>
+                      <div className="text-[10px] text-white/55 leading-tight">{s.label}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-[10px] text-white/25 mt-3 leading-relaxed">
+        כל האותות מבוססים על נתוני אמת קריאה-בלבד מהמערכת. לחיצה על כרטיס פותחת את הדף הרלוונטי. אותות שאין להם מקור נתונים מסומנים כ״לא זמין״ ולא מומצאים.
       </p>
     </div>
   );
@@ -969,6 +997,8 @@ export function AgentCommandCenter() {
   const router = useRouter();
   const [mainTab, setMainTab] = useState<MainTab>("hq");
   const [jarvisSummary, setJarvisSummary] = useState<{ open: number; awaitingOwner: number; awaitingClarification: number } | null>(null);
+  const [pulse, setPulse] = useState<PulseGroup[]>([]);
+  const [pulseLoading, setPulseLoading] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showNewMeeting, setShowNewMeeting] = useState(false);
 
@@ -984,24 +1014,31 @@ export function AgentCommandCenter() {
       if (!supabase) return;
       const { data } = await supabase.auth.getSession();
       const token = data.session?.access_token;
-      if (!token) return;
+      if (!token) { if (!cancelled) setPulseLoading(false); return; }
+      const headers = { Authorization: `Bearer ${token}` };
+      // Requests summary (KPI)
       try {
-        const res = await fetch("/api/jarvis/requests-summary", {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        if (!res.ok) return;
-        const j = await res.json();
-        if (!cancelled) {
-          setJarvisSummary({
-            open: j.open ?? 0,
-            awaitingOwner: j.awaitingOwner ?? 0,
-            awaitingClarification: j.awaitingClarification ?? 0,
-          });
+        const res = await fetch("/api/jarvis/requests-summary", { headers, cache: "no-store" });
+        if (res.ok) {
+          const j = await res.json();
+          if (!cancelled) {
+            setJarvisSummary({
+              open: j.open ?? 0,
+              awaitingOwner: j.awaitingOwner ?? 0,
+              awaitingClarification: j.awaitingClarification ?? 0,
+            });
+          }
         }
-      } catch {
-        /* non-fatal — KPI shows — */
-      }
+      } catch { /* non-fatal */ }
+      // Cross-domain risk pulse (real signals)
+      try {
+        const res = await fetch("/api/agents/risk-pulse", { headers, cache: "no-store" });
+        if (res.ok) {
+          const j = await res.json();
+          if (!cancelled) setPulse((j.groups ?? []) as PulseGroup[]);
+        }
+      } catch { /* non-fatal */ }
+      finally { if (!cancelled) setPulseLoading(false); }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -1334,15 +1371,7 @@ export function AgentCommandCenter() {
         {/* Overview: risk pulse + org chart + agent cards */}
         {mainTab === "overview" && (
           <>
-          <RiskPulse
-            items={[
-              { label: "בקשות JARVIS פתוחות", value: jarvisSummary?.open ?? "—", accent: (jarvisSummary?.open ?? 0) > 0 ? EK_BLUE : "rgba(255,255,255,0.4)", onClick: () => router.push("/jarvis-requests"), hint: jarvisSummary && (jarvisSummary.awaitingOwner + jarvisSummary.awaitingClarification) > 0 ? `${jarvisSummary.awaitingOwner + jarvisSummary.awaitingClarification} ממתינות` : undefined },
-              { label: "חריגות קריטיות", value: totalCriticalExc, accent: totalCriticalExc > 0 ? "#ef4444" : "rgba(255,255,255,0.4)", onClick: () => setMainTab("exceptions") },
-              { label: "חריגות פתוחות", value: totalOpenExc, accent: totalOpenExc > 0 ? "#f97316" : "rgba(255,255,255,0.4)", onClick: () => setMainTab("exceptions") },
-              { label: "ממתינים לאישור", value: totalPendingApprovals, accent: totalPendingApprovals > 0 ? "#f59e0b" : "rgba(255,255,255,0.4)", onClick: () => setMainTab("approvals") },
-              { label: "משימות פתוחות", value: totalOpenTasks, accent: totalOpenTasks > 0 ? EK_GOLD : "rgba(255,255,255,0.4)", onClick: () => setMainTab("tasks") },
-            ]}
-          />
+          <RiskPulse groups={pulse} loading={pulseLoading} onNavigate={(href) => router.push(href)} />
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
             {/* Org Chart */}
