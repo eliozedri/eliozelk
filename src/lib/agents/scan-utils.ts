@@ -188,7 +188,12 @@ export async function upsertTask(
       status: "open",
       recommended_action: task.recommendedAction ?? null,
       requires_approval: task.requiresApproval ?? false,
-      assigned_to: task.assignedTo ?? null,
+      // Auto-assignment: default the owner to the scanning agent (each scan route
+      // IS its domain agent, so this gives correct department ownership). A scanner
+      // can override via task.assignedTo (e.g. CEO routing cross-domain). The
+      // update branch above never touches assigned_to, so a manual reassignment in
+      // the Command Center is preserved across re-scans.
+      assigned_to: task.assignedTo ?? agentId,
     })
     .select("id")
     .single();

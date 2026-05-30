@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   loadAgentExceptionDedupeMap,
+  loadAgentTaskDedupeMap,
   upsertException,
+  upsertTask,
   autoResolveStaleExceptions,
   writeAgentActivity,
   updateAgentRunStatus,
@@ -74,6 +76,7 @@ export async function POST(req: NextRequest) {
     result.entitiesScanned = orders.length;
 
     const dedupeMap = await loadAgentExceptionDedupeMap(db, AGENT_ID);
+    const taskDedupeMap = await loadAgentTaskDedupeMap(db, AGENT_ID);
     const nowMs = Date.now();
     const activeDedupeKeys = new Set<string>();
 
@@ -139,6 +142,19 @@ export async function POST(req: NextRequest) {
             },
             recommendedResolution: `השלם את השדות החסרים: ${missingFields.join(", ")}`,
           }, dedupeMap, result);
+
+          // Actionable human-review task (safe metadata; no business mutation).
+          // Stable title → re-scans update the same task (no dup spam). Auto-assigned
+          // to orders-agent by upsertTask's default owner.
+          await upsertTask(db, AGENT_ID, {
+            category: "incomplete_order_fields",
+            entityType: "work_order",
+            entityId: order.id,
+            title: `הזמנה ${order.order_number} — השלמת שדות חובה`,
+            description: `חסר: ${missingFields.join(", ")} | לקוח: ${order.customer || "(ללא שם)"} | שלב: ${order.status}`,
+            priority: "high",
+            recommendedAction: `השלם את השדות החסרים (${missingFields.join(", ")}) בדף ההזמנות, או בטל אם אינה רלוונטית`,
+          }, taskDedupeMap, result);
         }
       }
 
@@ -265,17 +281,31 @@ export async function POST(req: NextRequest) {
           detectedFromData: { draftId: id, source: d.source, customer: d.customer, city: d.city, itemCount, hoursWaiting: Math.round(hrs) },
           recommendedResolution: "פתח את 'הזמנות מהבוט' וקדם/דחה את הבקשה",
         }, dedupeMap, result);
+
+        // Actionable human-review task — promote/reject the external intake.
+        // Stable title (per draft id + source) → no dup spam. Auto-assigned to orders-agent.
+        await upsertTask(db, AGENT_ID, {
+          category: "external_order_review_aged",
+          entityType: "team_bot_order_draft",
+          entityId: id,
+          title: `אישור בקשת הזמנה חיצונית — ${srcLabel}`,
+          description: `לקוח: ${d.customer || "(ללא שם)"} | עיר: ${d.city || "—"} | פריטים: ${itemCount} | טרם נסקרה`,
+          priority: severity === "error" ? "critical" : "high",
+          recommendedAction: "פתח 'הזמנות מהבוט' וקדם/דחה את הבקשה",
+        }, taskDedupeMap, result);
       }
     }
 
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
 
-    const summary = `סריקה הושלמה: ${result.entitiesScanned} ישויות | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו`;
+    const summary = `סריקה הושלמה: ${result.entitiesScanned} ישויות | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו | ${result.tasksCreated} משימות נוצרו`;
     await writeAgentActivity(db, AGENT_ID, "detection", summary, {
       entitiesScanned: result.entitiesScanned,
       exceptionsCreated: result.exceptionsCreated,
       exceptionsUpdated: result.exceptionsUpdated,
       exceptionsResolved: result.exceptionsResolved,
+      tasksCreated: result.tasksCreated,
+      tasksUpdated: result.tasksUpdated,
     });
 
     result.durationMs = Date.now() - start;
