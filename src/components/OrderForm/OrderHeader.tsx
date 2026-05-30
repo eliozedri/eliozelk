@@ -18,8 +18,9 @@ const CITIES = Object.keys(CITY_COORDINATES)
   .sort((a, b) => a.localeCompare(b, "he"));
 
 export function OrderHeader({ header, onChange }: Props) {
-  const { customers, syncStatus } = useCustomersContext();
+  const { customers, syncStatus, addCustomer } = useCustomersContext();
   const [showCustomerSuggestions, setShowCustomerSuggestions] = useState(false);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [showCitySuggestions, setShowCitySuggestions] = useState(false);
   const [citySearch, setCitySearch] = useState(header.city);
   const customerWrapperRef = useRef<HTMLDivElement>(null);
@@ -54,6 +55,30 @@ export function OrderHeader({ header, onChange }: Props) {
   function selectCustomer(name: string) {
     onChange({ customer: name });
     setShowCustomerSuggestions(false);
+  }
+
+  // Exact (normalized) match guard — never create a duplicate; select the existing one.
+  const exactCustomer = customers.find(
+    (c) => c.name.trim().toLowerCase() === header.customer.trim().toLowerCase(),
+  );
+
+  // Create a customer inline without losing the order draft (only the customer name
+  // field is touched; all other order fields/rows are preserved). After creation the
+  // new customer is selected. NOTE: the order still stores the customer NAME — a real
+  // customer_id FK requires the proposed migration (docs/PROPOSAL_orders_customer_fk.md).
+  async function handleCreateCustomer() {
+    const name = header.customer.trim();
+    if (!name || creatingCustomer) return;
+    if (exactCustomer) { selectCustomer(exactCustomer.name); return; }
+    setCreatingCustomer(true);
+    try {
+      const c = await addCustomer({ name, location: header.city?.trim() ?? "", phone: "", lastOrder: "" });
+      selectCustomer(c.name);
+    } catch {
+      // non-fatal — keep the typed name so the draft is not lost
+    } finally {
+      setCreatingCustomer(false);
+    }
   }
 
   function selectCity(city: string) {
@@ -111,25 +136,42 @@ export function OrderHeader({ header, onChange }: Props) {
               <div className="absolute top-full right-0 mt-1 w-full bg-white rounded-lg border border-gray-200 shadow-lg z-50 overflow-hidden">
                 {syncStatus === "loading" ? (
                   <div className="px-3 py-2.5 text-sm text-gray-400">טוען לקוחות...</div>
-                ) : customerSuggestions.length > 0 ? (
-                  customerSuggestions.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onMouseDown={() => selectCustomer(c.name)}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-right hover:bg-blue-50 transition-colors"
-                    >
-                      <div className="flex-1 text-right">
-                        <div className="font-medium text-gray-800">{c.name}</div>
-                        {c.phone && <div className="text-xs text-gray-400">{c.phone}</div>}
-                      </div>
-                      {c.location && (
-                        <span className="text-xs text-gray-400 shrink-0">{c.location}</span>
-                      )}
-                    </button>
-                  ))
                 ) : (
-                  <div className="px-3 py-2.5 text-sm text-gray-400">לא נמצאו לקוחות תואמים</div>
+                  <>
+                    {customerSuggestions.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onMouseDown={() => selectCustomer(c.name)}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-right hover:bg-blue-50 transition-colors"
+                      >
+                        <div className="flex-1 text-right">
+                          <div className="font-medium text-gray-800">{c.name}</div>
+                          {c.phone && <div className="text-xs text-gray-400">{c.phone}</div>}
+                        </div>
+                        {c.location && (
+                          <span className="text-xs text-gray-400 shrink-0">{c.location}</span>
+                        )}
+                      </button>
+                    ))}
+                    {customerSuggestions.length === 0 && (
+                      <div className="px-3 py-2 text-xs text-gray-400">לא נמצא לקוח תואם</div>
+                    )}
+                    {/* Create-new-customer — only when no exact match exists (no duplicates) */}
+                    {!exactCustomer && header.customer.trim().length >= 2 && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); void handleCreateCustomer(); }}
+                        disabled={creatingCustomer}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-right border-t border-gray-100 bg-blue-50/50 hover:bg-blue-100 text-blue-700 font-semibold disabled:opacity-60"
+                      >
+                        <span className="text-base leading-none">＋</span>
+                        <span className="flex-1 text-right truncate">
+                          {creatingCustomer ? "מקים לקוח…" : `הקם לקוח חדש: "${header.customer.trim()}"`}
+                        </span>
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}
