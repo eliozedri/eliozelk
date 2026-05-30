@@ -916,6 +916,11 @@ function ActivityPanel({ feed, agents }: { feed: AgentActivityFeedItem[]; agents
         <button onClick={() => setView("all")} className={`text-[10px] px-2 py-0.5 rounded-full ${view === "all" ? "bg-white/15 text-white" : "text-white/40"}`}>הכל</button>
         <button onClick={() => setView("inter_agent")} className={`text-[10px] px-2 py-0.5 rounded-full ${view === "inter_agent" ? "bg-white/15 text-white" : "text-white/40"}`}>תקשורת בין סוכנים</button>
       </div>
+      {view === "inter_agent" && (
+        <p className="text-[10px] text-white/30 mb-1 text-right leading-relaxed">
+          מסירות / הסלמות דטרמיניסטיות (מקור→יעד) + משימות בדיקה אנושית. אין כאן דיאלוג אוטונומי בין סוכנים — חשיבה אוטונומית מנוהלת בנפרד ע״י מנוע ה-LLM.
+        </p>
+      )}
       {shown.length === 0 && (
         <div className="text-white/30 text-xs text-center py-6">אין רשומות תקשורת בין-סוכנים עדיין — ניתוב/הסלמה/הקצאה ייצרו כאן רשומות מקור→יעד</div>
       )}
