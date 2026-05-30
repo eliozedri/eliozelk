@@ -20,6 +20,7 @@ import {
 } from "@/types/supplierDocument";
 import type { UserDocumentCard } from "@/types/supplierDocument";
 import { runDuplicateCheck } from "@/lib/supplierDocuments/duplicateCheck";
+import { upsertOcrReviewTask } from "@/lib/supplierDocuments/reviewTask";
 import { suggestExpenseType } from "@/types/financial";
 import { validateUploadSignature } from "@/lib/upload/fileValidation";
 
@@ -389,6 +390,50 @@ export async function POST(req: NextRequest) {
       total:        (ocrUpdate.total_after_vat as number) ?? undefined,
       equipmentId,
     });
+
+    // ── Human-review TASK on OCR uncertainty (safe metadata; no business mutation) ──
+    // When OCR fails / is low-confidence / fields conflict or are missing / a
+    // duplicate or type-mismatch is suspected, the document is NOT auto-finalized,
+    // NOT marked billing-ready, NOT auto-linked — it gets a tracked, assigned
+    // review task. Owner: fleet docs → equipment-fleet-agent; otherwise finance.
+    const isFleetDoc = businessArea === "fleet" || Boolean(equipmentId);
+    const owner = isFleetDoc ? "equipment-fleet-agent" : "cfo-agent";
+    const conf = typeof ocrUpdate.extraction_confidence === "number" ? (ocrUpdate.extraction_confidence as number) : 0;
+    const pageConf = extraction.pageConfidence;
+    const parsedJson = (ocrUpdate.parsed_json as Record<string, unknown> | undefined) ?? undefined;
+
+    const reasons: string[] = [];
+    if (!extraction.available || (!isDuplicate && conf <= 0)) reasons.push("OCR נכשל / לא חולץ טקסט");
+    if (extraction.manualReviewReason) reasons.push(extraction.manualReviewReason);
+    if (typeof pageConf === "number" && pageConf > 0 && pageConf < 0.5) reasons.push(`ביטחון OCR נמוך (${Math.round(pageConf * 100)}%)`);
+    if (isDuplicate) reasons.push("חשד לכפילות מסמך");
+    if (parsedJson?.typeMismatchWarning) reasons.push("אי-התאמת סוג מסמך");
+    if (!isFleetDoc) {
+      const missing: string[] = [];
+      if (!ocrUpdate.supplier_name_raw) missing.push("שם ספק");
+      if (!ocrUpdate.document_number) missing.push("מספר מסמך");
+      if (!ocrUpdate.document_date) missing.push("תאריך");
+      if (ocrUpdate.total_after_vat == null) missing.push("סכום");
+      if (missing.length > 0) reasons.push(`שדות ליבה חסרים: ${missing.join(", ")}`);
+      if (needsClassification) reasons.push("דרוש סיווג הוצאה");
+    }
+
+    if (reasons.length > 0) {
+      const high = !extraction.available || conf <= 0 || isDuplicate;
+      await upsertOcrReviewTask(db, {
+        documentId: docId,
+        owner,
+        title: isFleetDoc ? "בדיקת מסמך צי/רכב (OCR)" : "בדיקת מסמך ספק (OCR)",
+        description:
+          `${file.name} | סיבות: ${reasons.join(" · ")}` +
+          ` | ספק: ${(ocrUpdate.supplier_name_raw as string) || "(לא זוהה)"}` +
+          ` | מנוע: ${extraction.provider ?? "—"}${extraction.fallbackUsed ? " (fallback)" : ""}` +
+          (typeof pageConf === "number" ? ` | ביטחון: ${Math.round(pageConf * 100)}%` : ""),
+        priority: high ? "high" : "normal",
+        recommendedAction:
+          "פתח את המסמך, אמת/השלם את השדות, סווג, ואמת קישור לספק/הזמנה. אל תאשר לחיוב עד אימות.",
+      });
+    }
   } catch (err) {
     // Unexpected OCR crash — still open the review screen so user can fill manually
     await db.from("supplier_documents").update({
@@ -397,6 +442,17 @@ export async function POST(req: NextRequest) {
       extraction_notes: `שגיאה ב-OCR: ${err instanceof Error ? err.message : String(err)}`,
       updated_at: new Date().toISOString(),
     }).eq("id", docId);
+
+    // OCR crashed → still raise an assigned human-review task (safe metadata only).
+    const isFleetDoc = businessArea === "fleet" || Boolean(equipmentId);
+    await upsertOcrReviewTask(db, {
+      documentId: docId,
+      owner: isFleetDoc ? "equipment-fleet-agent" : "cfo-agent",
+      title: isFleetDoc ? "בדיקת מסמך צי/רכב (OCR)" : "בדיקת מסמך ספק (OCR)",
+      description: `${file.name} | OCR קרס: ${err instanceof Error ? err.message : String(err)} | יש להזין/לאמת ידנית`,
+      priority: "high",
+      recommendedAction: "פתח את המסמך והזן את הנתונים ידנית. אל תאשר לחיוב עד אימות.",
+    });
   }
 
   return NextResponse.json({ id: docId, fileUrl }, { status: 201 });
