@@ -52,9 +52,35 @@ const opsNoteHandler: ActionHandler = {
   // no buildPreview/execute/revert — this action is staged + reviewed only.
 };
 
+/**
+ * Generic REVIEW-ONLY handler — for domain actions that record / ask / flag
+ * (create review task, request missing info, return for clarification…). No
+ * buildPreview/execute/revert → NO business mutation. They flow through the same
+ * approve→handled lifecycle as ops_note (guarded + approval-gated + audited).
+ */
+function reviewOnlyHandler(actionType: string): ActionHandler {
+  return { actionType, validate: () => ({ ok: true }) };
+}
+
+// Review-only action types (Level 0–1, no mutation) — in sync with the
+// reviewOnly entries in actionCatalog.ts.
+const REVIEW_ONLY_ACTIONS = [
+  "finance_request_missing_invoice_fields",
+  "inventory_create_stock_review_task",
+  "fleet_create_maintenance_followup_task",
+  "orders_return_for_clarification",
+  "orders_create_coordination_task",
+  "document_create_human_review_task",
+  "graphics_request_missing_design_info",
+  "fabrication_create_production_readiness_task",
+  "coordination_create_site_readiness_task",
+  "ceo_create_cross_domain_review_task",
+];
+
 const HANDLERS: Record<string, ActionHandler> = {
   price_update_percentage: priceHandler,
   ops_note: opsNoteHandler,
+  ...Object.fromEntries(REVIEW_ONLY_ACTIONS.map((t) => [t, reviewOnlyHandler(t)])),
 };
 
 /** Resolve a handler by any inbound/canonical action type, or null if not allowlisted. */
