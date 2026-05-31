@@ -153,6 +153,7 @@ export async function POST(req: NextRequest) {
         recommended_action: dept?.approval_required ? "דרוש אישור בעלים לפני ביצוע" : "בצע בדיקה אנושית והשלם/אשר",
         requires_approval: Boolean(dept?.approval_required),
         assigned_to: targetScanner,
+        source: "dialogue", // not a scanner task → never auto-resolved by a scan
         updated_at: new Date().toISOString(),
       };
       if (existing?.id) await db.from("agent_tasks").update(payload).eq("id", existing.id);

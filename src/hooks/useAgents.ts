@@ -194,8 +194,22 @@ export function useAgents(): AgentsHookValue {
     setLoading(false);
   }, []);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load(); }, [load]);
+  // Live refresh: initial load + poll every 25s + refetch when the tab regains
+  // focus/visibility — so the Command Center reflects new scans and tasks that
+  // were handled/auto-resolved, without a manual reload. load() is version-guarded
+  // and updates in-place (no UI blanking).
+  useEffect(() => {
+    load();
+    const interval = setInterval(() => { void load(); }, 25_000);
+    const onVisible = () => { if (document.visibilityState === "visible") void load(); };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [load]);
 
   const agentStats = buildAgentStats(tasks, exceptions, approvals, agents.map(a => a.id));
 

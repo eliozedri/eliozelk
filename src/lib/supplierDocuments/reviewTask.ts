@@ -63,6 +63,7 @@ export async function upsertOcrReviewTask(db: SupabaseClient, input: OcrReviewTa
       recommended_action: input.recommendedAction,
       requires_approval: false,
       assigned_to: input.owner,
+      source: "ocr", // not a scanner task → never auto-resolved by a scan
     });
   } catch {
     /* best-effort — review-task write must never fail the upload/OCR flow */

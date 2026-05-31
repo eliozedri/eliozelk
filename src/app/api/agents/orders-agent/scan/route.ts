@@ -3,6 +3,7 @@ import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   loadAgentExceptionDedupeMap,
   loadAgentTaskDedupeMap,
+  autoResolveStaleTasks,
   upsertException,
   upsertTask,
   autoResolveStaleExceptions,
@@ -297,6 +298,7 @@ export async function POST(req: NextRequest) {
     }
 
     await autoResolveStaleExceptions(db, AGENT_ID, activeDedupeKeys, dedupeMap, result);
+    await autoResolveStaleTasks(db, AGENT_ID, taskDedupeMap, result);
 
     const summary = `סריקה הושלמה: ${result.entitiesScanned} ישויות | ${result.exceptionsCreated} חריגות חדשות | ${result.exceptionsUpdated} עודכנו | ${result.exceptionsResolved} נפתרו | ${result.tasksCreated} משימות נוצרו`;
     await writeAgentActivity(db, AGENT_ID, "detection", summary, {

@@ -18,6 +18,7 @@ export interface ScanResult {
   exceptionsResolved: number;
   tasksCreated: number;
   tasksUpdated: number;
+  tasksResolved: number;
   approvalsCreated: number;
   errors: string[];
 }
@@ -34,6 +35,7 @@ export function emptyScanResult(agentId: string, agentName: string): ScanResult 
     exceptionsResolved: 0,
     tasksCreated: 0,
     tasksUpdated: 0,
+    tasksResolved: 0,
     approvalsCreated: 0,
     errors: [],
   };

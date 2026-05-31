@@ -129,7 +129,7 @@ export async function autoResolveStaleExceptions(
 
 // ── Task deduplication (open tasks) ──────────────────────────────────────────
 
-export type TaskDedupeMap = Map<string, { id: string; status: string }>;
+export type TaskDedupeMap = Map<string, { id: string; status: string; touched?: boolean }>;
 
 export async function loadAgentTaskDedupeMap(
   db: SupabaseClient,
@@ -173,6 +173,7 @@ export async function upsertTask(
       })
       .eq("id", existing.id);
     result.tasksUpdated++;
+    existing.touched = true; // still active this scan → not auto-resolved
     return existing.id;
   }
 
@@ -194,6 +195,7 @@ export async function upsertTask(
       // update branch above never touches assigned_to, so a manual reassignment in
       // the Command Center is preserved across re-scans.
       assigned_to: task.assignedTo ?? agentId,
+      source: "scan", // marks scanner-created → auto-resolvable by this agent's scan
     })
     .select("id")
     .single();
@@ -204,8 +206,38 @@ export async function upsertTask(
   }
 
   result.tasksCreated++;
-  taskDedupeMap.set(k, { id: inserted.id as string, status: "open" });
+  taskDedupeMap.set(k, { id: inserted.id as string, status: "open", touched: true });
   return inserted.id as string;
+}
+
+// ── Auto-resolve tasks whose source issue is gone ─────────────────────────────
+// Mirrors autoResolveStaleExceptions, but for tasks. A scanner closes the tasks
+// IT produced (source='scan') that it did NOT re-detect this run — so when a human
+// fixes the underlying issue, the agent's task drops on the next scan instead of
+// lingering. SCOPED to source='scan' so it never closes OCR / dialogue / manual
+// review tasks (which the scanner doesn't re-touch).
+export async function autoResolveStaleTasks(
+  db: SupabaseClient,
+  agentId: string,
+  taskDedupeMap: TaskDedupeMap,
+  result: ScanResult,
+): Promise<void> {
+  const touchedIds = [...taskDedupeMap.values()].filter((t) => t.touched).map((t) => t.id);
+
+  let q = db
+    .from("agent_tasks")
+    .update({ status: "completed", updated_at: new Date().toISOString() })
+    .eq("agent_id", agentId)
+    .eq("source", "scan")
+    .in("status", ["open", "in_progress"]);
+  if (touchedIds.length > 0) q = q.not("id", "in", `(${touchedIds.map((id) => `"${id}"`).join(",")})`);
+
+  const { data, error } = await q.select("id");
+  if (error) {
+    result.errors.push(`autoResolveTasks: ${error.message}`);
+    return;
+  }
+  result.tasksResolved += (data ?? []).length;
 }
 
 // ── Write agent activity ──────────────────────────────────────────────────────
