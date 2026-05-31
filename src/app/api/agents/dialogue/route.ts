@@ -33,6 +33,7 @@ function bearer(req: NextRequest): string | undefined {
 function inferRole(category: string | null, agentId: string | null): string | null {
   const c = (category ?? "").toLowerCase();
   const a = (agentId ?? "").toLowerCase();
+  if (c.includes("ocr") || c.includes("extracting") || c.includes("low_conf") || c.includes("supplier_doc") || c.includes("needs_classification") || c.includes("document_review")) return "document_ocr_manager";
   if (a.includes("cfo") || a.includes("billing") || c.includes("billing") || c.includes("invoice") || c.includes("finance")) return "finance_manager";
   if (a.includes("equipment") || a.includes("fleet") || c.includes("license") || c.includes("insurance") || c.includes("inspection") || c.includes("document")) return "fleet_manager";
   if (a.includes("inventory") || c.includes("stock") || c.includes("inventory")) return "warehouse_manager";

@@ -238,6 +238,25 @@ export const AGENT_ROLES: Record<string, AgentRole> = {
     defaultResponseStyle: "תמציתי, עברית",
     escalationRules: "קישור לקוח לא ודאי → בדיקה אנושית; טיוטה תקועה → דיווח",
   },
+  document_ocr_manager: {
+    id: "document_ocr_manager",
+    name: "Document / OCR Review Agent",
+    domain: "מסמכים סרוקים, OCR, סיווג מסמך, חילוץ שדות, מסמכים תקועים/בביטחון נמוך",
+    prompt:
+      "אתה סוכן בדיקת מסמכים/OCR של אלקיים. תחומך: מסמכים שנכשלו ב-OCR, ביטחון נמוך, תקועים בעיבוד, ממתינים לבדיקה, " +
+      "שדות חסרים, סוג מסמך לא ברור, חשד לכפילות. כשהביטחון נמוך או הקישור (ספק/הזמנה/נכס) לא ודאי — אל תסווג כסופי, אל תקשר, " +
+      "ואל תסמן מוכן לחיוב; פתח משימת בדיקה אנושית עם הסיבה והעדויות. " + SAFETY,
+    responsibilityScope: "בדיקת OCR, סיווג מסמך, חילוץ שדות, מסמכים תקועים/לא ודאיים",
+    readableContextSources: ["supplier_documents", "jarvis_documents", "equipment.documents"],
+    availableTools: ["read_supplier_documents", "read_low_confidence_docs"],
+    allowedActions: [],
+    actionsRequiringApproval: [],
+    actionsRequiringDoubleApproval: [],
+    forbiddenActions: ["finalize_classification", "auto_link_document", "mark_billing_ready", "direct_db_write", "arbitrary_sql"],
+    missingCapabilityBehavior: "capability_gap — המלצה + משימת בדיקה אנושית",
+    defaultResponseStyle: "מדויק, עברית, ללא ניחוש",
+    escalationRules: "ביטחון נמוך/קישור לא ודאי/סוג לא ברור → משימת בדיקה אנושית, לא סיווג/קישור אוטומטי",
+  },
 };
 
 /** Internal agents the CEO-Agent may route to (reasoning roles). */
@@ -245,6 +264,7 @@ export const INTERNAL_AGENT_IDS = [
   "operations_manager", "catalog_manager", "system_admin",
   "finance_manager", "fleet_manager", "warehouse_manager",
   "graphics_manager", "fabrication_manager", "coordination_qa_manager", "orders_manager",
+  "document_ocr_manager",
 ];
 
 /**
@@ -263,6 +283,7 @@ export const ROLE_TO_SCANNER_AGENT: Record<string, string> = {
   graphics_manager: "graphics-production-agent",
   fabrication_manager: "fabrication-agent",
   coordination_qa_manager: "coordination-qa-agent",
+  document_ocr_manager: "cfo-agent",
   system_admin: "ceo",
 };
 
