@@ -50,16 +50,18 @@ function stageEntryTs(order: DbOrderRow): string {
 
 export async function POST(req: NextRequest) {
   const db = getServiceSupabase();
-  const start = Date.now();
-  const result = emptyScanResult(AGENT_ID, AGENT_NAME);
-
-  // Auth
   const authHeader = req.headers.get("authorization") ?? "";
   const token = authHeader.replace(/^Bearer\s+/i, "");
   const userId = await verifyMasterAuth(db, token);
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  return runScan(db);
+}
+
+// Core scan logic — callable by the master-gated POST above AND by the
+// CRON_SECRET-gated /api/agents/cron-scan aggregator. Returns the same response.
+export async function runScan(db: ReturnType<typeof getServiceSupabase>) {
+  const start = Date.now();
+  const result = emptyScanResult(AGENT_ID, AGENT_NAME);
 
   try {
     await updateAgentRunStatus(db, AGENT_ID, "active");

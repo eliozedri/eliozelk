@@ -7,6 +7,10 @@
     {
       "path": "/api/jarvis/ocr-worker",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/agents/cron-scan",
+      "schedule": "0 5 * * *"
     }
   ]
 }
