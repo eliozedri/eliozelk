@@ -768,11 +768,13 @@ function TasksPanel({ tasks, agents, onUpdate, onAssign }: { tasks: AgentTask[];
 
 // ── Exceptions panel ──────────────────────────────────────────────────────────
 
-function ExceptionsPanel({ exceptions, agents, onDismiss, onAcknowledge }: {
+function ExceptionsPanel({ exceptions, agents, onDismiss, onAcknowledge, onDiscuss, discussingId }: {
   exceptions: AgentException[];
   agents: Agent[];
   onDismiss: (id: string) => void;
   onAcknowledge: (id: string) => void;
+  onDiscuss?: (id: string) => void;
+  discussingId?: string | null;
 }) {
   const byId = useMemo(() => new Map(agents.map(a => [a.id, a])), [agents]);
   if (exceptions.length === 0) {
@@ -801,6 +803,12 @@ function ExceptionsPanel({ exceptions, agents, onDismiss, onAcknowledge }: {
                   className="text-white/30 hover:text-white/60 transition-colors p-1 rounded hover:bg-white/10">
                   <XIcon />
                 </button>
+                {onDiscuss && (
+                  <button onClick={() => onDiscuss(exc.id)} disabled={discussingId === exc.id}
+                    className="text-[11px] px-1.5 rounded hover:bg-white/10 text-teal-300 disabled:opacity-40" title="פתח דיון סוכנים (CEO→מחלקה) על הסוגיה">
+                    {discussingId === exc.id ? "…" : "🤝"}
+                  </button>
+                )}
               </div>
               <div className="text-right flex-1 mr-2">
                 <div className="flex items-center justify-end gap-1.5 mb-0.5">
@@ -1170,6 +1178,27 @@ export function AgentCommandCenter() {
     return () => clearTimeout(t);
   }, [systemScan.status]);
 
+  // Owner-triggered inter-agent dialogue on an exception (CEO triage → department
+  // reasoning). Recommendation-only; the API writes only agent metadata.
+  const [discussingId, setDiscussingId] = useState<string | null>(null);
+  const runDialogue = useCallback(async (exceptionId: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    setDiscussingId(exceptionId);
+    try {
+      const res = await fetch("/api/agents/dialogue", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ exceptionId }),
+      });
+      if (res.ok) setTimeout(() => refresh(), 400);
+    } catch { /* non-fatal */ }
+    finally { setDiscussingId(null); }
+  }, [refresh]);
+
   const runScan = useCallback(async (agentId: string): Promise<ScanStatus> => {
     const supabase = getSupabase();
     if (!supabase) return "error";
@@ -1523,6 +1552,8 @@ export function AgentCommandCenter() {
             agents={agents}
             onDismiss={dismissException}
             onAcknowledge={acknowledgeException}
+            onDiscuss={runDialogue}
+            discussingId={discussingId}
           />
         )}
 
