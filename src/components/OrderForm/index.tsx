@@ -211,6 +211,7 @@ export function OrderForm({ draftId }: { draftId?: string }) {
       // Already saved once — update existing draft
       await updateOrderFields(draftOrderIdRef.current, {
         customer: order.customer,
+        customerId: order.customerId ?? null,
         jobName: order.jobName ?? null,
         city: order.city ?? "",
         signRows: order.signRows,
@@ -386,6 +387,7 @@ export function OrderForm({ draftId }: { draftId?: string }) {
           header={{
             date: order.date,
             customer: order.customer,
+            customerId: order.customerId ?? null,
             contactPerson: order.contactPerson,
             orderedBy: order.orderedBy,
             city: order.city,

@@ -16,6 +16,7 @@ import {
 } from "@/lib/agents/scan-utils";
 import { emptyScanResult } from "@/lib/agents/types";
 import type { DbOrderRow } from "@/lib/agents/types";
+import { customerMatchStatus } from "@/lib/customers/resolveCustomerId";
 
 const AGENT_ID   = "orders-agent";
 const AGENT_NAME = "מנהל הזמנות";
@@ -72,12 +73,16 @@ export async function runScan(db: ReturnType<typeof getServiceSupabase>) {
     // completed and cancelled are excluded — no intake checks needed there.
     const ordersRes = await db
       .from("work_orders")
-      .select("id,order_number,status,priority,customer,city,order_date,contact_person,order_type,customer_approval_status,graphics_sent_at,created_at,updated_at,required_date")
+      .select("id,order_number,status,priority,customer,customer_id,city,order_date,contact_person,order_type,customer_approval_status,graphics_sent_at,created_at,updated_at,required_date")
       .not("status", "in", '("completed","cancelled")');
 
     if (ordersRes.error) throw new Error(ordersRes.error.message);
-    const orders = (ordersRes.data ?? []) as (DbOrderRow & { contact_person: string | null })[];
+    const orders = (ordersRes.data ?? []) as (DbOrderRow & { contact_person: string | null; customer_id: string | null })[];
     result.entitiesScanned = orders.length;
+
+    // Customer roster for FK-link review (read-only; exact-name resolution only).
+    const custRes = await db.from("customers").select("id,name");
+    const customersLite = (custRes.data ?? []) as { id: string; name: string }[];
 
     const dedupeMap = await loadAgentExceptionDedupeMap(db, AGENT_ID);
     const taskDedupeMap = await loadAgentTaskDedupeMap(db, AGENT_ID);
@@ -251,6 +256,62 @@ export async function runScan(db: ReturnType<typeof getServiceSupabase>) {
             },
             recommendedResolution: "תאם עם הלקוח תאריך חדש ועדכן את required_date, או סמן כבוטלת",
           }, dedupeMap, result);
+        }
+      }
+
+      // ── Customer not linked to a CRM record (customer_id FK) ─────────────
+      // The order carries a customer NAME but no customer_id. SAFETY: never
+      // auto-link. If exactly one customer matches the name → suggest linking
+      // (info/low). If multiple match → ambiguous, needs human disambiguation
+      // (warn/high). If none match → not flagged (customer simply isn't in the
+      // CRM yet — the name fallback is legitimate). Auto-resolves on next scan
+      // once customer_id is set (human confirms the link in the order form).
+      if (!order.customer_id && order.customer && order.customer.trim()) {
+        const match = customerMatchStatus(order.customer, customersLite);
+        if (match.status === "linked-one") {
+          const k = dedupeKey("order_customer_unlinked", "work_order", order.id);
+          activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "order_customer_unlinked",
+            entityType: "work_order",
+            entityId: order.id,
+            severity: "info",
+            title: `הזמנה ${order.order_number} — ניתן לקשר ללקוח קיים בכרטסת`,
+            description: `לקוח: ${order.customer} | קיים לקוח תואם בכרטסת אך ההזמנה אינה מקושרת אליו (customer_id). קישור ישפר דיוק חיוב ודוחות.`,
+            detectedFromData: { orderNumber: order.order_number, customer: order.customer, candidateCustomerId: match.id },
+            recommendedResolution: "פתח את ההזמנה ובחר את הלקוח מרשימת ההשלמה כדי לקשר (לא מתבצע אוטומטית).",
+          }, dedupeMap, result);
+          await upsertTask(db, AGENT_ID, {
+            category: "order_customer_unlinked",
+            entityType: "work_order",
+            entityId: order.id,
+            title: `הזמנה ${order.order_number} — קישור ללקוח קיים`,
+            description: `הלקוח "${order.customer}" קיים בכרטסת אך ההזמנה אינה מקושרת אליו. אשר את הקישור (לא מתבצע אוטומטית).`,
+            priority: "low",
+            recommendedAction: "פתח את ההזמנה ובחר את הלקוח מרשימת ההשלמה כדי לקשר (customer_id).",
+          }, taskDedupeMap, result);
+        } else if (match.status === "ambiguous") {
+          const k = dedupeKey("order_customer_ambiguous", "work_order", order.id);
+          activeDedupeKeys.add(k);
+          await upsertException(db, AGENT_ID, {
+            category: "order_customer_ambiguous",
+            entityType: "work_order",
+            entityId: order.id,
+            severity: "warn",
+            title: `הזמנה ${order.order_number} — קישור לקוח לא חד-משמעי`,
+            description: `קיימים ${match.ids.length} לקוחות עם השם "${order.customer}". לא ניתן לקשר אוטומטית — נדרשת הכרעה אנושית.`,
+            detectedFromData: { orderNumber: order.order_number, customer: order.customer, candidateCustomerIds: match.ids },
+            recommendedResolution: "בחר ידנית את הלקוח הנכון בהזמנה, או מזג/תקן את כפילות הלקוחות בכרטסת.",
+          }, dedupeMap, result);
+          await upsertTask(db, AGENT_ID, {
+            category: "order_customer_ambiguous",
+            entityType: "work_order",
+            entityId: order.id,
+            title: `הזמנה ${order.order_number} — הכרעת לקוח כפול`,
+            description: `${match.ids.length} לקוחות עם השם "${order.customer}". בחר ידנית את הנכון, או תקן כפילות בכרטסת.`,
+            priority: "high",
+            recommendedAction: "בחר את הלקוח הנכון בהזמנה, או מזג/תקן כפילות בכרטסת הלקוחות.",
+          }, taskDedupeMap, result);
         }
       }
     }

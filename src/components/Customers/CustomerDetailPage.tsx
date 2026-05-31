@@ -162,9 +162,14 @@ export function CustomerDetailPage() {
 
   const customer = customers.find((c) => c.id === params.id);
 
+  // Prefer the customer_id FK; fall back to normalized-name match only for
+  // legacy/unlinked orders (customer_id null). An order linked to a DIFFERENT
+  // customer_id is never shown here even if the name happens to match.
   const customerOrders = useMemo(
-    () => orders.filter(
-      (o) => o.customer.trim().toLowerCase() === (customer?.name ?? "").trim().toLowerCase()
+    () => orders.filter((o) =>
+      o.customerId
+        ? o.customerId === customer?.id
+        : o.customer.trim().toLowerCase() === (customer?.name ?? "").trim().toLowerCase()
     ),
     [orders, customer]
   );

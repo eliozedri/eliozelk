@@ -46,6 +46,7 @@ function initialState(): OrderState {
   return {
     date: todayISO(),
     customer: "",
+    customerId: null,
     contactPerson: "",
     orderedBy: "",
     city: "",
@@ -105,7 +106,7 @@ export function useOrderForm(opts?: { skipLocalStorage?: boolean }) {
   }, [order]);
 
   const updateHeader = useCallback(
-    (partial: Partial<Pick<OrderState, "date" | "customer" | "contactPerson" | "orderedBy" | "city" | "generalNotes" | "jobName" | "location" | "orderType" | "fulfillmentMethod" | "awaitingCustomerApproval" | "requiredDate">>) => {
+    (partial: Partial<Pick<OrderState, "date" | "customer" | "customerId" | "contactPerson" | "orderedBy" | "city" | "generalNotes" | "jobName" | "location" | "orderType" | "fulfillmentMethod" | "awaitingCustomerApproval" | "requiredDate">>) => {
       setOrder((prev) => ({ ...prev, ...partial }));
     },
     []
@@ -235,6 +236,7 @@ export function useOrderForm(opts?: { skipLocalStorage?: boolean }) {
     setOrder({
       date: o.date,
       customer: o.customer,
+      customerId: o.customerId ?? null,
       contactPerson: o.contactPerson ?? "",
       orderedBy: o.orderedBy ?? "",
       city: o.city ?? "",

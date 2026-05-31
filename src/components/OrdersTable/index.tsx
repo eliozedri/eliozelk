@@ -992,7 +992,18 @@ function OrderDetailPanel({
 
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="text-[10px] text-gray-400 font-medium mb-0.5">לקוח</p>
-              <p className="text-sm font-semibold text-gray-800">{order.customer || "—"}</p>
+              {order.customerId ? (
+                <Link
+                  href={`/customers/${order.customerId}`}
+                  className="text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-1"
+                  title="כרטיס לקוח מקושר"
+                >
+                  {order.customer || "—"}
+                  <span className="text-[10px] text-green-600">✓</span>
+                </Link>
+              ) : (
+                <p className="text-sm font-semibold text-gray-800">{order.customer || "—"}</p>
+              )}
             </div>
             <div className="bg-gray-50 rounded-lg p-3">
               <p className="text-[10px] text-gray-400 font-medium mb-0.5">תאריך</p>

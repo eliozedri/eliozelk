@@ -642,11 +642,15 @@ export function AccountingPage() {
   const billingByCustomer = useMemo<CustomerBillingGroup[]>(() => {
     const map = new Map<string, CustomerBillingGroup>();
     for (const o of pendingBillingFiltered) {
-      const name = o.customer || "לא ידוע";
-      if (!map.has(name)) {
-        map.set(name, { customerName: name, orders: [], totalEstRevenue: 0, oldestDate: o.date, newestDate: o.date });
+      // Prefer the customer_id FK as the grouping key so a linked customer's
+      // orders group together even if the free-text name drifted; legacy/unlinked
+      // orders (no customer_id) still group by name.
+      const label = o.customer || "לא ידוע";
+      const key = o.customerId || label;
+      if (!map.has(key)) {
+        map.set(key, { customerName: label, orders: [], totalEstRevenue: 0, oldestDate: o.date, newestDate: o.date });
       }
-      const g = map.get(name)!;
+      const g = map.get(key)!;
       g.orders.push(o);
       g.totalEstRevenue += orderRevenueMap.get(o.id) ?? 0;
       if (o.date < g.oldestDate) g.oldestDate = o.date;

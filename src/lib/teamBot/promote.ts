@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "crypto";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { resolveExactCustomerId } from "@/lib/customers/resolveCustomerId";
 import type { CartLine } from "./types";
 
 /**
@@ -92,6 +93,18 @@ export async function promoteDraft(draftId: string, reviewerName: string): Promi
   const now = new Date().toISOString();
   const cart = (draft.cart ?? []) as CartLine[];
 
+  // Link to a customer only on an exact, unambiguous name match; otherwise leave
+  // null (the free-text name remains the fallback — never fuzzy-link a bot order).
+  let resolvedCustomerId: string | null = null;
+  const draftCustomerName = (draft.customer ?? "").trim();
+  if (draftCustomerName) {
+    const { data: customerRows } = await db.from("customers").select("id,name");
+    resolvedCustomerId = resolveExactCustomerId(
+      draftCustomerName,
+      (customerRows ?? []) as { id: string; name: string }[],
+    );
+  }
+
   const dataBlob = {
     signRows: [],
     signsRows: [],
@@ -110,6 +123,7 @@ export async function promoteDraft(draftId: string, reviewerName: string): Promi
     status: "graphics_pending",
     priority: "normal",
     customer: draft.customer ?? "",
+    customer_id: resolvedCustomerId,
     city: draft.city ?? "",
     order_date: now.slice(0, 10),
     version: 1,

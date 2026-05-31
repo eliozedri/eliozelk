@@ -207,6 +207,7 @@ export interface WorkOrder {
   version: number;
   date: string;
   customer: string;
+  customerId?: string | null; // FK to customers.id; null = legacy/unlinked (name fallback)
   contactPerson?: string;
   orderedBy?: string;
   location?: string;

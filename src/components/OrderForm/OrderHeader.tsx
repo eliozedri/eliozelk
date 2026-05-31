@@ -40,6 +40,7 @@ export function OrderHeader({ header, onChange }: Props) {
   }, []);
 
   // Sync citySearch when header.city changes externally (e.g., reset)
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setCitySearch(header.city); }, [header.city]);
 
   const customerSuggestions = header.customer.trim().length >= 1
@@ -52,8 +53,9 @@ export function OrderHeader({ header, onChange }: Props) {
     ? CITIES.filter((c) => c.includes(citySearch.trim())).slice(0, 10)
     : CITIES.slice(0, 10);
 
-  function selectCustomer(name: string) {
-    onChange({ customer: name });
+  // Picking (or creating) a known customer captures the FK id alongside the name.
+  function selectCustomer(c: { id: string; name: string }) {
+    onChange({ customer: c.name, customerId: c.id });
     setShowCustomerSuggestions(false);
   }
 
@@ -64,16 +66,16 @@ export function OrderHeader({ header, onChange }: Props) {
 
   // Create a customer inline without losing the order draft (only the customer name
   // field is touched; all other order fields/rows are preserved). After creation the
-  // new customer is selected. NOTE: the order still stores the customer NAME — a real
-  // customer_id FK requires the proposed migration (docs/PROPOSAL_orders_customer_fk.md).
+  // new customer is selected AND its id is captured as the order's customer_id FK,
+  // so the order is saved linked to the real customer record.
   async function handleCreateCustomer() {
     const name = header.customer.trim();
     if (!name || creatingCustomer) return;
-    if (exactCustomer) { selectCustomer(exactCustomer.name); return; }
+    if (exactCustomer) { selectCustomer(exactCustomer); return; }
     setCreatingCustomer(true);
     try {
       const c = await addCustomer({ name, location: header.city?.trim() ?? "", phone: "", lastOrder: "" });
-      selectCustomer(c.name);
+      selectCustomer(c);
     } catch {
       // non-fatal — keep the typed name so the draft is not lost
     } finally {
@@ -116,15 +118,25 @@ export function OrderHeader({ header, onChange }: Props) {
 
         {/* שם החברה */}
         <div className="flex flex-col gap-1" ref={customerWrapperRef}>
-          <label className="text-sm font-medium text-gray-600">
-            שם החברה <span className="text-red-500">*</span>
+          <label className="text-sm font-medium text-gray-600 flex items-center gap-1.5">
+            <span>שם החברה <span className="text-red-500">*</span></span>
+            {header.customerId && (
+              <span
+                className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5"
+                title="מקושר ללקוח קיים בכרטסת"
+              >
+                ✓ מקושר
+              </span>
+            )}
           </label>
           <div className="relative">
             <input
               type="text"
               value={header.customer}
               onChange={(e) => {
-                onChange({ customer: e.target.value });
+                // Free typing breaks any prior link — clear customerId; it is
+                // re-established only by picking a suggestion or creating a customer.
+                onChange({ customer: e.target.value, customerId: null });
                 setShowCustomerSuggestions(true);
               }}
               onFocus={() => { if (header.customer.trim().length >= 1) setShowCustomerSuggestions(true); }}
@@ -142,7 +154,7 @@ export function OrderHeader({ header, onChange }: Props) {
                       <button
                         key={c.id}
                         type="button"
-                        onMouseDown={() => selectCustomer(c.name)}
+                        onMouseDown={() => selectCustomer(c)}
                         className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-right hover:bg-blue-50 transition-colors"
                       >
                         <div className="flex-1 text-right">

@@ -56,7 +56,8 @@ export interface FabricationDetails {
 
 export interface OrderHeader {
   date: string;
-  customer: string;      // שם החברה
+  customer: string;      // שם החברה (display + fallback)
+  customerId?: string | null; // FK to customers.id — set when a known customer is chosen/created
   contactPerson: string; // איש קשר
   orderedBy: string;     // מזמין
   city: string;          // עיר (required)
