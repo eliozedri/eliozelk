@@ -240,7 +240,7 @@ export const DIARY_STATUS_COLORS: Record<WorkDiaryStatus, string> = {
 - [ ] **Step 2: Verify TypeScript compiles**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | head -20
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | head -20
 ```
 Expected: no errors related to `workDiary.ts`
 

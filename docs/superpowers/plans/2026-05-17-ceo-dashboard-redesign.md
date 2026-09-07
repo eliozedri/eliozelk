@@ -112,7 +112,7 @@ export function DashboardHero() {
 - [ ] **Step 2: Verify no TypeScript errors**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | grep "DashboardHero" | head -10
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | grep "DashboardHero" | head -10
 ```
 
 Expected: no output (no errors in this file).
@@ -196,7 +196,7 @@ export function ExecutiveAttentionStrip({ alerts, onAlertClick }: Props) {
 - [ ] **Step 2: Verify no TypeScript errors in this file**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | grep "ExecutiveAttentionStrip" | head -10
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | grep "ExecutiveAttentionStrip" | head -10
 ```
 
 Expected: no output.
@@ -329,7 +329,7 @@ export function ExecutiveKpiRow({
 - [ ] **Step 2: Verify no TypeScript errors**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | grep "ExecutiveKpiRow" | head -10
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | grep "ExecutiveKpiRow" | head -10
 ```
 
 Expected: no output.
@@ -439,7 +439,7 @@ export function PipelineHealthTable({ stages, bottleneck, onStageClick }: Props)
 - [ ] **Step 2: Verify no TypeScript errors**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | grep "PipelineHealthTable" | head -10
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | grep "PipelineHealthTable" | head -10
 ```
 
 Expected: no output.
@@ -523,7 +523,7 @@ export function AccountingBillingPanel({
 - [ ] **Step 2: Verify no TypeScript errors**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | grep "AccountingBillingPanel" | head -10
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | grep "AccountingBillingPanel" | head -10
 ```
 
 Expected: no output.
@@ -602,7 +602,7 @@ export function DepartmentLoadPanel({ notifications }: Props) {
 - [ ] **Step 2: Verify no TypeScript errors**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | grep "DepartmentLoadPanel" | head -10
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | grep "DepartmentLoadPanel" | head -10
 ```
 
 Expected: no output.
@@ -722,7 +722,7 @@ export function FieldReportsPanel({
 - [ ] **Step 2: Verify no TypeScript errors**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | grep "FieldReportsPanel" | head -10
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | grep "FieldReportsPanel" | head -10
 ```
 
 Expected: no output.
@@ -808,7 +808,7 @@ export function CrewCapacityPanel({
 - [ ] **Step 2: Verify no TypeScript errors**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | grep "CrewCapacityPanel" | head -10
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | grep "CrewCapacityPanel" | head -10
 ```
 
 Expected: no output.
@@ -1041,7 +1041,7 @@ export function DashboardPage() {
 - [ ] **Step 2: Run full TypeScript check**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | head -40
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | head -40
 ```
 
 Expected: no errors. If errors appear, fix them before proceeding.
@@ -1072,7 +1072,7 @@ rm src/components/Dashboard/AlertsSection.tsx
 - [ ] **Step 2: Run TypeScript check after deletions**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | head -40
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | head -40
 ```
 
 Expected: no errors. The deleted files had no external consumers — they were only imported from `index.tsx` which now imports the new files.
@@ -1088,7 +1088,7 @@ Expected: no output (no changes to these files).
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git add src/components/Dashboard/
 git commit -m "$(cat <<'EOF'
 feat(dashboard): CEO command center redesign — content area only

@@ -1,6 +1,6 @@
 # Image Scan Report — Engine B POC
 
-**Run dir:** `/Users/eliozedri/Desktop/eliozelk/research/cad-pdf-intelligence/runs/poc_plan_50_448_02_400_20260520_223259`  
+**Run dir:** `/Users/eliozedri/Projects/eliozelk/research/cad-pdf-intelligence/runs/poc_plan_50_448_02_400_20260520_223259`  
 **Page:** 0  
 **DPI:** 42  
 **Mode:** fast  

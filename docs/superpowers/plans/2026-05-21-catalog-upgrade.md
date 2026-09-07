@@ -62,7 +62,7 @@ public/catalog/
 - [ ] **Step 1: Create all asset directories**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 
 # Elkayam dirs
 mkdir -p public/catalog/elkayam/road-marking/original
@@ -392,7 +392,7 @@ if __name__ == '__main__':
 - [ ] **Step 2: Run the Elkayam scraper**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 python3 scripts/scrape-elkayam.py
 ```
 
@@ -720,7 +720,7 @@ if __name__ == '__main__':
 - [ ] **Step 2: Run the scraper**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 python3 scripts/scrape-asclean.py
 ```
 
@@ -977,7 +977,7 @@ if __name__ == '__main__':
 - [ ] **Step 2: Run the crop script**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 python3 scripts/crop-catalog-images.py
 ```
 
@@ -1179,7 +1179,7 @@ main().catch(console.error);
 - [ ] **Step 2: Run the script**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsx scripts/attach-catalog-images.ts
 ```
 
@@ -1382,7 +1382,7 @@ main().catch(console.error);
 - [ ] **Step 2: Run the import**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsx scripts/import-supplier-catalog.ts
 ```
 
@@ -1559,7 +1559,7 @@ export function resolveDetailImage(metadata?: Record<string, unknown>): string |
 - [ ] **Step 2: Verify TypeScript compiles**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | head -30
 ```
 
@@ -1823,7 +1823,7 @@ And add the import for `REVIEW_BADGE` (already added in Step 1 of this task).
 - [ ] **Step 4: Check TypeScript**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | head -40
 ```
 
@@ -2600,7 +2600,7 @@ git commit -m "feat(catalog/phase-d): /catalog-showcase route + sidebar nav entr
 - [ ] **Step 1: Full TypeScript check**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1
 ```
 
@@ -2692,7 +2692,7 @@ print('Crop statuses:', Counter(x.get('crop_status') for x in e))
 - [ ] **Step 8: Final commit + push**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git log --oneline -10
 git push origin main
 ```

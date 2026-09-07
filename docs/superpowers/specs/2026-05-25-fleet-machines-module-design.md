@@ -269,7 +269,7 @@ Alert thresholds (upcoming test/insurance/maintenance) reuse the constants alrea
 ## 12. Testing (end of Phase 1)
 
 1. `tsc --noEmit` clean.
-2. `npm run build` passes. *(Note: local builds on `~/Desktop/eliozelk` can fail due to an iCloud-sync hazard corrupting `.next`; if the local build fails with manifest ENOENT, that is the environment, not the code — Vercel build is authoritative.)*
+2. `npm run build` passes. *(Note: local builds on `~/Projects/eliozelk` can fail due to an iCloud-sync hazard corrupting `.next`; if the local build fails with manifest ENOENT, that is the environment, not the code — Vercel build is authoritative.)*
 3. Runtime verification per AGENTS.md protocol: correct branch + commit, dev server running from correct dir and started after the changes, `/fleet` returns 200, tab visible in sidebar for master/fleet_manager, permission check passes at runtime.
 4. Functional: create asset, edit asset, upload/replace photo, open detail card, add maintenance record, add incident, attach operational document, add reminder. Filters and KPI counts reflect the data. No console errors. Existing screens unbroken.
 

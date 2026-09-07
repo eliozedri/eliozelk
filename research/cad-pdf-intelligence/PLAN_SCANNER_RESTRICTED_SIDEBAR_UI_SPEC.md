@@ -4,7 +4,7 @@
 **Date:** 2026-05-21  
 **Status:** SPEC — pending review before any production code is written  
 **Scope:** Research → restricted internal feature  
-**Codebase root:** `/Users/eliozedri/Desktop/eliozelk/`  
+**Codebase root:** `/Users/eliozedri/Projects/eliozelk/`  
 **Research pipeline:** `research/cad-pdf-intelligence/`  
 **Author:** Plan Scanner research session
 

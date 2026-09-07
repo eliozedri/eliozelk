@@ -49,7 +49,7 @@ export interface SignRecord {
 - [ ] **Step 2: Verify TypeScript accepts it**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | head -30
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | head -30
 ```
 
 Expected: errors only about `name` and `needsReview` being missing from `SIGNS_DATA` entries (the old generated file doesn't have them yet — that is expected and will be fixed in Task 3).
@@ -311,7 +311,7 @@ console.log(`   missing meta : ${missingMetaCount}`);
 - [ ] **Step 2: Verify the file was created**
 
 ```bash
-ls -la /Users/eliozedri/Desktop/eliozelk/scripts/generateSignsFromKnowledgeBase.ts
+ls -la /Users/eliozedri/Projects/eliozelk/scripts/generateSignsFromKnowledgeBase.ts
 ```
 
 Expected: file exists with non-zero size.
@@ -478,7 +478,7 @@ Change the `generate:signs` target and add `audit:signs`:
 - [ ] **Step 1: Run the generator**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsx scripts/generateSignsFromKnowledgeBase.ts 2>&1
+cd /Users/eliozedri/Projects/eliozelk && npx tsx scripts/generateSignsFromKnowledgeBase.ts 2>&1
 ```
 
 Expected output:
@@ -492,7 +492,7 @@ Expected output:
 - [ ] **Step 2: Spot-check the generated output**
 
 ```bash
-grep -E '"(201|302|401|801|902)"' /Users/eliozedri/Desktop/eliozelk/src/data/signs.ts | head -10
+grep -E '"(201|302|401|801|902)"' /Users/eliozedri/Projects/eliozelk/src/data/signs.ts | head -10
 ```
 
 Expected:
@@ -577,7 +577,7 @@ process.exit(1);
 - [ ] **Step 1: TypeScript check**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1
 ```
 
 Expected: 0 errors.
@@ -585,7 +585,7 @@ Expected: 0 errors.
 - [ ] **Step 2: Run audit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsx scripts/auditSignsData.ts 2>&1
+cd /Users/eliozedri/Projects/eliozelk && npx tsx scripts/auditSignsData.ts 2>&1
 ```
 
 Expected:
@@ -596,7 +596,7 @@ Expected:
 - [ ] **Step 3: Verify 8xx entries are all סימון כביש**
 
 ```bash
-grep '"8' /Users/eliozedri/Desktop/eliozelk/src/data/signs.ts | grep -v 'סימון כביש'
+grep '"8' /Users/eliozedri/Projects/eliozelk/src/data/signs.ts | grep -v 'סימון כביש'
 ```
 
 Expected: no output (all 8xx entries have correct shape).
@@ -604,7 +604,7 @@ Expected: no output (all 8xx entries have correct shape).
 - [ ] **Step 4: Verify 2xx entries are all מלבן**
 
 ```bash
-grep '"2[0-9][0-9]"' /Users/eliozedri/Desktop/eliozelk/src/data/signs.ts | grep -v 'מלבן'
+grep '"2[0-9][0-9]"' /Users/eliozedri/Projects/eliozelk/src/data/signs.ts | grep -v 'מלבן'
 ```
 
 Expected: no output.
@@ -616,7 +616,7 @@ Expected: no output.
 - [ ] **Step 1: Stage and commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && git add \
+cd /Users/eliozedri/Projects/eliozelk && git add \
   scripts/generateSignsFromKnowledgeBase.ts \
   scripts/generateSignsData.ts \
   scripts/auditSignsData.ts \
@@ -630,7 +630,7 @@ cd /Users/eliozedri/Desktop/eliozelk && git add \
 ```
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && git commit -m "$(cat <<'EOF'
+cd /Users/eliozedri/Projects/eliozelk && git commit -m "$(cat <<'EOF'
 fix(signs): replace range-based shape inference with official knowledge-base pipeline
 
 Sign shapes and names are now derived per-sign from the official Netivei Israel

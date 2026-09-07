@@ -3,7 +3,7 @@
 **Date:** 2026-05-23
 **Status:** Approved — implementing
 **Owner:** Elio
-**Location:** Elkayam repo (`/Users/eliozedri/Desktop/eliozelk`). NOT JARVIS.
+**Location:** Elkayam repo (`/Users/eliozedri/Projects/eliozelk`). NOT JARVIS.
 
 ---
 

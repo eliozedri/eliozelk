@@ -53,7 +53,7 @@
 - [ ] **Step 1: Install packages**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npm install leaflet react-leaflet
 npm install --save-dev @types/leaflet
 ```
@@ -63,7 +63,7 @@ Expected: packages added to `node_modules`, `package.json` updated.
 - [ ] **Step 2: Verify TypeScript can find types**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | head -20
 ```
 
@@ -72,7 +72,7 @@ Expected: no errors about `leaflet` or `react-leaflet` (there may be pre-existin
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git add package.json package-lock.json
 git commit -m "chore: add leaflet + react-leaflet dependencies"
 ```
@@ -215,7 +215,7 @@ export function formatWaitingDuration(readyForExecutionAt: string | null | undef
 - [ ] **Step 3: Verify TypeScript compiles**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | grep -E "cityCoordinates|slaUtils"
 ```
 
@@ -224,7 +224,7 @@ Expected: no errors for the new files.
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git add src/lib/cityCoordinates.ts src/lib/slaUtils.ts
 git commit -m "feat: add city coordinates lookup and SLA color utilities"
 ```
@@ -334,7 +334,7 @@ The provider body stays the same — it spreads `useOrders()` which now returns 
 - [ ] **Step 4: Type-check**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | grep -v "node_modules"
 ```
 
@@ -343,7 +343,7 @@ Expected: 0 errors.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git add src/types/workOrder.ts src/hooks/useOrders.ts src/context/OrdersContext.tsx
 git commit -m "feat: extend WorkOrder with field-execution fields; auto-set readyForExecutionAt"
 ```
@@ -513,7 +513,7 @@ export function CrewsProvider({ children }: { children: React.ReactNode }) {
 - [ ] **Step 5: Type-check**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | grep -v "node_modules"
 ```
 
@@ -522,7 +522,7 @@ Expected: 0 errors.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git add src/types/crew.ts src/hooks/useCrews.ts src/context/CrewsContext.tsx src/components/CrewsProvider.tsx
 git commit -m "feat: add Crew type, useCrews hook, and CrewsContext"
 ```
@@ -649,7 +649,7 @@ function CrewsIcon() {
 - [ ] **Step 3: Type-check and verify dev server starts**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | grep -v "node_modules"
 ```
 
@@ -658,7 +658,7 @@ Expected: 0 errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git add src/app/layout.tsx src/components/Sidebar.tsx
 git commit -m "feat: add CrewsProvider to layout and field-ops nav links to sidebar"
 ```
@@ -1080,7 +1080,7 @@ export function Crews() {
 - [ ] **Step 3: Type-check**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | grep -v "node_modules"
 ```
 
@@ -1089,7 +1089,7 @@ Expected: 0 errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git add src/components/Crews/index.tsx src/app/crews/page.tsx
 git commit -m "feat: add crews management page with add/edit/delete"
 ```
@@ -1286,7 +1286,7 @@ export default function IsraelMap({ orders, onOpenOrder }: IsraelMapProps) {
 - [ ] **Step 2: Type-check**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | grep -v "node_modules"
 ```
 
@@ -1295,7 +1295,7 @@ Expected: 0 errors.
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git add src/components/WorkMap/IsraelMap.tsx
 git commit -m "feat: add Leaflet IsraelMap component with SLA-colored markers"
 ```
@@ -1578,7 +1578,7 @@ export function WorkMap() {
 - [ ] **Step 3: Type-check**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | grep -v "node_modules"
 ```
 
@@ -1587,7 +1587,7 @@ Expected: 0 errors.
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git add src/components/WorkMap/index.tsx src/app/workmap/page.tsx
 git commit -m "feat: add Work Map page with Leaflet, KPI cards, SLA filters, and legend"
 ```
@@ -2046,7 +2046,7 @@ Also: in the `AssignModal`, pre-select the `dateStr` to `weekDateStrings[di]` wh
 - [ ] **Step 4: Type-check**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | grep -v "node_modules"
 ```
 
@@ -2055,7 +2055,7 @@ Expected: 0 errors.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git add src/components/WeeklySchedule/index.tsx src/app/schedule/page.tsx
 git commit -m "feat: add Weekly Schedule page with crew board and assign modal"
 ```
@@ -2123,7 +2123,7 @@ const newOrder: WorkOrder = {
 - [ ] **Step 5: Type-check**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | grep -v "node_modules"
 ```
 
@@ -2132,7 +2132,7 @@ Expected: 0 errors.
 - [ ] **Step 6: Full build check**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npm run build 2>&1 | tail -30
 ```
 
@@ -2141,7 +2141,7 @@ Expected: build succeeds with no errors.
 - [ ] **Step 7: Commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git add src/types/order.ts src/hooks/useOrderForm.ts src/components/OrderForm/OrderHeader.tsx src/hooks/useOrders.ts
 git commit -m "feat: add city field to order form for map placement"
 ```
@@ -2153,7 +2153,7 @@ git commit -m "feat: add city field to order form for map placement"
 - [ ] **Step 1: Run lint**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npm run lint 2>&1
 ```
 
@@ -2162,7 +2162,7 @@ Fix any reported errors before continuing.
 - [ ] **Step 2: Run full TypeScript check**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npx tsc --noEmit 2>&1 | grep -v "node_modules"
 ```
 
@@ -2171,7 +2171,7 @@ Expected: 0 errors.
 - [ ] **Step 3: Run production build**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 npm run build 2>&1 | tail -40
 ```
 
@@ -2182,7 +2182,7 @@ Expected: `✓ Compiled successfully` (or equivalent success message). Fix any b
 - [ ] **Step 4: Final commit**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk
+cd /Users/eliozedri/Projects/eliozelk
 git add -A
 git commit -m "feat: complete Work Map, Weekly Schedule, and Crews modules"
 ```

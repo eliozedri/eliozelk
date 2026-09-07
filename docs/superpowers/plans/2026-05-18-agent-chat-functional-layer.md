@@ -132,7 +132,7 @@ export function detectIntent(
 - [ ] **Step 1.4 — Verify TypeScript compiles**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | head -40
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | head -40
 ```
 
 Expected: no errors related to the edited region. (Other pre-existing errors are acceptable at this stage.)
@@ -558,7 +558,7 @@ The rest of the existing default body (from the `const [excRes, ...` line onward
 - [ ] **Step 2.5 — Verify TypeScript compiles**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | head -50
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | head -50
 ```
 
 Expected: no errors in the edited files.
@@ -648,7 +648,7 @@ With:
 - [ ] **Step 3.5 — Verify TypeScript**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | head -30
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | head -30
 ```
 
 Expected: 0 errors.
@@ -697,7 +697,7 @@ With:
 - [ ] **Step 4.3 — Verify TypeScript**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | head -30
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | head -30
 ```
 
 - [ ] **Step 4.4 — Commit**
@@ -751,7 +751,7 @@ Update `handleChip`:
 - [ ] **Step 5.4 — Verify TypeScript**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1 | head -30
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1 | head -30
 ```
 
 Expected: 0 errors.
@@ -772,7 +772,7 @@ git commit -m "feat(FloatingChatWindow): pass current pathname as pageContext to
 - [ ] **Step 6.1 — Full typecheck**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx tsc --noEmit 2>&1
+cd /Users/eliozedri/Projects/eliozelk && npx tsc --noEmit 2>&1
 ```
 
 Expected: 0 errors.
@@ -780,7 +780,7 @@ Expected: 0 errors.
 - [ ] **Step 6.2 — ESLint**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx next lint 2>&1 | tail -20
+cd /Users/eliozedri/Projects/eliozelk && npx next lint 2>&1 | tail -20
 ```
 
 Expected: 0 errors, 0 warnings.
@@ -788,7 +788,7 @@ Expected: 0 errors, 0 warnings.
 - [ ] **Step 6.3 — Build**
 
 ```bash
-cd /Users/eliozedri/Desktop/eliozelk && npx next build 2>&1 | tail -20
+cd /Users/eliozedri/Projects/eliozelk && npx next build 2>&1 | tail -20
 ```
 
 Expected: `✓ Compiled successfully` (or equivalent success message).
